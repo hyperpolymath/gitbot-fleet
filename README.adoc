@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2025 hyperpolymath
+
+= Gitbot Fleet
+:toc: auto
+:toclevels: 2
+
+Bot fleet for repository quality enforcement across the Hyperpolymath ecosystem.
+
+== Overview
+
+Gitbot Fleet is the central orchestration repository for all quality-enforcement bots in the Hyperpolymath ecosystem. Each bot specializes in a specific aspect of repository health and compliance.
+
+== Bot Roster
+
+[cols="1,3,1"]
+|===
+|Bot |Purpose |Status
+
+|**rhodibot**
+|RSR (Rhodium Standard Repositories) compliance validation. Structural checks, file presence, directory layout.
+|Active
+
+|**echidnabot**
+|Formal mathematical/statistical verification. Security fuzzing as secondary function.
+|Active
+
+|**oikos**
+|Ecological and economic code standards. Carbon intensity, resource efficiency, technical debt modeling.
+|Active
+
+|**glambot**
+|Presentation quality. Visual polish, accessibility (WCAG), SEO, machine-readability for AI/bots.
+|Complete
+
+|**seambot**
+|Integration health testing. Cross-component communication, API contracts, end-to-end flows.
+|Active
+
+|**finishing-bot**
+|Release readiness. Placeholder removal, license validation, claim verification, execution testing.
+|Complete
+|===
+
+== Architecture
+
+[source]
+----
+                     GITBOT FLEET
+   ┌──────────────────────────────────────────┐
+   │                                          │
+   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+   │  │ rhodibot│  │echidna  │  │  oikos  │  │
+   │  │(RSR     │  │(verify) │  │(eco/    │  │
+   │  │ struct) │  │         │  │ econ)   │  │
+   │  └────┬────┘  └────┬────┘  └────┬────┘  │
+   │       │            │            │        │
+   │       ▼            ▼            ▼        │
+   │  ┌─────────────────────────────────────┐ │
+   │  │        SHARED CONTEXT LAYER         │ │
+   │  └─────────────────────────────────────┘ │
+   │       │            │            │        │
+   │       ▼            ▼            ▼        │
+   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
+   │  │ glambot │  │ seambot │  │finishing│  │
+   │  │(present │  │(integr) │  │  -bot   │  │
+   │  │ ation)  │  │         │  │(release)│  │
+   │  └─────────┘  └─────────┘  └─────────┘  │
+   │                                          │
+   └──────────────────────────────────────────┘
+----
+
+== Relationship to git-dispatcher
+
+This repository is a **satellite** of `git-dispatcher`, the central coordination hub for all Git automation in the Hyperpolymath ecosystem.
+
+== License
+
+MPL-2.0 - See LICENSE file.

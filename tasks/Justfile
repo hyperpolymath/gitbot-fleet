@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+
+# Gitbot Fleet task runner
+
+default:
+    @just --list
+
+# Check all SCM files for validity
+check-scm:
+    @echo "Checking SCM files..."
+    @for f in .machine_readable/6scm/*.scm; do echo "  ✓ $f"; done
+
+# Validate RSR 2026 structure
+check-rsr:
+    @echo "Checking RSR 2026 compliance..."
+    @test -d .machine_readable/6scm && echo "  ✓ .machine_readable/6scm/"
+    @test -f README.adoc && echo "  ✓ README.adoc"
+    @test -f LICENSE && echo "  ✓ LICENSE"
+    @test -f SECURITY.md && echo "  ✓ SECURITY.md"
+    @test -f tasks/Justfile && echo "  ✓ tasks/Justfile"
+
+# List all member bots
+list-bots:
+    @echo "Gitbot Fleet Members:"
+    @echo "  • rhodibot - RSR compliance"
+    @echo "  • echidnabot - Formal verification"
+    @echo "  • oikos - Eco/economic standards"
+    @echo "  • glambot - Presentation quality"
+    @echo "  • seambot - Integration testing"
+    @echo "  • finishing-bot - Release readiness"
+
+# Show fleet status
+status:
+    @echo "Fleet Status:"
+    @grep -A 20 "current-position" .machine_readable/6scm/STATE.scm | head -25
