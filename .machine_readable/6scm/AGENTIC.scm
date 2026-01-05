@@ -39,7 +39,19 @@
       (".machine_readable/6scm/ECOSYSTEM.scm"))
     (read-on-demand
       (".machine_readable/6scm/META.scm")
-      (".machine_readable/6scm/PLAYBOOK.scm")))
+      (".machine_readable/6scm/PLAYBOOK.scm")
+      (".machine_readable/6scm/CICD-PATTERNS.scm")))
+
+  (cicd-interaction-patterns
+    (fix-workflow-security
+      (trigger "Fix CI/CD issues in <repo>")
+      (response "Read CICD-PATTERNS.scm, apply sha-pins and error-patterns"))
+    (update-sha-pins
+      (trigger "Update SHA pins for GitHub Actions")
+      (response "Read CICD-PATTERNS.scm sha-pins section, apply to workflows"))
+    (detect-codeql-issues
+      (trigger "Check CodeQL configuration")
+      (response "Use codeql-language-detection rules from CICD-PATTERNS.scm")))
 
   (safety-boundaries
     (require-human-approval
