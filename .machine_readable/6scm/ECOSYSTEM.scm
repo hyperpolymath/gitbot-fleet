@@ -52,7 +52,12 @@
       (integration "compliance-rules"))
     (cicd-hyper-a
       (relationship "sibling")
-      (integration "ci-automation")))
+      (integration "ci-automation")
+      (cli-tool "cicd-fixer")
+      (capabilities
+        ("scan" "Detect CI/CD issues in workflows")
+        ("fix" "Auto-fix pinning, permissions, SPDX headers")
+        ("batch" "Process multiple repos"))))
 
   (what-this-is
     ("Central coordination for the bot fleet")

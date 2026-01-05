@@ -171,4 +171,25 @@
     (spdx-header
       "First line: # SPDX-License-Identifier: AGPL-3.0-or-later")
     (rust-toolchain-fix
-      "uses: dtolnay/rust-toolchain@SHA\\n        with:\\n          toolchain: stable")))
+      "uses: dtolnay/rust-toolchain@SHA\\n        with:\\n          toolchain: stable"))
+
+  ;; CLI Tool Reference
+  (cli-tool
+    (name "cicd-fixer")
+    (location "cicd-hyper-a/target/release/cicd-fixer")
+    (commands
+      (scan
+        (usage "cicd-fixer scan <repo-path>")
+        (description "Scan a repository for CI/CD issues"))
+      (fix
+        (usage "cicd-fixer fix <repo-path> [--dry-run]")
+        (description "Fix auto-fixable issues"))
+      (batch
+        (usage "cicd-fixer batch <repos-dir> [--fix] [--dry-run] [--limit N]")
+        (description "Process multiple repositories"))
+      (pins
+        (usage "cicd-fixer pins")
+        (description "List known SHA pins"))
+      (catalog
+        (usage "cicd-fixer catalog")
+        (description "List error patterns")))))
