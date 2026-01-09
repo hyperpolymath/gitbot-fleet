@@ -1,0 +1,85 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+#
+# Container runtime wrapper with fallback order: nerdctl → podman → docker
+# Usage: container-build [options] <context>
+#        container-build --help
+
+set -e
+
+# Detect available container runtime (nerdctl first, then podman, then docker)
+detect_runtime() {
+    if command -v nerdctl >/dev/null 2>&1; then
+        echo "nerdctl"
+    elif command -v podman >/dev/null 2>&1; then
+        echo "podman"
+    elif command -v docker >/dev/null 2>&1; then
+        echo "docker"
+    else
+        echo ""
+    fi
+}
+
+RUNTIME=$(detect_runtime)
+
+if [ -z "$RUNTIME" ]; then
+    echo "Error: No container runtime found." >&2
+    echo "Please install one of: nerdctl, podman, docker" >&2
+    exit 1
+fi
+
+# Show which runtime we're using
+echo "Using container runtime: $RUNTIME"
+
+# Forward all arguments to the detected runtime
+case "$1" in
+    build)
+        shift
+        exec "$RUNTIME" build "$@"
+        ;;
+    run)
+        shift
+        exec "$RUNTIME" run "$@"
+        ;;
+    push)
+        shift
+        exec "$RUNTIME" push "$@"
+        ;;
+    pull)
+        shift
+        exec "$RUNTIME" pull "$@"
+        ;;
+    images)
+        shift
+        exec "$RUNTIME" images "$@"
+        ;;
+    ps)
+        shift
+        exec "$RUNTIME" ps "$@"
+        ;;
+    --help|-h)
+        echo "Container runtime wrapper (nerdctl → podman → docker fallback)"
+        echo ""
+        echo "Usage: container-build <command> [options]"
+        echo ""
+        echo "Commands:"
+        echo "  build   Build an image from Containerfile"
+        echo "  run     Run a container"
+        echo "  push    Push image to registry"
+        echo "  pull    Pull image from registry"
+        echo "  images  List images"
+        echo "  ps      List containers"
+        echo ""
+        echo "Current runtime: $RUNTIME"
+        echo ""
+        echo "Examples:"
+        echo "  container-build build -t myapp:latest ."
+        echo "  container-build run -d -p 8080:80 myapp:latest"
+        exit 0
+        ;;
+    *)
+        # Pass through any other command
+        exec "$RUNTIME" "$@"
+        ;;
+esac

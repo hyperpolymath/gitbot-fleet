@@ -1,0 +1,80 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+#
+# Container compose wrapper with fallback order: nerdctl → podman → docker
+# Usage: container-compose [options]
+
+set -e
+
+# Detect available compose runtime
+detect_compose() {
+    # Prefer nerdctl compose
+    if command -v nerdctl >/dev/null 2>&1; then
+        echo "nerdctl compose"
+    # Then podman-compose or podman compose
+    elif command -v podman-compose >/dev/null 2>&1; then
+        echo "podman-compose"
+    elif command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then
+        echo "podman compose"
+    # Finally docker compose
+    elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+        echo "docker compose"
+    elif command -v docker-compose >/dev/null 2>&1; then
+        echo "docker-compose"
+    else
+        echo ""
+    fi
+}
+
+COMPOSE=$(detect_compose)
+
+if [ -z "$COMPOSE" ]; then
+    echo "Error: No compose runtime found." >&2
+    echo "Please install one of: nerdctl, podman-compose, docker compose" >&2
+    exit 1
+fi
+
+echo "Using compose runtime: $COMPOSE"
+
+# Detect compose file (prefer compose.yaml, then nerdctl-compose.yaml, then docker-compose.yml)
+detect_compose_file() {
+    if [ -f "compose.yaml" ]; then
+        echo "compose.yaml"
+    elif [ -f "nerdctl-compose.yaml" ]; then
+        echo "nerdctl-compose.yaml"
+    elif [ -f "docker-compose.yaml" ]; then
+        echo "docker-compose.yaml"
+    elif [ -f "docker-compose.yml" ]; then
+        echo "docker-compose.yml"
+    else
+        echo ""
+    fi
+}
+
+case "$1" in
+    --help|-h)
+        echo "Container compose wrapper (nerdctl → podman → docker fallback)"
+        echo ""
+        echo "Usage: container-compose [options]"
+        echo ""
+        echo "Current compose runtime: $COMPOSE"
+        echo ""
+        echo "Examples:"
+        echo "  container-compose up -d"
+        echo "  container-compose down"
+        echo "  container-compose logs -f"
+        exit 0
+        ;;
+    *)
+        # Auto-detect compose file if not specified
+        if [ -z "$COMPOSE_FILE" ]; then
+            COMPOSE_FILE=$(detect_compose_file)
+            if [ -n "$COMPOSE_FILE" ]; then
+                export COMPOSE_FILE
+                echo "Using compose file: $COMPOSE_FILE"
+            fi
+        fi
+        exec $COMPOSE "$@"
+        ;;
+esac

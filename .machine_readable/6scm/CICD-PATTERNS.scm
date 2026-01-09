@@ -242,6 +242,28 @@
     (rust-toolchain-fix
       "uses: dtolnay/rust-toolchain@SHA\\n        with:\\n          toolchain: stable"))
 
+  ;; Container runtime patterns (added 2026-01-09)
+  (container-patterns
+    (runtime-priority
+      (order ("nerdctl" "podman" "docker"))
+      (rationale "Prefer FOSS-first: nerdctl (containerd) → podman (daemonless) → docker"))
+    (package-management
+      (primary "guix")
+      (fallback "nix")
+      (rationale "Guix for reproducibility, Nix as widely-available fallback"))
+    (base-images
+      (preferred "cgr.dev/chainguard/wolfi-base:latest")
+      (alternatives
+        ("denoland/deno:2.1.4" "For Deno projects")
+        ("rust:1.85-slim-bookworm" "For Rust builders")
+        ("registry.fedoraproject.org/fedora-minimal:41" "Fedora alternative")))
+    (security-practices
+      ("Non-root user in runtime image")
+      ("Multi-stage builds (separate builder from runtime)")
+      ("Distroless/minimal base images")
+      ("HEALTHCHECK directive for orchestration")
+      ("OCI labels for metadata")))
+
   ;; CLI Tool Reference
   (cli-tool
     (name "cicd-fixer")
