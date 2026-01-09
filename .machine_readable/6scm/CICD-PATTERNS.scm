@@ -1,8 +1,9 @@
-;; SPDX-License-Identifier: MPL-2.0
+;; SPDX-License-Identifier: AGPL-3.0-or-later
 ;; SPDX-FileCopyrightText: 2025-2026 hyperpolymath
 ;; CICD-PATTERNS.scm - CI/CD error patterns and fixes for bot learning
 ;; Media-Type: application/cicd-patterns+scheme
 ;; Generated: 2026-01-05 from cicd-hyper-a audit session
+;; Updated: 2026-01-09 with RSR policy contradiction fixes
 
 (cicd-patterns
   (version "1.0")
@@ -119,7 +120,65 @@
       (pattern "github/codeql-action.*@662472033e021d55d94146f66f6058822b0b39fd")
       (description "CodeQL action using outdated SHA")
       (fix "Update to @1b168cd39490f61582a9beae412bb7057a6b2c4e # v3.28.1")
+      (auto-fixable #t))
+
+    ;; RSR Policy Contradictions (added 2026-01-09)
+    (python-check-in-workflow
+      (id "rsr-contradiction-001")
+      (severity "medium")
+      (pattern "pip install|requirements\\.txt|python3 -m")
+      (description "Workflow checks for Python but Python is banned per RSR")
+      (fix "Remove Python checks, use jq for JSON validation, Julia/Rust for data processing")
+      (auto-fixable #t))
+
+    (dependabot-pip-ecosystem
+      (id "rsr-contradiction-002")
+      (severity "medium")
+      (pattern "package-ecosystem:\\s*\"pip\"")
+      (description "Dependabot configured for pip but Python is banned per RSR")
+      (fix "Remove pip ecosystem from dependabot.yml")
+      (auto-fixable #t))
+
+    (dependabot-npm-ecosystem
+      (id "rsr-contradiction-003")
+      (severity "low")
+      (pattern "package-ecosystem:\\s*\"npm\"")
+      (description "Dependabot configured for npm but npm is replaced by Deno per RSR")
+      (fix "Remove npm ecosystem, use Deno for JS dependency management")
+      (auto-fixable #t))
+
+    (python-in-comment-check
+      (id "rsr-contradiction-004")
+      (severity "low")
+      (pattern "--include=\"\\*\\.py\"")
+      (description "Workflow checks for Python file comments but Python is banned")
+      (fix "Replace --include=\"*.py\" with --include=\"*.jl\" --include=\"*.gleam\"")
+      (auto-fixable #t))
+
+    (wrong-spdx-license
+      (id "license-001")
+      (severity "medium")
+      (pattern "SPDX-License-Identifier:\\s*MPL-2\\.0")
+      (description "SPDX header uses MPL-2.0 instead of AGPL-3.0-or-later")
+      (fix "Change to AGPL-3.0-or-later")
       (auto-fixable #t)))
+
+  ;; Secret patterns for scanning (added 2026-01-09)
+  (secret-patterns
+    (api-keys
+      (github-pat "ghp_[a-zA-Z0-9]{36}")
+      (github-fine-grained "github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}")
+      (aws-access-key "AKIA[A-Z0-9]{16}")
+      (openai-api-key "sk-[a-zA-Z0-9]{48}")
+      (openai-project-key "sk-proj-[a-zA-Z0-9]{48}")
+      (anthropic-api-key "sk-ant-api[0-9]{2}-[a-zA-Z0-9\\-_]{86}")
+      (slack-bot-token "xoxb-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]+")
+      (slack-user-token "xoxp-[0-9]{10,}-[0-9]{10,}-[a-zA-Z0-9]+")
+      (npm-access-token "npm_[a-zA-Z0-9]{36}")
+      (pypi-api-token "pypi-AgE[a-zA-Z0-9\\-_]{50,}")
+      (snyk-api-token "snyk_[a-zA-Z0-9\\-]{36}")
+      (sendgrid-api-key "SG\\.[a-zA-Z0-9\\-_]{22}\\.[a-zA-Z0-9\\-_]{43}")
+      (private-key-header "-----BEGIN [A-Z]+ PRIVATE KEY-----")))
 
   ;; CodeQL language detection rules
   (codeql-language-detection
@@ -148,17 +207,27 @@
       (can-fix
         ("unpinned-actions")
         ("missing-permissions")
-        ("missing-spdx-header"))
+        ("missing-spdx-header")
+        ("wrong-spdx-license"))
       (detection-method "grep-based scanning"))
     (echidnabot
       (can-fix
         ("codeql-language-mismatch")
         ("codeql-outdated-sha"))
       (detection-method "yaml parsing"))
+    (oikos
+      (can-fix
+        ("python-check-in-workflow")
+        ("dependabot-pip-ecosystem")
+        ("dependabot-npm-ecosystem")
+        ("python-in-comment-check"))
+      (detection-method "RSR policy validation")
+      (note "Enforces RSR language policy, removes banned language references"))
     (seambot
       (can-propagate
         ("workflow templates")
-        ("sha-pins updates"))
+        ("sha-pins updates")
+        ("secret-patterns"))
       (propagation-scope "fleet-wide")))
 
   ;; Quick reference for common fixes

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // SPDX-FileCopyrightText: 2025 hyperpolymath
 
 = Gitbot Fleet
@@ -76,4 +76,4 @@ This repository is a **satellite** of `git-dispatcher`, the central coordination
 
 == License
 
-MPL-2.0 - See LICENSE file.
+AGPL-3.0-or-later - See LICENSE file.
