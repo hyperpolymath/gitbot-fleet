@@ -1,7 +1,12 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+image:https://img.shields.io/badge/license-PMPL--1.0-blue.svg[License,link="https://github.com/hyperpolymath/palimpsest-license"]
+
+// SPDX-License-Identifier: PMPL-1.0
 // SPDX-FileCopyrightText: 2025 hyperpolymath
 
 = Gitbot Fleet
+
+
+
 :toc: auto
 :toclevels: 2
 
@@ -76,4 +81,4 @@ This repository is a **satellite** of `git-dispatcher`, the central coordination
 
 == License
 
-AGPL-3.0-or-later - See LICENSE file.
+PMPL-1.0-or-later - See LICENSE file.
