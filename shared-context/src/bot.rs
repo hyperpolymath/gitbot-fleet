@@ -36,7 +36,7 @@ impl fmt::Display for BotId {
             BotId::Oikos => write!(f, "oikos"),
             BotId::Glambot => write!(f, "glambot"),
             BotId::Seambot => write!(f, "seambot"),
-            BotId::FinishingBot => write!(f, "finishing-bot"),
+            BotId::FinishingBot => write!(f, "finishingbot"),
             BotId::RobotRepoAutomaton => write!(f, "robot-repo-automaton"),
             BotId::Hypatia => write!(f, "hypatia"),
             BotId::Custom(id) => write!(f, "custom-{}", id),
@@ -92,7 +92,7 @@ impl BotId {
 pub enum Tier {
     /// First tier - produces findings (rhodibot, echidnabot, oikos)
     Verifier,
-    /// Second tier - consumes findings, produces results (glambot, seambot, finishing-bot)
+    /// Second tier - consumes findings, produces results (glambot, seambot, finishingbot)
     Finisher,
     /// Third tier - executes actions based on findings (robot-repo-automaton)
     Executor,

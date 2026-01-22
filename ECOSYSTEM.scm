@@ -55,11 +55,11 @@
         (purpose "Seam boundary hygiene and architectural integrity")
         (tech "Rust")
         (repo "hyperpolymath/bots/seambot"))
-      (finishing-bot
+      (finishingbot
         (type "release-bot")
         (purpose "Release readiness gating and placeholder validation")
         (tech "Rust")
-        (repo "hyperpolymath/bots/finishing-bot")))
+        (repo "hyperpolymath/finishingbot")))
     (sibling
       (gitvisor
         (relationship "visualization-layer")
@@ -70,7 +70,7 @@
     (components
       (results-api "Bots publish findings to shared context")
       (prompt-sharing "Common prompts and templates for bot interactions")
-      (sequencing "Coordinate execution order - e.g., seambot before finishing-bot")))
+      (sequencing "Coordinate execution order - e.g., seambot before finishingbot")))
 
   (bot-modes
     (consultant "Reports findings without taking action")

@@ -25,7 +25,7 @@
        (oikos . ((status . "active") (completion . 40)))
        (glambot . ((status . "complete") (completion . 90)))
        (seambot . ((status . "active") (completion . 60)))
-       (finishing-bot . ((status . "complete") (completion . 90)))
+       (finishingbot . ((status . "complete") (completion . 90)))
        (robot-repo-automaton . ((status . "integrated") (completion . 85)))
        (hypatia . ((status . "integrated") (completion . 90)))))
     (working-features
@@ -80,13 +80,14 @@
                          "Fixed robot-repo-automaton README: AGPL-3.0→PMPL-1.0-or-later, renamed cicd-hyper-a→hypatia"
                          "Audited palimpsest-license repo: fully consistent, no issues"
                          "Reorganized SCM files to .machine_readable/6scm/ structure in 8 repos"
-                         "Moved core 6 SCM files from root to standard location (echidnabot, hypatia, robot-repo-automaton, rhodibot, sustainabot, glambot, seambot, finishing-bot)"
+                         "Moved core 6 SCM files from root to standard location (echidnabot, hypatia, robot-repo-automaton, rhodibot, sustainabot, glambot, seambot, finishingbot)"
                          "Created 22 missing SCM files to complete 6-file set for all fleet bots"
                          "Created comprehensive PLAYBOOK, AGENTIC, NEUROSYM files tailored to each bot's purpose"
                          "Created AI.djot files for 8 repos with explicit SCM folder references"
                          "All repos now have complete .machine_readable/6scm/ structure (STATE, ECOSYSTEM, META, PLAYBOOK, AGENTIC, NEUROSYM)"
                          "All licensing standardized to PMPL-1.0-or-later across ecosystem"
-                         "All changes committed and pushed to GitHub")))
+                         "All changes committed and pushed to GitHub"
+                         "Renamed finishing-bot → finishingbot for naming consistency with other bots")))
      ((date . "2026-01-22")
       (session . "afternoon")
       (accomplishments . ("Renamed cicd-hyper-a to hypatia across all fleet files"
