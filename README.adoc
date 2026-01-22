@@ -82,3 +82,5 @@ This repository is a **satellite** of `git-dispatcher`, the central coordination
 == License
 
 PMPL-1.0-or-later - See LICENSE file.
+
+image::https://img.shields.io/badge/license-PMPL--1.0--or--later-blue.svg[License: PMPL-1.0-or-later, link=https://github.com/hyperpolymath/palimpsest-license]
