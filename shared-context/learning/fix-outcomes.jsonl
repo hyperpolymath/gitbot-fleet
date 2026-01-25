@@ -1,0 +1,9 @@
+{"pattern":"getexn_on_external_data","file":"svalinn/src/auth/OAuth2.res","outcome":"success","fixed_at":"2026-01-25T08:25:00+00:00","bot":"hypatia"}
+{"pattern":"getexn_on_external_data","file":"svalinn/src/auth/OAuth2.res","outcome":"success","fixed_at":"2026-01-25T08:25:00+00:00","bot":"hypatia"}
+{"pattern":"getexn_on_external_data","file":"svalinn/src/auth/OAuth2.res","outcome":"success","fixed_at":"2026-01-25T08:25:00+00:00","bot":"hypatia"}
+{"pattern":"obj_magic_bypass","file":"svalinn/src/vordr/Client.res","outcome":"success","fixed_at":"2026-01-25T08:25:00+00:00","bot":"hypatia"}
+{"pattern":"obj_magic_bypass","file":"svalinn/src/vordr/Client.res","outcome":"success","fixed_at":"2026-01-25T08:25:00+00:00","bot":"hypatia"}
+{"pattern":"unwrap_on_lock","file":"vordr/src/rust/ebpf/anomaly.rs","outcome":"success","fixed_at":"2026-01-25T08:30:00+00:00","bot":"hypatia"}
+{"pattern":"unwrap_on_lock","file":"vordr/src/rust/ebpf/anomaly.rs","outcome":"success","fixed_at":"2026-01-25T08:30:00+00:00","bot":"hypatia"}
+{"pattern":"unwrap_on_lock","file":"vordr/src/rust/ebpf/anomaly.rs","outcome":"success","fixed_at":"2026-01-25T08:30:00+00:00","bot":"hypatia"}
+{"pattern":"unwrap_on_systemtime","file":"vordr/src/rust/mcp/server.rs","outcome":"success","fixed_at":"2026-01-25T08:30:00+00:00","bot":"hypatia"}

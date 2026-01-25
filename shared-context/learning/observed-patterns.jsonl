@@ -1,0 +1,13 @@
+{"type":"unsafe_crash","pattern":"getexn_on_external_data","observed":"2026-01-25T08:18:08+00:00"}
+{"type":"type_safety_bypass","pattern":"obj_magic_bypass","observed":"2026-01-25T08:18:08+00:00"}
+{"type":"unsafe_crash","pattern":"getexn_on_external_data","observed":"2026-01-25T08:18:08+00:00"}
+{"type":"unsafe_crash","pattern":"getexn_on_external_data","observed":"2026-01-25T08:19:00+00:00"}
+{"type":"unsafe_crash","pattern":"getexn_on_external_data","observed":"2026-01-25T08:19:00+00:00"}
+{"type":"unsafe_crash","pattern":"getexn_on_external_data","observed":"2026-01-25T08:19:00+00:00"}
+{"type":"unsafe_crash","pattern":"getexn_on_external_data","observed":"2026-01-25T08:18:41+00:00"}
+{"type":"type_safety_bypass","pattern":"obj_magic_bypass","observed":"2026-01-25T08:18:41+00:00"}
+{"type":"unsafe_crash","pattern":"getexn_on_external_data","observed":"2026-01-25T08:18:41+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_on_lock","observed":"2026-01-25T08:30:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_on_lock","observed":"2026-01-25T08:30:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_on_lock","observed":"2026-01-25T08:30:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_on_systemtime","observed":"2026-01-25T08:30:00+00:00"}
