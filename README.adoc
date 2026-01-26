@@ -30,7 +30,7 @@ Gitbot Fleet is the central orchestration repository for all quality-enforcement
 |Formal mathematical/statistical verification. Security fuzzing as secondary function.
 |Active
 
-|**oikos**
+|**sustainabot**
 |Ecological and economic code standards. Carbon intensity, resource efficiency, technical debt modeling.
 |Active
 
@@ -42,7 +42,7 @@ Gitbot Fleet is the central orchestration repository for all quality-enforcement
 |Integration health testing. Cross-component communication, API contracts, end-to-end flows.
 |Active
 
-|**finishing-bot**
+|**finishbot**
 |Release readiness. Placeholder removal, license validation, claim verification, execution testing.
 |Complete
 |===
@@ -55,7 +55,7 @@ Gitbot Fleet is the central orchestration repository for all quality-enforcement
    ┌──────────────────────────────────────────┐
    │                                          │
    │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
-   │  │ rhodibot│  │echidna  │  │  oikos  │  │
+   │  │ rhodibot│  │echidna  │  │  sustainabot  │  │
    │  │(RSR     │  │(verify) │  │(eco/    │  │
    │  │ struct) │  │         │  │ econ)   │  │
    │  └────┬────┘  └────┬────┘  └────┬────┘  │

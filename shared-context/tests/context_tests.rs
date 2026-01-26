@@ -47,10 +47,10 @@ fn test_register_all_bots() {
 
     assert!(ctx.executions.contains_key(&BotId::Rhodibot));
     assert!(ctx.executions.contains_key(&BotId::Echidnabot));
-    assert!(ctx.executions.contains_key(&BotId::Oikos));
+    assert!(ctx.executions.contains_key(&BotId::Sustainabot));
     assert!(ctx.executions.contains_key(&BotId::Glambot));
     assert!(ctx.executions.contains_key(&BotId::Seambot));
-    assert!(ctx.executions.contains_key(&BotId::FinishingBot));
+    assert!(ctx.executions.contains_key(&BotId::Finishbot));
 }
 
 #[test]
@@ -163,11 +163,11 @@ fn test_bot_dependencies() {
     // Verifiers (no deps) should be ready
     assert!(ready.contains(&BotId::Rhodibot));
     assert!(ready.contains(&BotId::Echidnabot));
-    assert!(ready.contains(&BotId::Oikos));
+    assert!(ready.contains(&BotId::Sustainabot));
 
     // Finishers (have deps) should NOT be ready
     assert!(!ready.contains(&BotId::Glambot)); // depends on rhodibot
-    assert!(!ready.contains(&BotId::FinishingBot)); // depends on rhodibot, glambot
+    assert!(!ready.contains(&BotId::Finishbot)); // depends on rhodibot, glambot
 }
 
 #[test]
@@ -184,8 +184,8 @@ fn test_verifiers_complete() {
     ctx.start_bot(BotId::Echidnabot).unwrap();
     ctx.complete_bot(BotId::Echidnabot, 0, 0, 5).unwrap();
 
-    ctx.start_bot(BotId::Oikos).unwrap();
-    ctx.complete_bot(BotId::Oikos, 0, 0, 5).unwrap();
+    ctx.start_bot(BotId::Sustainabot).unwrap();
+    ctx.complete_bot(BotId::Sustainabot, 0, 0, 5).unwrap();
 
     assert!(ctx.verifiers_complete());
 }
@@ -242,11 +242,11 @@ fn test_bot_info() {
 fn test_bot_tier() {
     assert_eq!(BotId::Rhodibot.tier(), Tier::Verifier);
     assert_eq!(BotId::Echidnabot.tier(), Tier::Verifier);
-    assert_eq!(BotId::Oikos.tier(), Tier::Verifier);
+    assert_eq!(BotId::Sustainabot.tier(), Tier::Verifier);
 
     assert_eq!(BotId::Glambot.tier(), Tier::Finisher);
     assert_eq!(BotId::Seambot.tier(), Tier::Finisher);
-    assert_eq!(BotId::FinishingBot.tier(), Tier::Finisher);
+    assert_eq!(BotId::Finishbot.tier(), Tier::Finisher);
 
     assert_eq!(BotId::Custom(1).tier(), Tier::Custom);
 }

@@ -13,13 +13,13 @@ pub enum BotId {
     /// Mathematical/formal verification
     Echidnabot,
     /// Ecological/economic standards
-    Oikos,
+    Sustainabot,
     /// Presentation quality (accessibility, SEO)
     Glambot,
     /// Integration testing
     Seambot,
     /// Release readiness validation
-    FinishingBot,
+    Finishbot,
     /// Workflow cleanup and security executor
     RobotRepoAutomaton,
     /// Neurosymbolic CI/CD intelligence platform
@@ -33,10 +33,10 @@ impl fmt::Display for BotId {
         match self {
             BotId::Rhodibot => write!(f, "rhodibot"),
             BotId::Echidnabot => write!(f, "echidnabot"),
-            BotId::Oikos => write!(f, "oikos"),
+            BotId::Sustainabot => write!(f, "sustainabot"),
             BotId::Glambot => write!(f, "glambot"),
             BotId::Seambot => write!(f, "seambot"),
-            BotId::FinishingBot => write!(f, "finishingbot"),
+            BotId::Finishbot => write!(f, "finishbot"),
             BotId::RobotRepoAutomaton => write!(f, "robot-repo-automaton"),
             BotId::Hypatia => write!(f, "hypatia"),
             BotId::Custom(id) => write!(f, "custom-{}", id),
@@ -48,8 +48,8 @@ impl BotId {
     /// Get the tier this bot belongs to
     pub fn tier(&self) -> Tier {
         match self {
-            BotId::Rhodibot | BotId::Echidnabot | BotId::Oikos => Tier::Verifier,
-            BotId::Glambot | BotId::Seambot | BotId::FinishingBot => Tier::Finisher,
+            BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot => Tier::Verifier,
+            BotId::Glambot | BotId::Seambot | BotId::Finishbot => Tier::Finisher,
             BotId::RobotRepoAutomaton => Tier::Executor,
             BotId::Hypatia => Tier::Engine,
             BotId::Custom(_) => Tier::Custom,
@@ -61,10 +61,10 @@ impl BotId {
         vec![
             BotId::Rhodibot,
             BotId::Echidnabot,
-            BotId::Oikos,
+            BotId::Sustainabot,
             BotId::Glambot,
             BotId::Seambot,
-            BotId::FinishingBot,
+            BotId::Finishbot,
             BotId::RobotRepoAutomaton,
             BotId::Hypatia,
         ]
@@ -75,10 +75,10 @@ impl BotId {
         match s.to_lowercase().as_str() {
             "rhodibot" => Some(BotId::Rhodibot),
             "echidnabot" => Some(BotId::Echidnabot),
-            "oikos" => Some(BotId::Oikos),
+            "sustainabot" => Some(BotId::Sustainabot),
             "glambot" => Some(BotId::Glambot),
             "seambot" => Some(BotId::Seambot),
-            "finishing-bot" | "finishingbot" => Some(BotId::FinishingBot),
+            "finishbot" | "finishingbot" | "finishing-bot" => Some(BotId::Finishbot),
             "robot-repo-automaton" | "robotrepoautomaton" => Some(BotId::RobotRepoAutomaton),
             "hypatia" | "cicd-hyper-a" | "cicdhypera" => Some(BotId::Hypatia),
             _ => None,
@@ -90,9 +90,9 @@ impl BotId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Tier {
-    /// First tier - produces findings (rhodibot, echidnabot, oikos)
+    /// First tier - produces findings (rhodibot, echidnabot, sustainabot)
     Verifier,
-    /// Second tier - consumes findings, produces results (glambot, seambot, finishingbot)
+    /// Second tier - consumes findings, produces results (glambot, seambot, finishbot)
     Finisher,
     /// Third tier - executes actions based on findings (robot-repo-automaton)
     Executor,
@@ -172,9 +172,9 @@ impl BotInfo {
                 can_fix: false,
                 depends_on: vec![],
             },
-            BotId::Oikos => Self {
+            BotId::Sustainabot => Self {
                 id,
-                name: "Oikos".to_string(),
+                name: "Sustainabot".to_string(),
                 description: "Ecological and economic code standards".to_string(),
                 version: "0.1.0".to_string(),
                 categories: vec![
@@ -212,7 +212,7 @@ impl BotInfo {
                 can_fix: false,
                 depends_on: vec![BotId::Rhodibot, BotId::Echidnabot],
             },
-            BotId::FinishingBot => Self {
+            BotId::Finishbot => Self {
                 id,
                 name: "Finishing Bot".to_string(),
                 description: "Release readiness - placeholders, licenses, claims".to_string(),

@@ -11,12 +11,12 @@
 //! **Tier 1 - Verifiers** (produce findings):
 //! - `rhodibot` - RSR structural compliance
 //! - `echidnabot` - Mathematical/formal verification
-//! - `oikos` - Ecological/economic standards
+//! - `sustainabot` - Ecological/economic standards
 //!
 //! **Tier 2 - Finishers** (consume findings, produce results):
 //! - `glambot` - Presentation quality
 //! - `seambot` - Integration testing
-//! - `finishing-bot` - Release readiness
+//! - `finishbot` - Release readiness
 //!
 //! ## Usage
 //!

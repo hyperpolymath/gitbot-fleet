@@ -40,10 +40,10 @@ COMMANDS:
 BOT EXECUTION ORDER (from bot_integration.lgt):
     1. rhodibot    (Verifier - structure, policy, licensing)
     2. echidnabot  (Verifier - verification, fuzzing)
-    3. oikos       (Verifier - sustainability)
+    3. sustainabot       (Verifier - sustainability)
     4. glambot     (Finisher - accessibility, SEO) [depends: rhodibot]
     5. seambot     (Finisher - integration) [depends: rhodibot, echidnabot]
-    6. finishingbot (Finisher - release, quality) [depends: rhodibot, glambot]
+    6. finishbot (Finisher - release, quality) [depends: rhodibot, glambot]
     7. robot-repo-automaton (Executor - fixes)
     8. hypatia (Engine - rule coordination)
 EOF
@@ -196,10 +196,10 @@ deploy_bots() {
   "bots": {
     "rhodibot": {"status": "ready", "tier": "verifier"},
     "echidnabot": {"status": "ready", "tier": "verifier"},
-    "oikos": {"status": "ready", "tier": "verifier"},
+    "sustainabot": {"status": "ready", "tier": "verifier"},
     "glambot": {"status": "ready", "tier": "finisher"},
     "seambot": {"status": "ready", "tier": "finisher"},
-    "finishingbot": {"status": "ready", "tier": "finisher"},
+    "finishbot": {"status": "ready", "tier": "finisher"},
     "robot-repo-automaton": {"status": "ready", "tier": "executor"},
     "hypatia": {"status": "ready", "tier": "engine"}
   }

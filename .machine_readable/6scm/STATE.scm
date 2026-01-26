@@ -1,4 +1,4 @@
-;; SPDX-License-Identifier: AGPL-3.0-or-later
+;; SPDX-License-Identifier: PMPL-1.0-or-later
 ;; SPDX-FileCopyrightText: 2025 hyperpolymath
 ;; STATE.scm - Current project state
 ;; Media-Type: application/state+scheme
@@ -23,10 +23,10 @@
     (components
       (rhodibot (status "active") (location "separate-repo"))
       (echidnabot (status "active") (location "separate-repo"))
-      (oikos (status "active") (location "separate-repo"))
+      (sustainabot (status "active") (location "separate-repo"))
       (glambot (status "complete") (location "separate-repo"))
       (seambot (status "active") (location "separate-repo"))
-      (finishing-bot (status "complete") (location "separate-repo"))
+      (finishbot (status "complete") (location "separate-repo"))
       (cicd-hyper-a (status "integrated") (location "sibling-repo")))
     (working-features
       ("Bot coordination documentation")

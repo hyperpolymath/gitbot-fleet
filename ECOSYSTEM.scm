@@ -40,7 +40,7 @@
         (purpose "Formal mathematical and statistical verification")
         (tech "Rust")
         (repo "hyperpolymath/echidnabot"))
-      (oikos-bot
+      (sustainabot
         (type "analysis-bot")
         (purpose "Ecological carbon intensity and economic efficiency analysis")
         (tech "Polyglot: Haskell, OCaml, ReScript, Rust")
@@ -55,11 +55,11 @@
         (purpose "Seam boundary hygiene and architectural integrity")
         (tech "Rust")
         (repo "hyperpolymath/bots/seambot"))
-      (finishingbot
+      (finishbot
         (type "release-bot")
         (purpose "Release readiness gating and placeholder validation")
         (tech "Rust")
-        (repo "hyperpolymath/finishingbot")))
+        (repo "hyperpolymath/finishbot")))
     (sibling
       (git-hud
         (relationship "visualization-layer")
@@ -70,7 +70,7 @@
     (components
       (results-api "Bots publish findings to shared context")
       (prompt-sharing "Common prompts and templates for bot interactions")
-      (sequencing "Coordinate execution order - e.g., seambot before finishingbot")))
+      (sequencing "Coordinate execution order - e.g., seambot before finishbot")))
 
   (bot-modes
     (consultant "Reports findings without taking action")

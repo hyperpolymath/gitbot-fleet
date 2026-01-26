@@ -1,4 +1,4 @@
-;; SPDX-License-Identifier: AGPL-3.0-or-later
+;; SPDX-License-Identifier: PMPL-1.0-or-later
 ;; SPDX-FileCopyrightText: 2025 hyperpolymath
 ;; NEUROSYM.scm - Neurosymbolic integration config
 ;; Media-Type: application/neurosym+scheme
@@ -20,7 +20,7 @@
       (conflict-resolution
         "Prevent multiple bots from conflicting actions on same file")
       (priority-ordering
-        "rhodibot > glambot > finishing-bot for structural changes")))
+        "rhodibot > glambot > finishbot for structural changes")))
 
   (neural-layer
     (embeddings
