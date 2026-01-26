@@ -7,3 +7,11 @@
 {"pattern":"unwrap_on_lock","file":"vordr/src/rust/ebpf/anomaly.rs","outcome":"success","fixed_at":"2026-01-25T08:30:00+00:00","bot":"hypatia"}
 {"pattern":"unwrap_on_lock","file":"vordr/src/rust/ebpf/anomaly.rs","outcome":"success","fixed_at":"2026-01-25T08:30:00+00:00","bot":"hypatia"}
 {"pattern":"unwrap_on_systemtime","file":"vordr/src/rust/mcp/server.rs","outcome":"success","fixed_at":"2026-01-25T08:30:00+00:00","bot":"hypatia"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}
+{"pattern":"unwrap_without_check","file":"hypatia/fixer/src/scanner.rs","outcome":"success","fixed_at":"2026-01-25T09:00:00+00:00","bot":"hypatia","method":"lazy_static_expect"}

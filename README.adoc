@@ -1,6 +1,6 @@
-image:https://img.shields.io/badge/license-PMPL--1.0-blue.svg[License,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
-// SPDX-License-Identifier: PMPL-1.0
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 hyperpolymath
 
 = Gitbot Fleet
@@ -83,4 +83,15 @@ This repository is a **satellite** of `git-dispatcher`, the central coordination
 
 PMPL-1.0-or-later - See LICENSE file.
 
-image::https://img.shields.io/badge/license-PMPL--1.0--or--later-blue.svg[License: PMPL-1.0-or-later, link=https://github.com/hyperpolymath/palimpsest-license]
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+
+== OPSM Link
+
+[source]
+----
+OPSM Core
+  |
+  v
+gitbot-fleet (execution fleet for OPSM batch operations)
+
+----

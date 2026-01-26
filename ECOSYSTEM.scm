@@ -61,7 +61,7 @@
         (tech "Rust")
         (repo "hyperpolymath/finishingbot")))
     (sibling
-      (gitvisor
+      (git-hud
         (relationship "visualization-layer")
         (description "Dashboard for viewing fleet status and bot findings"))))
 
@@ -89,4 +89,9 @@
     "Not the action executor - that is robot-repo-automaton"
     "Not a single bot - it coordinates multiple specialized bots"
     "Not the central dispatcher - that is git-dispatcher"
-    "Not a dashboard - that is gitvisor"))
+    "Not a dashboard - that is git-hud")
+  (opsm-integration
+    (relationship "core")
+    (description "execution fleet for OPSM batch operations.")
+    (direction "opsm -> gitbot-fleet"))
+)

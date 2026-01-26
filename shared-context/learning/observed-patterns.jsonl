@@ -11,3 +11,11 @@
 {"type":"unsafe_panic","pattern":"unwrap_on_lock","observed":"2026-01-25T08:30:00+00:00"}
 {"type":"unsafe_panic","pattern":"unwrap_on_lock","observed":"2026-01-25T08:30:00+00:00"}
 {"type":"unsafe_panic","pattern":"unwrap_on_systemtime","observed":"2026-01-25T08:30:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
+{"type":"unsafe_panic","pattern":"unwrap_without_check","observed":"2026-01-25T09:00:00+00:00"}
