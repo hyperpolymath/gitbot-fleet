@@ -176,12 +176,16 @@ impl BotInfo {
             BotId::Echidnabot => Self {
                 id,
                 name: "Echidnabot".to_string(),
-                description: "Formal mathematical/statistical verification and fuzzing".to_string(),
+                description: "Tier 1 Verifier - formal verification, fuzzing, proof checking".to_string(),
                 version: "0.1.0".to_string(),
                 categories: vec![
                     "verification".to_string(),
                     "fuzzing".to_string(),
                     "proofs".to_string(),
+                    "proof-verification".to_string(),
+                    "solver-integrity".to_string(),
+                    "trust-bridge".to_string(),
+                    "axiom-tracking".to_string(),
                 ],
                 can_fix: false,
                 depends_on: vec![],
