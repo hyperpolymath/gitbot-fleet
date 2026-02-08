@@ -62,10 +62,16 @@ config = {
       priority | Number = 7,  # After finishbot, before executor
     },
 
+    cipherbot = {
+      enabled | Bool = true,
+      description = "Cryptographic hygiene and post-quantum readiness",
+      priority | Number = 8,  # Specialist tier, after finishers
+    },
+
     robot_repo_automaton = {
       enabled | Bool = true,
       description = "Tier 3 Executor - automated fix application with confidence thresholds",
-      priority | Number = 8,  # Executor tier runs after all verifiers and finishers
+      priority | Number = 9,  # Executor tier runs after all verifiers, finishers, and specialists
     },
   },
 
@@ -214,6 +220,24 @@ bot_workflows = {
       "fix_color_contrast",
       "add_alt_text",
       "fix_heading_hierarchy",
+    ],
+  },
+
+  cipherbot = {
+    description = "Cryptographic hygiene and post-quantum readiness workflow",
+    enabled = config.bots.cipherbot.enabled,
+    workflow_file = ".github/workflows/cipherbot.yml",
+    checks = [
+      "hash_algorithm_strength",
+      "symmetric_cipher_selection",
+      "key_exchange_protocols",
+      "signature_scheme_validity",
+      "password_hashing_compliance",
+      "post_quantum_readiness",
+    ],
+    auto_fix_items = [
+      "upgrade_weak_hash_algorithms",
+      "add_pq_readiness_markers",
     ],
   },
 
@@ -385,6 +409,7 @@ recipes = {
       (if config.bots.seambot.enabled then "echo '  ✓ seambot (integration)'" else ""),
       (if config.bots.finishbot.enabled then "echo '  ✓ finishbot (release readiness)'" else ""),
       (if config.bots.accessibilitybot.enabled then "echo '  ✓ accessibilitybot (WCAG compliance)'" else ""),
+      (if config.bots.cipherbot.enabled then "echo '  ✓ cipherbot (crypto hygiene)'" else ""),
       (if config.bots.robot_repo_automaton.enabled then "echo '  ✓ robot-repo-automaton (Tier 3 executor)'" else ""),
       "echo ''",
       "echo 'Mode: %{std.string.from config.deployment.mode}'",
@@ -404,6 +429,7 @@ validation = {
     || config.bots.seambot.enabled
     || config.bots.finishbot.enabled
     || config.bots.accessibilitybot.enabled
+    || config.bots.cipherbot.enabled
     || config.bots.robot_repo_automaton.enabled
     | doc "At least one bot must be enabled",
 

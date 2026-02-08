@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0
+// SPDX-License-Identifier: PMPL-1.0-or-later
 //! Bot identification and metadata
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,8 @@ pub enum BotId {
     Hypatia,
     /// WCAG accessibility compliance validator
     Accessibilitybot,
+    /// Cryptographic hygiene and post-quantum readiness specialist
+    Cipherbot,
     /// Custom/external bot
     Custom(u32),
 }
@@ -42,6 +44,7 @@ impl fmt::Display for BotId {
             BotId::RobotRepoAutomaton => write!(f, "robot-repo-automaton"),
             BotId::Hypatia => write!(f, "hypatia"),
             BotId::Accessibilitybot => write!(f, "accessibilitybot"),
+            BotId::Cipherbot => write!(f, "cipherbot"),
             BotId::Custom(id) => write!(f, "custom-{}", id),
         }
     }
@@ -53,6 +56,7 @@ impl BotId {
         match self {
             BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot => Tier::Verifier,
             BotId::Glambot | BotId::Seambot | BotId::Finishbot | BotId::Accessibilitybot => Tier::Finisher,
+            BotId::Cipherbot => Tier::Specialist,
             BotId::RobotRepoAutomaton => Tier::Executor,
             BotId::Hypatia => Tier::Engine,
             BotId::Custom(_) => Tier::Custom,
@@ -71,6 +75,7 @@ impl BotId {
             BotId::RobotRepoAutomaton,
             BotId::Hypatia,
             BotId::Accessibilitybot,
+            BotId::Cipherbot,
         ]
     }
 
@@ -86,6 +91,7 @@ impl BotId {
             "robot-repo-automaton" | "robotrepoautomaton" => Some(BotId::RobotRepoAutomaton),
             "hypatia" | "cicd-hyper-a" | "cicdhypera" => Some(BotId::Hypatia),
             "accessibilitybot" | "accessibility-bot" => Some(BotId::Accessibilitybot),
+            "cipherbot" | "cipher-bot" => Some(BotId::Cipherbot),
             _ => None,
         }
     }
@@ -99,6 +105,8 @@ pub enum Tier {
     Verifier,
     /// Second tier - consumes findings, produces results (glambot, seambot, finishbot)
     Finisher,
+    /// Specialist - domain-specific deep analysis (cipherbot)
+    Specialist,
     /// Third tier - executes actions based on findings (robot-repo-automaton)
     Executor,
     /// Central intelligence layer - coordinates all bots (hypatia)
@@ -111,11 +119,12 @@ impl Tier {
     /// Get execution order (lower = earlier)
     pub fn execution_order(&self) -> u8 {
         match self {
-            Tier::Engine => 0,    // Engine coordinates, runs first
+            Tier::Engine => 0,      // Engine coordinates, runs first
             Tier::Verifier => 1,
             Tier::Finisher => 2,
-            Tier::Executor => 3,  // Executor runs after verification
-            Tier::Custom => 4,
+            Tier::Specialist => 3,  // Specialist runs after verifiers/finishers
+            Tier::Executor => 4,    // Executor runs after all analysis
+            Tier::Custom => 5,
         }
     }
 
@@ -224,13 +233,17 @@ impl BotInfo {
             BotId::Finishbot => Self {
                 id,
                 name: "Finishing Bot".to_string(),
-                description: "Release readiness - placeholders, licenses, claims".to_string(),
+                description: "Tier 2 Finisher - completeness analysis and release readiness".to_string(),
                 version: "0.1.0".to_string(),
                 categories: vec![
-                    "license".to_string(),
-                    "placeholder".to_string(),
-                    "claims".to_string(),
-                    "release".to_string(),
+                    "completeness/license".to_string(),
+                    "completeness/placeholder".to_string(),
+                    "completeness/claims".to_string(),
+                    "completeness/release".to_string(),
+                    "completeness/scm".to_string(),
+                    "completeness/testing".to_string(),
+                    "completeness/tooling".to_string(),
+                    "completeness/v1-readiness".to_string(),
                 ],
                 can_fix: true,
                 depends_on: vec![BotId::Rhodibot, BotId::Glambot],
@@ -275,6 +288,22 @@ impl BotInfo {
                 ],
                 can_fix: true,
                 depends_on: vec![BotId::Rhodibot, BotId::Glambot],
+            },
+            BotId::Cipherbot => Self {
+                id,
+                name: "Cipherbot".to_string(),
+                description: "Cryptographic hygiene and post-quantum readiness specialist".to_string(),
+                version: "0.1.0".to_string(),
+                categories: vec![
+                    "crypto/hashing".to_string(),
+                    "crypto/symmetric".to_string(),
+                    "crypto/key-exchange".to_string(),
+                    "crypto/signatures".to_string(),
+                    "crypto/password".to_string(),
+                    "crypto/pq-readiness".to_string(),
+                ],
+                can_fix: true,
+                depends_on: vec![BotId::Rhodibot, BotId::Echidnabot],
             },
             BotId::Custom(_) => Self {
                 id,

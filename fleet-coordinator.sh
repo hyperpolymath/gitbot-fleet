@@ -46,8 +46,9 @@ BOT EXECUTION ORDER (from bot_integration.lgt):
     5. seambot     (Finisher - integration) [depends: rhodibot, echidnabot]
     6. finishbot (Finisher - release, quality) [depends: rhodibot, glambot]
     7. accessibilitybot (Finisher - WCAG compliance) [depends: rhodibot, glambot]
-    8. robot-repo-automaton (Executor - fixes)
-    9. hypatia (Engine - rule coordination)
+    8. cipherbot     (Specialist - crypto hygiene) [depends: rhodibot, echidnabot]
+    9. robot-repo-automaton (Executor - fixes)
+   10. hypatia (Engine - rule coordination)
 EOF
 }
 
@@ -551,6 +552,7 @@ deploy_bots() {
     "seambot": {"status": "ready", "tier": "finisher"},
     "finishbot": {"status": "ready", "tier": "finisher"},
     "accessibilitybot": {"status": "ready", "tier": "finisher"},
+    "cipherbot": {"status": "ready", "tier": "specialist"},
     "robot-repo-automaton": {"status": "ready", "tier": "executor"},
     "hypatia": {"status": "ready", "tier": "engine"}
   }

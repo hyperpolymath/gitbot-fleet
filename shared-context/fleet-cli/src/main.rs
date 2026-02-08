@@ -311,6 +311,7 @@ fn parse_bot_id(name: &str) -> Option<BotId> {
         "robot-repo-automaton" | "robot" => Some(BotId::RobotRepoAutomaton),
         "hypatia" => Some(BotId::Hypatia),
         "accessibilitybot" | "accessibility-bot" => Some(BotId::Accessibilitybot),
+        "cipherbot" | "cipher-bot" => Some(BotId::Cipherbot),
         _ => None,
     }
 }
@@ -321,6 +322,7 @@ fn tier_name(tier: gitbot_shared_context::Tier) -> &'static str {
         Tier::Engine => "Engine",
         Tier::Verifier => "Verifier",
         Tier::Finisher => "Finisher",
+        Tier::Specialist => "Specialist",
         Tier::Executor => "Executor",
         Tier::Custom => "Custom",
     }
