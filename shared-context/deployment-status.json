@@ -1,0 +1,14 @@
+{
+  "session_id": "20260125-081353",
+  "deployed_at": "2026-01-25T08:13:53+00:00",
+  "bots": {
+    "rhodibot": {"status": "ready", "tier": "verifier"},
+    "echidnabot": {"status": "ready", "tier": "verifier"},
+    "sustainabot": {"status": "ready", "tier": "verifier"},
+    "glambot": {"status": "ready", "tier": "finisher"},
+    "seambot": {"status": "ready", "tier": "finisher"},
+    "finishbot": {"status": "ready", "tier": "finisher"},
+    "robot-repo-automaton": {"status": "ready", "tier": "executor"},
+    "hypatia": {"status": "ready", "tier": "engine"}
+  }
+}

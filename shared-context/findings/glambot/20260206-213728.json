@@ -1,0 +1,65 @@
+{
+  "submission_metadata": {
+    "repo": "glambot",
+    "timestamp": "2026-02-06T21:37:28+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/glambot/target/debug/build/markup5ever-acddbbe0f565565f/out/named_entities.rs",
+      "line": 10,
+      "code": "/// assert_eq!(NAMED_ENTITIES.get(\"gt;\").unwrap(), &(62, 0));",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/glambot/target/release/build/markup5ever-d79fd0f77e893b53/out/named_entities.rs",
+      "line": 10,
+      "code": "/// assert_eq!(NAMED_ENTITIES.get(\"gt;\").unwrap(), &(62, 0));",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/glambot/src/analyzers/accessibility.rs",
+      "line": 57,
+      "code": "        let md_image_re = Regex::new(r\"!\\[(.*?)\\]\\((.*?)\\)\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/glambot/src/analyzers/accessibility.rs",
+      "line": 58,
+      "code": "        let adoc_image_re = Regex::new(r\"image::(.*?)\\[(.*?)\\]\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/glambot/src/analyzers/accessibility.rs",
+      "line": 173,
+      "code": "        let md_link_re = Regex::new(r\"\\[(.*?)\\]\\((.*?)\\)\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    }
+  ]
+}

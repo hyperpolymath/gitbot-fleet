@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Docker Compose configuration for gitbot-fleet
+
+version: '3.8'
+
+services:
+  # Fleet Dashboard - Web UI and API
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: fleet-dashboard
+    ports:
+      - "8080:8080"
+    environment:
+      FLEET_REPO_PATH: ${FLEET_REPO_PATH:-/repo}
+      FLEET_REPO_NAME: ${FLEET_REPO_NAME:-default}
+      RUST_LOG: ${RUST_LOG:-fleet_dashboard=info}
+    volumes:
+      # Mount repository as read-only
+      - ${HOST_REPO_PATH:-./test-repo}:/repo:ro
+      # Persistent storage for context
+      - fleet-context:/var/lib/fleet
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - fleet-network
+    labels:
+      com.hyperpolymath.fleet.service: "dashboard"
+      com.hyperpolymath.fleet.version: "0.2.0"
+
+  # Fleet CLI - Background coordinator (optional)
+  coordinator:
+    build:
+      context: .
+      dockerfile: shared-context/fleet-cli/Dockerfile
+    container_name: fleet-coordinator
+    environment:
+      FLEET_REPO_PATH: /repo
+      FLEET_REPO_NAME: ${FLEET_REPO_NAME:-default}
+    volumes:
+      - ${HOST_REPO_PATH:-./test-repo}:/repo:ro
+      - fleet-context:/var/lib/fleet
+    command: ["fleet", "run", "--continue-on-error"]
+    restart: "no"
+    depends_on:
+      - dashboard
+    networks:
+      - fleet-network
+    labels:
+      com.hyperpolymath.fleet.service: "coordinator"
+      com.hyperpolymath.fleet.version: "0.2.0"
+
+volumes:
+  fleet-context:
+    driver: local
+    labels:
+      com.hyperpolymath.fleet.volume: "context"
+
+networks:
+  fleet-network:
+    driver: bridge
+    labels:
+      com.hyperpolymath.fleet.network: "main"

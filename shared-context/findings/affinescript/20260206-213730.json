@@ -1,0 +1,98 @@
+{
+  "submission_metadata": {
+    "repo": "affinescript",
+    "timestamp": "2026-02-06T21:37:31+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affine-doc/src/index.rs",
+      "line": 166,
+      "code": "    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affinescript-lsp/src/diagnostics.rs",
+      "line": 127,
+      "code": "                    uri: Url::parse(&format!(\"file://{}\", span.file)).unwrap(),",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affinescript-lsp/src/diagnostics.rs",
+      "line": 156,
+      "code": "                .unwrap(),",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affinescript-lsp/src/document.rs",
+      "line": 30,
+      "code": "        self.documents.write().unwrap().insert(uri, doc);",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affinescript-lsp/src/document.rs",
+      "line": 35,
+      "code": "        self.documents.write().unwrap().remove(uri);",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affinescript-lsp/src/document.rs",
+      "line": 40,
+      "code": "        let mut docs = self.documents.write().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affinescript-lsp/src/document.rs",
+      "line": 48,
+      "code": "        self.documents.read().unwrap().get(uri).map(|d| d.text.clone())",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/affinescript/tools/affinescript-lsp/src/document.rs",
+      "line": 53,
+      "code": "        self.documents.read().unwrap().get(uri).map(|d| d.version)",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    }
+  ]
+}

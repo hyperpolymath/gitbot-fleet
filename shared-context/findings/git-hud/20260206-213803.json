@@ -1,0 +1,76 @@
+{
+  "submission_metadata": {
+    "repo": "git-hud",
+    "timestamp": "2026-02-06T21:38:03+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "type_safety_bypass",
+      "pattern": "obj_magic_bypass",
+      "file": "/var/mnt/eclipse/repos/git-hud/frontend/src/Tea.res",
+      "line": 121,
+      "code": "        Webapi.Dom.Window.addEventListener(Webapi.Dom.window, \"keydown\", listener->Obj.magic)",
+      "cwe": "CWE-704",
+      "fix": "Remove Obj.magic and use proper type conversions",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "type_safety_bypass",
+      "pattern": "obj_magic_bypass",
+      "file": "/var/mnt/eclipse/repos/git-hud/frontend/src/Tea.res",
+      "line": 123,
+      "code": "          Webapi.Dom.Window.removeEventListener(Webapi.Dom.window, \"keydown\", listener->Obj.magic)",
+      "cwe": "CWE-704",
+      "fix": "Remove Obj.magic and use proper type conversions",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "type_safety_bypass",
+      "pattern": "obj_magic_bypass",
+      "file": "/var/mnt/eclipse/repos/git-hud/frontend/src/Tea.res",
+      "line": 134,
+      "code": "        Webapi.Dom.Window.addEventListener(Webapi.Dom.window, \"keyup\", listener->Obj.magic)",
+      "cwe": "CWE-704",
+      "fix": "Remove Obj.magic and use proper type conversions",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "type_safety_bypass",
+      "pattern": "obj_magic_bypass",
+      "file": "/var/mnt/eclipse/repos/git-hud/frontend/src/Tea.res",
+      "line": 136,
+      "code": "          Webapi.Dom.Window.removeEventListener(Webapi.Dom.window, \"keyup\", listener->Obj.magic)",
+      "cwe": "CWE-704",
+      "fix": "Remove Obj.magic and use proper type conversions",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "type_safety_bypass",
+      "pattern": "obj_magic_bypass",
+      "file": "/var/mnt/eclipse/repos/git-hud/frontend/src/Tea.res",
+      "line": 145,
+      "code": "        Webapi.Dom.Window.addEventListener(Webapi.Dom.window, \"resize\", listener->Obj.magic)",
+      "cwe": "CWE-704",
+      "fix": "Remove Obj.magic and use proper type conversions",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "type_safety_bypass",
+      "pattern": "obj_magic_bypass",
+      "file": "/var/mnt/eclipse/repos/git-hud/frontend/src/Tea.res",
+      "line": 147,
+      "code": "          Webapi.Dom.Window.removeEventListener(Webapi.Dom.window, \"resize\", listener->Obj.magic)",
+      "cwe": "CWE-704",
+      "fix": "Remove Obj.magic and use proper type conversions",
+      "auto_fixable": false
+    }
+  ]
+}

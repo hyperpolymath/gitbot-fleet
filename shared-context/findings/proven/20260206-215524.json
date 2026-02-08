@@ -1,0 +1,54 @@
+{
+  "submission_metadata": {
+    "repo": "proven",
+    "timestamp": "2026-02-06T21:55:25+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/proven/bindings/rust/src/core.rs",
+      "line": 181,
+      "code": "        assert_eq!(pct.unwrap().get(), 50);",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/proven/bindings/rust/src/lib.rs",
+      "line": 187,
+      "code": "        assert_eq!(result.unwrap(), 3);",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/proven/bindings/elixir/native/proven_nif/src/lib.rs",
+      "line": 179,
+      "code": "        let mut digit = c.to_digit(10).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/proven/bindings/elixir/native/proven_nif/src/lib.rs",
+      "line": 314,
+      "code": "        .unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    }
+  ]
+}

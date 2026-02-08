@@ -1,0 +1,10 @@
+[0;34m[INFO][0m Scanning directory: gitbot-fleet
+[0;34m[INFO][0m Found 7 source files
+[]
+[]
+[]
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 22
+jq: parse error: Invalid numeric literal at line 7, column 34
+[0;31m[ERROR][0m Found issues in 2 files

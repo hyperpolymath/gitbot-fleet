@@ -1,0 +1,98 @@
+{
+  "submission_metadata": {
+    "repo": "absolute-zero",
+    "timestamp": "2026-02-06T21:37:29+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 167,
+      "code": "                let b = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 168,
+      "code": "                let a = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 175,
+      "code": "                let b = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 176,
+      "code": "                let a = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 183,
+      "code": "                let b = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 184,
+      "code": "                let a = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 193,
+      "code": "                let value = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/absolute-zero/src/whitespace/src/lib.rs",
+      "line": 194,
+      "code": "                let address = self.state.stack.pop().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    }
+  ]
+}

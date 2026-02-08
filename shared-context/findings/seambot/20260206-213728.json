@@ -1,0 +1,142 @@
+{
+  "submission_metadata": {
+    "repo": "seambot",
+    "timestamp": "2026-02-06T21:37:28+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/src/register.rs",
+      "line": 253,
+      "code": "GLOBAL_STATE.write().unwrap().set_value(input);",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/check_register.rs",
+      "line": 46,
+      "code": "        assert!(!seam[\"frozen\"].as_bool().unwrap());",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 53,
+      "code": "        let serialized = serde_json::to_string(&output).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 65,
+      "code": "            let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 77,
+      "code": "            let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 97,
+      "code": "            let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 147,
+      "code": "        assert!(claims[\"iat\"].as_i64().unwrap() < claims[\"exp\"].as_i64().unwrap());",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 158,
+      "code": "        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 159,
+      "code": "        assert!(parsed[\"token\"].as_str().unwrap().starts_with(\"ghs_\"));",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 160,
+      "code": "        assert!(parsed[\"expires_at\"].as_str().unwrap().contains(\"T\"));",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 183,
+      "code": "        let parsed: serde_json::Value = serde_json::from_str(check_suite_event).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/seambot/tests/github_integration.rs",
+      "line": 210,
+      "code": "        let parsed: serde_json::Value = serde_json::from_str(pr_event).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    }
+  ]
+}

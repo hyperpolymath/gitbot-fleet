@@ -1,0 +1,1 @@
+{"severity":"critical","type":"cors_misconfiguration","pattern":"wildcard_cors","file":"/var/mnt/eclipse/repos/vordr/src/mcp-adapter/src/HttpServer.res","line":352,"code":"  (\"Access-Control-Allow-Origin\", \"*\"),","cwe":"CWE-942","fix":"Replace '*' with environment-based origin whitelist","auto_fixable":true,"fix_suggestion":"scripts/fix-cors-wildcard.sh"}

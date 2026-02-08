@@ -1,0 +1,285 @@
+{
+  "submission_metadata": {
+    "repo": "gitbot-fleet",
+    "timestamp": "2026-02-06T21:55:23+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/src/storage.rs",
+      "line": 259,
+      "code": "        let temp = TempDir::new().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/src/storage.rs",
+      "line": 263,
+      "code": "        let path = storage.save_context(&ctx).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/src/storage.rs",
+      "line": 266,
+      "code": "        let loaded = storage.load_context(&ctx.session_id).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/src/storage.rs",
+      "line": 272,
+      "code": "        let temp = TempDir::new().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/src/storage.rs",
+      "line": 276,
+      "code": "        storage.save_repo_state(&state).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/src/storage.rs",
+      "line": 278,
+      "code": "        let loaded = storage.load_repo_state(\"my-repo\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 29,
+      "code": "    ctx.start_bot(BotId::Glambot).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 33,
+      "code": "    ctx.complete_bot(BotId::Glambot, 5, 1, 10).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 37,
+      "code": "    let execution = ctx.executions.get(&BotId::Glambot).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 181,
+      "code": "    ctx.start_bot(BotId::Rhodibot).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 182,
+      "code": "    ctx.complete_bot(BotId::Rhodibot, 0, 0, 5).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 184,
+      "code": "    ctx.start_bot(BotId::Echidnabot).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 185,
+      "code": "    ctx.complete_bot(BotId::Echidnabot, 0, 0, 5).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 187,
+      "code": "    ctx.start_bot(BotId::Sustainabot).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 188,
+      "code": "    ctx.complete_bot(BotId::Sustainabot, 0, 0, 5).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 199,
+      "code": "    ctx.start_bot(BotId::Rhodibot).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 206,
+      "code": "    ctx.complete_bot(BotId::Rhodibot, 1, 0, 10).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 208,
+      "code": "    ctx.start_bot(BotId::Glambot).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 215,
+      "code": "    ctx.complete_bot(BotId::Glambot, 1, 1, 5).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 297,
+      "code": "    let temp_dir = TempDir::new().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 309,
+      "code": "    storage.save_context(&ctx).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 312,
+      "code": "    let loaded = storage.load_context(\"test-repo\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 319,
+      "code": "    let temp_dir = TempDir::new().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 331,
+      "code": "    storage.save_repo_state(&state).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/tests/context_tests.rs",
+      "line": 334,
+      "code": "    let loaded = storage.load_repo_state(\"test-repo\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    }
+  ]
+}

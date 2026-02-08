@@ -1,0 +1,18 @@
+[package]
+name = "fleet"
+version = "0.1.0"
+edition = "2021"
+license = "PMPL-1.0-or-later"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+description = "Unified CLI for gitbot-fleet coordination"
+
+[dependencies]
+gitbot-shared-context = { path = ".." }
+clap = { version = "4", features = ["derive", "cargo"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+colored = "2"

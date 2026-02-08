@@ -1,0 +1,22 @@
+[0;34m[INFO][0m Scanning directory: finishbot
+[0;34m[INFO][0m Found 19 source files
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 31
+[]
+jq: parse error: Invalid numeric literal at line 7, column 28
+jq: parse error: Invalid numeric literal at line 7, column 31
+jq: parse error: Invalid numeric literal at line 7, column 28
+jq: parse error: Invalid numeric literal at line 7, column 22
+[]
+[]
+[]
+jq: parse error: Invalid literal at line 7, column 21
+[0;31m[ERROR][0m Found issues in 6 files

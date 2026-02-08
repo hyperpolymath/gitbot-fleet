@@ -1,0 +1,9 @@
+# Rule Approval Metadata
+rule_name: unsafe_without_doc
+status: approved
+approved_date: 2026-02-06T22:23:47+00:00
+approved_by: ECHIDNA Semantic Validation v1.0
+validation_score: 92%
+observations: 19
+deployment_date: 2026-02-06T22:23:47+00:00
+production_ready: true

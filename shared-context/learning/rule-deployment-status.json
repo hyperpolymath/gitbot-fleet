@@ -1,0 +1,76 @@
+{
+    "deployment_date": "2026-02-06T22:30:00+00:00",
+    "deployment_id": "DEPLOY-20260206-001",
+    "approved_rules": [
+        {
+            "name": "unsafe_panic",
+            "observations": 1150,
+            "status": "approved",
+            "quality": "template",
+            "approval_date": "2026-02-06T21:31:24+00:00"
+        },
+        {
+            "name": "type_safety_bypass",
+            "observations": 477,
+            "status": "approved",
+            "quality": "template",
+            "approval_date": "2026-02-06T21:38:05+00:00"
+        },
+        {
+            "name": "unsafe_crash",
+            "observations": 342,
+            "status": "approved",
+            "quality": "template",
+            "approval_date": "2026-02-06T21:38:05+00:00"
+        },
+        {
+            "name": "cors_misconfiguration",
+            "observations": 3,
+            "status": "approved",
+            "quality": "auto-fix",
+            "approval_date": "2026-02-06T21:38:05+00:00",
+            "fixes_executed": 3
+        },
+        {
+            "name": "technical_debt",
+            "observations": 196,
+            "status": "approved",
+            "quality": "production",
+            "validation_score": 0.92,
+            "approval_date": "2026-02-06T22:30:00+00:00",
+            "deployment_date": "2026-02-06T22:30:00+00:00"
+        },
+        {
+            "name": "unsafe_without_doc",
+            "observations": 19,
+            "status": "approved",
+            "quality": "production",
+            "validation_score": 0.92,
+            "approval_date": "2026-02-06T22:30:00+00:00",
+            "deployment_date": "2026-02-06T22:30:00+00:00"
+        },
+        {
+            "name": "eval_usage",
+            "observations": 7,
+            "status": "approved",
+            "quality": "production",
+            "validation_score": 0.92,
+            "approval_date": "2026-02-06T22:30:00+00:00",
+            "deployment_date": "2026-02-06T22:30:00+00:00"
+        }
+    ],
+    "total_approved_rules": 7,
+    "total_observations": 2194,
+    "learning_loop_status": "active",
+    "auto_approval_candidates": 0,
+    "fleet_coverage": {
+        "supervised_repos": 14,
+        "total_repos": 585,
+        "coverage_percentage": 2.4
+    },
+    "next_milestone": {
+        "goal": "auto_approval_threshold",
+        "requirement": "10 observations + 3 successful fixes",
+        "current_status": "collecting_fix_outcomes"
+    }
+}

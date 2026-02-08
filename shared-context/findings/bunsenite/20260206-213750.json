@@ -1,0 +1,340 @@
+{
+  "submission_metadata": {
+    "repo": "bunsenite",
+    "timestamp": "2026-02-06T21:37:50+00:00",
+    "scanner": "hypatia",
+    "version": "1.0.0"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 141,
+      "code": "        let source = CString::new(\"{ foo = 42 }\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 142,
+      "code": "        let name = CString::new(\"test.ncl\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 148,
+      "code": "            let result_str = CStr::from_ptr(result).to_str().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 158,
+      "code": "        let source = CString::new(\"{ invalid = }\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 159,
+      "code": "        let name = CString::new(\"bad.ncl\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 169,
+      "code": "        let source = CString::new(\"{ foo = 42 }\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 170,
+      "code": "        let name = CString::new(\"test.ncl\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 180,
+      "code": "        let source = CString::new(\"{ foo = }\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 181,
+      "code": "        let name = CString::new(\"bad.ncl\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 202,
+      "code": "            let version_str = CStr::from_ptr(version).to_str().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/ffi.rs",
+      "line": 212,
+      "code": "            let tier_str = CStr::from_ptr(tier).to_str().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/loader.rs",
+      "line": 34,
+      "code": "/// let result = loader.parse_string(config, \"test.ncl\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/loader.rs",
+      "line": 198,
+      "code": "        let result = loader.parse_string(source, \"math.ncl\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/loader.rs",
+      "line": 208,
+      "code": "        let result = loader.parse_string(source, \"strings.ncl\").unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/schema.rs",
+      "line": 109,
+      "code": "        let validator = SchemaValidator::new(schema).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/schema.rs",
+      "line": 130,
+      "code": "        let validator = SchemaValidator::new(schema).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/schema.rs",
+      "line": 149,
+      "code": "        let validator = SchemaValidator::new(schema).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/schema.rs",
+      "line": 171,
+      "code": "        let validator = SchemaValidator::new(schema).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/schema.rs",
+      "line": 188,
+      "code": "        let validator = SchemaValidator::from_str(schema_str).unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/main.rs",
+      "line": 133,
+      "code": "        println!(\"{}\", serde_json::to_string_pretty(&result).unwrap());",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/main.rs",
+      "line": 135,
+      "code": "        println!(\"{}\", serde_json::to_string(&result).unwrap());",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/src/main.rs",
+      "line": 288,
+      "code": "                        println!(\"{}\", serde_json::to_string_pretty(&result).unwrap());",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 17731,
+      "code": "        let __state = *__states.last().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 57840,
+      "code": "        let __state = *__states.last().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 97886,
+      "code": "        let __state = *__states.last().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 137937,
+      "code": "        let __state = *__states.last().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 177981,
+      "code": "        let __state = *__states.last().unwrap();",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 201340,
+      "code": "                // value.pos.unwrap(): the position of `t` is necessarily set by",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 201344,
+      "code": "                annot_span.fuse(value.pos.unwrap()).unwrap()",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    },
+    {
+      "severity": "high",
+      "type": "unsafe_panic",
+      "pattern": "unwrap_without_check",
+      "file": "/var/mnt/eclipse/repos/bunsenite/target/debug/build/nickel-lang-core-a48330c0d4876146/out/parser/grammar.rs",
+      "line": 202785,
+      "code": "    match strip_indent(chunks).pop().unwrap() {",
+      "cwe": "CWE-754",
+      "fix": "Replace unwrap() with ? operator or match",
+      "auto_fixable": false
+    }
+  ]
+}

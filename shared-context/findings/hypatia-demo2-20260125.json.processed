@@ -1,0 +1,32 @@
+[
+  {
+    "severity": "critical",
+    "type": "unsafe_crash",
+    "pattern": "getexn_on_external_data",
+    "file": "/var/mnt/eclipse/repos/svalinn/src/auth/OAuth2.res",
+    "line": 78,
+    "code": "let obj = json->Js.Json.decodeObject->Belt.Option.getExn",
+    "cwe": "CWE-754",
+    "fix": "Replace getExn with switch/match or getWithDefault"
+  },
+  {
+    "severity": "high",
+    "type": "type_safety_bypass",
+    "pattern": "obj_magic_bypass",
+    "file": "/var/mnt/eclipse/repos/svalinn/src/vordr/Client.res",
+    "line": 49,
+    "code": "params: Obj.magic({",
+    "cwe": "CWE-704",
+    "fix": "Remove Obj.magic and use proper type conversions"
+  },
+  {
+    "severity": "critical",
+    "type": "unsafe_crash",
+    "pattern": "getexn_on_external_data",
+    "file": "/var/mnt/eclipse/repos/svalinn/src/auth/JWT.res",
+    "line": 61,
+    "code": "->Belt.Option.getExn",
+    "cwe": "CWE-754",
+    "fix": "Replace getExn with switch/match or getWithDefault"
+  }
+]
