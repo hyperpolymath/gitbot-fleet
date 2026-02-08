@@ -207,9 +207,13 @@ impl BotInfo {
             BotId::Seambot => Self {
                 id,
                 name: "Seambot".to_string(),
-                description: "Integration health testing - APIs, contracts, e2e flows".to_string(),
+                description: "Architectural seam analysis - drift detection, hidden channels, forge integration".to_string(),
                 version: "0.1.0".to_string(),
                 categories: vec![
+                    "seam-analysis".to_string(),
+                    "drift-detection".to_string(),
+                    "hidden-channels".to_string(),
+                    "forge-integration".to_string(),
                     "integration".to_string(),
                     "api".to_string(),
                     "contracts".to_string(),

@@ -61,6 +61,12 @@ config = {
       description = "WCAG 2.3 AAA accessibility compliance",
       priority | Number = 7,  # After finishbot, before executor
     },
+
+    robot_repo_automaton = {
+      enabled | Bool = true,
+      description = "Tier 3 Executor - automated fix application with confidence thresholds",
+      priority | Number = 8,  # Executor tier runs after all verifiers and finishers
+    },
   },
 
   # GitHub organization settings
@@ -208,6 +214,24 @@ bot_workflows = {
       "fix_color_contrast",
       "add_alt_text",
       "fix_heading_hierarchy",
+    ],
+  },
+
+  robot_repo_automaton = {
+    description = "Tier 3 Executor - automated fix application",
+    enabled = config.bots.robot_repo_automaton.enabled,
+    workflow_file = ".github/workflows/robot-repo-automaton.yml",
+    checks = [
+      "compliance_scanning",
+      "confidence_threshold_evaluation",
+      "fix_dry_run_validation",
+    ],
+    auto_fix_items = [
+      "apply_spdx_headers",
+      "create_missing_standard_files",
+      "pin_workflow_actions",
+      "add_workflow_permissions",
+      "fix_cors_wildcards",
     ],
   },
 }
@@ -361,6 +385,7 @@ recipes = {
       (if config.bots.seambot.enabled then "echo '  ✓ seambot (integration)'" else ""),
       (if config.bots.finishbot.enabled then "echo '  ✓ finishbot (release readiness)'" else ""),
       (if config.bots.accessibilitybot.enabled then "echo '  ✓ accessibilitybot (WCAG compliance)'" else ""),
+      (if config.bots.robot_repo_automaton.enabled then "echo '  ✓ robot-repo-automaton (Tier 3 executor)'" else ""),
       "echo ''",
       "echo 'Mode: %{std.string.from config.deployment.mode}'",
       "echo 'Organization: %{config.github_org}'",
@@ -379,6 +404,7 @@ validation = {
     || config.bots.seambot.enabled
     || config.bots.finishbot.enabled
     || config.bots.accessibilitybot.enabled
+    || config.bots.robot_repo_automaton.enabled
     | doc "At least one bot must be enabled",
 
   # Deployment mode must be valid
