@@ -53,7 +53,13 @@ config = {
     finishbot = {
       enabled | Bool = true,
       description = "Release readiness validation",
-      priority | Number = 6,  # Lowest priority (final checks)
+      priority | Number = 6,
+    },
+
+    accessibilitybot = {
+      enabled | Bool = true,
+      description = "WCAG 2.3 AAA accessibility compliance",
+      priority | Number = 7,  # After finishbot, before executor
     },
   },
 
@@ -180,6 +186,28 @@ bot_workflows = {
     auto_fix_items = [
       "remove_todo_placeholders",
       "add_changelog_entry",
+    ],
+  },
+
+  accessibilitybot = {
+    description = "WCAG 2.3 AAA accessibility compliance workflow",
+    enabled = config.bots.accessibilitybot.enabled,
+    workflow_file = ".github/workflows/accessibilitybot.yml",
+    checks = [
+      "wcag_a_conformance",
+      "wcag_aa_conformance",
+      "wcag_aaa_conformance",
+      "aria_usage",
+      "css_accessibility",
+      "keyboard_navigation",
+      "color_contrast",
+      "alt_text",
+    ],
+    auto_fix_items = [
+      "add_aria_labels",
+      "fix_color_contrast",
+      "add_alt_text",
+      "fix_heading_hierarchy",
     ],
   },
 }
@@ -332,6 +360,7 @@ recipes = {
       (if config.bots.glambot.enabled then "echo '  ✓ glambot (presentation)'" else ""),
       (if config.bots.seambot.enabled then "echo '  ✓ seambot (integration)'" else ""),
       (if config.bots.finishbot.enabled then "echo '  ✓ finishbot (release readiness)'" else ""),
+      (if config.bots.accessibilitybot.enabled then "echo '  ✓ accessibilitybot (WCAG compliance)'" else ""),
       "echo ''",
       "echo 'Mode: %{std.string.from config.deployment.mode}'",
       "echo 'Organization: %{config.github_org}'",
@@ -349,6 +378,7 @@ validation = {
     || config.bots.glambot.enabled
     || config.bots.seambot.enabled
     || config.bots.finishbot.enabled
+    || config.bots.accessibilitybot.enabled
     | doc "At least one bot must be enabled",
 
   # Deployment mode must be valid

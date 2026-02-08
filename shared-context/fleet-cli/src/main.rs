@@ -310,6 +310,7 @@ fn parse_bot_id(name: &str) -> Option<BotId> {
         "finishbot" => Some(BotId::Finishbot),
         "robot-repo-automaton" | "robot" => Some(BotId::RobotRepoAutomaton),
         "hypatia" => Some(BotId::Hypatia),
+        "accessibilitybot" | "accessibility-bot" => Some(BotId::Accessibilitybot),
         _ => None,
     }
 }

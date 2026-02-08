@@ -17,6 +17,7 @@
 //! - `glambot` - Presentation quality
 //! - `seambot` - Integration testing
 //! - `finishbot` - Release readiness
+//! - `accessibilitybot` - WCAG accessibility compliance
 //!
 //! ## Usage
 //!

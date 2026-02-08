@@ -24,6 +24,8 @@ pub enum BotId {
     RobotRepoAutomaton,
     /// Neurosymbolic CI/CD intelligence platform
     Hypatia,
+    /// WCAG accessibility compliance validator
+    Accessibilitybot,
     /// Custom/external bot
     Custom(u32),
 }
@@ -39,6 +41,7 @@ impl fmt::Display for BotId {
             BotId::Finishbot => write!(f, "finishbot"),
             BotId::RobotRepoAutomaton => write!(f, "robot-repo-automaton"),
             BotId::Hypatia => write!(f, "hypatia"),
+            BotId::Accessibilitybot => write!(f, "accessibilitybot"),
             BotId::Custom(id) => write!(f, "custom-{}", id),
         }
     }
@@ -49,7 +52,7 @@ impl BotId {
     pub fn tier(&self) -> Tier {
         match self {
             BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot => Tier::Verifier,
-            BotId::Glambot | BotId::Seambot | BotId::Finishbot => Tier::Finisher,
+            BotId::Glambot | BotId::Seambot | BotId::Finishbot | BotId::Accessibilitybot => Tier::Finisher,
             BotId::RobotRepoAutomaton => Tier::Executor,
             BotId::Hypatia => Tier::Engine,
             BotId::Custom(_) => Tier::Custom,
@@ -67,6 +70,7 @@ impl BotId {
             BotId::Finishbot,
             BotId::RobotRepoAutomaton,
             BotId::Hypatia,
+            BotId::Accessibilitybot,
         ]
     }
 
@@ -81,6 +85,7 @@ impl BotId {
             "finishbot" | "finishingbot" | "finishing-bot" => Some(BotId::Finishbot),
             "robot-repo-automaton" | "robotrepoautomaton" => Some(BotId::RobotRepoAutomaton),
             "hypatia" | "cicd-hyper-a" | "cicdhypera" => Some(BotId::Hypatia),
+            "accessibilitybot" | "accessibility-bot" => Some(BotId::Accessibilitybot),
             _ => None,
         }
     }
@@ -251,6 +256,21 @@ impl BotInfo {
                 ],
                 can_fix: false, // Engine provides rules, doesn't directly fix
                 depends_on: vec![], // Engine is the root, no dependencies
+            },
+            BotId::Accessibilitybot => Self {
+                id,
+                name: "Accessibilitybot".to_string(),
+                description: "WCAG 2.3 AAA accessibility compliance validator".to_string(),
+                version: "0.1.0".to_string(),
+                categories: vec![
+                    "accessibility/wcag-a".to_string(),
+                    "accessibility/wcag-aa".to_string(),
+                    "accessibility/wcag-aaa".to_string(),
+                    "accessibility/aria".to_string(),
+                    "accessibility/css".to_string(),
+                ],
+                can_fix: true,
+                depends_on: vec![BotId::Rhodibot, BotId::Glambot],
             },
             BotId::Custom(_) => Self {
                 id,
