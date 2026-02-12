@@ -46,6 +46,7 @@ pub mod health;
 pub mod reporting;
 pub mod state;
 pub mod storage;
+pub mod triangle;
 
 pub use bot::{BotId, BotInfo, Tier};
 pub use context::Context;
@@ -54,6 +55,7 @@ pub use health::{FleetHealth, HealthStatus};
 pub use reporting::{FleetReport, ReportFormat};
 pub use state::{RepoState, SessionState};
 pub use storage::ContextStorage;
+pub use triangle::{ConfidenceThresholds, DispatchStrategy, TriangleTier};
 
 use thiserror::Error;
 

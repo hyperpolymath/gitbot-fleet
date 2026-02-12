@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Confidence thresholds for the learning loop — gates auto-execution and adjusts over time",
+  "auto_execute": {
+    "min_confidence": 0.95,
+    "min_successful_fixes": 3,
+    "description": "robot-repo-automaton applies fix without human review"
+  },
+  "review_required": {
+    "min_confidence": 0.85,
+    "min_successful_fixes": 1,
+    "description": "rhodibot creates PR for human review"
+  },
+  "report_only": {
+    "min_confidence": 0.0,
+    "description": "sustainabot logs advisory — no action taken"
+  },
+  "confidence_adjustments": {
+    "successful_fix": 0.02,
+    "failed_fix": -0.05,
+    "false_positive": -0.10,
+    "no_activity_90_days": -0.03
+  },
+  "bounds": {
+    "cap": 0.99,
+    "floor": 0.10
+  }
+}

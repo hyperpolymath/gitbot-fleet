@@ -90,9 +90,29 @@ run_hypatia_scan() {
 process_findings() {
     log_info "Processing pending findings..."
 
+    # Load confidence thresholds
+    local thresholds_file="$SHARED_CONTEXT/learning/confidence-thresholds.json"
+    local auto_min=0.95
+    local review_min=0.85
+    local min_fixes=3
+
+    if [[ -f "$thresholds_file" ]]; then
+        auto_min=$(jq -r '.auto_execute.min_confidence // 0.95' "$thresholds_file")
+        review_min=$(jq -r '.review_required.min_confidence // 0.85' "$thresholds_file")
+        min_fixes=$(jq -r '.auto_execute.min_successful_fixes // 3' "$thresholds_file")
+        log_info "Confidence thresholds: auto>=$auto_min, review>=$review_min, min_fixes=$min_fixes"
+    fi
+
+    # Load recipes for triangle routing
+    local recipes_dir="/var/mnt/eclipse/repos/verisimdb-data/recipes"
+    local substitutions_file="$recipes_dir/proven-substitutions.json"
+
     # Scan for findings in new directory structure: findings/<repo-name>/<timestamp>.json
     local total_findings=0
     local total_auto_fixed=0
+    local total_eliminate=0
+    local total_substitute=0
+    local total_control=0
 
     for repo_dir in "$FINDINGS_DIR"/*; do
         [[ -d "$repo_dir" ]] || continue
@@ -137,11 +157,33 @@ process_findings() {
             log_info "  Total: $total (Critical: $critical, High: $high, Medium: $medium)"
             log_info "  Auto-fixable: $auto_fixable"
 
-            # Execute auto-fixes for high-severity or auto-fixable issues
+            # Triangle routing: classify each finding by tier
+            if [[ -f "$substitutions_file" ]]; then
+                local eliminate=$(echo "$findings" | jq --slurpfile subs "$substitutions_file" \
+                    '[.[] | . as $f | ($subs[0].substitutions[] | select(.category == $f.type) | .triangle_tier) // "control" | select(. == "eliminate")] | length')
+                local substitute=$(echo "$findings" | jq --slurpfile subs "$substitutions_file" \
+                    '[.[] | . as $f | ($subs[0].substitutions[] | select(.category == $f.type) | .triangle_tier) // "control" | select(. == "substitute")] | length')
+                local control=$((total - eliminate - substitute))
+
+                total_eliminate=$((total_eliminate + eliminate))
+                total_substitute=$((total_substitute + substitute))
+                total_control=$((total_control + control))
+
+                log_info "  Triangle: Eliminate=$eliminate, Substitute=$substitute, Control=$control"
+            fi
+
+            # Execute auto-fixes for high-confidence eliminate-tier items
             if [[ $auto_fixable -gt 0 ]]; then
                 log_bot "robot-repo-automaton" "Executing $auto_fixable auto-fixes for $repo_name"
                 local fixed_count=$(execute_auto_fixes "$repo_name" "$latest_findings")
                 total_auto_fixed=$((total_auto_fixed + fixed_count))
+
+                # Record outcomes for completed fixes
+                if [[ $fixed_count -gt 0 ]]; then
+                    log_bot "hypatia" "Recording $fixed_count fix outcomes to learning pipeline"
+                    echo "{\"pattern\":\"auto-fix\",\"repo\":\"$repo_name\",\"outcome\":\"success\",\"count\":$fixed_count,\"fixed_at\":\"$(date -Iseconds)\",\"bot\":\"robot-repo-automaton\"}" \
+                        >> "$SHARED_CONTEXT/learning/fix-outcomes.jsonl"
+                fi
             fi
 
             # Trigger learning for all findings
@@ -156,6 +198,7 @@ process_findings() {
         log_info "No pending findings"
     else
         log_info "Summary: Processed $total_findings findings, auto-fixed $total_auto_fixed issues"
+        log_info "Triangle: Eliminate=$total_eliminate, Substitute=$total_substitute, Control=$total_control"
     fi
 }
 

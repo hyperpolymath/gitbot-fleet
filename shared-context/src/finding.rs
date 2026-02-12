@@ -75,6 +75,12 @@ pub struct Finding {
     pub related: Vec<Uuid>,
     /// Custom metadata
     pub metadata: serde_json::Value,
+    /// Safety triangle tier for remediation routing
+    pub triangle_tier: Option<crate::triangle::TriangleTier>,
+    /// Recipe ID if a fix recipe has been matched
+    pub recipe_id: Option<String>,
+    /// Confidence score for auto-fix decisions (0.0 - 1.0)
+    pub confidence: Option<f64>,
 }
 
 impl Finding {
@@ -98,6 +104,9 @@ impl Finding {
             created_at: Utc::now(),
             related: Vec::new(),
             metadata: serde_json::Value::Null,
+            triangle_tier: None,
+            recipe_id: None,
+            confidence: None,
         }
     }
 
@@ -165,6 +174,24 @@ impl Finding {
     /// Mark as fixed
     pub fn mark_fixed(&mut self) {
         self.fixed = true;
+    }
+
+    /// Set triangle tier for remediation routing
+    pub fn with_triangle_tier(mut self, tier: crate::triangle::TriangleTier) -> Self {
+        self.triangle_tier = Some(tier);
+        self
+    }
+
+    /// Set recipe ID
+    pub fn with_recipe(mut self, recipe_id: &str) -> Self {
+        self.recipe_id = Some(recipe_id.to_string());
+        self
+    }
+
+    /// Set confidence score
+    pub fn with_confidence(mut self, confidence: f64) -> Self {
+        self.confidence = Some(confidence);
+        self
     }
 
     /// Get location string for display
