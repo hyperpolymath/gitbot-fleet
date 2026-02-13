@@ -1,0 +1,20 @@
+{
+  "action": "substitute_text",
+  "auto_fixable": true,
+  "category": "InsecureProtocol",
+  "confidence": 0.93,
+  "description": "6 HTTP (non-HTTPS) URLs in learning/src/rdf/sparql.jl",
+  "fix_script": "fix-http-to-https.sh",
+  "match": "http:// URL",
+  "pattern_id": "PA014-6-http-non-https-urls-in-learn",
+  "proven_module": "SafeUrl",
+  "recipe_id": "recipe-http-to-https",
+  "replacement": "https:// URL",
+  "repo": "anamnesis",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "eliminate",
+  "timestamp": "2026-02-12T22:42:53.919204Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

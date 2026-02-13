@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "DynamicCodeExecution",
+  "confidence": 0.85,
+  "description": "eval() usage in scripts/dist/GrimSecurityScanner.user.js",
+  "formally_proven": false,
+  "pattern_id": "PA011-eval-usage-in-scripts-dist-gri",
+  "proven_module": "SafeHtml",
+  "proven_modules": [
+    "SafeHtml",
+    "SafeTemplate"
+  ],
+  "recipe_id": "proven-substitute-DynamicCodeExecution",
+  "repo": "grim-repo",
+  "severity": "Critical",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.922996Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

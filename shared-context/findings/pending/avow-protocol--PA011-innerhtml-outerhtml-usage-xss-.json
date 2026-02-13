@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "DynamicCodeExecution",
+  "confidence": 0.85,
+  "description": "innerHTML/outerHTML usage (XSS risk) in examples/demos/web-ui/app.js",
+  "formally_proven": false,
+  "pattern_id": "PA011-innerhtml-outerhtml-usage-xss-",
+  "proven_module": "SafeHtml",
+  "proven_modules": [
+    "SafeHtml",
+    "SafeTemplate"
+  ],
+  "recipe_id": "recipe-innerhtml-to-textcontent",
+  "repo": "avow-protocol",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921026Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

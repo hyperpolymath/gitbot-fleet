@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "UncheckedAllocation",
+  "confidence": 0.85,
+  "description": "Unchecked malloc in ephapax-proven-ffi/src/stubs.c",
+  "formally_proven": false,
+  "pattern_id": "PA001-unchecked-malloc-in-ephapax-pr",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer"
+  ],
+  "recipe_id": "proven-substitute-UncheckedAllocation",
+  "repo": "ephapax",
+  "severity": "Critical",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.920138Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "ExcessivePermissions",
+  "confidence": 0.8,
+  "description": "Deno -A (all permissions) in run-test.sh",
+  "formally_proven": false,
+  "pattern_id": "PA015-deno-a-all-permissions-in-run-",
+  "proven_module": "SafeCapability",
+  "proven_modules": [
+    "SafeCapability"
+  ],
+  "recipe_id": "proven-substitute-ExcessivePermissions",
+  "repo": "poly-k8s-mcp",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.922048Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "ExcessivePermissions",
+  "confidence": 0.8,
+  "description": "Deno -A (all permissions) in wp-sinople-theme/deno/fresh.gen.js",
+  "formally_proven": false,
+  "pattern_id": "PA015-deno-a-all-permissions-in-wp-s",
+  "proven_module": "SafeCapability",
+  "proven_modules": [
+    "SafeCapability"
+  ],
+  "recipe_id": "proven-substitute-ExcessivePermissions",
+  "repo": "hyperpolymath-archive",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.923335Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

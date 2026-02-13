@@ -199,6 +199,27 @@ process_findings() {
     else
         log_info "Summary: Processed $total_findings findings, auto-fixed $total_auto_fixed issues"
         log_info "Triangle: Eliminate=$total_eliminate, Substitute=$total_substitute, Control=$total_control"
+
+        # Process substitute-tier findings via review path (rhodibot creates issues)
+        if [[ $total_substitute -gt 0 ]]; then
+            local review_script="$FLEET_DIR/scripts/process-review-findings.sh"
+            if [[ -x "$review_script" ]]; then
+                log_bot "rhodibot" "Processing $total_substitute substitute-tier findings for review"
+                "$review_script" 2>&1 | sed 's/^/  /' || log_warn "Review processing had errors"
+            else
+                log_warn "Review processor not found at $review_script"
+            fi
+        fi
+
+        # Process eliminate-tier findings via dispatch-runner (auto-execute)
+        local dispatch_runner="$FLEET_DIR/scripts/dispatch-runner.sh"
+        if [[ -x "$dispatch_runner" && -f "/var/mnt/eclipse/repos/verisimdb-data/dispatch/pending.jsonl" ]]; then
+            local auto_count
+            auto_count=$(jq -c 'select(.strategy == "auto_execute")' /var/mnt/eclipse/repos/verisimdb-data/dispatch/pending.jsonl 2>/dev/null | wc -l)
+            if [[ $auto_count -gt 0 ]]; then
+                log_bot "robot-repo-automaton" "Dispatch runner: $auto_count auto-execute entries pending"
+            fi
+        fi
     fi
 }
 

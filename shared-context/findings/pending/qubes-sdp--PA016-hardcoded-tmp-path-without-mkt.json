@@ -1,0 +1,20 @@
+{
+  "action": "substitute_text",
+  "auto_fixable": true,
+  "category": "PathTraversal",
+  "confidence": 0.92,
+  "description": "Hardcoded /tmp/ path without mktemp in run-local-verification.sh",
+  "fix_script": "fix-tmp-paths.sh",
+  "match": "hardcoded /tmp/ path",
+  "pattern_id": "PA016-hardcoded-tmp-path-without-mkt",
+  "proven_module": "SafePath",
+  "recipe_id": "recipe-tmp-to-mktemp",
+  "replacement": "$(mktemp -d)",
+  "repo": "qubes-sdp",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "eliminate",
+  "timestamp": "2026-02-12T22:42:53.919456Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

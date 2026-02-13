@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.9,
+  "description": "Shell/process_create in bindings/prolog/safe_string.pl",
+  "formally_proven": false,
+  "pattern_id": "PA009-shell-process-create-in-bindin",
+  "proven_module": "SafeSQL",
+  "proven_modules": [
+    "SafeSQL"
+  ],
+  "recipe_id": "recipe-sql-parameterize",
+  "repo": "proven",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.919955Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

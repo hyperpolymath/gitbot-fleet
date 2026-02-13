@@ -1,0 +1,20 @@
+{
+  "action": "substitute_text",
+  "auto_fixable": true,
+  "category": "InsecureProtocol",
+  "confidence": 0.93,
+  "description": "1 HTTP (non-HTTPS) URLs in dipstick/tools/cli/backup.sh",
+  "fix_script": "fix-http-to-https.sh",
+  "match": "http:// URL",
+  "pattern_id": "PA014-1-http-non-https-urls-in-dipst",
+  "proven_module": "SafeUrl",
+  "recipe_id": "recipe-http-to-https",
+  "replacement": "https:// URL",
+  "repo": "social-media-tools",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "eliminate",
+  "timestamp": "2026-02-12T22:42:53.919989Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

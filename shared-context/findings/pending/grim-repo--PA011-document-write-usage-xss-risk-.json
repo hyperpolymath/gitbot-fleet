@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "DynamicCodeExecution",
+  "confidence": 0.85,
+  "description": "document.write usage (XSS risk) in scripts/dist/GrimSecurityScanner.user.js",
+  "formally_proven": false,
+  "pattern_id": "PA011-document-write-usage-xss-risk-",
+  "proven_module": "SafeHtml",
+  "proven_modules": [
+    "SafeHtml",
+    "SafeTemplate"
+  ],
+  "recipe_id": "recipe-innerhtml-to-textcontent",
+  "repo": "grim-repo",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.922505Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

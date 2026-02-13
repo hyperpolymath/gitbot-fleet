@@ -1,0 +1,20 @@
+{
+  "action": "substitute_text",
+  "auto_fixable": true,
+  "category": "InsecureProtocol",
+  "confidence": 0.93,
+  "description": "5 HTTP (non-HTTPS) URLs in idris2-xml-7-44-toolkit/src/Xml744/Document.idr",
+  "fix_script": "fix-http-to-https.sh",
+  "match": "http:// URL",
+  "pattern_id": "PA014-5-http-non-https-urls-in-idris",
+  "proven_module": "SafeUrl",
+  "recipe_id": "recipe-http-to-https",
+  "replacement": "https:// URL",
+  "repo": "hyperpolymath-archive",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "eliminate",
+  "timestamp": "2026-02-12T22:42:53.922037Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

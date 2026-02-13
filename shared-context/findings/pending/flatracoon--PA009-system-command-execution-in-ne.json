@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.88,
+  "description": "System command execution in netstack/orchestrator/lib/flatracoon_orchestrator/health_monitor.ex",
+  "formally_proven": false,
+  "pattern_id": "PA009-system-command-execution-in-ne",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand"
+  ],
+  "recipe_id": "recipe-safe-command",
+  "repo": "flatracoon",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.919632Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

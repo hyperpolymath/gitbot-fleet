@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "4 unsafe blocks in satellites/neurosymbolic/neurophone/crates/neurophone-android/src/lib.rs",
+  "formally_proven": false,
+  "pattern_id": "PA004-4-unsafe-blocks-in-satellites-",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "neural-foundations",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921637Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

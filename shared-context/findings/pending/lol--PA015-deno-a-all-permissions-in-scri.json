@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "ExcessivePermissions",
+  "confidence": 0.8,
+  "description": "Deno -A (all permissions) in scripts/build.js",
+  "formally_proven": false,
+  "pattern_id": "PA015-deno-a-all-permissions-in-scri",
+  "proven_module": "SafeCapability",
+  "proven_modules": [
+    "SafeCapability"
+  ],
+  "recipe_id": "proven-substitute-ExcessivePermissions",
+  "repo": "lol",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921164Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

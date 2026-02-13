@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.88,
+  "description": "System command execution in backend/lib/stapeln/native_bridge.ex",
+  "formally_proven": false,
+  "pattern_id": "PA009-system-command-execution-in-ba",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand"
+  ],
+  "recipe_id": "recipe-safe-command",
+  "repo": "stapeln",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921536Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

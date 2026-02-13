@@ -1,0 +1,20 @@
+{
+  "action": "substitute_text",
+  "auto_fixable": true,
+  "category": "InsecureProtocol",
+  "confidence": 0.93,
+  "description": "3 HTTP (non-HTTPS) URLs in packages/core/compiler-source/compiler/ext/ext_basic_hash_stubs.c",
+  "fix_script": "fix-http-to-https.sh",
+  "match": "http:// URL",
+  "pattern_id": "PA014-3-http-non-https-urls-in-packa",
+  "proven_module": "SafeUrl",
+  "recipe_id": "recipe-http-to-https",
+  "replacement": "https:// URL",
+  "repo": "rescript-ecosystem",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "eliminate",
+  "timestamp": "2026-02-12T22:42:53.919982Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

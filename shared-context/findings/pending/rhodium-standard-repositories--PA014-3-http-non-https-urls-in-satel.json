@@ -1,0 +1,20 @@
+{
+  "action": "substitute_text",
+  "auto_fixable": true,
+  "category": "InsecureProtocol",
+  "confidence": 0.93,
+  "description": "3 HTTP (non-HTTPS) URLs in satellites/agentic/conative-gating/templates/rsr-metadata.ncl",
+  "fix_script": "fix-http-to-https.sh",
+  "match": "http:// URL",
+  "pattern_id": "PA014-3-http-non-https-urls-in-satel",
+  "proven_module": "SafeUrl",
+  "recipe_id": "recipe-http-to-https",
+  "replacement": "https:// URL",
+  "repo": "rhodium-standard-repositories",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "eliminate",
+  "timestamp": "2026-02-12T22:42:53.922019Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

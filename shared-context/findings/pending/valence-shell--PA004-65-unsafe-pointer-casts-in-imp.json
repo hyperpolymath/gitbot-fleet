@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "65 unsafe pointer casts in impl/zig/.zig-cache/o/39778ac9cf948956a1362d33f708b2a9/cimport.zig",
+  "formally_proven": false,
+  "pattern_id": "PA004-65-unsafe-pointer-casts-in-imp",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "valence-shell",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.923398Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "DynamicCodeExecution",
+  "confidence": 0.85,
+  "description": "Code.eval_string/eval_quoted in lib/etma_handler/logic/calculator.ex",
+  "formally_proven": false,
+  "pattern_id": "PA011-code-eval-string-eval-quoted-i",
+  "proven_module": "SafeHtml",
+  "proven_modules": [
+    "SafeHtml",
+    "SafeTemplate"
+  ],
+  "recipe_id": "proven-substitute-DynamicCodeExecution",
+  "repo": "tma-mark2",
+  "severity": "Critical",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.923179Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "8 unsafe blocks in impl/rust-cli/src/commands.rs",
+  "formally_proven": false,
+  "pattern_id": "PA004-8-unsafe-blocks-in-impl-rust-c",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "valence-shell",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.920514Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

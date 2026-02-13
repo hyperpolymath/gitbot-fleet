@@ -1,0 +1,22 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeDeserialization",
+  "confidence": 0.95,
+  "description": "Unsafe Marshal deserialization in packages/core/compiler-source/analysis/reanalyze/src/ReanalyzeServer.ml",
+  "formally_proven": true,
+  "pattern_id": "PA010-unsafe-marshal-deserialization",
+  "proven_module": "SafeJson",
+  "proven_modules": [
+    "SafeJson",
+    "SafeYAML",
+    "SafeXML"
+  ],
+  "recipe_id": "proven-substitute-UnsafeDeserialization",
+  "repo": "rescript-ecosystem",
+  "severity": "Critical",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.922708Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}
