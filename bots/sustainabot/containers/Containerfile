@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Oikos Bot Container Image
+#
+# Build: vordr build -t oikos:latest -f containers/Containerfile .
+# Run:   vordr run -p 3000:3000 oikos:latest
+
+# =============================================================================
+# Stage 1: Placeholder for Haskell analyzer (skipped for MVP)
+# =============================================================================
+# The Haskell analyzer will be added when fully implemented.
+# For now, the bot uses mock analysis or calls external analyzer endpoint.
+FROM docker.io/debian:bookworm-slim AS haskell-builder
+RUN echo "Haskell analyzer skipped for MVP" > /build-status.txt
+
+# =============================================================================
+# Stage 2: Placeholder for OCaml analyzer (skipped for MVP)
+# =============================================================================
+# The OCaml doc analyzer will be added when implemented.
+FROM docker.io/debian:bookworm-slim AS ocaml-builder
+RUN echo "OCaml analyzer skipped for MVP" > /build-status.txt
+
+# =============================================================================
+# Stage 3: ReScript bot integration (pre-compiled, Deno runtime)
+# =============================================================================
+# NOTE: ReScript must be pre-compiled locally before building container.
+# Run `deno task build:rescript` in bot-integration/ to generate .res.js files.
+# We do NOT use npm in the container - Deno only.
+FROM docker.io/denoland/deno:2.1.4 AS rescript-stage
+
+WORKDIR /build/bot
+
+# Just copy pre-compiled ReScript output and Deno config
+COPY bot-integration/src/*.res.js ./src/
+COPY bot-integration/deno.json .
+COPY bot-integration/bindings/ ./bindings/
+COPY bot-integration/rescript-runtime/ ./rescript-runtime/
+
+# Cache Deno dependencies
+RUN deno cache src/Oikos.res.js || true
+
+# =============================================================================
+# Stage 4: Final runtime image
+# =============================================================================
+FROM docker.io/denoland/deno:2.1.4 AS runtime
+
+LABEL maintainer="hyperpolymath"
+LABEL org.opencontainers.image.title="Oikos Bot"
+LABEL org.opencontainers.image.description="Ecological & Economic Code Analysis Platform"
+LABEL org.opencontainers.image.version="0.1.0-beta"
+LABEL org.opencontainers.image.source="https://github.com/hyperpolymath/oikos-bot"
+LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+
+WORKDIR /app
+
+USER root
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    jq \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy built artifacts from previous stages
+# NOTE: Haskell and OCaml analyzers are optional - if they didn't build, we skip them
+# The bot will fall back to mock analysis if the analyzer is unavailable
+
+# ReScript bot (pre-compiled, Deno runtime)
+COPY --from=rescript-stage /build/bot/src/*.res.js /app/bot-integration/src/
+COPY --from=rescript-stage /build/bot/deno.json /app/bot-integration/
+COPY --from=rescript-stage /build/bot/rescript-runtime/ /app/bot-integration/rescript-runtime/
+
+# Copy policy engine
+COPY policy-engine/ /app/policy-engine/
+
+# Copy configuration
+COPY config/ /app/config/
+
+# Environment
+ENV PORT=3000
+ENV BOT_MODE=advisor
+ENV ANALYSIS_ENDPOINT=http://localhost:8080/analyze
+ENV DENO_DIR=/app/.deno
+
+# Create deno cache directory
+RUN mkdir -p /app/.deno && chown -R deno:deno /app
+
+# Switch to non-root user
+USER deno
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD deno eval "const r = await fetch('http://localhost:3000/health'); if (!r.ok) Deno.exit(1);" || exit 1
+
+EXPOSE 3000
+
+# Default command
+CMD ["run", "--allow-net", "--allow-env", "--allow-read", "/app/bot-integration/src/Oikos.res.js"]

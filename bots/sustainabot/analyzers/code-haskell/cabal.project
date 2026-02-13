@@ -1,0 +1,10 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+-- Cabal project configuration for eco-analyzer
+
+packages: .
+
+-- Allow newer dependencies
+allow-newer: all
+
+-- Build with optimizations
+optimization: 2

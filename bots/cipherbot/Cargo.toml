@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+[package]
+name = "cipherbot"
+version = "0.1.0"
+edition = "2021"
+license = "PMPL-1.0-or-later"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+description = "Cryptographic Hygiene & Post-Quantum Readiness Bot for gitbot-fleet"
+repository = "https://github.com/hyperpolymath/cipherbot"
+keywords = ["cryptography", "post-quantum", "security", "gitbot-fleet"]
+categories = ["development-tools"]
+
+[[bin]]
+name = "cipherbot"
+path = "src/main.rs"
+
+[dependencies]
+# Fleet integration
+gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File traversal
+walkdir = "2"
+
+# Pattern matching
+regex = "1"
+
+# AST parsing (optional, for future deep analysis)
+# tree-sitter = "0.24"
+# tree-sitter-rust = "0.23"
+# tree-sitter-javascript = "0.23"
+
+[dev-dependencies]
+tempfile = "3"

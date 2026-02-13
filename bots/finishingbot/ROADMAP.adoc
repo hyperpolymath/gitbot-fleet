@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2025 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= finishing-bot Roadmap
+:toc:
+:toclevels: 3
+
+== Overview
+
+This roadmap outlines the development plan for finishing-bot, the release readiness validation bot for the hyperpolymath gitbot-fleet.
+
+== v1.0 - Production Release (Current)
+
+**Target:** 2026-02
+**Status:** Near-complete (98%)
+
+=== Core Analyzers
+* [x] License validation (SPDX headers, allowed licenses, disallowed license detection)
+* [x] Placeholder detection (TODO, FIXME, XXX, HACK, BUG, UNDONE)
+* [x] Claims verification (README completeness, CHANGELOG, feature markers)
+* [x] Release artifact checking (version consistency, debug statements, sensitive data, SECURITY.md)
+* [x] SCM files validation (all 6 files in `.machine_readable/`, SPDX headers, required sections)
+* [x] Testing infrastructure (benchmarks, fuzzing, stress tests)
+* [x] Tooling validation (.tool-versions, .editorconfig, CI workflows)
+* [x] V1 readiness (docs, security, language compliance, community files)
+
+=== Testing and Quality
+* [x] 43 tests total (37 integration, 2 config, 3 fleet, 1 inline)
+* [x] ClusterFuzzLite fuzzing (2 targets)
+* [x] Criterion benchmarks
+* [x] Stress test workflow
+* [x] Self-analysis dogfooding (finishingbot analyzes itself)
+
+=== Integration
+* [x] gitbot-fleet shared context support (behind `fleet` feature flag)
+* [x] Fleet mode CLI subcommand
+* [x] BotId::Finishbot registration and dependency tracking
+* [x] cicd-hyper-a release rule integration (types and scaffolding)
+* [x] JSON and pretty output formats
+* [x] CLI with subcommands (audit, fix, license, placeholders, claims, release, init, show, fleet)
+* [x] YAML and TOML configuration support
+* [x] Auto-fix for license headers and placeholders
+* [x] ROADMAP.adoc
+* [x] Documentation with usage examples
+
+=== Remaining for v1.0
+* [ ] Publish to crates.io
+* [ ] End-to-end integration test with live gitbot-fleet context
+* [ ] Expand auto-fix capability beyond license/placeholder
+
+== v1.1 - Enhanced Validation (Next)
+
+**Target:** 2026-03
+
+=== New Analyzers
+* Security scanning (dependency audit, CVE checking)
+* Performance validation (bundle size, build time)
+* Documentation quality (link checking, completeness scoring)
+* API compatibility checking
+
+=== Improvements
+* Enhanced auto-fix for more finding types
+* Configurable severity thresholds
+* Custom rule definitions
+* Parallel analyzer execution for speed
+
+=== Fleet Integration
+* Advanced shared context synchronization
+* Cross-repo validation rules
+* Fleet-wide policy enforcement
+* Automated PR creation for fixes
+
+== v1.2 - AI-Assisted Validation
+
+**Target:** 2026-04
+
+=== AI Features
+* LLM-based code quality analysis
+* Automated suggestion generation
+* Natural language finding explanations
+* Contextual fix recommendations
+
+=== Advanced Checks
+* Semantic versioning compliance
+* Breaking change detection
+* Migration path validation
+* Backwards compatibility verification
+
+== v2.0 - Neurosymbolic Validation
+
+**Target:** 2026-Q3
+
+=== Hypatia Integration
+* Logtalk rule-based validation
+* Formal verification of release criteria
+* Proof-carrying code validation
+* Rule synthesis from validation history
+
+=== A2ML Integration
+* Attested documentation validation
+* Typed markup verification
+* Claim provenance tracking
+* Verified documentation graphs
+
+=== K9-SVC Integration
+* Self-validating component contracts
+* Must-just-nickel validation
+* Contractiles verification
+* Interface stability checking
+
+=== Advanced Features
+* Multi-repo release orchestration
+* Dependency graph validation
+* Ecosystem-wide compatibility checking
+* Formal proof generation for release readiness
+
+== v2.5 - Distributed Validation
+
+**Target:** 2026-Q4
+
+=== Architecture
+* Distributed analyzer execution
+* Peer-to-peer validation network
+* Cached validation results
+* Incremental validation
+
+=== Performance
+* Sub-second validation for large repos
+* Parallel multi-repo validation
+* Intelligent caching strategies
+* Differential validation
+
+== v3.0 - Autonomous Release Management
+
+**Target:** 2027
+
+=== Autonomous Features
+* Automatic release candidate creation
+* Self-healing validation failures
+* Predictive quality analysis
+* Autonomous fix generation and testing
+
+=== Ecosystem Intelligence
+* Cross-project learning
+* Best practice extraction
+* Anti-pattern detection
+* Quality trend analysis
+
+=== Integration
+* Full CI/CD pipeline integration
+* Release automation orchestration
+* Quality gate enforcement
+* Rollback decision support
+
+== Contributing
+
+See link:CONTRIBUTING.md[Contributing Guidelines] for how to contribute to finishing-bot development.
+
+== Versioning
+
+finishing-bot follows semantic versioning (SemVer). Breaking changes will only be introduced in major version releases.

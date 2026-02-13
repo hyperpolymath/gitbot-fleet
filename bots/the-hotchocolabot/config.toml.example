@@ -1,0 +1,55 @@
+# HotChocolaBot Configuration Example
+# Copy this to config.toml and adjust for your setup
+
+[hardware]
+# GPIO pin assignments (BCM numbering)
+cocoa_pump_pin = 17
+milk_pump_pin = 27
+sugar_pump_pin = 22
+emergency_stop_pin = 23
+status_led_pin = 24
+
+# I2C device addresses
+temp_sensor_addr = 0x48  # TMP102 temperature sensor
+lcd_addr = 0x27          # LCD with PCF8574 I2C backpack
+
+[safety]
+# Temperature limits (Celsius)
+max_temperature = 90.0
+min_temperature = 5.0
+
+# Pump safety limits
+max_pump_runtime = 30  # Maximum seconds for any pump operation
+operation_timeout = 120  # Maximum seconds for complete operation
+
+# Safety features
+verbose_logging = true
+emergency_stop_enabled = true
+
+[recipes.standard]
+# Standard hot chocolate recipe (times in milliseconds)
+cocoa_ms = 2000
+milk_ms = 5000
+sugar_ms = 1000
+target_temp = 65.0
+
+[recipes.light]
+# Light recipe (less cocoa, more milk)
+cocoa_ms = 1000
+milk_ms = 6000
+sugar_ms = 800
+target_temp = 65.0
+
+[recipes.rich]
+# Rich recipe (more cocoa, less milk)
+cocoa_ms = 3000
+milk_ms = 4000
+sugar_ms = 1200
+target_temp = 70.0
+
+[education]
+# Educational mode settings
+challenge_mode = false
+show_internals = true
+enable_teaching_failures = false
+observation_delay_ms = 500  # Delay between operations for student observation

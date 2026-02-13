@@ -1,0 +1,183 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+#
+# Oikos Bot Configuration
+# =======================
+# Main configuration file for the Oikos Bot platform
+
+# Bot operating mode
+# - consultant: Answers questions, provides alternatives, explains trade-offs
+# - advisor: Proactive suggestions on PRs, best practice recommendations
+# - regulator: Enforces policy compliance, can block PRs
+mode: advisor
+
+# Score thresholds for policy levels
+thresholds:
+  eco_minimum:
+    carbon: 50
+    energy: 50
+    description: "Minimum acceptable eco standards"
+    enforcement: blocking  # Will block PRs below this threshold
+
+  eco_standard:
+    carbon: 70
+    energy: 70
+    description: "Recommended eco standards"
+    enforcement: warning  # Will warn but not block
+
+  eco_excellence:
+    carbon: 85
+    energy: 85
+    description: "Excellence in eco practices"
+    enforcement: none  # Just a badge/recognition
+
+# Weights for composite health index
+weights:
+  ecological: 0.4   # Carbon + Energy + Resources
+  economic: 0.3     # Pareto + Allocation + Debt
+  quality: 0.3      # Complexity + Coupling + Coverage
+
+# Analysis configuration
+analysis:
+  # Languages to analyze
+  languages:
+    - python
+    - javascript
+    - typescript
+    - java
+    - go
+    - rust
+    - haskell
+    - ocaml
+
+  # File patterns to exclude
+  exclude:
+    - "**/*.min.js"
+    - "**/node_modules/**"
+    - "**/vendor/**"
+    - "**/.git/**"
+    - "**/dist/**"
+    - "**/build/**"
+
+  # Carbon estimation model
+  carbon:
+    grid_intensity: 475  # gCO2eq/kWh (global average)
+    hardware_lifespan: 4  # years
+    usage_percentage: 0.01  # 1% of hardware
+
+  # Energy pattern detection
+  energy:
+    detect_busy_waiting: true
+    detect_polling: true
+    detect_inefficient_io: true
+    detect_resource_leaks: true
+
+  # Complexity thresholds
+  complexity:
+    cyclomatic_warning: 10
+    cyclomatic_critical: 20
+    cognitive_warning: 15
+    cognitive_critical: 30
+
+# Database connections
+databases:
+  arangodb:
+    url: "http://localhost:8529"
+    database: "oikos"
+    username: "${ARANGO_USER}"
+    password: "${ARANGO_PASSWORD}"
+
+  virtuoso:
+    sparql_endpoint: "http://localhost:8890/sparql"
+    graph_uri: "https://oikos-bot.dev/knowledge"
+
+# External integrations
+integrations:
+  github:
+    enabled: true
+    app_id: "${GITHUB_APP_ID}"
+    webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
+
+  gitlab:
+    enabled: true
+    token: "${GITLAB_TOKEN}"
+    webhook_secret: "${GITLAB_WEBHOOK_SECRET}"
+
+  # Echidna for formal verification
+  echidna:
+    enabled: true
+    endpoint: "https://gitlab.com/hyperpolymath/echidna"
+    verify_pareto_claims: true
+
+# AI assistant integration
+ai_assistants:
+  copilot:
+    generate_instructions: true
+    instruction_path: ".github/copilot-instructions.md"
+    update_on_analysis: true
+
+  claude_code:
+    generate_instructions: true
+    instruction_path: ".claude-code/instructions.md"
+    update_on_analysis: true
+
+# Praxis loop configuration
+praxis:
+  enabled: true
+  learning_rate: 0.01
+  min_observations: 10  # Before updating policies
+  feedback_collection: true
+
+  # What to learn from
+  observation_sources:
+    - pr_outcomes  # Did merged PRs improve metrics?
+    - refactor_results  # Did suggested refactors help?
+    - user_feedback  # Explicit feedback on recommendations
+
+# Reporting configuration
+reporting:
+  # PR comment format
+  pr_comments:
+    enabled: true
+    include_scores: true
+    include_recommendations: true
+    max_recommendations: 5  # In advisor mode
+    include_pareto_analysis: true
+
+  # SARIF output for code scanning
+  sarif:
+    enabled: true
+    upload_to_github: true
+
+  # OpenTelemetry metrics
+  metrics:
+    enabled: true
+    endpoint: "${OTEL_ENDPOINT}"
+    export_interval: 60  # seconds
+
+  # Dashboard
+  dashboard:
+    enabled: true
+    port: 8080
+
+# Notification configuration
+notifications:
+  # Slack integration
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK}"
+    channels:
+      violations: "#oikos-bot-alerts"
+      weekly_report: "#engineering"
+
+  # Email
+  email:
+    enabled: false
+    smtp_host: "${SMTP_HOST}"
+    from: "oikos-bot@example.com"
+
+# Logging
+logging:
+  level: info  # debug, info, warn, error
+  format: json
+  output: stdout

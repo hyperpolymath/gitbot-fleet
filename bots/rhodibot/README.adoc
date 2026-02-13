@@ -1,0 +1,329 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= Rhodibot
+:author: Jonathan D.A. Jewell
+:email: jonathan.jewell@open.ac.uk
+:toc: macro
+:toclevels: 3
+:icons: font
+
+Tier 1 Verifier in the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] ecosystem.
+Enforces https://github.com/hyperpolymath/rhodium-standard-repositories[Rhodium Standard Repository (RSR)]
+compliance across hyperpolymath repositories via GitHub webhooks.
+
+image:https://img.shields.io/github/license/hyperpolymath/rhodibot[License]
+
+toc::[]
+
+== Overview
+
+Rhodibot is a GitHub App that validates repositories against RSR structural
+requirements. It runs as an HTTP service, receives webhook events (push, pull
+request, repository creation, installation), and reports compliance via GitHub
+Check Runs. When a new repository is created, it automatically opens an issue
+with an RSR compliance checklist.
+
+Rhodibot is written in Rust (2151 LOC across 8 modules), uses Axum for the web
+framework, and integrates with the gitbot-fleet shared context layer so that
+downstream bots (glambot, seambot, finishbot, robot-repo-automaton) can consume
+its findings.
+
+=== Key Capabilities
+
+* **RSR compliance checking** with 5 configurable policy packs (Minimal, Standard, Strict, Enterprise, Custom)
+* **14 file presence checks** across documentation, security, governance, and structure categories
+* **6 banned file pattern checks** enforcing the CCCP language policy (npm, yarn, pnpm, bun, Go)
+* **Workflow validation** for required CI/CD workflows (hypatia-scan, codeql, scorecard)
+* **Author attribution validation** detecting incorrect `authors` fields in Cargo.toml
+* **License type validation** against an approved license list (PMPL, MIT, Apache-2.0, MPL-2.0)
+* **Per-repo configuration** via `.rsr.toml` with severity overrides and skip lists
+* **Check run creation** on pushes and pull requests with detailed markdown reports
+* **RSR checklist issue creation** for newly created repositories
+* **Fleet integration** converting findings to `Finding` structs for the gitbot-fleet shared context
+* **Security hardening** with input sanitization, path traversal prevention, and HMAC constant-time comparison
+
+=== Test Coverage
+
+69 tests total:
+
+* 21 unit tests in `src/sanitize.rs` (GitHub name validation, file path validation, markdown sanitization)
+* 48 integration tests in `tests/integration_tests.rs` covering RSR engine, webhooks, GitHub client, fleet integration, and report formatting
+* All tests use wiremock for GitHub API mocking (no real API calls)
+
+== Architecture
+
+=== Modules
+
+[cols="1,3"]
+|===
+| Module | Purpose
+
+| `main.rs`
+| Axum HTTP server, CLI argument parsing, route registration
+
+| `config.rs`
+| Application configuration (GitHub App ID, private key, webhook secret, API URL)
+
+| `rsr.rs`
+| RSR compliance engine with policy packs, file checks, banned patterns, scoring
+
+| `webhook.rs`
+| GitHub webhook handlers (push, PR, repository, installation, ping), HMAC-SHA256 verification
+
+| `github.rs`
+| GitHub API client (file existence, content retrieval, check runs, issues)
+
+| `sanitize.rs`
+| Input validation for GitHub names, file paths, and markdown output
+
+| `fleet.rs`
+| gitbot-fleet integration: converts compliance reports to `Finding` structs, publishes to shared context
+
+| `lib.rs`
+| Library root, re-exports all modules
+|===
+
+=== Policy Packs
+
+Each RSR check has a severity (Required, Recommended, Optional) that varies by policy pack:
+
+[cols="1,1,1,1,1"]
+|===
+| Check | Minimal | Standard | Strict | Enterprise
+
+| README.adoc | Required | Required | Required | Required
+| LICENSE.txt | Required | Required | Required | Required
+| SECURITY.md | Optional | Recommended | Required | Required
+| CONTRIBUTING.md | Optional | Recommended | Required | Required
+| CODE_OF_CONDUCT.md | Optional | Optional | Recommended | Required
+| .claude/CLAUDE.md | Optional | Optional | Recommended | Required
+| STATE.scm | Optional | Recommended | Required | Required
+| META.scm | Optional | Recommended | Required | Required
+| ECOSYSTEM.scm | Optional | Optional | Recommended | Required
+| .editorconfig | Optional | Recommended | Required | Required
+| .gitattributes | Optional | Recommended | Required | Required
+| .gitignore | Optional | Recommended | Required | Required
+| justfile | Optional | Optional | Recommended | Required
+| .bot_directives | Optional | Optional | Recommended | Required
+|===
+
+Repositories can override severity or skip checks entirely via `.rsr.toml`:
+
+[source,toml]
+----
+policy = "strict"
+
+[severity_overrides]
+"CODE_OF_CONDUCT.md" = "optional"
+
+skip = ["ECOSYSTEM.scm"]
+----
+
+== Installation
+
+=== From Source
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/rhodibot.git
+cd rhodibot
+cargo build --release
+----
+
+NOTE: Rhodibot depends on `gitbot-shared-context` via a local path
+(`../gitbot-fleet/shared-context`). Ensure the `gitbot-fleet` repository is
+cloned alongside rhodibot.
+
+== Usage
+
+=== Running the Server
+
+[source,bash]
+----
+# Set required environment variables
+export GITHUB_TOKEN=ghp_...
+export GITHUB_WEBHOOK_SECRET=your-webhook-secret
+
+# Optional: GitHub App mode (JWT auth not yet implemented)
+export GITHUB_APP_ID=123456
+export GITHUB_PRIVATE_KEY_PATH=/path/to/private-key.pem
+
+# Start the server
+rhodibot --port 3000
+----
+
+=== API Endpoints
+
+[cols="1,1,2"]
+|===
+| Method | Path | Description
+
+| GET | `/` | Health check (returns JSON with status, version, name)
+| GET | `/health` | Health check (same as `/`)
+| POST | `/webhook` | GitHub webhook receiver (validates HMAC-SHA256 signature)
+| GET | `/api/check/\{owner\}/\{repo\}` | Manual compliance check (returns JSON report)
+|===
+
+=== CLI Options
+
+[source]
+----
+Usage: rhodibot [OPTIONS]
+
+Options:
+  -p, --port <PORT>                    Port to listen on [env: PORT=] [default: 3000]
+      --app-id <APP_ID>                GitHub App ID [env: GITHUB_APP_ID=]
+      --private-key-path <PATH>        Path to GitHub App private key [env: GITHUB_PRIVATE_KEY_PATH=]
+      --webhook-secret <SECRET>        Webhook secret for verification [env: GITHUB_WEBHOOK_SECRET=]
+  -h, --help                           Print help
+  -V, --version                        Print version
+----
+
+== RSR Compliance Checks
+
+=== File Presence Checks (14)
+
+[cols="2,2,1"]
+|===
+| File | Category | Points
+
+| README.adoc | Documentation | 5
+| LICENSE.txt | Governance | 5
+| SECURITY.md | Security | 5
+| CONTRIBUTING.md | Documentation | 3
+| CODE_OF_CONDUCT.md | Governance | 3
+| .claude/CLAUDE.md | Structure | 2
+| STATE.scm | Structure | 3
+| META.scm | Structure | 3
+| ECOSYSTEM.scm | Structure | 3
+| .editorconfig | Structure | 2
+| .gitattributes | Structure | 2
+| .gitignore | Structure | 2
+| justfile | Structure | 2
+| .bot_directives | Structure | 2
+|===
+
+=== Banned Patterns (6)
+
+[cols="2,3"]
+|===
+| File | Violation
+
+| package-lock.json | npm lock file (use Deno)
+| yarn.lock | Yarn lock file (use Deno)
+| pnpm-lock.yaml | pnpm lock file (use Deno)
+| bun.lockb | Bun lock file (use Deno)
+| go.mod | Go module (use Rust)
+| go.sum | Go checksum (use Rust)
+|===
+
+=== Additional Checks
+
+* **Workflow presence** -- `.github/workflows/` directory
+* **Required workflows** -- `hypatia-scan.yml`, `codeql.yml`, `scorecard.yml` (severity varies by policy)
+* **Author attribution** -- flags Cargo.toml using "hyperpolymath" as author
+* **License type** -- validates against approved license list
+
+=== Scoring
+
+Each check has a point value. The final score is `points_earned / max_points * 100`.
+Required checks that fail cause `required_passed = false`, blocking the check run
+regardless of score percentage.
+
+== Security
+
+Rhodibot applies defense-in-depth security measures:
+
+* **Webhook signature verification** uses HMAC-SHA256 with constant-time comparison (via the `hmac` crate's `verify_slice`, backed by `subtle::ConstantTimeEq`)
+* **Input validation** for GitHub owner/repo names from webhook payloads (rejects special characters, empty strings, consecutive hyphens)
+* **Path traversal prevention** for all GitHub content API calls (rejects `..`, absolute paths, null bytes)
+* **Markdown output sanitization** escapes HTML tags, markdown links, and code block delimiters in user-controlled content
+* **Token handling** -- `GITHUB_TOKEN` is passed only to `bearer_auth()` and never logged or serialized
+
+== Development
+
+=== Prerequisites
+
+* Rust (edition 2024)
+* `gitbot-fleet` repository cloned at `../gitbot-fleet/`
+
+=== Building
+
+[source,bash]
+----
+cargo build
+----
+
+=== Testing
+
+[source,bash]
+----
+cargo test
+----
+
+69 tests: 21 unit tests (sanitize module) and 48 integration tests (RSR engine, webhooks, GitHub client, fleet, reports).
+
+=== Local Development with smee
+
+[source,bash]
+----
+# Terminal 1: Forward webhooks from smee.io to local server
+npx smee -u https://smee.io/your-channel -p 3000 -P /webhook
+
+# Terminal 2: Run the server
+cargo run -- --port 3000
+----
+
+== Fleet Ecosystem
+
+Rhodibot is a Tier 1 Verifier in the gitbot-fleet hierarchy:
+
+[cols="1,1,2"]
+|===
+| Bot | Role | Relationship to Rhodibot
+
+| https://github.com/hyperpolymath/echidnabot[echidnabot]
+| Tier 1 Verifier
+| Sibling (mathematical/formal verification)
+
+| https://github.com/hyperpolymath/sustainabot[sustainabot]
+| Tier 1 Verifier
+| Sibling (ecological/economic standards)
+
+| glambot
+| Tier 2
+| Downstream consumer (presentation quality)
+
+| seambot
+| Tier 2
+| Downstream consumer (integration testing)
+
+| finishbot
+| Tier 2
+| Downstream consumer (release readiness)
+
+| https://github.com/hyperpolymath/robot-repo-automaton[robot-repo-automaton]
+| Executor
+| Acts on rhodibot RSR findings to auto-fix repos
+
+| https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet]
+| Coordinator
+| Parent: provides shared context layer
+
+| https://github.com/hyperpolymath/hypatia[hypatia]
+| Engine
+| Neurosymbolic CI/CD intelligence platform
+|===
+
+== Known Limitations
+
+* **GitHub only** -- multi-forge support (GitLab, Codeberg, Bitbucket) not implemented
+* **GITHUB_TOKEN auth only** -- GitHub App JWT authentication is not yet implemented (app_id and private_key are accepted but unused)
+* **SPDX header validation** not yet implemented (checks file presence only, not header content)
+* **Workflow SHA-pin validation** not yet implemented
+* **Fleet CLI subcommand** not yet wired into main.rs (fleet integration is available as a library)
+
+== License
+
+PMPL-1.0-or-later. See link:LICENSE[LICENSE] for details.

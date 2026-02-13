@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "repository": "test-repo",
+  "seams": [
+    {
+      "id": "api-to-db",
+      "name": "API to Database",
+      "description": "Boundary between the API layer and the database layer",
+      "side_a": ["api-handler", "api-router"],
+      "side_b": ["database", "repository"],
+      "seam_type": "layer",
+      "invariants": [
+        {
+          "id": "no-direct-sql",
+          "description": "API handlers must not execute SQL directly",
+          "verification": "manual",
+          "severity": "error"
+        }
+      ],
+      "introduced_at": "i1",
+      "frozen": false,
+      "ring": 1,
+      "checklist_path": "spec/seams/checklists/api-to-db.adoc",
+      "conformance_paths": [
+        "spec/seams/conformance/api-to-db-conformance.adoc"
+      ]
+    }
+  ],
+  "cross_repo_seams": [],
+  "metadata": {
+    "updated_at": "2024-01-15T10:00:00Z",
+    "updated_by": "test-setup",
+    "commit_hash": null
+  }
+}

@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# finishing-bot configuration example
+# Place this file at .finishing-bot/config.yml in your repository
+
+# License validation settings
+licenses:
+  allowed:
+    - PMPL-1.0-or-later
+    - MIT
+    - Apache-2.0
+    - BSD-3-Clause
+    - PMPL-1.0
+  strict: false
+  require_spdx_headers: true
+  source_extensions:
+    - rs
+    - js
+    - ts
+    - py
+    - go
+    - java
+    - kt
+    - swift
+
+# Placeholder detection settings
+placeholders:
+  patterns:
+    - TODO
+    - FIXME
+    - XXX
+    - HACK
+    - BUG
+    - UNDONE
+  action: flag  # Options: flag, remove, comment
+  custom_patterns: []
+  max_allowed: 0  # 0 = none allowed for release
+
+# Claim verification settings
+claims:
+  verify_docs: true
+  verify_tests: true
+  require_readme: true
+  require_changelog: false
+  min_test_coverage: 0  # 0 = disabled
+  verify_dependencies: false
+
+# Release artifact settings
+release:
+  require_hashes: false
+  hash_algorithms:
+    - SHA256
+    - SHA512
+  require_signatures: false
+  require_reproducible: false
+
+# Logging configuration
+log:
+  level: info
+  format: pretty
+
+# Paths to exclude from analysis
+exclude:
+  - .git
+  - node_modules
+  - target
+  - vendor
+  - .venv
+  - dist
+  - build
+
+# General settings
+auto_fix: false
+dry_run: false

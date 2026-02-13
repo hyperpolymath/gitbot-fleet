@@ -1,0 +1,267 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+#
+# Oikos Bot SPARQL Queries for Virtuoso
+# Collection of useful SPARQL queries for the Oikos Bot knowledge graph.
+
+PREFIX eco: <http://oikos-bot.dev/ontology#>
+PREFIX dc: <http://purl.org/dc/terms/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+# =============================================================================
+# BEST PRACTICES QUERIES
+# =============================================================================
+
+# Query 1: Get all best practices sorted by impact
+# Used by: Recommendation engine
+SELECT ?practice ?label ?description ?impact ?carbonImpact ?energyImpact
+WHERE {
+    ?practice a eco:BestPractice ;
+              rdfs:label ?label ;
+              dc:description ?description ;
+              eco:impact ?impact .
+    OPTIONAL { ?practice eco:carbonImpact ?carbonImpact }
+    OPTIONAL { ?practice eco:energyImpact ?energyImpact }
+}
+ORDER BY DESC(?impact)
+
+---
+
+# Query 2: Get best practices by minimum impact threshold
+# Parameters: ?minImpact = 0.1
+SELECT ?practice ?label ?description ?impact
+WHERE {
+    ?practice a eco:BestPractice ;
+              rdfs:label ?label ;
+              dc:description ?description ;
+              eco:impact ?impact .
+    FILTER (?impact > 0.1)
+}
+ORDER BY DESC(?impact)
+
+---
+
+# Query 3: Find practices with highest energy impact
+SELECT ?practice ?label ?energyImpact
+WHERE {
+    ?practice a eco:BestPractice ;
+              rdfs:label ?label ;
+              eco:energyImpact ?energyImpact .
+    FILTER (?energyImpact > 0.15)
+}
+ORDER BY DESC(?energyImpact)
+LIMIT 10
+
+---
+
+# =============================================================================
+# CODE ENTITY QUERIES
+# =============================================================================
+
+# Query 4: Get all files in a repository with their metrics
+# Parameters: ?repoUri = <http://oikos-bot.dev/data/repo/owner/name>
+SELECT ?file ?path ?language ?carbonScore ?energyScore
+WHERE {
+    ?file a eco:File ;
+          eco:inRepository ?repoUri ;
+          eco:path ?path .
+    OPTIONAL { ?file eco:language ?language }
+    OPTIONAL {
+        ?analysis eco:analyzedBy ?file ;
+                  eco:hasMetric ?carbonMetric .
+        ?carbonMetric a eco:CarbonMetric ;
+                      eco:carbonScore ?carbonScore .
+    }
+    OPTIONAL {
+        ?analysis eco:hasMetric ?energyMetric .
+        ?energyMetric a eco:EnergyMetric ;
+                      eco:energyScore ?energyScore .
+    }
+}
+ORDER BY ?path
+
+---
+
+# Query 5: Find code entities with policy violations
+SELECT ?entity ?path ?policy ?severity
+WHERE {
+    ?entity a eco:CodeEntity ;
+            eco:path ?path ;
+            eco:violates ?policy .
+    ?violation a eco:Violation ;
+               eco:severity ?severity .
+}
+ORDER BY DESC(?severity)
+
+---
+
+# Query 6: Get dependency graph for an entity
+# Parameters: ?startEntity = <http://oikos-bot.dev/data/file/123>
+SELECT ?entity ?dependency ?depPath
+WHERE {
+    ?startEntity eco:dependsOn+ ?dependency .
+    ?dependency eco:path ?depPath .
+}
+
+---
+
+# =============================================================================
+# PARETO ANALYSIS QUERIES
+# =============================================================================
+
+# Query 7: Find Pareto-optimal entities (not dominated by any other)
+SELECT ?entity ?path ?carbonScore ?energyScore ?qualityScore
+WHERE {
+    ?entity a eco:CodeEntity ;
+            eco:path ?path .
+
+    ?analysis eco:analyzedBy ?entity ;
+              eco:hasMetric ?cm, ?em, ?qm .
+
+    ?cm a eco:CarbonMetric ; eco:carbonScore ?carbonScore .
+    ?em a eco:EnergyMetric ; eco:energyScore ?energyScore .
+    ?qm a eco:QualityMetric ; eco:complexityScore ?qualityScore .
+
+    FILTER NOT EXISTS {
+        ?other a eco:CodeEntity ;
+               eco:dominates ?entity .
+    }
+}
+
+---
+
+# Query 8: Find dominated entities with improvement potential
+SELECT ?dominated ?dominator ?improvementArea
+WHERE {
+    ?dominator eco:dominates ?dominated .
+
+    ?dominatorAnalysis eco:analyzedBy ?dominator ;
+                       eco:hasMetric ?dmCm .
+    ?dmCm a eco:CarbonMetric ; eco:carbonScore ?domCarbonScore .
+
+    ?dominatedAnalysis eco:analyzedBy ?dominated ;
+                       eco:hasMetric ?ddCm .
+    ?ddCm a eco:CarbonMetric ; eco:carbonScore ?domCarbonScore2 .
+
+    BIND(IF(?domCarbonScore > ?domCarbonScore2, "carbon", "other") AS ?improvementArea)
+}
+
+---
+
+# =============================================================================
+# RECOMMENDATION QUERIES
+# =============================================================================
+
+# Query 9: Get recommendations with confidence above threshold
+# Parameters: ?minConfidence = 0.7
+SELECT ?entity ?path ?action ?reason ?confidence
+WHERE {
+    ?rec a eco:Recommendation ;
+         eco:recommendedFor ?entity ;
+         eco:confidence ?confidence .
+
+    ?entity eco:path ?path .
+
+    ?rec dc:description ?reason .
+
+    FILTER (?confidence > 0.7)
+}
+ORDER BY DESC(?confidence)
+
+---
+
+# Query 10: Match entities to applicable best practices
+SELECT ?entity ?path ?practice ?practiceLabel ?impact
+WHERE {
+    ?entity a eco:CodeEntity ;
+            eco:path ?path .
+
+    ?practice a eco:BestPractice ;
+              rdfs:label ?practiceLabel ;
+              eco:impact ?impact ;
+              eco:appliesTo ?entity .
+
+    FILTER NOT EXISTS {
+        ?entity eco:implements ?practice .
+    }
+}
+ORDER BY DESC(?impact)
+
+---
+
+# =============================================================================
+# ANALYSIS HISTORY QUERIES
+# =============================================================================
+
+# Query 11: Get analysis history for an entity
+SELECT ?analysis ?timestamp ?overallScore ?grade
+WHERE {
+    ?analysis eco:analyzedBy ?entity ;
+              eco:timestamp ?timestamp ;
+              eco:overallScore ?overallScore ;
+              eco:grade ?grade .
+}
+ORDER BY DESC(?timestamp)
+
+---
+
+# Query 12: Track score improvement over time
+SELECT ?timestamp ?carbonScore ?energyScore ?qualityScore
+WHERE {
+    ?analysis eco:analyzedBy ?entity ;
+              eco:timestamp ?timestamp ;
+              eco:hasMetric ?cm, ?em, ?qm .
+
+    ?cm a eco:CarbonMetric ; eco:carbonScore ?carbonScore .
+    ?em a eco:EnergyMetric ; eco:energyScore ?energyScore .
+    ?qm a eco:QualityMetric ; eco:complexityScore ?qualityScore .
+}
+ORDER BY ?timestamp
+
+---
+
+# =============================================================================
+# AGGREGATE QUERIES
+# =============================================================================
+
+# Query 13: Repository-level statistics
+SELECT ?repo
+       (AVG(?carbonScore) AS ?avgCarbon)
+       (AVG(?energyScore) AS ?avgEnergy)
+       (AVG(?qualityScore) AS ?avgQuality)
+       (COUNT(?violation) AS ?violationCount)
+WHERE {
+    ?entity eco:inRepository ?repo .
+
+    ?analysis eco:analyzedBy ?entity ;
+              eco:hasMetric ?cm, ?em, ?qm .
+
+    ?cm a eco:CarbonMetric ; eco:carbonScore ?carbonScore .
+    ?em a eco:EnergyMetric ; eco:energyScore ?energyScore .
+    ?qm a eco:QualityMetric ; eco:complexityScore ?qualityScore .
+
+    OPTIONAL { ?entity eco:violates ?violation }
+}
+GROUP BY ?repo
+
+---
+
+# Query 14: Language-level eco statistics
+SELECT ?language
+       (AVG(?carbonScore) AS ?avgCarbon)
+       (AVG(?energyScore) AS ?avgEnergy)
+       (COUNT(?entity) AS ?fileCount)
+WHERE {
+    ?entity a eco:File ;
+            eco:language ?language .
+
+    ?analysis eco:analyzedBy ?entity ;
+              eco:hasMetric ?cm, ?em .
+
+    ?cm a eco:CarbonMetric ; eco:carbonScore ?carbonScore .
+    ?em a eco:EnergyMetric ; eco:energyScore ?energyScore .
+}
+GROUP BY ?language
+ORDER BY DESC(?avgCarbon)

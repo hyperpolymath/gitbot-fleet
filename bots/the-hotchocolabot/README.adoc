@@ -1,0 +1,349 @@
+= HotChocolaBot
+
+image:[Palimpsest-MPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+
+*An Educational Robotics Platform for Teaching Reverse Engineering and Systems Thinking*
+
+[![RSR Bronze](https://img.shields.io/badge/RSR-Bronze-cd7f32?style=flat-square)](RSR_COMPLIANCE.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/Hyperpolymath/the-hotchocolabot/rust_ci.yml?style=flat-square)](https://github.com/Hyperpolymath/the-hotchocolabot/actions)
+
+Part of UAL Creative Communities' Postdisciplinary Mechatronics Group (MechCC)
+
+== Overview
+
+HotChocolaBot is an over-engineered hot chocolate dispenser designed to teach reverse engineering, systems thinking, and problem-solving skills through heutagogic (self-directed) learning. Students deconstruct and analyze the system to understand complex engineering principles in an engaging, hands-on environment.
+
+=== Why Over-Engineered?
+
+The deliberate complexity serves pedagogical purposes:
+- *Layered Learning*: Multiple levels of abstraction (hardware, firmware, safety systems)
+- *Real-World Complexity*: Mirrors professional engineering projects
+- *Discovery-Based*: Students uncover design decisions through investigation
+- *Safety-First*: Demonstrates formal verification and CNO (Certified Null Operations) principles
+
+== Features
+
+- *Rust-Based Control System*: Memory-safe, formally verifiable control logic
+- *Hardware Abstraction Layer*: Trait-based design enables testing without physical hardware
+- *Safety Monitoring*: State machine-based safety system with emergency stop
+- *Educational Mode*: Configurable delays and system introspection for learning
+- *Three-Ingredient System*: Cocoa, milk, and sugar with programmable recipes
+- *Mock Hardware*: Full simulation for development without Raspberry Pi
+- *RSR Compliant*: Bronze level (Rhodium Standard Repository), targeting Silver ([details](RSR_COMPLIANCE.md))
+
+== Hardware Requirements
+
+=== Minimum Setup
+
+- Raspberry Pi 4 (2GB+ RAM recommended)
+- 3× Peristaltic pumps (12V DC)
+- 3× Relay modules (or MOSFET drivers)
+- Temperature sensor (TMP102 or DS18B20)
+- 16×2 LCD with I2C backpack
+- Emergency stop button
+- Status LED
+- 12V power supply (2A+)
+- Wiring, breadboard, connectors
+
+*Estimated Cost*: £500-750 (See `hardware/bom/parts_list.md` for detailed BOM)
+
+=== GPIO Pin Assignments (BCM Numbering)
+
+| Component | Default Pin |
+|-----------|-------------|
+| Cocoa Pump | GPIO 17 |
+| Milk Pump | GPIO 27 |
+| Sugar Pump | GPIO 22 |
+| Emergency Stop | GPIO 23 |
+| Status LED | GPIO 24 |
+| Temperature Sensor | I2C (0x48) |
+| LCD Display | I2C (0x27) |
+
+== Software Setup
+
+=== Prerequisites
+
+- Rust 1.70+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- Git
+
+=== Installation
+
+```bash
+= Clone repository
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+git clone https://github.com/Hyperpolymath/the-hotchocolabot.git
+cd the-hotchocolabot
+
+= Copy configuration template
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cp config.toml.example config.toml
+
+= Edit configuration for your hardware
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+nano config.toml
+
+= Build (development mode with mock hardware)
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo build
+
+= Build for Raspberry Pi (cross-compile or on-device)
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo build --release
+
+= Run tests
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo test
+
+= Run with mock hardware (for development)
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo run
+
+= Run on Raspberry Pi
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+sudo cargo run --release
+```
+
+=== Cross-Compilation for Raspberry Pi
+
+```bash
+= Install cross-compilation toolchain
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+rustup target add armv7-unknown-linux-gnueabihf
+
+= Install cross-compilation dependencies
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo install cross
+
+= Build for Raspberry Pi
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cross build --target armv7-unknown-linux-gnueabihf --release
+
+= Copy to Raspberry Pi
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+scp target/armv7-unknown-linux-gnueabihf/release/hotchocolabot pi@raspberrypi.local:~/
+```
+
+== Architecture
+
+=== System Components
+
+```
+┌─────────────────────────────────────────┐
+│         Main Controller                 │
+│  (src/control/mod.rs)                   │
+└─────────────────┬───────────────────────┘
+                  │
+        ┌─────────┴──────────┐
+        │                    │
+┌───────▼────────┐  ┌────────▼─────────┐
+│ Safety Monitor │  │ Hardware Layer   │
+│ (src/safety)   │  │ (src/hardware)   │
+│                │  │                  │
+│ • State Machine│  │ • Pumps (GPIO)   │
+│ • CNO Checks   │  │ • Sensors (I2C)  │
+│ • Temp Limits  │  │ • Display (I2C)  │
+│ • E-Stop       │  │ • Mock Impl.     │
+└────────────────┘  └──────────────────┘
+                           │
+                    ┌──────┴────────┐
+                    │  Raspberry Pi │
+                    │  GPIO / I2C   │
+                    └───────────────┘
+```
+
+=== Code Organization
+
+```
+the-hotchocolabot/
+├── src/
+│   ├── main.rs              # Entry point
+│   ├── config/              # Configuration management
+│   ├── control/             # Main control logic
+│   ├── hardware/            # Hardware abstraction
+│   │   ├── mod.rs           # Trait definitions
+│   │   ├── pump.rs          # GPIO pump control
+│   │   ├── sensor.rs        # I2C temperature sensor
+│   │   ├── display.rs       # I2C LCD display
+│   │   └── mock.rs          # Mock implementations
+│   └── safety/              # Safety monitoring
+├── tests/                   # Integration tests
+├── hardware/                # Hardware documentation
+│   ├── bom/                 # Bill of materials
+│   ├── schematics/          # Wiring diagrams
+│   └── assembly/            # Assembly instructions
+├── education/               # Educational materials
+│   ├── workshops/           # Workshop curricula
+│   ├── assessments/         # Pre/post assessments
+│   └── activities/          # Student activity sheets
+└── docs/                    # Documentation
+    ├── technical/           # Technical specifications
+    ├── research/            # Research connections
+    └── competition/         # Competition materials
+```
+
+== Educational Use
+
+=== Workshop Format
+
+HotChocolaBot is designed for 2-3 hour workshops with students aged 12-18:
+
+1. *Introduction* (30 min): Present the "mystery box" - what does it do?
+2. *Exploration* (45 min): Students observe, hypothesize, diagram
+3. *Deconstruction* (45 min): Guided hardware/software investigation
+4. *Reconstruction* (30 min): Students propose improvements
+5. *Reflection* (15 min): Systems thinking discussion
+
+=== Learning Outcomes
+
+- Reverse engineering methodology
+- Systems thinking and component interaction
+- Safety-critical system design
+- State machines and formal verification concepts
+- Hardware-software integration
+- Professional engineering practices
+
+=== Customization
+
+Edit `config.toml` to enable educational features:
+
+```toml
+[education]
+challenge_mode = true           # Hide labels, make students discover
+show_internals = true           # Display system state on LCD
+enable_teaching_failures = true # Intentional failures for learning
+observation_delay_ms = 1000     # Slow down for observation
+```
+
+== Safety
+
+=== Built-In Safety Features
+
+- *Temperature Monitoring*: Continuous temperature validation
+- *Pump Runtime Limits*: Maximum runtime prevents overflow
+- *Emergency Stop*: Hardware button for immediate shutdown
+- *State Machine Verification*: Formal state transitions
+- *CNO Principles*: Certified Null Operations for safety-critical code
+
+=== Safety Configuration
+
+```toml
+[safety]
+max_temperature = 90.0      # Celsius
+min_temperature = 5.0       # Celsius
+max_pump_runtime = 30       # Seconds
+operation_timeout = 120     # Seconds
+emergency_stop_enabled = true
+```
+
+=== Important Safety Notes
+
+⚠️ *Never operate unattended*
+⚠️ *Ensure emergency stop is accessible*
+⚠️ *Regularly inspect pumps and connections*
+⚠️ *Use food-safe tubing for ingredients*
+⚠️ *Supervise students during operation*
+
+== Research Connections
+
+HotChocolaBot demonstrates concepts from ongoing research:
+
+- *Phase-Separated Approach*: Oblíbený's methodology for systems design
+- *CNO (Certified Null Operations)*: Safety verification principles
+- *UPM (Universal Project Manager)*: Case study for project management theory
+- *Formal Verification*: State machine approach bridges theory to practice
+
+== Competition Submission
+
+=== Target: Robotics for Good Youth Challenge 2025-2026
+
+- *Deadline*: April 1, 2026
+- *Theme*: Food security (adapted to educational food systems)
+- *Requirements*:
+  - Working prototype ✓
+  - Video demonstration
+  - Workshop delivery (3+ sessions, 15+ students)
+  - Impact metrics and assessment data
+  - Open-source repository ✓
+
+=== Alternative Competitions
+
+- FIRST Tech Challenge Educational Outreach Award
+- ECER (Academic paper on educational methodology)
+
+== Development Status
+
+- [x] Repository structure
+- [x] Rust control system scaffolding
+- [x] Hardware abstraction layer
+- [x] Mock implementations for testing
+- [x] Safety monitoring system
+- [ ] Complete hardware assembly
+- [ ] Workshop curriculum finalization
+- [ ] Pilot workshops (3 sessions)
+- [ ] Impact assessment collection
+- [ ] Competition submission
+
+== Contributing
+
+See `CONTRIBUTING.md` for development guidelines.
+
+=== Quick Start for Developers
+
+```bash
+= Run tests
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo test
+
+= Run with logging
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+RUST_LOG=debug cargo run
+
+= Format code
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo fmt
+
+= Lint
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo clippy
+
+= Benchmark
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+cargo bench
+```
+
+== License
+
+Dual-licensed under MIT OR Apache-2.0. See `LICENSE-MIT` and `LICENSE-APACHE` for details.
+
+== Acknowledgments
+
+- UAL Creative Communities - MechCC
+- Robotics for Good Youth Challenge (ITU/FAO)
+- Rust Embedded Working Group
+- Open-source hardware community
+
+== Contact
+
+- Repository: https://github.com/Hyperpolymath/the-hotchocolabot
+- Issues: https://github.com/Hyperpolymath/the-hotchocolabot/issues
+
+---
+
+*Built with ❤️ for education and open-source learning*

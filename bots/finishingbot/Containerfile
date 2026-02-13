@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Cerro Torre - The Challenging Peak
+# Patagonian mountain known for difficulty and technical climbing
+# Purpose: Release readiness validation (conquering the final ascent)
+
+FROM docker.io/library/rust:latest AS builder
+
+WORKDIR /build
+
+# Install dependencies and nightly toolchain
+RUN apt-get update && \
+    apt-get install -y pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/* && \
+    rustup default nightly
+
+# Copy source
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+# Remove path dependency that isn't available in container context
+RUN sed -i '/gitbot-shared-context.*path.*optional/d' Cargo.toml && \
+    sed -i '/uuid.*v4.*optional/s/^/# /' Cargo.toml && \
+    sed -i 's/fleet = \["gitbot-shared-context", "uuid"\]/fleet = []/' Cargo.toml
+
+# Build release binary (without optional fleet feature)
+RUN cargo build --release --bin finishing-bot --no-default-features
+
+# Runtime image
+FROM docker.io/library/debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y ca-certificates libssl3 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/target/release/finishing-bot /usr/local/bin/cerro-torre
+
+# Run as non-root
+RUN useradd -r -s /bin/false cerro-torre
+USER cerro-torre
+
+ENTRYPOINT ["/usr/local/bin/cerro-torre"]
+CMD ["audit"]

@@ -1,0 +1,194 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2025-2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= Echidnabot Roadmap
+
+:toc: macro
+:toclevels: 3
+:icons: font
+
+Development roadmap for echidnabot -- Proof-Aware CI Bot.
+
+*Last Updated:* 2026-02-08 +
+*Current Version:* v0.1.0 +
+*Overall Completion:* ~90%
+
+toc::[]
+
+== Completed (v0.1.0 -- February 2026)
+
+=== Core Infrastructure (100%)
+
+* [x] Axum HTTP server with health checks
+* [x] Webhook signature verification (HMAC-SHA256 for GitHub/Bitbucket, token for GitLab)
+* [x] GraphQL API (async-graphql) with queries, mutations, and playground
+* [x] Database schema with sqlx (SQLite for dev, PostgreSQL for production)
+* [x] Configuration system (TOML files + environment variables)
+* [x] Structured error handling with `thiserror`
+* [x] CLI with clap: `serve`, `register`, `check`, `status`, `init-db`
+
+=== Platform Adapters (100%)
+
+* [x] `PlatformAdapter` trait with unified interface
+* [x] GitHub adapter (octocrab) -- check runs, PR comments, repo cloning
+* [x] GitLab adapter -- commit statuses, MR notes
+* [x] Bitbucket adapter -- build statuses, PR comments
+* [x] Webhook receivers for all three platforms
+* [x] Platform enum includes Codeberg (adapter not yet implemented)
+
+=== ECHIDNA Integration (100%)
+
+* [x] HTTP client (reqwest) for ECHIDNA REST API
+* [x] 12-prover enumeration with tier classification and file extensions
+* [x] Job dispatch to ECHIDNA
+* [x] Result parsing (ProofStatus: Verified/Failed/Timeout/Error/Unknown)
+* [x] Prover health checking
+* [x] Tactic suggestion data model
+
+=== Job Scheduler (100%)
+
+* [x] Priority queue (Low/Normal/High/Critical)
+* [x] SQLite/PostgreSQL persistence
+* [x] Job status tracking (Queued/Running/Completed/Failed/Cancelled)
+* [x] Retry logic with exponential backoff and jitter
+* [x] Circuit breaker for ECHIDNA API (5 failures -> open, 5 min auto-reset)
+* [x] Concurrent job execution limits (semaphore-based, global + per-repo)
+* [x] Job lifecycle methods (start, complete, cancel, duration)
+
+=== Container Isolation (100%)
+
+* [x] Podman rootless container spawning
+* [x] bubblewrap (bwrap) fallback
+* [x] Fail-safe: refuses proofs without isolation backend
+* [x] Security: `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--read-only`
+* [x] Resource limits: CPU, memory, PIDs, timeout
+* [x] Network isolation (`--network=none`)
+* [x] Writable `/tmp` with size limits
+* [x] Timeout enforcement with SIGKILL
+* [x] OOM-kill detection (exit code 137)
+
+=== Bot Modes (100%)
+
+* [x] Verifier mode (silent pass/fail, minimal output)
+* [x] Advisor mode (detailed failures + tactic suggestions)
+* [x] Consultant mode (interactive Q&A, explicit mention trigger only)
+* [x] Regulator mode (merge blocking on failure)
+* [x] Mode parsing from `.bot_directives/echidnabot.scm`
+* [x] Mode-dependent auto-trigger logic
+* [x] Result formatting bridge (check runs, PR comments, summaries)
+
+=== ECHIDNA Trust Bridge (100%)
+
+* [x] 5-level proof confidence assessment
+* [x] Small-kernel prover classification (7 of 12 provers)
+* [x] Solver integrity verification against SHA-256 manifest
+* [x] Constant-time hash comparison
+* [x] Axiom usage tracking (sorry, Admitted, postulate, oops, etc.)
+* [x] 3-tier severity: unsound (3), warning (2), informational (1)
+* [x] Prover-specific and universal axiom pattern scanning
+
+=== Automated Tests (129 tests)
+
+* [x] 30 integration tests (webhook signatures, ECHIDNA client, bot modes, job lifecycle, database models, container executor, circuit breaker, scheduler)
+* [x] 99 unit tests across modules (container, modes, retry, limiter, confidence, axiom tracker, solver integrity, result formatter, fleet, dispatcher, webhooks, job queue)
+
+=== Metadata and Compliance
+
+* [x] License: PMPL-1.0-or-later
+* [x] SPDX headers on all `.rs` files
+* [x] Author: Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+* [x] SCM files in `.machine_readable/`
+
+== Remaining Work (v0.2.0 -- Q1-Q2 2026)
+
+=== Production Hardening (HIGH PRIORITY)
+
+* [ ] Wire trust bridge into scheduler loop (confidence + axiom reports in job results)
+* [ ] Observability: Prometheus metrics endpoint (`/metrics`)
+* [ ] Observability: OpenTelemetry distributed tracing
+* [ ] Rate limiting for webhook endpoints
+* [ ] Structured JSON logging
+* [ ] Comprehensive error recovery for all failure modes
+* [ ] Graceful shutdown (finish in-progress jobs)
+
+=== Deployment (MEDIUM PRIORITY)
+
+* [ ] Docker Compose setup (PostgreSQL + echidnabot + ECHIDNA)
+* [ ] Pre-built Podman images for all 12 provers
+* [ ] Kubernetes deployment manifests
+* [ ] Helm chart for easy installation
+* [ ] Production deployment guide
+
+=== Codeberg Adapter (LOW PRIORITY)
+
+* [ ] Implement `PlatformAdapter` for Codeberg (Forgejo/Gitea API)
+
+== Long-Term Goals (v1.0.0 -- Q3-Q4 2026)
+
+=== Proof Caching and Incremental Verification
+
+* [ ] Cache verified proofs (skip re-verification if unchanged)
+* [ ] Incremental verification (only changed theorems + dependents)
+* [ ] Proof dependency tracking
+
+=== Multi-Prover Consensus
+
+* [ ] Configure N provers to verify each proof
+* [ ] Consensus voting (majority must agree)
+* [ ] Disagreement reporting
+
+=== Distributed Proof Verification
+
+* [ ] Kubernetes-native horizontal scaling
+* [ ] Proof job distribution across workers
+* [ ] Worker health monitoring
+
+=== Proof Library Integration
+
+* [ ] Mathlib (Lean) automatic import resolution
+* [ ] Coq stdlib + ext-lib integration
+* [ ] Isabelle/AFP integration
+
+== Research Goals (v2.0.0+ -- 2027+)
+
+* [ ] AI-powered proof sketch generation
+* [ ] Cross-prover proof translation (Coq <-> Lean <-> Isabelle)
+* [ ] Continuous ML model improvement from CI proof data
+
+== Technical Debt
+
+=== High Priority
+
+* [ ] Refactor platform adapters to shared crate (with rhodibot, seambot)
+* [ ] Wire trust bridge modules into the main processing pipeline
+* [ ] Improve error messages with prover-specific guidance
+
+=== Medium Priority
+
+* [ ] Performance benchmarks for verification pipeline
+* [ ] Memory optimization for large proof files
+* [ ] GraphQL schema versioning
+
+=== Low Priority
+
+* [ ] Plugin system for custom provers
+* [ ] Alternative output formats (HTML proof reports)
+
+== Non-Goals
+
+Echidnabot will **NOT**:
+
+* Replace human proof engineers (assists and automates, does not replace)
+* Verify proofs without ECHIDNA (delegates to ECHIDNA core, is not a prover itself)
+* Support non-theorem-prover languages (Python tests are not formal proofs)
+* Guarantee soundness independently (relies on ECHIDNA's formal soundness)
+* Become a standalone prover (always orchestrates ECHIDNA)
+
+== Versioning
+
+* **v0.x.y** -- Pre-1.0, breaking changes allowed between minor versions
+* **v1.x.y** -- Stable API, breaking changes only in major versions
+
+**Repository:** https://github.com/hyperpolymath/echidnabot +
+**Maintainer:** Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk> +
+**License:** PMPL-1.0-or-later

@@ -1,0 +1,265 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+#
+# Oikos Bot SPARQL Queries for Virtuoso
+# =====================================
+# Common queries for the Oikos Bot semantic knowledge base
+
+PREFIX eco: <http://oikos-bot.dev/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+# -----------------------------------------------------------------------------
+# QUERY 1: Find all eco hotspots (entities below minimum threshold)
+# -----------------------------------------------------------------------------
+
+# @name: eco_hotspots
+# @description: Find software entities not meeting eco minimum standards
+SELECT ?entity ?entityLabel ?carbonScore ?energyScore ?healthIndex
+WHERE {
+    ?entity a eco:SoftwareEntity ;
+            rdfs:label ?entityLabel .
+    ?analysis eco:analyzedBy ?entity ;
+              eco:healthIndex ?healthIndex .
+    ?analysis eco:hasMetric ?carbonMetric .
+    ?carbonMetric a eco:CarbonMetric ;
+                  eco:carbonScore ?carbonScore .
+    ?analysis eco:hasMetric ?energyMetric .
+    ?energyMetric a eco:EnergyMetric ;
+                  eco:energyScore ?energyScore .
+    FILTER (?carbonScore < 50 || ?energyScore < 50)
+}
+ORDER BY ?healthIndex
+
+# -----------------------------------------------------------------------------
+# QUERY 2: Find best practices for improvement
+# -----------------------------------------------------------------------------
+
+# @name: best_practices_for_entity
+# @param: entityUri - URI of the entity to get recommendations for
+SELECT ?practice ?practiceLabel ?carbonImpact ?energyImpact ?description
+WHERE {
+    BIND(<${entityUri}> AS ?entity)
+
+    # Find anti-patterns the entity exhibits
+    ?entity eco:exhibitsPattern ?antiPattern .
+    ?antiPattern a eco:AntiPattern .
+
+    # Find best practices that address similar concerns
+    ?practice a eco:BestPractice ;
+              rdfs:label ?practiceLabel ;
+              rdfs:comment ?description .
+
+    OPTIONAL { ?practice eco:carbonImpact ?carbonImpact }
+    OPTIONAL { ?practice eco:energyImpact ?energyImpact }
+
+    FILTER (BOUND(?carbonImpact) || BOUND(?energyImpact))
+}
+ORDER BY COALESCE(?carbonImpact, 0)
+
+# -----------------------------------------------------------------------------
+# QUERY 3: Pareto dominance analysis
+# -----------------------------------------------------------------------------
+
+# @name: pareto_dominance
+# @description: Find entities that Pareto dominate others
+SELECT ?dominant ?dominantLabel ?dominated ?dominatedLabel
+       ?domCarbon ?domEnergy ?subCarbon ?subEnergy
+WHERE {
+    ?dominant a eco:SoftwareEntity ;
+              rdfs:label ?dominantLabel ;
+              eco:dominates ?dominated .
+    ?dominated rdfs:label ?dominatedLabel .
+
+    # Get metrics for dominant entity
+    ?domAnalysis eco:analyzedBy ?dominant .
+    ?domAnalysis eco:hasMetric ?domCarbonMetric .
+    ?domCarbonMetric a eco:CarbonMetric ;
+                     eco:carbonScore ?domCarbon .
+    ?domAnalysis eco:hasMetric ?domEnergyMetric .
+    ?domEnergyMetric a eco:EnergyMetric ;
+                     eco:energyScore ?domEnergy .
+
+    # Get metrics for dominated entity
+    ?subAnalysis eco:analyzedBy ?dominated .
+    ?subAnalysis eco:hasMetric ?subCarbonMetric .
+    ?subCarbonMetric a eco:CarbonMetric ;
+                     eco:carbonScore ?subCarbon .
+    ?subAnalysis eco:hasMetric ?subEnergyMetric .
+    ?subEnergyMetric a eco:EnergyMetric ;
+                     eco:energyScore ?subEnergy .
+}
+
+# -----------------------------------------------------------------------------
+# QUERY 4: Policy compliance check
+# -----------------------------------------------------------------------------
+
+# @name: policy_compliance
+# @param: policyUri - URI of the policy to check against
+SELECT ?entity ?entityLabel ?carbonScore ?energyScore ?compliant
+WHERE {
+    BIND(<${policyUri}> AS ?policy)
+
+    ?policy eco:carbonThreshold ?carbonThreshold ;
+            eco:energyThreshold ?energyThreshold .
+
+    ?entity a eco:SoftwareEntity ;
+            rdfs:label ?entityLabel .
+
+    ?analysis eco:analyzedBy ?entity .
+    ?analysis eco:hasMetric ?carbonMetric .
+    ?carbonMetric a eco:CarbonMetric ;
+                  eco:carbonScore ?carbonScore .
+    ?analysis eco:hasMetric ?energyMetric .
+    ?energyMetric a eco:EnergyMetric ;
+                  eco:energyScore ?energyScore .
+
+    BIND(IF(?carbonScore >= ?carbonThreshold && ?energyScore >= ?energyThreshold,
+            "true", "false") AS ?compliant)
+}
+ORDER BY ?compliant ?carbonScore
+
+# -----------------------------------------------------------------------------
+# QUERY 5: Praxis learning - successful interventions
+# -----------------------------------------------------------------------------
+
+# @name: successful_interventions
+# @description: Find patterns in successful praxis observations
+SELECT ?action (COUNT(?obs) AS ?successCount)
+       (AVG(?carbonImprovement) AS ?avgCarbonImprovement)
+       (AVG(?energyImprovement) AS ?avgEnergyImprovement)
+WHERE {
+    ?obs a eco:PraxisObservation ;
+         eco:actionTaken ?action ;
+         eco:outcome "positive" ;
+         eco:carbonImprovement ?carbonImprovement ;
+         eco:energyImprovement ?energyImprovement .
+}
+GROUP BY ?action
+HAVING (COUNT(?obs) > 5)
+ORDER BY DESC(?successCount)
+
+# -----------------------------------------------------------------------------
+# QUERY 6: Technical debt hotspots
+# -----------------------------------------------------------------------------
+
+# @name: debt_hotspots
+# @description: Find entities with high technical debt impacting eco metrics
+SELECT ?entity ?entityLabel ?debtPrincipal ?carbonScore ?correlation
+WHERE {
+    ?entity a eco:SoftwareEntity ;
+            rdfs:label ?entityLabel .
+
+    ?analysis eco:analyzedBy ?entity .
+    ?analysis eco:hasMetric ?debtMetric .
+    ?debtMetric a eco:DebtMetric ;
+                eco:debtPrincipal ?debtPrincipal .
+    ?analysis eco:hasMetric ?carbonMetric .
+    ?carbonMetric a eco:CarbonMetric ;
+                  eco:carbonScore ?carbonScore .
+
+    # Calculate correlation indicator (simplified)
+    BIND(IF(?debtPrincipal > 100 && ?carbonScore < 50, "high", "normal") AS ?correlation)
+
+    FILTER (?debtPrincipal > 50)
+}
+ORDER BY DESC(?debtPrincipal)
+
+# -----------------------------------------------------------------------------
+# QUERY 7: Dependency impact analysis
+# -----------------------------------------------------------------------------
+
+# @name: dependency_eco_impact
+# @description: Analyze eco impact propagation through dependencies
+SELECT ?source ?sourceLabel ?target ?targetLabel ?depth ?cumulativeCarbon
+WHERE {
+    ?source a eco:SoftwareEntity ;
+            rdfs:label ?sourceLabel ;
+            eco:dependsOn+ ?target .
+    ?target rdfs:label ?targetLabel .
+
+    ?targetAnalysis eco:analyzedBy ?target .
+    ?targetAnalysis eco:hasMetric ?carbonMetric .
+    ?carbonMetric a eco:CarbonMetric ;
+                  eco:carbonScore ?targetCarbon .
+
+    # Path depth (simplified - would need property path counting)
+    BIND(1 AS ?depth)
+    BIND(?targetCarbon AS ?cumulativeCarbon)
+}
+ORDER BY ?source DESC(?cumulativeCarbon)
+
+# -----------------------------------------------------------------------------
+# QUERY 8: Recommendation confidence ranking
+# -----------------------------------------------------------------------------
+
+# @name: ranked_recommendations
+# @param: entityUri - URI of the entity to get recommendations for
+SELECT ?recommendation ?action ?reason ?confidence ?expectedImprovement
+WHERE {
+    BIND(<${entityUri}> AS ?entity)
+
+    ?analysis eco:analyzedBy ?entity ;
+              eco:hasRecommendation ?recommendation .
+
+    ?recommendation eco:action ?action ;
+                    eco:reason ?reason ;
+                    eco:confidence ?confidence .
+
+    OPTIONAL { ?recommendation eco:expectedImprovement ?expectedImprovement }
+
+    FILTER (?confidence > 0.5)
+}
+ORDER BY DESC(?confidence)
+LIMIT 10
+
+# -----------------------------------------------------------------------------
+# QUERY 9: Cross-project pattern analysis
+# -----------------------------------------------------------------------------
+
+# @name: common_patterns
+# @description: Find patterns common across multiple projects
+SELECT ?pattern ?patternLabel (COUNT(DISTINCT ?project) AS ?projectCount)
+       (AVG(?healthIndex) AS ?avgHealthIndex)
+WHERE {
+    ?project a eco:Project .
+    ?entity eco:contains* ?project ;
+            eco:exhibitsPattern ?pattern .
+    ?pattern rdfs:label ?patternLabel .
+
+    ?analysis eco:analyzedBy ?entity ;
+              eco:healthIndex ?healthIndex .
+}
+GROUP BY ?pattern ?patternLabel
+HAVING (COUNT(DISTINCT ?project) > 2)
+ORDER BY DESC(?projectCount)
+
+# -----------------------------------------------------------------------------
+# QUERY 10: Temporal trend analysis
+# -----------------------------------------------------------------------------
+
+# @name: eco_trends
+# @param: entityUri - URI of the entity to analyze
+# @param: startDate - Start of time period (xsd:dateTime)
+# @param: endDate - End of time period (xsd:dateTime)
+SELECT ?date ?carbonScore ?energyScore ?healthIndex
+WHERE {
+    BIND(<${entityUri}> AS ?entity)
+
+    ?analysis eco:analyzedBy ?entity ;
+              eco:timestamp ?date ;
+              eco:healthIndex ?healthIndex .
+
+    ?analysis eco:hasMetric ?carbonMetric .
+    ?carbonMetric a eco:CarbonMetric ;
+                  eco:carbonScore ?carbonScore .
+
+    ?analysis eco:hasMetric ?energyMetric .
+    ?energyMetric a eco:EnergyMetric ;
+                  eco:energyScore ?energyScore .
+
+    FILTER (?date >= "${startDate}"^^xsd:dateTime &&
+            ?date <= "${endDate}"^^xsd:dateTime)
+}
+ORDER BY ?date

@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+#
+# Oikos Bot Policy Engine Container
+# Datalog + DeepProbLog based policy engine
+#
+# Build: podman build -t oikos-policy:latest -f containers/Containerfile.policy .
+
+FROM /cerro-torre AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN guix install \
+    python \
+    python-pip \
+    souffle \
+    swi-prolog \
+    git
+
+# Copy policy engine source
+COPY policy-engine/ .
+
+# Create virtual environment and install dependencies
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip && \
+    /opt/venv/bin/pip install \
+        numpy \
+        torch \
+        networkx \
+        pyyaml \
+        aiohttp \
+        pyarango \
+        SPARQLWrapper
+
+# Install DeepProbLog
+RUN /opt/venv/bin/pip install deepproblog
+
+# =============================================================================
+# Runtime
+# =============================================================================
+FROM /cerro-torre AS runtime
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN guix install \
+    python \
+    souffle \
+    swi-prolog \
+    jq
+
+# Copy virtual environment
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy policy engine
+COPY --from=builder /build /app/policy-engine
+
+# Copy Datalog rules
+COPY policy-engine/datalog/ /app/datalog/
+
+# Copy DeepProbLog rules
+COPY policy-engine/deepproblog/ /app/deepproblog/
+
+# Environment
+ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8081
+
+# Create non-root user
+RUN useradd -m -s /bin/bash policyengine
+USER policyengine
+
+EXPOSE 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"
+
+CMD ["python", "-m", "policy_engine.server", "--port", "8081"]

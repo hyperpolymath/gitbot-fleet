@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+
+[package]
+name = "rhodibot"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+description = "RSR compliance bot for repository management and standard enforcement"
+license = "PMPL-1.0-or-later"
+repository = "https://github.com/hyperpolymath/rhodibot"
+homepage = "https://github.com/hyperpolymath/rhodibot"
+keywords = ["github", "bot", "rsr", "compliance", "automation"]
+categories = ["development-tools", "command-line-utilities"]
+readme = "README.md"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Crypto for webhook verification
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Environment
+dotenvy = "0.15"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Git operations
+gix = { version = "0.76", default-features = false, features = ["blocking-network-client"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Template rendering (for reports/issues)
+minijinja = "2"
+
+# Fleet integration
+gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
+
+[dev-dependencies]
+tokio-test = "0.4"
+wiremock = "0.6"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

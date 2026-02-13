@@ -1,0 +1,75 @@
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+-- SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+cabal-version:      3.0
+name:               oikos-analyzer
+version:            0.1.0.0
+synopsis:           Ecological and economic code analysis engine
+description:        Haskell-based code analyzer for Oikos Bot platform.
+                    Analyzes code for carbon intensity, energy efficiency,
+                    Pareto optimality, and software quality metrics.
+license:            AGPL-3.0-or-later
+author:             Hyperpolymath
+maintainer:         oikos@hyperpolymath.dev
+category:           Development
+build-type:         Simple
+
+common warnings
+    ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates
+                 -Wincomplete-uni-patterns -Wmissing-export-lists
+                 -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+
+library
+    import:           warnings
+    exposed-modules:
+        Eco.Analysis
+        Eco.Carbon
+        Eco.Energy
+        Eco.Pareto
+        Eco.Resource
+        Quality.Complexity
+        Quality.Coupling
+        Quality.Debt
+        Quality.Coverage
+        Types.Metrics
+        Types.Report
+    build-depends:
+        base ^>=4.17,
+        aeson >= 2.0,
+        text >= 2.0,
+        containers >= 0.6,
+        vector >= 0.13,
+        mtl >= 2.3,
+        transformers >= 0.6,
+        scientific >= 0.3,
+        bytestring >= 0.11,
+        filepath >= 1.4,
+        directory >= 1.3,
+        tree-sitter >= 0.9,
+        megaparsec >= 9.0,
+        optparse-applicative >= 0.18
+    hs-source-dirs:   src
+    default-language: GHC2021
+
+executable oikos-analyzer
+    import:           warnings
+    main-is:          Main.hs
+    build-depends:
+        base ^>=4.17,
+        oikos-analyzer,
+        aeson,
+        text,
+        optparse-applicative
+    hs-source-dirs:   app
+    default-language: GHC2021
+
+test-suite oikos-analyzer-test
+    import:           warnings
+    default-language: GHC2021
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+        base ^>=4.17,
+        oikos-analyzer,
+        hspec >= 2.10,
+        QuickCheck >= 2.14

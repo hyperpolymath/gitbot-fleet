@@ -1,0 +1,457 @@
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2025 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= finishing-bot: Release Readiness Validator
+
+:toc: macro
+:toclevels: 3
+:icons: font
+:source-highlighter: pygments
+
+Tier 2 (Finisher) bot in the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] ecosystem.
+Analyzes repositories for unfinished work and validates release readiness across 8 categories.
+
+toc::[]
+
+== Overview
+
+finishing-bot is a Rust CLI tool that ensures repositories are production-ready before release.
+It performs 8 distinct analyses covering license compliance, placeholder detection, documentation
+claims verification, release artifact checking, SCM file validation, testing infrastructure,
+tooling configuration, and v1 readiness assessment.
+
+finishing-bot operates as a Tier 2 "Finisher" bot, meaning it runs after structural validators
+(rhodibot) and presentation validators (glambot) have completed. It consumes their findings via
+the gitbot-fleet shared context layer and makes the final release-readiness determination.
+
+=== What It Checks
+
+[cols="1,3,1"]
+|===
+|Analyzer |What It Validates |Auto-Fix
+
+|**License**
+|LICENSE file presence, SPDX headers in source files, allowed license list, disallowed license detection
+|Yes
+
+|**Placeholder**
+|TODO, FIXME, XXX, HACK, BUG, UNDONE markers in code and documentation
+|Yes
+
+|**Claims**
+|README completeness, documentation accuracy, CHANGELOG presence, incomplete feature markers
+|No
+
+|**Release**
+|Version consistency across files, debug statement detection, sensitive data patterns, SECURITY.md, release profiles
+|No
+
+|**SCM Files**
+|All 6 `.machine_readable/` files (STATE.scm, META.scm, ECOSYSTEM.scm, PLAYBOOK.scm, AGENTIC.scm, NEUROSYM.scm), SPDX headers, required sections, content completeness
+|No
+
+|**Testing**
+|Benchmark infrastructure (Criterion), fuzz testing targets, stress test workflows
+|No
+
+|**Tooling**
+|`.tool-versions`, `.editorconfig`, CI workflow count, workflow directory presence
+|No
+
+|**V1 Readiness**
+|Core docs (README.adoc, ROADMAP.adoc, LICENSE), SECURITY.md, community files (CODE_OF_CONDUCT.md, CONTRIBUTING.md), banned language detection (TypeScript, Python, Go)
+|No
+|===
+
+=== Architecture
+
+[source]
+----
+  Repository
+      |
+      v
+ ┌──────────────────────────────────────────────────┐
+ │              finishing-bot (Rust)                  │
+ │  ┌────────────┐  ┌────────────┐  ┌────────────┐  │
+ │  │  License    │  │ Placeholder│  │   Claims   │  │
+ │  │  Analyzer   │  │  Analyzer  │  │  Analyzer  │  │
+ │  └────────────┘  └────────────┘  └────────────┘  │
+ │  ┌────────────┐  ┌────────────┐  ┌────────────┐  │
+ │  │  Release    │  │ SCM Files  │  │  Testing   │  │
+ │  │  Analyzer   │  │  Analyzer  │  │  Analyzer  │  │
+ │  └────────────┘  └────────────┘  └────────────┘  │
+ │  ┌────────────┐  ┌────────────┐                   │
+ │  │  Tooling    │  │V1 Readiness│                   │
+ │  │  Analyzer   │  │  Analyzer  │                   │
+ │  └────────────┘  └────────────┘                   │
+ │                                                    │
+ │  Analyzer trait: analyze() + fix() + name()        │
+ └──────────────────────────────────────────────────┘
+      |                          |
+      v                          v
+  Pretty/JSON output      Fleet shared context
+----
+
+== Installation
+
+=== From Source
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/finishing-bot.git
+cd finishing-bot
+cargo build --release
+----
+
+=== With Fleet Integration
+
+[source,bash]
+----
+cargo build --release --features fleet
+----
+
+== Usage
+
+=== Run Full Audit
+
+[source,bash]
+----
+# Audit current directory
+finishing-bot audit
+
+# Audit specific repository
+finishing-bot audit --path /path/to/repo
+
+# Strict mode (fail on warnings)
+finishing-bot audit --strict
+
+# JSON output for CI integration
+finishing-bot audit --format json
+----
+
+=== Apply Automatic Fixes
+
+[source,bash]
+----
+# Fix all auto-fixable issues (license headers, placeholders)
+finishing-bot fix
+
+# Fix only license issues
+finishing-bot fix --only license
+
+# Fix only placeholders
+finishing-bot fix --only placeholder
+
+# Dry-run (preview changes)
+finishing-bot fix --dry-run
+----
+
+=== Check Specific Categories
+
+[source,bash]
+----
+# License compliance
+finishing-bot license
+
+# List allowed licenses
+finishing-bot license --list-allowed
+
+# Placeholders (action: flag, remove, comment)
+finishing-bot placeholders --action remove
+
+# Documentation claims
+finishing-bot claims
+
+# Release readiness
+finishing-bot release
+----
+
+=== Configuration
+
+Default location: `.finishing-bot/config.yml`
+
+[source,bash]
+----
+# Create default YAML config
+finishing-bot init
+
+# Create TOML config
+finishing-bot init --format toml
+
+# Show current configuration
+finishing-bot show
+----
+
+[source,yaml]
+----
+licenses:
+  allowed:
+    - PMPL-1.0-or-later
+    - MIT
+    - Apache-2.0
+    - BSD-3-Clause
+  strict: false
+  require_spdx_headers: true
+
+placeholders:
+  patterns: [TODO, FIXME, XXX, HACK, BUG, UNDONE]
+  action: flag  # flag, remove, or comment
+  max_allowed: 0
+
+claims:
+  verify_docs: true
+  verify_tests: true
+  require_readme: true
+  require_changelog: false
+
+release:
+  require_hashes: false
+  require_signatures: false
+
+exclude:
+  - .git
+  - node_modules
+  - target
+  - vendor
+  - .venv
+----
+
+=== Fleet Mode
+
+Run finishing-bot as part of the gitbot-fleet with shared context (requires `fleet` feature):
+
+[source,bash]
+----
+# Run with shared context
+finishing-bot fleet \
+  --repo /path/to/repo \
+  --context /path/to/context.json \
+  --output /path/to/updated-context.json
+
+# Join existing session
+finishing-bot fleet \
+  --repo /path/to/repo \
+  --session session-id-123
+----
+
+In fleet mode, finishing-bot:
+
+* Registers as `BotId::Finishbot` in the shared context
+* Consumes findings from rhodibot and glambot (its dependencies)
+* Reports its own findings to the shared context
+* Sets `finishing-bot.release_ready` in context data
+* Supports cicd-hyper-a release rule integration
+
+=== Audit Output
+
+[source]
+----
+╔════════════════════════════════════════════════════════════════╗
+║              FINISHING-BOT RELEASE AUDIT SUMMARY               ║
+╠════════════════════════════════════════════════════════════════╣
+║  License:           2 findings  (  0 errors,   2 warnings)     ║
+║  Placeholders:      1 findings  (  0 errors,   1 warnings)     ║
+║  Claims:            0 findings  (  0 errors,   0 warnings)     ║
+║  Release:           0 findings  (  0 errors,   0 warnings)     ║
+║  SCM Files:         0 findings  (  0 errors,   0 warnings)     ║
+║  Testing:           0 findings  (  0 errors,   0 warnings)     ║
+║  Tooling:           0 findings  (  0 errors,   0 warnings)     ║
+║  V1 Readiness:      0 findings  (  0 errors,   0 warnings)     ║
+╠════════════════════════════════════════════════════════════════╣
+║  TOTAL:             3 findings  (  0 errors,   3 warnings)     ║
+╠════════════════════════════════════════════════════════════════╣
+║  STATUS: READY WITH WARNINGS                                   ║
+╚════════════════════════════════════════════════════════════════╝
+----
+
+== CLI Reference
+
+[source]
+----
+finishing-bot [OPTIONS] [COMMAND]
+
+Commands:
+  audit         Run full release readiness audit (default)
+  fix           Apply automatic fixes (license headers, placeholders)
+  license       Check license compliance only
+  placeholders  Check placeholders only
+  claims        Verify documentation claims
+  release       Check release readiness
+  init          Initialize configuration file
+  show          Show current configuration
+  fleet         Run as part of gitbot-fleet (requires 'fleet' feature)
+  help          Print help
+
+Options:
+  -p, --path <PATH>         Path to repository [default: .]
+  -c, --config <PATH>       Path to configuration file
+      --dry-run             Enable dry-run mode (no changes)
+      --fix                 Enable auto-fix mode
+      --log-level <LEVEL>   Log level [default: info]
+      --format <FORMAT>     Output format (pretty, json) [default: pretty]
+  -h, --help                Print help
+  -V, --version             Print version
+----
+
+== Integration with Gitbot Fleet
+
+finishing-bot is part of the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet], operating at **Tier 2 (Finisher)**.
+
+=== Fleet Execution Order
+
+[source]
+----
+Tier 1 (Verifiers):
+  1. rhodibot    - RSR structural compliance
+  2. glambot     - Presentation quality (WCAG, SEO)
+
+Tier 2 (Finishers):
+  3. finishbot   - Release readiness validation  <-- this bot
+  4. seambot     - Architectural seam hygiene
+
+Tier 3 (Specialists):
+  5. echidnabot  - Formal verification
+  6. sustainabot - Sustainability metrics
+----
+
+finishing-bot depends on rhodibot and glambot completing first. In fleet mode, it reads their
+findings from the shared context and factors them into its release-readiness determination.
+
+Bots share context through a unified layer managed by https://github.com/hyperpolymath/hypatia[hypatia].
+
+=== cicd-hyper-a Integration
+
+finishing-bot integrates with cicd-hyper-a for dynamic release rules. The fleet module includes:
+
+* `ReleaseRule` and `ReleaseCheck` types for rule-based validation
+* `CicdHyperAConfig` for configuring rule endpoints and rulesets
+* Learning pipeline reporting for findings feedback
+* Release blocking based on cicd-hyper-a rule evaluation
+
+== Development
+
+=== Prerequisites
+
+* Rust 1.75+ (nightly recommended)
+* cargo
+
+=== Building
+
+[source,bash]
+----
+cargo build
+cargo build --features fleet    # with fleet integration
+----
+
+=== Testing
+
+[source,bash]
+----
+# Run all 43 tests (37 integration + 2 config + 3 fleet + 1 inline)
+cargo test
+
+# Run specific analyzer tests
+cargo test --test analyzer_tests
+
+# Run with logging
+RUST_LOG=debug cargo test
+
+# Run benchmarks
+cargo bench
+
+# Run fuzz targets
+cargo fuzz run fuzz_target_1
+----
+
+=== Project Structure
+
+[source]
+----
+src/
+  main.rs                    CLI entry point, subcommand routing
+  lib.rs                     Public API (audit, fix, print_summary)
+  config.rs                  Configuration loading (YAML/TOML)
+  error.rs                   Error types (thiserror)
+  fleet.rs                   gitbot-fleet integration, cicd-hyper-a
+  analyzers/
+    mod.rs                   Analyzer trait, Finding, AuditResult
+    license.rs               License and SPDX validation
+    placeholder.rs           Placeholder detection and removal
+    claims.rs                Documentation claims verification
+    release.rs               Release artifact and security checks
+    scm_files.rs             .machine_readable/ SCM file validation
+    testing.rs               Testing infrastructure analysis
+    tooling.rs               Tooling and CI workflow validation
+    v1_readiness.rs          V1 release readiness assessment
+tests/
+  analyzer_tests.rs          37 comprehensive tests for all analyzers
+benches/
+  finishingbot_bench.rs      Criterion benchmarks
+fuzz/
+  fuzz_targets/              ClusterFuzzLite targets
+----
+
+=== Analyzer Interface
+
+All analyzers implement the `Analyzer` trait:
+
+[source,rust]
+----
+pub trait Analyzer {
+    fn name(&self) -> &str;
+    fn analyze(&self, path: &Path, config: &Config) -> Result<AnalysisResult>;
+    fn fix(&self, path: &Path, config: &Config, findings: &[Finding]) -> Result<Vec<String>>;
+}
+----
+
+Findings use a builder pattern for construction:
+
+[source,rust]
+----
+Finding::new("LIC-001", "Missing License", Severity::Error, "No LICENSE file found")
+    .with_file(PathBuf::from("LICENSE"))
+    .with_line(1)
+    .with_suggestion("Add a LICENSE file")
+    .fixable()
+----
+
+=== Adding a New Analyzer
+
+1. Create `src/analyzers/youranalyzer.rs`
+2. Implement the `Analyzer` trait
+3. Add `pub mod youranalyzer;` to `src/analyzers/mod.rs`
+4. Add result field to `AuditResult` in `src/analyzers/mod.rs`
+5. Wire up in `handle_audit()` in `src/main.rs`
+6. Add tests in `tests/analyzer_tests.rs`
+
+== Non-Goals
+
+finishing-bot intentionally does NOT:
+
+* Auto-generate missing documentation (requires human judgment)
+* Bump version numbers automatically (requires human decision)
+* Publish releases (security-sensitive operation)
+* Modify test code to fix coverage claims (anti-pattern)
+* Auto-resolve conflicting licenses (legal judgment required)
+* Replace CI/CD systems -- it integrates with existing CI
+* Run tests -- it validates that testing infrastructure exists
+
+== License
+
+PMPL-1.0-or-later (Palimpsest License)
+
+See link:LICENSE[LICENSE] for details.
+
+== Author
+
+Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+== Contributing
+
+Contributions are welcome. See link:CONTRIBUTING.md[CONTRIBUTING.md] for guidelines.
+
+== Security
+
+For security issues, see link:SECURITY.md[SECURITY.md].

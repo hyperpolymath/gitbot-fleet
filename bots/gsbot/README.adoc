@@ -1,0 +1,341 @@
+= GSBot - Garment Sustainability Bot
+
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/Philosophy-Palimpsest-indigo.svg[Palimpsest,link="https://github.com/hyperpolymath/palimpsest-license"]
+
+
+:toc: auto
+:toclevels: 2
+:icons: font
+:source-highlighter: rouge
+
+A Discord bot promoting sustainability in the garment and fashion industry through education, tracking, and actionable insights.
+
+== Overview
+
+GSBot helps users make informed decisions about clothing by providing:
+
+* Sustainability scores for garments and materials
+* Environmental impact analysis (water, carbon, energy)
+* Sustainable brand discovery and comparison
+* Personalized care instructions to extend garment life
+* Gamification to encourage sustainable habits
+
+== Architecture
+
+[source]
+----
+Discord Platform
+       |
+       v
++------------------+
+|   Bot Layer      |  Discord.py, Cog-based commands
+|  (5 command cogs)|
++--------+---------+
+         |
+         v
++------------------+
+|  Service Layer   |  Business logic, scoring algorithms
++--------+---------+
+         |
+         v
++------------------+
+|   Data Layer     |  SQLAlchemy ORM, 4 models
++--------+---------+
+         |
+         v
++------------------+
+|   SQLite/Postgres|
++------------------+
+----
+
+image:https://github.com/Hyperpolymath/gsbot/actions/workflows/main.yml/badge.svg[CI/CD,link=https://github.com/Hyperpolymath/gsbot/actions/workflows/main.yml]
+image:https://img.shields.io/badge/python-3.9+-blue.svg[Python 3.9+,link=https://www.python.org/downloads/]
+image:https://img.shields.io/badge/RSR-Bronze-cd7f32.svg[RSR Compliant,link=RSR.md]
+image:https://img.shields.io/badge/TPCF-Perimeter%203-success.svg[TPCF Perimeter 3,link=TPCF.md]
+
+=== Sustainability Commands
+
+[cols="1,2"]
+|===
+|Command |Description
+
+|`!sustainability <garment>`
+|Get sustainability score with full environmental impact breakdown
+
+|`!alternatives <garment>`
+|Find more sustainable options in the same category
+
+|`!care <garment>`
+|Material-specific care tips to extend garment life
+
+|`!tips`
+|Random sustainability tips for conscious consumption
+|===
+
+=== Material Analysis
+
+[cols="1,2"]
+|===
+|Command |Description
+
+|`!impact <material>`
+|Environmental scores: water, carbon, chemicals, energy, biodegradability
+
+|`!compare <mat1> <mat2>`
+|Side-by-side material comparison with winner per category
+
+|`!search <query>`
+|Search materials and garments by name or description
+|===
+
+=== Brand Intelligence
+
+[cols="1,2"]
+|===
+|Command |Description
+
+|`!brands`
+|Top 10 sustainable brands by overall rating
+
+|`!brands <name>`
+|Detailed profile: ratings, certifications, transparency, Good On You score
+|===
+
+=== Gamification
+
+[cols="1,2"]
+|===
+|Command |Description
+
+|`!profile`
+|Your rank, level, points, query count, preferences
+
+|`!leaderboard`
+|Top 10 sustainability champions
+
+|`!setpreference <type> <value>`
+|Configure materials, budget ($-$$$$), priority (environmental/social/animal_welfare)
+|===
+
+=== Points & Ranks
+
+[cols="1,1"]
+|===
+|Action |Points
+
+|Sustainability check |+5
+|Find alternatives |+5
+|Material impact |+5
+|Brand lookup |+5
+|Compare materials |+7
+|Care instructions |+3
+|Read tips |+2
+|===
+
+Ranks progress through: Sustainability Learner -> Conscious Consumer -> Green Enthusiast -> Eco Warrior -> Sustainability Champion
+
+== Data Models
+
+=== Material
+
+* 5 environmental scores (0-100): water usage, carbon footprint, biodegradability, chemical usage, energy consumption
+* Production metrics: water L/kg, CO2 kg/kg, energy MJ/kg
+* Properties: biodegradable, recycling potential, durability
+* Types: natural, synthetic, semi-synthetic, recycled, organic
+
+=== Garment
+
+* Category (shirt, pants, dress, etc.)
+* Material composition (many-to-many relationship)
+* Lifespan and typical wear count
+* Care instructions and washing frequency
+* Calculated sustainability score with lifespan multiplier
+
+=== Brand
+
+* 3 rating dimensions: environmental, labor, animal welfare
+* 5 certification flags: B Corp, Fair Trade, Organic, Recycled Materials, Carbon Neutral
+* Transparency score
+* Good On You rating integration
+
+=== User
+
+* Discord ID and username
+* Points, level, queries count
+* Preferences: materials, budget range, sustainability priority
+
+== Project Structure
+
+[source]
+----
+gsbot/
++-- src/
+|   +-- bot/
+|   |   +-- bot.py              # Core bot initialization
+|   |   +-- main.py             # Entry point
+|   |   +-- cogs/
+|   |       +-- sustainability.py
+|   |       +-- materials.py
+|   |       +-- brands.py
+|   |       +-- user_commands.py
+|   |       +-- admin.py
+|   +-- models/
+|   |   +-- base.py             # BaseModel with timestamps
+|   |   +-- material.py
+|   |   +-- garment.py
+|   |   +-- brand.py
+|   |   +-- user.py
+|   +-- services/
+|   |   +-- database.py         # CRUD operations
+|   |   +-- sustainability.py   # Scoring algorithms
+|   +-- config/
+|   |   +-- settings.py         # Environment config
+|   +-- utils/
+|       +-- cache.py            # TTL/LRU caching
+|       +-- logger.py           # Colored logging
++-- tests/
+|   +-- unit/
+|   |   +-- test_models.py
+|   |   +-- test_services.py
+|   +-- integration/
+|       +-- test_bot_commands.py
++-- docs/
+|   +-- API.md                  # Full command reference
+|   +-- ARCHITECTURE.md         # System design
+|   +-- DEPLOYMENT.md           # Deployment guide
++-- scripts/
+|   +-- load_fixtures.py        # Sample data
+|   +-- quick_start.sh
++-- ROADMAP.adoc                # Development roadmap
++-- CLAUDE.md                   # AI assistant instructions
++-- docker-compose.yml
++-- Containerfile
++-- requirements.txt
++-- alembic.ini                 # Database migrations
+----
+
+== Quick Start
+
+=== Prerequisites
+
+* Python 3.11+
+* Discord Bot Token (from Discord Developer Portal)
+
+=== Installation
+
+[source,bash]
+----
+# Clone repository
+git clone https://github.com/hyperpolymath/gsbot.git
+cd gsbot
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your DISCORD_TOKEN
+
+# Initialize database
+alembic upgrade head
+
+# Load sample data (optional)
+python scripts/load_fixtures.py
+
+# Run bot
+python -m src.bot.main
+----
+
+=== Docker
+
+[source,bash]
+----
+# Build and run
+docker-compose up -d
+
+# View logs
+docker-compose logs -f gsbot
+----
+
+== Configuration
+
+Environment variables (`.env`):
+
+[cols="1,2,1"]
+|===
+|Variable |Description |Default
+
+|`DISCORD_TOKEN`
+|Bot authentication token
+|Required
+
+|`COMMAND_PREFIX`
+|Command prefix
+|`!`
+
+|`DATABASE_URL`
+|Database connection string
+|`sqlite:///data/gsbot.db`
+
+|`ENABLE_CACHING`
+|Enable query caching
+|`True`
+
+|`CACHE_TTL`
+|Cache time-to-live (seconds)
+|`3600`
+
+|`LOG_LEVEL`
+|Logging verbosity
+|`INFO`
+|===
+
+== Testing
+
+[source,bash]
+----
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=src --cov-report=html
+
+# Run specific test file
+pytest tests/unit/test_models.py -v
+----
+
+== Documentation
+
+* link:docs/API.md[API Reference] - Complete command documentation
+* link:docs/ARCHITECTURE.md[Architecture] - System design and patterns
+* link:docs/DEPLOYMENT.md[Deployment] - Production deployment guide
+* link:ROADMAP.adoc[Roadmap] - Development roadmap and future features
+
+== Contributing
+
+See link:CONTRIBUTING.md[CONTRIBUTING.md] for development guidelines.
+
+Key areas:
+
+1. Data curation (verified material/brand datasets)
+2. Test coverage expansion
+3. Documentation improvements
+4. Localization support
+
+== License
+
+PMPL-1.0-or-later
+
+This ensures any modifications or derivative works remain open source, protecting the sustainability mission of the project.
+
+== Resources
+
+* https://www.fashionrevolution.org/[Fashion Revolution]
+* https://goodonyou.eco/[Good On You]
+* https://apparelcoalition.org/[Sustainable Apparel Coalition]
+* https://ellenmacarthurfoundation.org/[Ellen MacArthur Foundation]

@@ -1,0 +1,317 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+= glambot: Repository Presentation Quality Enforcer
+Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+:toc: macro
+:toc-title:
+:toclevels: 3
+:icons: font
+:source-highlighter: pygments
+:sectnums:
+
+toc::[]
+
+== Overview
+
+`glambot` is a **Tier 2 Finisher bot** in the https://github.com/hyperpolymath/gitbot-fleet[Gitbot Fleet] ecosystem.
+It enforces presentation quality standards across repositories, covering visual polish, accessibility (WCAG), SEO, and machine-readability.
+
+Where verifier bots (echidna, rhodibot) check correctness and structure, glambot checks that repositories _look good_ and are discoverable -- ensuring they meet a baseline of quality before release.
+
+=== What glambot does
+
+* **Audits** repositories across five analysis domains (visual, accessibility, SEO, machine-readability, git-SEO)
+* **Reports** findings with severity levels (Error, Warning, Info, Suggestion) and actionable suggestions
+* **Fixes** common issues automatically (README templates, badge insertion, WCAG checklists, SCM scaffolding)
+* **Integrates** with the gitbot-fleet shared-context system for cross-bot coordination
+
+=== What glambot is not
+
+* Not a linter (does not check code style -- that is clippy/rustfmt territory)
+* Not a structural validator (that is rhodibot)
+* Not a content generator (it formats and scaffolds, but does not write documentation)
+
+== Analyzers
+
+glambot ships five analyzers, each implementing the `Analyzer` trait with `analyze()` and `fix()` methods.
+
+=== Visual Polish (`VisualAnalyzer`)
+
+Checks README presence and quality, badge inclusion, line length compliance, and logo/branding.
+
+[cols="1,2,1"]
+|===
+| Finding ID | Description | Severity
+
+| VIS-001 | Missing README | Error
+| VIS-002 | README too short (<100 chars) | Warning
+| VIS-003 | README missing title | Warning
+| VIS-004 | No badges found | Info
+| VIS-005 | Line too long | Info
+| VIS-006 | Missing logo | Info
+|===
+
+**Auto-fixes:** Creates README.adoc template (VIS-001), inserts badge section (VIS-004), creates screenshot placeholder (VIS-006).
+
+=== Accessibility (`AccessibilityAnalyzer`)
+
+Validates WCAG compliance for markdown and AsciiDoc documentation.
+
+[cols="1,2,1"]
+|===
+| Finding ID | Description | Severity
+
+| ACC-001 | Image missing alt text | Error
+| ACC-002 | Alt text too short (<3 chars) | Warning
+| ACC-003 | Skipped heading level | Warning
+| ACC-004 | Non-descriptive link text | Warning
+| ACC-005 | Missing lang attribute (HTML) | Warning
+|===
+
+**Auto-fixes:** Inserts alt text placeholders (ACC-001), adds `lang="en"` to HTML (ACC-005), generates WCAG compliance checklist.
+
+=== SEO (`SeoAnalyzer`)
+
+Evaluates repository discoverability through README descriptions, HTML meta tags, OpenGraph tags, and keyword coverage.
+
+[cols="1,2,1"]
+|===
+| Finding ID | Description | Severity
+
+| SEO-001 | Missing repository description | Warning
+| SEO-002 | Missing meta description (HTML) | Warning
+| SEO-003 | Missing meta keywords (HTML) | Info
+| SEO-004 | Missing OpenGraph tags (HTML) | Info
+| SEO-005 | Missing OpenGraph image (HTML) | Info
+| SEO-006 | Few standard keywords in README | Info
+|===
+
+**Auto-fixes:** Adds description placeholder (SEO-001), creates topic suggestions file (SEO-006), inserts OpenGraph metadata template (SEO-004/SEO-005).
+
+=== Machine-Readability (`MachineAnalyzer`)
+
+Validates JSON/YAML file syntax, structured data presence, robots.txt, and `.machine_readable/` directory with SCM files.
+
+[cols="1,2,1"]
+|===
+| Finding ID | Description | Severity
+
+| MACH-001 | Invalid JSON | Error
+| MACH-002 | Invalid YAML | Error
+| MACH-003 | Missing structured data (HTML) | Warning
+| MACH-004 | Invalid JSON-LD | Error
+| MACH-005 | Missing robots.txt | Info
+| MACH-006 | Missing .machine_readable/ directory | Warning
+| MACH-007 | Missing SCM file (STATE/META/ECOSYSTEM) | Info
+|===
+
+**Auto-fixes:** Creates `.machine_readable/` directory with STATE.scm, META.scm, ECOSYSTEM.scm templates (MACH-006), adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).
+
+=== Git-SEO Integration (`GitSeoAnalyzer`)
+
+Shells out to the `git-seo` CLI tool for comprehensive forge-based SEO scoring (GitHub/GitLab/Bitbucket).
+
+[cols="1,2,1"]
+|===
+| Finding ID | Description | Severity
+
+| GS-001 | git-seo not installed | Info
+| GS-002 | git-seo analysis failed | Warning
+| GS-003 | No git remote found | Info
+| GS-100 | Overall SEO score | Varies
+| GS-1xx | Category score low | Warning
+| GS-2xx | SEO recommendation | Info
+|===
+
+**Auto-fixes:** Creates optimized `.gitattributes` for search indexing, generates `.github/FUNDING.yml`, optionally runs `git-seo optimize --apply`.
+
+== Fleet Integration
+
+glambot integrates with the gitbot-fleet shared-context system via the `fleet` feature flag.
+
+[source,bash]
+----
+cargo build --features fleet
+----
+
+The fleet module provides:
+
+* Severity mapping from glambot to fleet format
+* Category tagging (`presentation/visual`, `presentation/accessibility`, `presentation/seo`, `presentation/machine-readability`, `presentation/git-seo`)
+* Round-trip serialization to/from `FindingSet` (JSON)
+* `BotId::Glambot` identification for cross-bot coordination
+
+=== Architecture within the fleet
+
+[source]
+----
+              GITBOT FLEET (Tier 2 - Finishers)
+   ┌────────────────────────────────────────────────┐
+   │  ┌──────────┐  ┌──────────┐  ┌─────────────┐  │
+   │  │ glambot  │  │ seambot  │  │ finishbot   │  │
+   │  │(present- │  │(integra- │  │(release     │  │
+   │  │ ation)   │  │ tion)    │  │ readiness)  │  │
+   │  └────┬─────┘  └────┬─────┘  └──────┬──────┘  │
+   │       │             │               │          │
+   │       └─────────────┼───────────────┘          │
+   │                     ▼                          │
+   │         ┌───────────────────────┐              │
+   │         │  SHARED CONTEXT LAYER │              │
+   │         └───────────────────────┘              │
+   └────────────────────────────────────────────────┘
+----
+
+== Installation
+
+=== Building from source
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/glambot
+cd glambot
+cargo build --release
+----
+
+The binary is produced at `target/release/glambot`.
+
+=== As a fleet member
+
+glambot is a workspace member of gitbot-fleet. When building the full fleet:
+
+[source,bash]
+----
+cd gitbot-fleet
+cargo build --release -p glambot
+----
+
+== Usage
+
+=== CLI commands
+
+[source,bash]
+----
+# Full presentation audit (default)
+glambot audit --path /path/to/repo
+
+# Audit with strict mode (warnings become failures)
+glambot audit --strict
+
+# Run individual analyzers
+glambot visual
+glambot accessibility
+glambot seo
+glambot machine
+
+# JSON output for CI/CD integration
+glambot audit --format json
+
+# Apply automatic fixes
+glambot fix
+glambot fix --only visual
+
+# Initialize configuration
+glambot init
+glambot init --format toml
+
+# Show current configuration
+glambot show
+----
+
+=== CLI flags
+
+[cols="1,2"]
+|===
+| Flag | Description
+
+| `--path`, `-p` | Repository path (default: current directory)
+| `--config`, `-c` | Path to configuration file
+| `--dry-run` | No changes mode
+| `--fix` | Enable auto-fix mode
+| `--log-level` | Logging level: trace, debug, info, warn, error
+| `--format` | Output format: pretty, json
+|===
+
+== Configuration
+
+glambot reads configuration from `$XDG_CONFIG_HOME/glambot/config.yml` (or `.toml`).
+
+[source,yaml]
+----
+visual:
+  max_line_length: 80
+  enforce_badges: true
+  require_logo: false
+  check_formatting: true
+
+accessibility:
+  wcag_level: AA
+  require_alt_text: true
+  check_heading_hierarchy: true
+  check_link_text: true
+
+seo:
+  require_meta_tags: false
+  require_opengraph: false
+  check_titles: true
+  check_descriptions: true
+  enable_git_seo: true
+  enable_auto_apply: false
+
+machine:
+  validate_json: true
+  validate_yaml: true
+  require_schema_org: false
+  check_structured_data: true
+
+dry_run: false
+auto_fix: false
+exclude:
+  - target
+  - node_modules
+  - .git
+  - dist
+  - build
+----
+
+== Testing
+
+glambot has 52 tests across unit, integration, and feature-gated suites.
+
+[source,bash]
+----
+# Run all tests (excluding fleet-gated)
+cargo test
+
+# Run with fleet integration tests
+cargo test --features fleet
+
+# Run benchmarks (4 Criterion suites)
+cargo bench
+----
+
+=== Test breakdown
+
+* **26 unit tests** across 6 modules (visual, accessibility, SEO, machine, git-seo, fleet)
+* **5 integration tests** covering cross-analyzer validation, serialization, and severity levels
+* **4 Criterion benchmark suites** (one per core analyzer)
+* **2 fuzz targets** (`fuzz_command_parsing`, `fuzz_git_operations`)
+
+== License
+
+PMPL-1.0-or-later (Palimpsest License)
+
+See link:licences/PMPL-1.0-or-later.txt[Full license text].
+
+== Author
+
+Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+== Related Projects
+
+* https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] -- Bot orchestration framework
+* https://github.com/hyperpolymath/finishing-bot[finishbot] -- Release readiness (complementary)
+* https://github.com/hyperpolymath/seambot[seambot] -- Integration health (complementary)
+* https://github.com/hyperpolymath/rhodibot[rhodibot] -- Structural compliance (upstream verifier)
+* https://github.com/hyperpolymath/echidna[echidna] -- Verification (upstream verifier)
+* https://github.com/hyperpolymath/hypatia[hypatia] -- Neurosymbolic CI/CD intelligence
+* https://github.com/hyperpolymath/git-seo[git-seo] -- Git forge SEO tool (optional dependency)

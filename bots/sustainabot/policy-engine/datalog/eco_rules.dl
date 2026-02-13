@@ -1,0 +1,233 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+//
+// Oikos Bot Policy Engine - Datalog Rules
+// =======================================
+// Deterministic rules for ecological and economic code analysis
+// These rules form the "certain" knowledge base, complementing
+// DeepProbLog's probabilistic inference.
+
+// =============================================================================
+// DOMAIN DECLARATIONS
+// =============================================================================
+
+// Code entities
+.decl file(id: symbol, path: symbol, language: symbol)
+.decl function(id: symbol, name: symbol, file_id: symbol)
+.decl module(id: symbol, name: symbol, file_id: symbol)
+.decl dependency(from_id: symbol, to_id: symbol, dep_type: symbol)
+
+// Metrics (normalized 0-100)
+.decl carbon_score(entity_id: symbol, score: float)
+.decl energy_score(entity_id: symbol, score: float)
+.decl complexity_score(entity_id: symbol, score: float)
+.decl coverage_score(entity_id: symbol, score: float)
+.decl debt_score(entity_id: symbol, score: float)
+
+// Patterns detected
+.decl pattern(entity_id: symbol, pattern_type: symbol, severity: symbol)
+.decl hotspot(entity_id: symbol, metric: symbol, value: float)
+
+// =============================================================================
+// ECOLOGICAL RULES
+// =============================================================================
+
+// A component is eco-friendly if it has good carbon and energy scores
+.decl eco_friendly(entity_id: symbol)
+eco_friendly(E) :-
+    carbon_score(E, C), C >= 70,
+    energy_score(E, En), En >= 70.
+
+// A component has high carbon footprint
+.decl high_carbon(entity_id: symbol)
+high_carbon(E) :- carbon_score(E, C), C < 40.
+
+// A component is energy inefficient
+.decl energy_inefficient(entity_id: symbol)
+energy_inefficient(E) :- energy_score(E, En), En < 40.
+
+// Identify eco hotspots (components needing immediate attention)
+.decl eco_hotspot(entity_id: symbol, reason: symbol)
+eco_hotspot(E, "high_carbon") :- high_carbon(E).
+eco_hotspot(E, "energy_inefficient") :- energy_inefficient(E).
+eco_hotspot(E, "busy_waiting") :- pattern(E, "busy_waiting", _).
+eco_hotspot(E, "inefficient_loop") :- pattern(E, "inefficient_loop", "high").
+
+// =============================================================================
+// ECONOMIC RULES (Pareto Optimality)
+// =============================================================================
+
+// Define Pareto dominance
+// Entity A dominates Entity B if A is at least as good in all metrics
+// and strictly better in at least one
+.decl dominates(entity_a: symbol, entity_b: symbol)
+dominates(A, B) :-
+    carbon_score(A, CA), carbon_score(B, CB), CA >= CB,
+    energy_score(A, EA), energy_score(B, EB), EA >= EB,
+    complexity_score(A, XA), complexity_score(B, XB), XA >= XB,
+    coverage_score(A, TA), coverage_score(B, TB), TA >= TB,
+    (CA > CB; EA > EB; XA > XB; TA > TB).  // At least one strictly better
+
+// Entity is Pareto optimal if not dominated by any other entity
+.decl pareto_optimal(entity_id: symbol)
+pareto_optimal(E) :-
+    file(E, _, _),
+    !dominated(E).
+
+.decl dominated(entity_id: symbol)
+dominated(B) :- dominates(_, B).
+
+// Identify Pareto improvement opportunities
+.decl pareto_improvement_possible(entity_id: symbol, metric: symbol)
+pareto_improvement_possible(E, "carbon") :-
+    dominated(E),
+    carbon_score(E, C), C < 70.
+
+pareto_improvement_possible(E, "energy") :-
+    dominated(E),
+    energy_score(E, En), En < 70.
+
+// =============================================================================
+// ALLOCATIVE EFFICIENCY RULES
+// =============================================================================
+
+// Resource allocation is efficient if no waste is detected
+.decl allocation_efficient(entity_id: symbol)
+allocation_efficient(E) :-
+    file(E, _, _),
+    !allocation_waste(E, _).
+
+// Detect allocation waste
+.decl allocation_waste(entity_id: symbol, waste_type: symbol)
+allocation_waste(E, "unused_dependency") :-
+    dependency(E, D, _),
+    !dependency_used(E, D).
+
+allocation_waste(E, "over_allocation") :-
+    pattern(E, "over_allocation", _).
+
+allocation_waste(E, "premature_optimization") :-
+    pattern(E, "premature_optimization", _),
+    complexity_score(E, X), X < 50.
+
+.decl dependency_used(from_id: symbol, to_id: symbol)
+.input dependency_used
+
+// =============================================================================
+// TECHNICAL DEBT RULES
+// =============================================================================
+
+// High technical debt components
+.decl high_debt(entity_id: symbol)
+high_debt(E) :- debt_score(E, D), D < 40.
+
+// Debt is economically justified if it enables faster delivery
+// without compromising eco metrics
+.decl justified_debt(entity_id: symbol)
+justified_debt(E) :-
+    high_debt(E),
+    eco_friendly(E),
+    pattern(E, "intentional_simplification", _).
+
+// Debt needs attention
+.decl debt_attention_needed(entity_id: symbol, urgency: symbol)
+debt_attention_needed(E, "critical") :-
+    high_debt(E),
+    high_carbon(E).
+
+debt_attention_needed(E, "high") :-
+    high_debt(E),
+    !justified_debt(E),
+    !eco_friendly(E).
+
+debt_attention_needed(E, "medium") :-
+    high_debt(E),
+    !justified_debt(E),
+    eco_friendly(E).
+
+// =============================================================================
+// QUALITY RULES
+// =============================================================================
+
+// High complexity components
+.decl high_complexity(entity_id: symbol)
+high_complexity(E) :- complexity_score(E, X), X < 40.
+
+// Low test coverage
+.decl low_coverage(entity_id: symbol)
+low_coverage(E) :- coverage_score(E, T), T < 60.
+
+// Quality hotspot (multiple quality issues)
+.decl quality_hotspot(entity_id: symbol)
+quality_hotspot(E) :-
+    high_complexity(E),
+    low_coverage(E).
+
+// =============================================================================
+// REFACTORING RECOMMENDATIONS
+// =============================================================================
+
+// Component needs refactoring based on multiple criteria
+.decl needs_refactor(entity_id: symbol, reason: symbol, priority: symbol)
+
+needs_refactor(E, "eco_improvement", "high") :-
+    eco_hotspot(E, _),
+    dominated(E).
+
+needs_refactor(E, "debt_reduction", "high") :-
+    debt_attention_needed(E, "critical").
+
+needs_refactor(E, "quality_improvement", "medium") :-
+    quality_hotspot(E),
+    !eco_hotspot(E, _).
+
+needs_refactor(E, "pareto_optimization", "medium") :-
+    dominated(E),
+    pareto_improvement_possible(E, _),
+    !eco_hotspot(E, _).
+
+// =============================================================================
+// POLICY COMPLIANCE
+// =============================================================================
+
+// Define compliance levels
+.decl compliant(entity_id: symbol, policy: symbol)
+
+compliant(E, "eco_minimum") :-
+    carbon_score(E, C), C >= 50,
+    energy_score(E, En), En >= 50.
+
+compliant(E, "eco_standard") :-
+    carbon_score(E, C), C >= 70,
+    energy_score(E, En), En >= 70.
+
+compliant(E, "eco_excellence") :-
+    eco_friendly(E),
+    pareto_optimal(E).
+
+// Policy violations
+.decl policy_violation(entity_id: symbol, policy: symbol, severity: symbol)
+
+policy_violation(E, "eco_minimum", "blocking") :-
+    file(E, _, _),
+    !compliant(E, "eco_minimum").
+
+policy_violation(E, "eco_standard", "warning") :-
+    compliant(E, "eco_minimum"),
+    !compliant(E, "eco_standard").
+
+// =============================================================================
+// OUTPUT RELATIONS
+// =============================================================================
+
+.output eco_friendly
+.output eco_hotspot
+.output pareto_optimal
+.output dominated
+.output pareto_improvement_possible
+.output allocation_efficient
+.output allocation_waste
+.output debt_attention_needed
+.output needs_refactor
+.output compliant
+.output policy_violation

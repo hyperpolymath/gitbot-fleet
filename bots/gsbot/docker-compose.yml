@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: gsbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - DATABASE_URL=sqlite:///data/gsbot.db
+      - LOG_FILE=/app/logs/gsbot.log
+    networks:
+      - gsbot-network
+
+networks:
+  gsbot-network:
+    driver: bridge
+
+# Optional: Add PostgreSQL for production use
+# services:
+#   bot:
+#     ...
+#     depends_on:
+#       - db
+#     environment:
+#       - DATABASE_URL=postgresql://gsbot:password@db:5432/gsbot
+#
+#   db:
+#     image: postgres:15-alpine
+#     container_name: gsbot-db
+#     restart: unless-stopped
+#     environment:
+#       - POSTGRES_DB=gsbot
+#       - POSTGRES_USER=gsbot
+#       - POSTGRES_PASSWORD=password
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - gsbot-network
+#
+# volumes:
+#   postgres_data:

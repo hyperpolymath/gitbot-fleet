@@ -1,0 +1,59 @@
+[package]
+name = "hotchocolabot"
+version = "0.1.0"
+edition = "2021"
+authors = ["UAL Creative Communities - MechCC"]
+description = "Educational robotics platform teaching reverse engineering through an over-engineered hot chocolate dispenser"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Hyperpolymath/the-hotchocolabot"
+readme = "README.md"
+keywords = ["robotics", "education", "embedded", "raspberry-pi"]
+categories = ["embedded", "hardware-support"]
+
+[dependencies]
+# Async runtime for concurrent hardware control
+tokio = { version = "1.35", features = ["full"] }
+async-trait = "0.1"
+
+# Hardware interfacing
+rppal = "0.17"  # Raspberry Pi GPIO/I2C/SPI support
+
+# Configuration management
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Logging and diagnostics
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# State machine for safety
+smlang = "0.6"  # State machine language for formal verification
+
+[dev-dependencies]
+# Testing
+tokio-test = "0.4"
+mockall = "0.12"  # Mock objects for hardware testing
+criterion = "0.5"  # Benchmarking
+proptest = "1.4"  # Property-based testing
+rand = "0.8"  # Random number generation for testing
+
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = true          # Link-time optimization
+codegen-units = 1   # Better optimization
+strip = true        # Strip symbols
+
+[profile.dev]
+opt-level = 1       # Some optimization for embedded testing
+
+[[bin]]
+name = "hotchocolabot"
+path = "src/main.rs"
+
+[workspace]
+members = ["crates/*"]

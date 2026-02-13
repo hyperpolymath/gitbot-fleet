@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Partially Accessible Page</title>
+</head>
+<body>
+    <header>
+        <h1>Partially Accessible</h1>
+    </header>
+
+    <main>
+        <h2>Content Section</h2>
+        <p>This page has some accessibility features but is missing others.</p>
+
+        <!-- Good: has alt text -->
+        <img src="photo.jpg" alt="A sunset over the ocean">
+
+        <!-- Bad: generic alt text -->
+        <img src="icon.svg" alt="icon">
+
+        <!-- Good: labelled form -->
+        <form>
+            <label for="search">Search:</label>
+            <input type="search" id="search" aria-label="Search">
+            <button type="submit">Search</button>
+        </form>
+
+        <!-- Bad: table without thead -->
+        <table>
+            <tr><th>Column 1</th><th>Column 2</th></tr>
+            <tr><td>Data 1</td><td>Data 2</td></tr>
+        </table>
+
+        <!-- Good: video with captions -->
+        <video controls>
+            <source src="tutorial.mp4" type="video/mp4">
+            <track kind="captions" src="captions.vtt" srclang="en" label="English">
+        </video>
+    </main>
+
+    <footer>
+        <p>Footer</p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Test fixture: configuration with weak crypto settings.
+
+[database]
+password = "SuperSecretPassword123!"
+algorithm = "md5"
+
+[tls]
+min_version = "tls_1.0"
+verify_ssl = false
+
+[security]
+key_size = 1024
+encryption = false

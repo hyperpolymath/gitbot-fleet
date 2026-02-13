@@ -1,0 +1,328 @@
+= GSBot Roadmap
+:toc: left
+:toclevels: 3
+:icons: font
+:source-highlighter: rouge
+
+== Project Status: Alpha
+
+GSBot is a feature-complete Discord bot for garment sustainability education and tracking. The core functionality is implemented and ready for community testing.
+
+== Completed Features
+
+=== Core Bot Infrastructure
+
+[cols="1,3,1", options="header"]
+|===
+|Feature |Description |Status
+
+|Discord.py Integration
+|Full Discord bot with async command handling, cog-based architecture
+|Done
+
+|SQLAlchemy ORM
+|Complete data layer with models, migrations (Alembic), session management
+|Done
+
+|Caching Layer
+|TTL and LRU caching for database queries and expensive operations
+|Done
+
+|Logging System
+|Colored console output with file logging support
+|Done
+
+|Configuration
+|Environment-based settings with validation
+|Done
+|===
+
+=== Sustainability Commands
+
+[cols="1,3,1", options="header"]
+|===
+|Command |Functionality |Status
+
+|`!sustainability`
+|Calculate and display sustainability score for garments with water, carbon, energy metrics
+|Done
+
+|`!alternatives`
+|Find more sustainable alternatives in the same garment category
+|Done
+
+|`!care`
+|Generate material-specific care instructions to extend garment life
+|Done
+
+|`!tips`
+|Display random sustainability tips for conscious consumption
+|Done
+|===
+
+=== Material Analysis
+
+[cols="1,3,1", options="header"]
+|===
+|Command |Functionality |Status
+
+|`!impact`
+|Detailed environmental impact breakdown: water usage, carbon footprint, biodegradability, chemical usage, energy consumption
+|Done
+
+|`!compare`
+|Side-by-side comparison of two materials across all sustainability metrics
+|Done
+
+|`!search`
+|Search materials and garments by name, description, or category
+|Done
+|===
+
+=== Brand Intelligence
+
+[cols="1,3,1", options="header"]
+|===
+|Command |Functionality |Status
+
+|`!brands`
+|View top-rated sustainable brands with overall ratings
+|Done
+
+|`!brands <name>`
+|Detailed brand profile: environmental, labor, animal welfare ratings, certifications, transparency scores
+|Done
+|===
+
+=== Gamification System
+
+[cols="1,3,1", options="header"]
+|===
+|Feature |Description |Status
+
+|Points System
+|Earn points for sustainability queries (2-7 points per action)
+|Done
+
+|Leveling
+|Level progression every 100 points
+|Done
+
+|Ranks
+|5-tier rank system: Learner -> Conscious Consumer -> Enthusiast -> Eco Warrior -> Champion
+|Done
+
+|`!profile`
+|User statistics, rank, level, points, preferences
+|Done
+
+|`!leaderboard`
+|Top 10 sustainability champions
+|Done
+
+|`!setpreference`
+|Configure materials, budget, priority preferences
+|Done
+|===
+
+=== Data Models
+
+[cols="1,3,1", options="header"]
+|===
+|Model |Attributes |Status
+
+|Material
+|5 environmental scores, production metrics, biodegradability, recycling potential, care requirements
+|Done
+
+|Garment
+|Category, materials relationship, weight, lifespan, care instructions, calculated sustainability score
+|Done
+
+|Brand
+|3 rating dimensions, 5 certification flags, transparency score, Good On You rating
+|Done
+
+|User
+|Discord ID, points, level, queries count, preferences
+|Done
+|===
+
+=== Testing
+
+[cols="1,3,1", options="header"]
+|===
+|Type |Coverage |Status
+
+|Unit Tests
+|Model calculations, grade assignment, certification badges, point/leveling system
+|Done
+
+|Integration Tests
+|Bot command execution flows
+|Done
+
+|Test Infrastructure
+|pytest with in-memory SQLite fixtures
+|Done
+|===
+
+== Phase 1: Production Readiness
+
+Target: Prepare for public deployment
+
+=== Database & Data
+
+* [ ] Curate initial material dataset (20+ common materials with verified metrics)
+* [ ] Curate garment dataset (50+ common garment types)
+* [ ] Integrate Good On You API or scrape verified brand data
+* [ ] PostgreSQL production configuration
+* [ ] Database backup and recovery procedures
+
+=== Deployment
+
+* [ ] Container optimization (multi-stage build, minimal image)
+* [ ] Health check endpoints
+* [ ] Graceful shutdown handling
+* [ ] Kubernetes manifests or docker-compose production config
+* [ ] Secret management (Vault, SOPS, or sealed secrets)
+
+=== Observability
+
+* [ ] Prometheus metrics endpoint
+* [ ] Grafana dashboard templates
+* [ ] Error tracking (Sentry integration)
+* [ ] Command usage analytics
+
+=== Security
+
+* [ ] Rate limiting per user/guild
+* [ ] Input sanitization audit
+* [ ] Dependency vulnerability scanning in CI
+* [ ] Bot permission audit (minimal required permissions)
+
+== Phase 2: Data Enrichment
+
+Target: Comprehensive sustainability intelligence
+
+=== External Integrations
+
+* [ ] Good On You API integration for real-time brand ratings
+* [ ] Open Apparel Registry integration for supply chain transparency
+* [ ] Life Cycle Assessment (LCA) database connections
+* [ ] Fashion Revolution transparency index data
+
+=== Enhanced Scoring
+
+* [ ] Multi-factor scoring with configurable weights
+* [ ] Regional impact variations (production location matters)
+* [ ] Seasonal recommendations
+* [ ] Price-per-wear calculations
+
+=== New Commands
+
+* [ ] `!lifecycle` - Full garment lifecycle analysis
+* [ ] `!certifications` - Explain certification meanings (GOTS, OEKO-TEX, etc.)
+* [ ] `!carbon` - Carbon footprint calculator for wardrobe
+* [ ] `!supply-chain` - Brand supply chain transparency
+
+== Phase 3: Personalization
+
+Target: Tailored sustainability guidance
+
+=== User Features
+
+* [ ] Wardrobe tracking (what you own)
+* [ ] Purchase history logging
+* [ ] Personal sustainability dashboard
+* [ ] Goal setting and progress tracking
+* [ ] Achievement badges beyond ranks
+
+=== Recommendations
+
+* [ ] Personalized alternative suggestions based on preferences
+* [ ] Budget-aware recommendations
+* [ ] Style-compatible sustainable swaps
+* [ ] Seasonal wardrobe planning
+
+=== Notifications
+
+* [ ] Scheduled sustainability tips
+* [ ] New sustainable brand alerts
+* [ ] Certification updates for tracked brands
+
+== Phase 4: Community Features
+
+Target: Social sustainability
+
+=== Social Features
+
+* [ ] Clothing swap coordination
+* [ ] Guild leaderboards (per server)
+* [ ] Community challenges
+* [ ] Sustainability streaks
+* [ ] Share achievements
+
+=== Content
+
+* [ ] User-submitted garment care tips
+* [ ] Community brand reviews
+* [ ] Sustainable find sharing
+* [ ] Local resource discovery
+
+== Phase 5: Platform Expansion
+
+Target: Multi-platform presence
+
+=== Additional Platforms
+
+* [ ] Slack workspace bot
+* [ ] Telegram bot
+* [ ] Web dashboard (readonly initially)
+* [ ] REST API for third-party integrations
+
+=== Advanced Features
+
+* [ ] Image recognition for garment identification
+* [ ] Receipt/tag OCR for material composition
+* [ ] ML-powered recommendations
+* [ ] Natural language queries
+
+== Architecture Migration Notes
+
+The current Python implementation uses:
+
+* discord.py (async Discord interactions)
+* SQLAlchemy (ORM)
+* SQLite (development database)
+* pytest (testing)
+
+Per project language policy (`.claude/CLAUDE.md`), future development should consider:
+
+* **ReScript** for bot logic (compiles to JS, type-safe)
+* **Deno** runtime (replaces Node.js ecosystem)
+* **Rust** for performance-critical services or WASM modules
+* **Gleam** for backend services (BEAM or JS compilation)
+
+Migration path:
+
+1. Stabilize current Python implementation for production
+2. Create Deno-based bot using Discord API directly (no discord.py equivalent needed)
+3. Port business logic to ReScript modules
+4. Extract scoring algorithms to Rust WASM for cross-platform use
+5. Deprecate Python codebase
+
+== Contributing
+
+See `CONTRIBUTING.md` for development guidelines.
+
+Priority areas for contribution:
+
+1. **Data curation** - Verified material and brand datasets
+2. **Testing** - Expand integration test coverage
+3. **Documentation** - User guides and command examples
+4. **Localization** - Multi-language support
+
+== License
+
+AGPL-3.0-or-later - see `LICENSE.txt`

@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+= Accessibilitybot Roadmap
+:author: Jonathan D.A. Jewell
+:email: jonathan.jewell@open.ac.uk
+:revdate: 2026-02-08
+:toc:
+
+== Completed
+
+=== Phase 1: Core Implementation [DONE]
+
+* [x] Repository scaffolding from RSR template
+* [x] Cargo workspace with all dependencies
+* [x] RSR standard files (CODE_OF_CONDUCT.md, CONTRIBUTING.md, SECURITY.md, etc.)
+* [x] SCM files in `.machine_readable/`
+* [x] Bot directives in `.bot_directives/`
+
+=== Phase 2: WCAG Analyzers [DONE]
+
+* [x] Alt Text Analyzer (WCAG 1.1.1) -- missing, generic, and filename-based alt detection
+* [x] Color Contrast Analyzer (WCAG 1.4.3/1.4.6) -- CSS and inline style contrast ratio checking
+* [x] Semantic HTML Analyzer (WCAG 1.3.1) -- semantic elements, heading hierarchy, table structure, div soup
+* [x] ARIA Validator (WCAG 4.1.2) -- redundant roles, aria-hidden on focusable, unlabelled buttons, div-as-button
+* [x] Keyboard Navigation Analyzer (WCAG 2.1.1/2.4.7) -- tabindex, skip nav, onclick-only, focus suppression
+* [x] Form Accessibility Analyzer (WCAG 3.3.2/1.3.5) -- input labels, placeholder-only, autocomplete
+* [x] Media Accessibility Analyzer (WCAG 1.2.1/1.2.2) -- video captions, audio transcripts, autoplay controls
+* [x] Language and Text Analyzer (WCAG 3.1.1/3.1.5) -- lang attribute, Flesch-Kincaid reading level
+* [x] CSS Accessibility Analyzer (WCAG 1.4.4/1.4.12/2.3.3) -- px fonts, line height, reduced motion, color scheme, contrast preference, display:none misuse
+
+=== Phase 3: CLI and Reporting [DONE]
+
+* [x] CLI with `check`, `analyze`, `report`, `fleet` subcommands
+* [x] WCAG level selection (A/AA/AAA) via `--level`
+* [x] Text output format with WCAG references and fix suggestions
+* [x] JSON output format for programmatic consumption
+* [x] SARIF 2.1.0 output for IDE/CI integration
+* [x] File/directory scanning with extension filtering
+* [x] Non-zero exit code on errors
+
+=== Phase 4: Fleet Integration Types [DONE]
+
+* [x] Fleet-compatible Finding/FindingSet types with severity, WCAG criterion, impact assessment
+* [x] `fleet` subcommand producing JSON output
+* [x] Release-blocking logic based on severity
+
+=== Phase 5: Test Suite [DONE]
+
+* [x] Per-analyzer unit tests (62 tests)
+* [x] Integration tests with HTML/CSS fixtures (9 tests)
+* [x] Test fixtures: accessible.html, inaccessible.html, partial.html, styles.css
+* [x] All 71 tests passing
+
+== Planned
+
+=== Phase 6: Auto-Fix Capability
+
+* [ ] Safe auto-fixes: add `alt=""` to decorative images, add `lang` to `<html>`, add `scope` to `<th>`
+* [ ] Fix suggestion mode: propose semantic replacements for div soup
+* [ ] Color contrast alternative suggestions
+* [ ] `--fix` flag for auto-applying safe fixes
+
+=== Phase 7: Live Fleet Integration
+
+* [ ] Direct dependency on gitbot-shared-context crate (replace local fleet types)
+* [ ] BotId registration in fleet coordinator
+* [ ] PR commenting and blocking via fleet protocol
+* [ ] @accessibilitybot mention handling
+
+=== Phase 8: Extended Analysis
+
+* [ ] `audit` subcommand for live URL accessibility auditing
+* [ ] JSX/TSX-aware parsing (currently uses HTML parser)
+* [ ] Svelte/Vue template-specific analysis
+* [ ] SVG accessibility checks (title, desc, aria-label)
+* [ ] Web component / custom element support
+
+=== Phase 9: Ecosystem Integration
+
+* [ ] Hypatia integration for pattern detection across repos
+* [ ] a2ml manifest integration (skip repos that declare no UI)
+* [ ] k9-svc endpoint accessibility validation
+* [ ] Cross-bot coordination with cipherbot and sustainabot

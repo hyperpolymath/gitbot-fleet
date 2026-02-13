@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= Seam Checklist: API to Database
+:checklist:
+
+== Pre-Implementation
+
+* [ ] Repository pattern is defined
+* [ ] Query interfaces are documented
+* [ ] Error types are specified
+
+== Implementation
+
+* [ ] All queries go through repository
+* [ ] No raw SQL in API handlers
+* [ ] Connection pooling is used
+
+== Post-Implementation
+
+* [ ] Integration tests cover boundary
+* [ ] Performance benchmarks added

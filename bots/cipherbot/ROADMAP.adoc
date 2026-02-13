@@ -1,0 +1,101 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+= Cipherbot Roadmap
+:author: Jonathan D.A. Jewell
+:email: jonathan.jewell@open.ac.uk
+:revdate: 2026-02-08
+:toc:
+
+== Completed (SONNET-TASKS)
+
+All tasks from the initial SONNET-TASKS plan have been completed.
+
+=== [line-through]#Task 0: Scaffold the Repository#
+
+* [x] Clone from RSR template
+* [x] Set up Rust project with Cargo.toml
+* [x] Configure dependencies (clap, serde, walkdir, regex, tracing, gitbot-shared-context)
+
+=== [line-through]#Task 1: Deprecated Crypto Detection Analyzers (7 analyzers)#
+
+* [x] Hash Function Analyzer (`src/analyzers/hashing.rs`)
+* [x] Symmetric Encryption Analyzer (`src/analyzers/symmetric.rs`)
+* [x] Key Exchange Analyzer (`src/analyzers/key_exchange.rs`)
+* [x] Signature Analyzer (`src/analyzers/signatures.rs`)
+* [x] Password Hashing Analyzer (`src/analyzers/password.rs`)
+* [x] TLS/Protocol Analyzer (`src/analyzers/protocol.rs`)
+* [x] RNG Analyzer (`src/analyzers/rng.rs`)
+
+=== [line-through]#Task 2: Configuration & Dependency Scanning (2 analyzers)#
+
+* [x] Dependency crypto audit (`src/analyzers/deps.rs`)
+* [x] Configuration file scanning (`src/analyzers/config.rs`)
+
+=== [line-through]#Task 3: Post-Quantum Readiness Assessment#
+
+* [x] PQ readiness scorer (`src/pq_readiness.rs`) with 0-100 scale
+* [x] Migration roadmap generator with 19 standard migration paths
+
+=== [line-through]#Task 4: CLI Interface#
+
+* [x] All 6 subcommands: scan, analyze, report, fleet, pq-readiness, audit-deps
+* [x] All 4 bot modes: advisor, consultant, regulator, policy
+* [x] Text and JSON output formats
+* [x] Verbosity levels
+
+=== [line-through]#Task 5: Fleet Integration#
+
+* [x] BotId registration (Custom(100))
+* [x] 6 finding categories
+* [x] BotInfo, BotExecution, FindingSet integration
+* [x] Mode-aware blocking (regulator/policy fail on errors)
+
+=== [line-through]#Task 6: Policy Engine#
+
+* [x] Bot directive parsing from `.bot_directives/cipherbot.scm`
+* [x] Scope and exception list support
+* [x] 3 Eclexia policy files
+
+=== [line-through]#Task 7: DNS & Infrastructure Security (2 analyzers)#
+
+* [x] DNS Zone File Analyzer (`src/analyzers/dns.rs`)
+* [x] Infrastructure-as-Code Analyzer (`src/analyzers/infra.rs`)
+
+=== [line-through]#Task 8: Ecosystem Integration (design)#
+
+* [x] Hypatia, a2ml, k9-svc, stateful-artefacts, gitbot-fleet interaction design
+
+=== [line-through]#Task 9: Tests#
+
+* [x] 94 tests total (target was 35 minimum)
+* [x] Per-analyzer unit tests
+* [x] PQ readiness tests
+* [x] Integration tests with fixture files
+* [x] SARIF serialization tests
+* [x] Fleet integration tests
+* [x] Policy engine tests
+* [x] CLI parsing tests
+
+== Future Work
+
+=== Near-term
+
+* Add tree-sitter AST parsing for deeper code analysis (dependency commented out in Cargo.toml)
+* Register `BotId::Cipherbot` upstream in gitbot-shared-context (currently using Custom(100))
+* Auto-fix capabilities for simple migrations (e.g., SHA-256 import to SHAKE3-512)
+* CI workflow for cipherbot's own test suite
+
+=== Medium-term
+
+* Hypatia integration for cross-repo pattern learning
+* robot-repo-automaton integration for automated crypto migrations
+* k9-svc contract validation for service-to-service crypto
+* VeriSimDB data feed for crypto hygiene metrics
+* Formal verification integration (Coq/Isabelle) for crypto primitives
+
+=== Long-term
+
+* Language-specific AST analysis (Rust, JavaScript, Go, Python)
+* Certificate chain validation and expiry monitoring
+* Runtime crypto audit via instrumentation
+* SBOM crypto attestation

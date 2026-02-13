@@ -1,0 +1,36 @@
+= the-hotchocolabot - Citation Guide
+:toc:
+
+== BibTeX
+
+[source,bibtex]
+----
+@software{the-hotchocolabot_2025,
+  author = {Polymath, Hyper},
+  title = {the-hotchocolabot},
+  year = {2025},
+  url = {https://github.com/hyperpolymath/the-hotchocolabot},
+  license = {AGPL-3.0-or-later}
+}
+----
+
+== Harvard Style
+
+Polymath, H. (2025) _the-hotchocolabot_ [Computer software]. Available at: https://github.com/hyperpolymath/the-hotchocolabot
+
+== OSCOLA
+
+Hyper Polymath, 'the-hotchocolabot' (2025) <https://github.com/hyperpolymath/the-hotchocolabot>
+
+== MLA
+
+Polymath, Hyper. "the-hotchocolabot." 2025, github.com/hyperpolymath/the-hotchocolabot.
+
+== APA 7
+
+Polymath, H. (2025). _the-hotchocolabot_ [Computer software]. GitHub. https://github.com/hyperpolymath/the-hotchocolabot
+
+== See Also
+
+* link:../CITATION.cff[CITATION.cff]
+* link:../codemeta.json[codemeta.json]

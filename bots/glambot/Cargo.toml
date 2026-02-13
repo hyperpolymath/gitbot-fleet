@@ -1,0 +1,83 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+[package]
+name = "glambot"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+description = "Presentation quality enforcer - ensures visual polish, accessibility, and machine-readability"
+license = "PMPL-1.0-or-later"
+repository = "https://github.com/hyperpolymath/glambot"
+keywords = ["presentation", "accessibility", "seo", "wcag", "gitbot-fleet"]
+categories = ["development-tools", "command-line-utilities"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# File operations
+walkdir = "2"
+globset = "0.4"
+glob = "0.3"
+regex = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Markdown parsing
+pulldown-cmark = "0.12"
+comrak = "0.29"
+
+# HTML parsing (for accessibility checks)
+scraper = "0.21"
+html5ever = "0.29"
+
+# Image metadata (for alt-text validation)
+image = "0.25"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Directories
+dirs = "5"
+
+# URL validation
+url = "2"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Fleet integration (optional)
+gitbot-shared-context = { path = "../gitbot-fleet/shared-context", optional = true }
+uuid = { version = "1", features = ["v4", "serde"], optional = true }
+
+[features]
+default = []
+fleet = ["gitbot-shared-context", "uuid"]
+
+[dev-dependencies]
+tempfile = "3"
+assert_fs = "1"
+predicates = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bin]]
+name = "glambot"
+path = "src/main.rs"
+
+[[bench]]
+name = "glambot_bench"
+harness = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

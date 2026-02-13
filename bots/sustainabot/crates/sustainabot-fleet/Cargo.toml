@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
+
+[package]
+name = "sustainabot-fleet"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gitbot-shared-context = { path = "../../../gitbot-fleet/shared-context" }
+sustainabot-analysis = { path = "../sustainabot-analysis" }
+sustainabot-metrics = { path = "../sustainabot-metrics" }
+anyhow.workspace = true
+serde_json.workspace = true

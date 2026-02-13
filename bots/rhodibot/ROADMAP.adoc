@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= Rhodibot Roadmap
+
+== Current Status
+
+v0.1.0 polishing phase. Core RSR compliance engine, GitHub integration, fleet
+integration, security hardening, and test suite are complete. Preparing for
+v0.2.0 release with extended checks.
+
+== Milestones
+
+=== v0.1.0 - Foundation [~95% complete]
+* [x] RSR compliance engine with 14 file checks
+* [x] 5 policy packs (Minimal, Standard, Strict, Enterprise, Custom)
+* [x] Per-repo configuration via `.rsr.toml`
+* [x] Banned file pattern detection (6 patterns)
+* [x] GitHub webhook handlers (push, PR, repository, installation, ping)
+* [x] Check run creation with markdown reports
+* [x] RSR checklist issue creation for new repos
+* [x] Input sanitization and path traversal prevention
+* [x] HMAC-SHA256 webhook signature verification (constant-time)
+* [x] 69 tests (21 unit + 48 integration)
+* [x] CI/CD workflows (codeql, scorecard, quality, mirror)
+* [x] PMPL-1.0-or-later license and correct author attribution
+* [ ] Wire fleet CLI subcommand into main.rs
+
+=== v0.2.0 - Extended Checks
+* [x] Workflow presence validation (hypatia-scan, codeql, scorecard)
+* [x] Author attribution validation
+* [x] License type validation
+* [x] Fleet shared context integration (library)
+* [ ] SPDX header validation in source files
+* [ ] Workflow SHA-pin validation
+* [ ] Fleet CLI subcommand (`rhodibot fleet --context <path>`)
+
+=== v0.3.0 - Authentication & Multi-Forge
+* [ ] GitHub App JWT authentication (replace GITHUB_TOKEN)
+* [ ] GitLab webhook support
+* [ ] Codeberg webhook support
+* [ ] Bitbucket webhook support
+
+=== v1.0.0 - Production Release
+* [ ] All v0.2.0 and v0.3.0 items complete
+* [ ] Published to crates.io
+* [ ] Container image (OCI)
+* [ ] Deployment documentation
+* [ ] Performance benchmarks
+
+== Future Directions
+
+* CII/OpenSSF Best Practices badge integration
+* Dependency license scanning
+* Cross-repository compliance dashboards
+* Integration with Hypatia neurosymbolic rules engine for dynamic policy selection

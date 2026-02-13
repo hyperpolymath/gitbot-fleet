@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+
+[package]
+name = "seambot"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+description = "Seam hygiene auditor - tracks, enforces, and detects drift in architectural boundaries"
+license = "PMPL-1.0-or-later"
+repository = "https://github.com/hyperpolymath/seambot"
+homepage = "https://github.com/hyperpolymath/seambot"
+keywords = ["architecture", "seams", "boundaries", "audit", "ci"]
+categories = ["development-tools", "command-line-utilities"]
+readme = "README.md"
+
+[dependencies]
+# CLI framework
+clap = { version = "4", features = ["derive", "env"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# File processing
+walkdir = "2"
+glob = "0.3"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Async runtime (for future integrations)
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
+async-trait = "0.1"
+
+# HTTP client (for webhook/CI integration)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+urlencoding = "2"
+
+# Hashing for drift detection
+sha2 = "0.10"
+hex = "0.4"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Template rendering for reports
+minijinja = "2"
+
+# Regex for pattern matching
+regex = "1"
+
+# JWT for GitHub App authentication
+jsonwebtoken = "9"
+
+# RSA key handling for GitHub App
+rsa = { version = "0.9", features = ["pem"] }
+
+# HMAC-SHA256 for webhook signature verification
+hmac-sha256 = "1"
+
+# Fleet integration
+gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
+
+# AsciiDoc parsing (basic)
+# Note: Full AsciiDoc parsing would need asciidoctor via subprocess
+
+[dev-dependencies]
+tempfile = "3"
+assert_fs = "1"
+predicates = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[[bin]]
+name = "seambot"
+path = "src/main.rs"

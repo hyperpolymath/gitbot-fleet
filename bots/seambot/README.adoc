@@ -1,0 +1,549 @@
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/github/license/hyperpolymath/seambot[License]
+image:https://img.shields.io/crates/v/seambot[Crates.io]
+
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= Seambot: Architectural Seam Hygiene Auditor
+
+:toc: macro
+:toclevels: 3
+:icons: font
+:source-highlighter: pygments
+
+Seam hygiene auditor -- tracks, enforces, and detects drift in architectural boundaries.
+
+toc::[]
+
+== Overview
+
+Seambot is a *Tier 2 Finisher* bot in the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] ecosystem. It audits architectural seam hygiene: verifying that declared boundaries between components remain explicit, stable, and free of hidden coupling.
+
+Seambot is a *governor and auditor*, not a designer. It does not create or suggest seam definitions -- it validates that existing seams are well-formed, correctly exercised, and have not drifted from their declared interfaces.
+
+[quote]
+"If finishbot tells us whether a repo is ready to release, seambot tells us whether it is still the same system we thought we built."
+
+=== What are Seams?
+
+Seams are first-class architectural artifacts representing boundaries between components. They are not incidental -- they are deliberate design decisions that encode:
+
+* *Invariants*: Rules that must hold across the boundary
+* *Interfaces*: Contracts between components
+* *Isolation*: What can and cannot cross
+
+=== What Seambot Does
+
+* Validates seam register completeness and JSON schema correctness
+* Detects hidden channels (undeclared coupling) across five categories
+* Tracks interface drift via SHA-256 fingerprinting
+* Validates conformance examples exist and are non-empty
+* Enforces stage freeze stamps with register hash verification
+* Reports findings to GitHub, GitLab, and Bitbucket via a unified ForgeClient API
+* Publishes findings to the gitbot-fleet shared context for cross-bot coordination
+* Outputs results in Text, JSON, Markdown, and SARIF 2.1.0 formats
+
+== Key Features
+
+=== Core Auditing
+
+* *Register Verification* -- Validates seam register completeness, JSON schema, and path security
+* *Conformance Checking* -- Ensures conformance examples exist and are not empty
+* *Drift Detection* -- SHA-256 interface fingerprinting with baseline comparison; frozen seam violations are errors
+* *Freeze Stamps* -- Validates stage freezes include immutable seam state and register hashes match
+* *Symbol Extraction* -- Parses exported symbols from Rust, Python, JS/TS, and Go for fingerprinting
+
+=== Hidden Channel Detection (5 Types)
+
+Detects undeclared coupling across seam boundaries:
+
+* *Undeclared imports* -- Module imports crossing seam boundaries without declaration (Rust, Python, JS/TS)
+* *Shared global state* -- `static mut`, `lazy_static`, `once_cell`, `Arc<Mutex<>>`, `Arc<RwLock<>>` patterns
+* *Filesystem coupling* -- Multiple seams reading/writing the same files via `std::fs`, `tokio::fs`, `File::open`
+* *Database coupling* -- Shared SQL tables (regex-parsed), ORM models (Diesel, SQLx, SeaORM, Sequelize, Mongoose, Ecto), shared DB env vars
+* *Network coupling* -- HTTP clients (reqwest, axios, aiohttp), gRPC (tonic, prost), WebSocket, shared endpoints and service env vars
+
+=== Multi-Forge Support
+
+Seambot works with multiple platforms through a unified `ForgeClient` trait:
+
+* *GitHub* -- Full support: Check Runs (Checks API), PR comments, issues, webhook signature verification, GitHub App JWT authentication
+* *GitLab* -- Full support: commit statuses, issue/MR notes, issues via Projects API
+* *Bitbucket* -- Full support: build statuses, issue comments, issues via Repositories API
+
+Forge type is auto-detected from the git remote URL, or can be specified via `--forge` flag.
+
+=== Output Formats
+
+* *Text* -- Human-readable terminal output with severity icons
+* *JSON* -- Machine-readable structured output
+* *Markdown* -- Report with status badges and summary tables
+* *SARIF 2.1.0* -- For GitHub Code Scanning integration
+
+=== Security Hardening
+
+* *Path traversal prevention* -- Rejects `..`, null bytes, absolute paths in seam register entries
+* *JSON schema validation* -- Validates register structure before processing
+* *Branch name sanitization* -- Rejects shell metacharacters, path traversal, `--` flags
+* *Constant-time webhook verification* -- XOR-fold comparison for HMAC-SHA256 signatures
+* *JWT token hygiene* -- 9-minute expiry, no secrets in log output
+
+=== Fleet Integration
+
+Publishes findings to the gitbot-fleet shared context via `gitbot-shared-context` crate, enabling cross-bot coordination with rhodibot, echidnabot, finishbot, glambot, and hypatia.
+
+== Installation
+
+=== From Source
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/seambot.git
+cd seambot
+cargo build --release
+----
+
+== Usage
+
+=== Initialize Seam Infrastructure
+
+[source,bash]
+----
+seambot init
+seambot init --force  # Overwrite existing files
+----
+
+This creates:
+
+* `spec/seams/seam-register.json` -- Machine-readable seam index
+* `spec/seams/seam-register.adoc` -- Human-readable documentation
+* `spec/seams/checklists/` -- Seam implementation checklists
+* `spec/seams/conformance/` -- Conformance examples (correct usage)
+* `spec/seams/freeze-stamps/` -- Immutable stage freeze stamps
+
+=== Run All Checks
+
+[source,bash]
+----
+# Run all seam hygiene checks
+seambot check
+
+# Fail on warnings (strict mode for CI)
+seambot check --strict
+
+# Output to JSON file
+seambot check --format json --output report.json
+
+# Output SARIF for GitHub Code Scanning
+seambot check --format sarif --output results.sarif
+----
+
+=== Check Register Completeness
+
+Validates that the seam register is complete, well-formed, and passes schema validation:
+
+[source,bash]
+----
+seambot register
+
+# Use a custom register path
+seambot register --register path/to/seam-register.json
+----
+
+=== Detect Hidden Channels
+
+Find undeclared coupling between seams across all five channel types:
+
+[source,bash]
+----
+# Scan for hidden channels across all seams
+seambot hidden-channels
+
+# Save results to file
+seambot hidden-channels --output hidden-channels.json
+----
+
+=== Check for Drift
+
+Detect changes to seam interfaces since the last baseline:
+
+[source,bash]
+----
+# Check for drift against baseline
+seambot drift
+
+# Compare against specific baseline file
+seambot drift --baseline path/to/baseline.json
+
+# Update baseline after reviewing changes
+seambot drift --update-baseline
+----
+
+=== Validate Conformance Examples
+
+Ensure conformance examples exist and are valid:
+
+[source,bash]
+----
+# Check all seams
+seambot conformance
+
+# Check specific seam
+seambot conformance --seam api-domain
+----
+
+=== Check Freeze Stamp
+
+Validate that a stage freeze has a corresponding seam freeze stamp:
+
+[source,bash]
+----
+# Check freeze stamp for stage f1
+seambot freeze-check --stage f1
+----
+
+=== Generate Report
+
+Generate a comprehensive seam status report:
+
+[source,bash]
+----
+# Generate markdown report
+seambot report --format markdown --output SEAM-STATUS.md
+
+# Generate full detailed report
+seambot report --full --output full-report.md
+----
+
+=== Multi-Forge Commands
+
+Post findings to GitHub, GitLab, or Bitbucket via the unified forge interface:
+
+[source,bash]
+----
+# Post a commit status check (auto-detects forge from git remote)
+seambot forge check-status \
+  --owner hyperpolymath --repo myrepo --sha abc123 \
+  --token $FORGE_TOKEN
+
+# Post a PR/MR comment
+seambot forge comment \
+  --owner hyperpolymath --repo myrepo --pr 42 \
+  --forge gitlab --token $GITLAB_TOKEN
+
+# Create an issue with findings
+seambot forge issue \
+  --owner hyperpolymath --repo myrepo \
+  --forge bitbucket --token $BITBUCKET_TOKEN
+
+# Forge type can also be set via FORGE_TYPE env var
+export FORGE_TYPE=gitlab
+----
+
+=== GitHub App Integration
+
+Seambot can run as a GitHub App with JWT authentication:
+
+[source,bash]
+----
+# Create a GitHub Check Run with seam check results
+seambot github check-run \
+  --owner hyperpolymath \
+  --repo myrepo \
+  --sha abc123 \
+  --app-id 123456 \
+  --private-key /path/to/key.pem \
+  --installation-id 789
+
+# Post PR comment with seam check results
+seambot github pr-comment \
+  --owner hyperpolymath \
+  --repo myrepo \
+  --pr 42 \
+  --app-id 123456 \
+  --private-key /path/to/key.pem \
+  --installation-id 789
+
+# Verify a webhook signature
+seambot github verify-webhook \
+  --secret $WEBHOOK_SECRET \
+  --signature $SIGNATURE \
+  --payload payload.json
+----
+
+== Seam Register Format
+
+[source,json]
+----
+{
+  "version": "1.0",
+  "repository": "my-repo",
+  "seams": [
+    {
+      "id": "api-domain",
+      "name": "API to Domain Boundary",
+      "description": "Separates HTTP handlers from business logic",
+      "side_a": ["api"],
+      "side_b": ["domain"],
+      "seam_type": "layer",
+      "boundary_path": "src/api",
+      "declared_dependencies": ["domain"],
+      "invariants": [
+        {
+          "id": "no-http-in-domain",
+          "description": "Domain layer must not depend on HTTP types",
+          "verification": { "type_system": null },
+          "severity": "error"
+        }
+      ],
+      "introduced_at": "i1",
+      "frozen": false,
+      "ring": 0,
+      "checklist_path": "spec/seams/checklists/api-domain.adoc",
+      "conformance_paths": ["spec/seams/conformance/api-domain.adoc"]
+    }
+  ],
+  "cross_repo_seams": [],
+  "metadata": {
+    "updated_at": "2025-01-23T12:00:00Z",
+    "updated_by": "seambot init",
+    "commit_hash": "abc123"
+  }
+}
+----
+
+== Seam Types
+
+|===
+| Type | Description | Example
+
+| `module`
+| Between modules within a repo
+| `api` <-> `domain`
+
+| `service`
+| Between services/repos
+| `auth-service` <-> `user-service`
+
+| `layer`
+| Between architectural layers
+| `presentation` <-> `business` <-> `data`
+
+| `data`
+| Data flow boundary
+| `external-api` <-> `internal-storage`
+
+| `api`
+| API boundary
+| `public-api` <-> `internal-impl`
+
+| `build`
+| Build/deployment boundary
+| `library` <-> `application`
+
+| `cross_repo`
+| Managed by git-loom
+| Seams spanning multiple repositories
+|===
+
+== Checks Reference
+
+[cols="1,2,1,1"]
+|===
+| Check | Description | Severity | Auto-Fix
+
+| `register-exists`
+| Seam register file exists
+| Error
+| Yes (init)
+
+| `register-schema-validation`
+| JSON schema is valid with required fields
+| Error
+| No
+
+| `register-path-security`
+| No path traversal in register path
+| Critical
+| No
+
+| `seam-has-checklist`
+| Each seam has a checklist defined
+| Warning
+| No
+
+| `checklist-exists`
+| Checklist file exists at declared path
+| Error
+| No
+
+| `seam-has-conformance`
+| Each seam has conformance examples
+| Warning
+| No
+
+| `conformance-exists`
+| Conformance files exist at declared paths
+| Error
+| No
+
+| `conformance-valid`
+| Conformance files are not empty
+| Warning
+| No
+
+| `seam-has-invariants`
+| Each seam has invariants defined
+| Info
+| No
+
+| `seam-has-components`
+| Both sides of seam have components
+| Warning
+| No
+
+| `seam-drift`
+| Interface has not changed from baseline
+| Warning/Error
+| No
+
+| `freeze-stamp-exists`
+| Freeze stamp exists for stage
+| Error
+| No
+
+| `freeze-stamp-current`
+| Register matches freeze stamp hash
+| Error
+| No
+
+| `freeze-stamp-valid`
+| Freeze stamp stage matches expected
+| Error
+| No
+
+| `hidden-channels-heuristic`
+| No undeclared coupling patterns found
+| Warning
+| No
+
+| `no-hidden-channels`
+| Full 5-type hidden channel scan
+| Critical/High/Medium
+| No
+|===
+
+== CI Integration
+
+=== GitHub Actions
+
+[source,yaml]
+----
+# .github/workflows/seam-check.yml
+# SPDX-License-Identifier: PMPL-1.0-or-later
+name: Seam Hygiene
+on: [push, pull_request]
+permissions: read-all
+
+jobs:
+  seambot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install seambot
+      - run: seambot check --format sarif --output results.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results.sarif
+----
+
+=== GitLab CI
+
+[source,yaml]
+----
+seam-hygiene:
+  stage: test
+  script:
+    - cargo install seambot
+    - seambot check --format json --output seam-report.json
+  artifacts:
+    reports:
+      junit: seam-report.json
+    paths:
+      - seam-report.json
+----
+
+== Integration with Gitbot Fleet
+
+Seambot is part of the https://github.com/hyperpolymath/gitbot-fleet[Gitbot Fleet], coordinating with:
+
+* *https://github.com/hyperpolymath/rhodibot[rhodibot]* -- RSR structural compliance (Tier 1)
+* *https://github.com/hyperpolymath/echidnabot[echidnabot]* -- Formal verification
+* *https://github.com/hyperpolymath/finishbot[finishbot]* -- Release readiness gating (Tier 2 sibling)
+* *seambot* (this bot) -- Architectural seam hygiene (Tier 2)
+* *glambot* -- Presentation quality, WCAG, SEO (Tier 2 sibling)
+
+Bots share context through `gitbot-shared-context` and can be orchestrated by https://github.com/hyperpolymath/hypatia[hypatia].
+
+== Architecture
+
+=== Source Structure
+
+* `src/main.rs` -- CLI entry point with 15 subcommands (749 LOC)
+* `src/seam.rs` -- Core data structures: Seam, SeamRegister, CheckResult, Finding (316 LOC)
+* `src/checks.rs` -- Compliance checking and drift detection logic (657 LOC)
+* `src/hidden_channels.rs` -- Five-type hidden channel detection (816 LOC)
+* `src/security.rs` -- Path traversal prevention, JSON schema validation, branch sanitization (386 LOC)
+* `src/report.rs` -- Text, JSON, Markdown, and SARIF output formatting (296 LOC)
+* `src/github.rs` -- GitHub App JWT auth, Checks API, PR comments, webhook verification (756 LOC)
+* `src/fleet.rs` -- gitbot-shared-context integration for cross-bot findings (261 LOC)
+* `src/register.rs` -- Seam register initialization and loading (277 LOC)
+* `src/forge/` -- Multi-forge abstraction layer
+** `src/forge/mod.rs` -- ForgeClient trait and factory (129 LOC)
+** `src/forge/github.rs` -- GitHub REST API client (188 LOC)
+** `src/forge/gitlab.rs` -- GitLab Projects API client (192 LOC)
+** `src/forge/bitbucket.rs` -- Bitbucket Repositories API client (223 LOC)
+
+=== Test Coverage
+
+68 tests across 8 files:
+
+* `tests/hidden_channels.rs` -- 13 tests covering all 5 channel types with Rust/JS/Python fixtures
+* `tests/github_integration.rs` -- 11 tests for GitHub App auth and API interaction
+* `tests/report_formats.rs` -- 9 tests for SARIF schema, Markdown structure, JSON round-trip
+* `tests/check_register.rs` -- 7 tests for register validation and path security
+* `tests/drift_detection.rs` -- 5 tests for unchanged/modified/frozen seam drift
+* `src/security.rs` -- 14 inline tests for path traversal, branch names, JSON schema
+* `src/fleet.rs` -- 6 inline tests for finding publishing and severity mapping
+* `src/github.rs` -- 3 inline tests for webhook verification
+
+== Non-Goals
+
+Seambot intentionally does NOT:
+
+* Auto-generate seam definitions (human judgment required)
+* Infer architecture from code (explicit is better than implicit)
+* Provide AI design suggestions (governance, not design)
+* Perform cross-language semantic analysis (relies on declared boundaries)
+* Mutate code (read-only auditor)
+
+== License
+
+This project is licensed under PMPL-1.0-or-later.
+
+See link:LICENSE[LICENSE] for details.
+
+== Author
+
+Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+== Contributing
+
+Contributions are welcome. Please see link:CONTRIBUTING.md[CONTRIBUTING.md] for guidelines.
+
+== Security
+
+For security issues, please see link:SECURITY.md[SECURITY.md].

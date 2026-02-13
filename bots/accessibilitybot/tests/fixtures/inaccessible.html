@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Inaccessible Page</title>
+</head>
+<body>
+    <div class="header">
+        <div class="title">My Page</div>
+        <div class="nav">
+            <div onclick="goHome()">Home</div>
+            <div onclick="goAbout()">About</div>
+        </div>
+    </div>
+
+    <div class="content">
+        <h1>Welcome</h1>
+        <h3>Skipped h2 heading</h3>
+
+        <img src="hero.jpg">
+        <img src="icon.svg" alt="image">
+        <img src="banner.png" alt="banner.png">
+
+        <form>
+            <input type="text">
+            <input type="email" placeholder="Enter email">
+            <select>
+                <option>Choose one</option>
+            </select>
+            <textarea></textarea>
+            <input type="submit" value="Go">
+        </form>
+
+        <table>
+            <tr>
+                <td>Name</td>
+                <td>Value</td>
+            </tr>
+            <tr>
+                <td>Test</td>
+                <td>123</td>
+            </tr>
+        </table>
+
+        <video autoplay src="background.mp4"></video>
+
+        <audio src="podcast.mp3" controls></audio>
+
+        <button><i class="icon-x"></i></button>
+
+        <div role="button" onclick="doAction()">Click Me</div>
+        <button aria-hidden="true">Hidden but focusable</button>
+        <nav role="navigation">Redundant role</nav>
+
+        <span tabindex="5">Bad tab order</span>
+        <div style="outline: none">No focus style</div>
+    </div>
+
+    <div class="footer">
+        <p>Footer content</p>
+    </div>
+</body>
+</html>

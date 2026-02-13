@@ -1,0 +1,341 @@
+@prefix eco: <http://oikos-bot.dev/ontology#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix schema: <http://schema.org/> .
+@prefix seon: <http://se-on.org/ontologies/main/1.0/> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+# =============================================================================
+# OIKOS BOT ONTOLOGY
+# =============================================================================
+
+eco:OikosBotOntology a owl:Ontology ;
+    rdfs:label "Oikos Bot Software Ecology Ontology"@en ;
+    rdfs:comment "Ontology for describing ecological and economic aspects of software systems"@en ;
+    dct:creator "Hyperpolymath" ;
+    owl:versionInfo "0.1.0" .
+
+# =============================================================================
+# CORE CLASSES
+# =============================================================================
+
+# Software Entities
+eco:SoftwareEntity a owl:Class ;
+    rdfs:label "Software Entity"@en ;
+    rdfs:comment "Any identifiable software component"@en .
+
+eco:Project a owl:Class ;
+    rdfs:subClassOf eco:SoftwareEntity ;
+    rdfs:label "Software Project"@en .
+
+eco:Module a owl:Class ;
+    rdfs:subClassOf eco:SoftwareEntity ;
+    rdfs:label "Module"@en .
+
+eco:SourceFile a owl:Class ;
+    rdfs:subClassOf eco:SoftwareEntity ;
+    rdfs:label "Source File"@en .
+
+eco:Function a owl:Class ;
+    rdfs:subClassOf eco:SoftwareEntity ;
+    rdfs:label "Function"@en .
+
+# Analysis Results
+eco:Analysis a owl:Class ;
+    rdfs:label "Code Analysis"@en ;
+    rdfs:comment "An analysis performed on a software entity"@en .
+
+eco:EcoAnalysis a owl:Class ;
+    rdfs:subClassOf eco:Analysis ;
+    rdfs:label "Ecological Analysis"@en .
+
+eco:EconAnalysis a owl:Class ;
+    rdfs:subClassOf eco:Analysis ;
+    rdfs:label "Economic Analysis"@en .
+
+eco:QualityAnalysis a owl:Class ;
+    rdfs:subClassOf eco:Analysis ;
+    rdfs:label "Quality Analysis"@en .
+
+# Metrics
+eco:Metric a owl:Class ;
+    rdfs:label "Metric"@en ;
+    rdfs:comment "A measurable aspect of software"@en .
+
+eco:CarbonMetric a owl:Class ;
+    rdfs:subClassOf eco:Metric ;
+    rdfs:label "Carbon Intensity Metric"@en ;
+    rdfs:comment "Based on SCI specification (ISO/IEC 21031:2024)"@en .
+
+eco:EnergyMetric a owl:Class ;
+    rdfs:subClassOf eco:Metric ;
+    rdfs:label "Energy Efficiency Metric"@en .
+
+eco:ParetoMetric a owl:Class ;
+    rdfs:subClassOf eco:Metric ;
+    rdfs:label "Pareto Optimality Metric"@en .
+
+eco:AllocationMetric a owl:Class ;
+    rdfs:subClassOf eco:Metric ;
+    rdfs:label "Allocative Efficiency Metric"@en .
+
+eco:DebtMetric a owl:Class ;
+    rdfs:subClassOf eco:Metric ;
+    rdfs:label "Technical Debt Metric"@en .
+
+eco:ComplexityMetric a owl:Class ;
+    rdfs:subClassOf eco:Metric ;
+    rdfs:label "Complexity Metric"@en .
+
+# Patterns
+eco:Pattern a owl:Class ;
+    rdfs:label "Code Pattern"@en .
+
+eco:EcoPattern a owl:Class ;
+    rdfs:subClassOf eco:Pattern ;
+    rdfs:label "Ecological Pattern"@en .
+
+eco:AntiPattern a owl:Class ;
+    rdfs:subClassOf eco:Pattern ;
+    rdfs:label "Anti-Pattern"@en .
+
+eco:BestPractice a owl:Class ;
+    rdfs:subClassOf eco:Pattern ;
+    rdfs:label "Best Practice"@en .
+
+# Policies
+eco:Policy a owl:Class ;
+    rdfs:label "Policy"@en ;
+    rdfs:comment "A set of rules governing code quality"@en .
+
+eco:EcoPolicy a owl:Class ;
+    rdfs:subClassOf eco:Policy ;
+    rdfs:label "Ecological Policy"@en .
+
+eco:EconPolicy a owl:Class ;
+    rdfs:subClassOf eco:Policy ;
+    rdfs:label "Economic Policy"@en .
+
+# Recommendations
+eco:Recommendation a owl:Class ;
+    rdfs:label "Recommendation"@en ;
+    rdfs:comment "A suggested improvement"@en .
+
+eco:RefactoringRecommendation a owl:Class ;
+    rdfs:subClassOf eco:Recommendation ;
+    rdfs:label "Refactoring Recommendation"@en .
+
+# Praxis (Theory-Practice Loop)
+eco:PraxisObservation a owl:Class ;
+    rdfs:label "Praxis Observation"@en ;
+    rdfs:comment "An observation from applying theory to practice"@en .
+
+# =============================================================================
+# OBJECT PROPERTIES
+# =============================================================================
+
+eco:analyzedBy a owl:ObjectProperty ;
+    rdfs:domain eco:SoftwareEntity ;
+    rdfs:range eco:Analysis ;
+    rdfs:label "analyzed by"@en .
+
+eco:hasMetric a owl:ObjectProperty ;
+    rdfs:domain eco:Analysis ;
+    rdfs:range eco:Metric ;
+    rdfs:label "has metric"@en .
+
+eco:dependsOn a owl:ObjectProperty ;
+    rdfs:domain eco:SoftwareEntity ;
+    rdfs:range eco:SoftwareEntity ;
+    rdfs:label "depends on"@en .
+
+eco:contains a owl:ObjectProperty ;
+    rdfs:domain eco:SoftwareEntity ;
+    rdfs:range eco:SoftwareEntity ;
+    rdfs:label "contains"@en .
+
+eco:exhibitsPattern a owl:ObjectProperty ;
+    rdfs:domain eco:SoftwareEntity ;
+    rdfs:range eco:Pattern ;
+    rdfs:label "exhibits pattern"@en .
+
+eco:violatesPolicy a owl:ObjectProperty ;
+    rdfs:domain eco:SoftwareEntity ;
+    rdfs:range eco:Policy ;
+    rdfs:label "violates policy"@en .
+
+eco:hasRecommendation a owl:ObjectProperty ;
+    rdfs:domain eco:Analysis ;
+    rdfs:range eco:Recommendation ;
+    rdfs:label "has recommendation"@en .
+
+eco:dominates a owl:ObjectProperty ;
+    rdfs:domain eco:SoftwareEntity ;
+    rdfs:range eco:SoftwareEntity ;
+    rdfs:label "Pareto dominates"@en ;
+    rdfs:comment "In multi-objective optimization sense"@en .
+
+eco:learnedFrom a owl:ObjectProperty ;
+    rdfs:domain eco:Policy ;
+    rdfs:range eco:PraxisObservation ;
+    rdfs:label "learned from"@en .
+
+# =============================================================================
+# DATA PROPERTIES
+# =============================================================================
+
+eco:carbonScore a owl:DatatypeProperty ;
+    rdfs:domain eco:CarbonMetric ;
+    rdfs:range xsd:float ;
+    rdfs:label "carbon score"@en ;
+    rdfs:comment "Normalized score 0-100, higher is better (lower carbon)"@en .
+
+eco:energyScore a owl:DatatypeProperty ;
+    rdfs:domain eco:EnergyMetric ;
+    rdfs:range xsd:float ;
+    rdfs:label "energy score"@en .
+
+eco:paretoDistance a owl:DatatypeProperty ;
+    rdfs:domain eco:ParetoMetric ;
+    rdfs:range xsd:float ;
+    rdfs:label "Pareto frontier distance"@en ;
+    rdfs:comment "Distance from the Pareto optimal frontier"@en .
+
+eco:allocativeEfficiency a owl:DatatypeProperty ;
+    rdfs:domain eco:AllocationMetric ;
+    rdfs:range xsd:float ;
+    rdfs:label "allocative efficiency"@en .
+
+eco:debtPrincipal a owl:DatatypeProperty ;
+    rdfs:domain eco:DebtMetric ;
+    rdfs:range xsd:float ;
+    rdfs:label "debt principal"@en ;
+    rdfs:comment "Estimated hours to remediate"@en .
+
+eco:cyclomaticComplexity a owl:DatatypeProperty ;
+    rdfs:domain eco:ComplexityMetric ;
+    rdfs:range xsd:integer ;
+    rdfs:label "cyclomatic complexity"@en .
+
+eco:cognitiveComplexity a owl:DatatypeProperty ;
+    rdfs:domain eco:ComplexityMetric ;
+    rdfs:range xsd:integer ;
+    rdfs:label "cognitive complexity"@en .
+
+eco:healthIndex a owl:DatatypeProperty ;
+    rdfs:domain eco:Analysis ;
+    rdfs:range xsd:float ;
+    rdfs:label "health index"@en ;
+    rdfs:comment "Composite score combining eco, econ, and quality"@en .
+
+eco:confidence a owl:DatatypeProperty ;
+    rdfs:domain eco:Recommendation ;
+    rdfs:range xsd:float ;
+    rdfs:label "confidence"@en ;
+    rdfs:comment "Probability-based confidence in recommendation"@en .
+
+eco:timestamp a owl:DatatypeProperty ;
+    rdfs:domain eco:Analysis ;
+    rdfs:range xsd:dateTime ;
+    rdfs:label "timestamp"@en .
+
+# =============================================================================
+# INDIVIDUALS (Common Patterns and Best Practices)
+# =============================================================================
+
+# Anti-patterns
+eco:BusyWaiting a eco:AntiPattern ;
+    rdfs:label "Busy Waiting"@en ;
+    eco:carbonImpact "0.3"^^xsd:float ;
+    rdfs:comment "Polling in a tight loop wastes CPU cycles and energy"@en ;
+    skos:altLabel "Spin Lock", "Polling Loop" .
+
+eco:PrematureOptimization a eco:AntiPattern ;
+    rdfs:label "Premature Optimization"@en ;
+    rdfs:comment "Optimizing before understanding actual bottlenecks"@en .
+
+eco:LeakyAbstraction a eco:AntiPattern ;
+    rdfs:label "Leaky Abstraction"@en ;
+    rdfs:comment "Abstraction that exposes implementation details"@en .
+
+# Best practices
+eco:ConnectionPooling a eco:BestPractice ;
+    rdfs:label "Connection Pooling"@en ;
+    eco:carbonImpact "-0.15"^^xsd:float ;
+    eco:energyImpact "-0.20"^^xsd:float ;
+    rdfs:comment "Reuse connections instead of creating new ones"@en .
+
+eco:Memoization a eco:BestPractice ;
+    rdfs:label "Memoization"@en ;
+    eco:carbonImpact "-0.25"^^xsd:float ;
+    rdfs:comment "Cache results of expensive computations"@en .
+
+eco:LazyEvaluation a eco:BestPractice ;
+    rdfs:label "Lazy Evaluation"@en ;
+    eco:carbonImpact "-0.10"^^xsd:float ;
+    rdfs:comment "Defer computation until results are needed"@en .
+
+eco:EventDriven a eco:BestPractice ;
+    rdfs:label "Event-Driven Architecture"@en ;
+    eco:energyImpact "-0.30"^^xsd:float ;
+    rdfs:comment "React to events instead of polling"@en .
+
+eco:Batching a eco:BestPractice ;
+    rdfs:label "Batching"@en ;
+    eco:carbonImpact "-0.15"^^xsd:float ;
+    rdfs:comment "Batch I/O and network operations"@en .
+
+# Standard policies
+eco:EcoMinimum a eco:EcoPolicy ;
+    rdfs:label "Eco Minimum Standard"@en ;
+    eco:carbonThreshold "50"^^xsd:float ;
+    eco:energyThreshold "50"^^xsd:float ;
+    rdfs:comment "Minimum acceptable eco standards"@en .
+
+eco:EcoStandard a eco:EcoPolicy ;
+    rdfs:label "Eco Standard"@en ;
+    eco:carbonThreshold "70"^^xsd:float ;
+    eco:energyThreshold "70"^^xsd:float ;
+    rdfs:comment "Recommended eco standards"@en .
+
+eco:EcoExcellence a eco:EcoPolicy ;
+    rdfs:label "Eco Excellence"@en ;
+    eco:carbonThreshold "85"^^xsd:float ;
+    eco:energyThreshold "85"^^xsd:float ;
+    rdfs:comment "Excellence in eco practices"@en .
+
+# =============================================================================
+# EXAMPLE SPARQL QUERIES
+# =============================================================================
+
+# Query: Find all entities below eco minimum
+# PREFIX eco: <http://oikos-bot.dev/ontology#>
+# SELECT ?entity ?carbonScore ?energyScore
+# WHERE {
+#     ?entity a eco:SoftwareEntity .
+#     ?entity eco:analyzedBy ?analysis .
+#     ?analysis eco:hasMetric ?carbonMetric .
+#     ?carbonMetric a eco:CarbonMetric ;
+#                   eco:carbonScore ?carbonScore .
+#     ?analysis eco:hasMetric ?energyMetric .
+#     ?energyMetric a eco:EnergyMetric ;
+#                   eco:energyScore ?energyScore .
+#     FILTER (?carbonScore < 50 || ?energyScore < 50)
+# }
+
+# Query: Find best practices applicable to an entity's anti-patterns
+# PREFIX eco: <http://oikos-bot.dev/ontology#>
+# PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+# SELECT ?entity ?antiPattern ?bestPractice ?impact
+# WHERE {
+#     ?entity eco:exhibitsPattern ?antiPattern .
+#     ?antiPattern a eco:AntiPattern .
+#     ?bestPractice a eco:BestPractice ;
+#                   eco:carbonImpact ?impact .
+#     FILTER (?impact < 0)
+# }
+# ORDER BY ?impact

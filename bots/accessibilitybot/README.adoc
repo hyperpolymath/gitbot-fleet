@@ -1,0 +1,206 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+= Accessibilitybot
+:author: Jonathan D.A. Jewell
+:email: jonathan.jewell@open.ac.uk
+:revnumber: 0.1.0
+:revdate: 2026-02-08
+:toc: macro
+:toclevels: 3
+:icons: font
+:source-highlighter: rouge
+
+WCAG 2.3 AAA Accessibility Compliance Bot for the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] ecosystem.
+
+toc::[]
+
+== Overview
+
+Accessibilitybot is a *Tier 2 (Finisher)* bot in the gitbot-fleet ecosystem.
+It performs static analysis of HTML and CSS files to detect WCAG 2.3 accessibility violations, ARIA correctness issues, semantic HTML problems, and CSS accessibility anti-patterns.
+
+The philosophy is simple: *accessibility is not optional*. CSS-first, HTML-second. Full WCAG 2.3 AAA compliance.
+
+== Features
+
+* 9 WCAG analyzers covering Level A, AA, and AAA criteria
+* CLI with `check`, `analyze`, `report`, and `fleet` subcommands
+* Output in text, JSON, or SARIF (Static Analysis Results Interchange Format)
+* Impact assessment per finding (who is affected: blind, low-vision, motor, cognitive, deaf)
+* Configurable conformance level (A, AA, AAA)
+* Non-zero exit code on errors for CI/CD integration
+* 71 tests (62 unit + 9 integration), all passing
+
+== Analyzers
+
+[cols="1,2,1,1"]
+|===
+| Analyzer | Description | WCAG Criteria | Level
+
+| *Alt Text*
+| Checks `<img>` elements for missing, empty, generic, or filename-based alt text.
+| 1.1.1 Non-text Content
+| A
+
+| *Color Contrast*
+| Parses CSS for color/background-color pairs and calculates contrast ratios using the WCAG luminance algorithm. Also checks inline styles in HTML.
+| 1.4.3 Contrast (Minimum), 1.4.6 Contrast (Enhanced)
+| AA / AAA
+
+| *Semantic HTML*
+| Validates use of semantic elements (header, nav, main, footer), heading hierarchy (no skipping levels), table structure (thead, th scope), and detects div soup.
+| 1.3.1 Info and Relationships
+| A
+
+| *ARIA*
+| Validates ARIA roles and attributes: redundant roles on native elements, aria-hidden on focusable elements, unlabelled buttons, div/span used as buttons.
+| 4.1.2 Name, Role, Value
+| A
+
+| *Keyboard*
+| Checks for positive tabindex values, missing skip navigation links, onclick handlers without keyboard equivalents, and suppressed focus indicators (outline: none).
+| 2.1.1 Keyboard, 2.4.1 Bypass Blocks, 2.4.3 Focus Order, 2.4.7 Focus Visible
+| A / AA
+
+| *Forms*
+| Validates that inputs have associated labels (via for/id, wrapping, or ARIA), checks for placeholder-only labelling, and verifies autocomplete attributes on eligible inputs.
+| 3.3.2 Labels or Instructions, 1.3.5 Identify Input Purpose
+| A / AA
+
+| *Media*
+| Checks video elements for captions/subtitles tracks, audio elements for transcript references, and auto-playing media for controls.
+| 1.2.1 Audio-only, 1.2.2 Captions, 1.4.2 Audio Control
+| A
+
+| *Language*
+| Validates the `<html>` lang attribute (missing or empty) and performs Flesch-Kincaid reading level analysis on substantial text content.
+| 3.1.1 Language of Page, 3.1.5 Reading Level
+| A / AAA
+
+| *CSS*
+| CSS-first accessibility checks: pixel font sizes (should be rem/em), insufficient line height, missing prefers-reduced-motion, missing prefers-color-scheme, missing prefers-contrast, and display:none on screen-reader classes.
+| 1.4.4 Resize Text, 1.4.12 Text Spacing, 2.3.3 Animation
+| AA / AAA
+|===
+
+== Installation
+
+[source,bash]
+----
+# Clone and build from source
+git clone https://github.com/hyperpolymath/accessibilitybot.git
+cd accessibilitybot
+cargo build --release
+
+# Binary will be at target/release/accessibilitybot
+----
+
+== Usage
+
+[source,bash]
+----
+# Run all WCAG checks on a directory (default: AAA level)
+accessibilitybot check ./my-site/
+
+# Check at a specific WCAG level
+accessibilitybot check ./my-site/ --level aa
+
+# Analyze a single file
+accessibilitybot analyze index.html
+
+# Generate a SARIF report for CI/CD
+accessibilitybot report ./my-site/ --output report.sarif
+
+# Run as a fleet member (JSON output, blocks on errors)
+accessibilitybot fleet ./my-site/
+
+# Output as JSON
+accessibilitybot check ./my-site/ --format json
+
+# Verbose logging
+accessibilitybot check ./my-site/ --verbose
+----
+
+=== Exit Codes
+
+* `0` -- No errors found (warnings and suggestions may be present)
+* `1` -- One or more error-level findings detected (release blocked)
+
+=== Output Formats
+
+* *text* -- Human-readable report with WCAG criterion references, locations, fix suggestions, and impact assessment
+* *json* -- Structured JSON findings for programmatic consumption
+* *sarif* -- SARIF 2.1.0 format for IDE and CI integration
+
+== Scanned File Types
+
+Accessibilitybot scans files with the following extensions:
+
+* HTML: `.html`, `.htm`
+* CSS: `.css`
+* Frontend frameworks: `.jsx`, `.tsx`, `.svelte`, `.vue`
+
+Directories skipped automatically: `node_modules`, `.git`, `target`, `dist`, `build`, `_build`, `vendor`, `.next`, `.nuxt`, `coverage`.
+
+== Fleet Integration
+
+Accessibilitybot integrates with the gitbot-fleet ecosystem as a Tier 2 Finisher:
+
+* *Finding categories:* `accessibility/wcag-a`, `accessibility/wcag-aa`, `accessibility/wcag-aaa`, `accessibility/aria`, `accessibility/css`
+* *Fleet modes:*
+** *Verifier* -- Block PRs with Level A violations
+** *Advisor* -- Comment with all findings, do not block
+** *Consultant* -- Only analyze when @accessibilitybot is mentioned
+** *Regulator* -- Enforce minimum WCAG level compliance
+
+When run via `accessibilitybot fleet <dir>`, output is JSON and the process exits with code 1 if any error-level findings exist.
+
+== Severity Levels
+
+[cols="1,3"]
+|===
+| Severity | Meaning
+
+| *Error*
+| Critical accessibility violation. Blocks release in fleet mode.
+
+| *Warning*
+| Should be addressed. Does not block release.
+
+| *Info*
+| Informational. Highlights areas for improvement.
+
+| *Suggestion*
+| Enhancement suggestion for better accessibility.
+|===
+
+== Development
+
+[source,bash]
+----
+# Run all tests (71 tests)
+cargo test
+
+# Run with verbose output
+cargo test -- --nocapture
+
+# Check without building
+cargo check
+----
+
+== Dependencies
+
+* https://crates.io/crates/clap[clap] -- CLI argument parsing
+* https://crates.io/crates/scraper[scraper] -- HTML parsing and CSS selectors
+* https://crates.io/crates/regex[regex] -- Pattern matching for CSS analysis
+* https://crates.io/crates/serde[serde] / https://crates.io/crates/serde_json[serde_json] -- Serialization for JSON and SARIF output
+* https://crates.io/crates/walkdir[walkdir] -- Directory traversal
+* https://crates.io/crates/tracing[tracing] -- Structured logging
+* https://crates.io/crates/chrono[chrono] -- Timestamps for findings
+* https://crates.io/crates/uuid[uuid] -- Unique identifiers for findings
+
+== License
+
+PMPL-1.0-or-later (Palimpsest License)
+
+See link:LICENSE[LICENSE] for the full text.

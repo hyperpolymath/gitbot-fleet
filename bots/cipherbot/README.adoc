@@ -1,0 +1,290 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+= Cipherbot
+:author: Jonathan D.A. Jewell
+:email: jonathan.jewell@open.ac.uk
+:revnumber: 0.1.0
+:revdate: 2026-02-08
+:toc: macro
+:toclevels: 3
+
+Cryptographic Hygiene & Post-Quantum Readiness Bot for the gitbot-fleet ecosystem.
+
+toc::[]
+
+== Overview
+
+Cipherbot is a specialist-tier bot in the gitbot-fleet ecosystem that scans codebases for deprecated, weak, or non-post-quantum-safe cryptographic algorithms. It provides migration recommendations and generates SARIF reports compatible with GitHub Code Scanning.
+
+Cipherbot operates in four modes:
+
+* **Advisor** -- report findings and suggest migrations without blocking.
+* **Consultant** -- analyze only when explicitly invoked.
+* **Regulator** -- block PRs containing REJECT-level findings.
+* **Policy** -- enforce organization-wide crypto policy from `.bot_directives/cipherbot.scm`.
+
+== Philosophy
+
+Proactive cryptographic attestation. No MD5, no SHA-1, no SHA-256 alone. Post-quantum readiness is not optional.
+
+=== Security Standards
+
+[cols="1,2"]
+|===
+| Category | Standard
+
+| Password Hashing
+| Argon2id (512 MiB, 8 iterations, 4 lanes)
+
+| General Hashing
+| SHAKE3-512 (FIPS 202)
+
+| PQ Signatures
+| Dilithium5-AES hybrid (ML-DSA-87, FIPS 204)
+
+| PQ Key Exchange
+| Kyber-1024 + SHAKE256-KDF (ML-KEM-1024, FIPS 203)
+
+| Classical Signatures
+| Ed448 + Dilithium5 hybrid
+
+| Symmetric Encryption
+| XChaCha20-Poly1305 (256-bit key)
+
+| KDF
+| HKDF-SHAKE512 (FIPS 202)
+
+| RNG
+| ChaCha20-DRBG (512-bit seed, SP 800-90Ar1)
+
+| Database Hashing
+| BLAKE3 (512-bit) + SHAKE3-512
+
+| Protocol
+| QUIC + HTTP/3 + IPv6
+
+| PQ Fallback
+| SPHINCS+ for all hybrid PQ systems
+|===
+
+== Analyzers
+
+Cipherbot includes 11 cryptographic analyzers, each detecting specific categories of cryptographic usage with severity classifications (REJECT, WARN, ACCEPT, PREFER, FALLBACK).
+
+=== 1. Hash Function Analyzer
+
+Detects deprecated and weak hash functions in source code and configuration.
+
+* **REJECT**: MD5, SHA-1
+* **WARN**: SHA-256, SHA-384
+* **ACCEPT**: SHA-512, BLAKE3
+* **PREFER**: SHAKE3-512
+
+Multi-language detection: Rust (`md5::`, `sha1::`), JavaScript (`crypto.createHash()`), OpenSSL (`MessageDigest::`), and configuration files.
+
+=== 2. Symmetric Encryption Analyzer
+
+Detects weak or deprecated symmetric ciphers.
+
+* **REJECT**: DES, 3DES, RC4, AES-ECB
+* **WARN**: AES-CBC, AES-GCM-128
+* **ACCEPT**: AES-GCM-256, ChaCha20-Poly1305
+* **PREFER**: XChaCha20-Poly1305
+
+=== 3. Key Exchange Analyzer
+
+Detects weak or non-PQ-safe key exchange algorithms.
+
+* **REJECT**: RSA-1024, DH-1024
+* **WARN**: RSA-2048, ECDH P-256
+* **ACCEPT**: X25519, X448, Kyber-768
+* **PREFER**: Kyber-1024 (ML-KEM-1024)
+
+=== 4. Signature Analyzer
+
+Detects weak or non-PQ-safe digital signature algorithms.
+
+* **REJECT**: RSA-SHA1, DSA
+* **WARN**: RSA-2048 signatures, Ed25519
+* **ACCEPT**: Ed448
+* **PREFER**: Dilithium5 (ML-DSA-87)
+* **FALLBACK**: SPHINCS+ (SLH-DSA)
+
+=== 5. Password Hashing Analyzer
+
+Detects weak password hashing algorithms.
+
+* **REJECT**: MD5 for passwords, SHA-1/SHA-256 unsalted
+* **WARN**: bcrypt, scrypt, PBKDF2
+* **ACCEPT**: Argon2id, Argon2i
+
+=== 6. TLS/Protocol Analyzer
+
+Detects insecure protocol configurations.
+
+* **REJECT**: SSLv2/v3, TLS 1.0, TLS 1.1, plaintext HTTP, disabled TLS verification
+* **WARN**: TLS 1.2
+* **ACCEPT**: TLS 1.3
+* **PREFER**: QUIC/HTTP3
+
+Localhost/loopback addresses are excluded from plaintext HTTP detection.
+
+=== 7. RNG Analyzer
+
+Detects non-cryptographic random number generators.
+
+* **REJECT**: `Math.random()`, C `rand()`, `srand(time(NULL))`, Python `random` module
+* **WARN**: OsRng (acceptable, but DRBG preferred for reproducibility)
+* **ACCEPT**: `/dev/urandom`, `getrandom()`, `thread_rng()`
+* **PREFER**: ChaCha20-DRBG
+
+=== 8. Dependency Crypto Audit
+
+Scans `Cargo.toml` and `package.json` for problematic cryptographic dependencies.
+
+* **REJECT**: `rust-crypto` (unmaintained)
+* **WARN**: `openssl` crate (prefer `rustls`), `crypto-js`, `node-forge`, `sjcl`, `bcryptjs`
+
+Only scans manifest files (Cargo.toml, package.json, Gemfile, requirements.txt, go.mod).
+
+=== 9. Configuration File Analyzer
+
+Scans TOML, YAML, JSON, ENV, and INI files for crypto issues.
+
+* Hardcoded secrets (password, API key, token)
+* Weak cipher/hash algorithm specifications
+* Disabled encryption settings
+* Invalid certificate acceptance
+* Low key sizes
+
+=== 10. DNS Zone File Analyzer
+
+Scans DNS zone files and infrastructure definitions.
+
+* Permissive SPF records (`+all`)
+* DMARC policy gaps (`p=none`, `p=quarantine`)
+* SSHFP records using SHA-1
+* TLSA records using SHA-1
+* Internal/private IPs exposed in public DNS
+* MTA-STS in testing mode
+
+=== 11. Infrastructure-as-Code Analyzer
+
+Scans Terraform, Docker, Kubernetes, Ansible, and Helm configurations.
+
+* Container images using `:latest` tag
+* Hardcoded credentials in IaC
+* Secrets in environment variables
+* Privileged containers
+* Plaintext HTTP endpoints
+* Modified TLS verification settings
+
+== Post-Quantum Readiness Assessment
+
+Cipherbot scores each repository's post-quantum preparedness on a 0-100 scale:
+
+[cols="1,1,2"]
+|===
+| Score | Rating | Description
+
+| 0-20
+| CRITICAL
+| Uses broken crypto (MD5, SHA-1, DES)
+
+| 21-40
+| HIGH
+| Classical-only crypto (RSA, ECDH, Ed25519)
+
+| 41-60
+| MEDIUM
+| Partially PQ-ready, inconsistent
+
+| 61-80
+| GOOD
+| Hybrid classical+PQ in most places
+
+| 81-100
+| EXCELLENT
+| Full PQ readiness with FIPS compliance
+|===
+
+The assessment includes a prioritized migration roadmap with 19 standard migration paths from classical to post-quantum algorithms.
+
+== Policy Engine
+
+Cipherbot reads `.bot_directives/cipherbot.scm` for repository-specific crypto policy enforcement. Configurable options:
+
+* Minimum hash algorithm
+* Minimum symmetric cipher
+* Post-quantum requirement toggle
+* Maximum key age in days
+* Exception lists for legacy compatibility modules
+* Operating mode and scan scope
+
+Three Eclexia policy files are included in `policies/`:
+
+* `crypto-hash-policy.ecl` -- hash algorithm enforcement
+* `crypto-pq-policy.ecl` -- post-quantum compliance
+* `crypto-protocol-policy.ecl` -- protocol requirements
+
+== CLI Usage
+
+[source,shell]
+----
+cipherbot scan <dir>            # Full crypto hygiene scan
+cipherbot analyze <file>        # Single file analysis
+cipherbot report <dir>          # Generate SARIF report
+cipherbot fleet <dir>           # Run as fleet member
+cipherbot pq-readiness <dir>    # Post-quantum readiness assessment
+cipherbot audit-deps <dir>      # Dependency crypto audit only
+----
+
+Global options:
+
+* `-v`, `-vv`, `-vvv` -- verbosity level
+* `-f text` or `-f json` -- output format
+
+== Fleet Integration
+
+Cipherbot integrates with gitbot-fleet as `BotId::Custom(100)`. It publishes findings in six categories:
+
+* `crypto/deprecated` -- deprecated algorithms
+* `crypto/weak` -- weak but not broken
+* `crypto/pq-vulnerable` -- classical-only, not PQ-safe
+* `crypto/config` -- configuration issues
+* `crypto/dependency` -- dependency vulnerabilities
+* `crypto/protocol` -- protocol-level issues
+
+== SARIF Output
+
+Cipherbot generates SARIF 2.1.0 reports compatible with:
+
+* GitHub Code Scanning
+* VS Code SARIF Viewer
+* Any SARIF 2.1.0-compliant tool
+
+== Building
+
+[source,shell]
+----
+cargo build --release
+----
+
+Requires `gitbot-shared-context` as a path dependency from `../gitbot-fleet/shared-context`.
+
+== Testing
+
+94 tests across all analyzers, PQ readiness, policy engine, fleet integration, SARIF output, and CLI parsing.
+
+[source,shell]
+----
+cargo test
+----
+
+== License
+
+PMPL-1.0-or-later (Palimpsest License)
+
+== Author
+
+Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>

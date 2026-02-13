@@ -1,0 +1,186 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+= glambot Roadmap
+:toc:
+:toclevels: 3
+
+== Overview
+
+This roadmap outlines the development plan for glambot, the presentation quality enforcer for the Hyperpolymath gitbot fleet.
+
+== v1.0 - Production Release (Current)
+
+**Target:** 2026-02 +
+**Status:** Core complete (85%)
+
+=== Core Analyzers
+* [x] Visual Polish (README, badges, line length, logos)
+* [x] Accessibility (WCAG alt-text, headings, links)
+* [x] SEO (meta tags, OpenGraph, keywords)
+* [x] Machine-Readability (JSON/YAML, structured data, .machine_readable/)
+* [x] Git-SEO Integration (external git-seo CLI, forge-based scoring)
+
+=== Features
+* [x] Full CLI with subcommands (audit, fix, visual, accessibility, seo, machine, init, show)
+* [x] Configuration system (YAML/TOML)
+* [x] JSON and pretty output formats
+* [x] Dry-run mode
+* [x] Individual analyzer commands
+* [x] Auto-fix mode flag
+
+=== Auto-Fix Implementation
+* [x] Visual: README.adoc template creation, badge insertion, screenshot placeholder
+* [x] Accessibility: alt text placeholders, lang attribute, WCAG checklist generation
+* [x] SEO: description placeholders, topic suggestions, OpenGraph template
+* [x] Machine: .machine_readable/ directory scaffolding, SCM templates, JSON-LD template, robots.txt
+* [x] Git-SEO: .gitattributes optimization, FUNDING.yml generation
+
+=== Testing & Quality
+* [x] 26 unit tests across 6 modules
+* [x] 5 integration tests
+* [x] Criterion benchmarks (4 suites)
+* [x] 2 fuzz targets
+* [x] Clippy clean
+* [x] SPDX headers on all source files
+
+=== Fleet Integration
+* [x] BotId::Glambot with shared-context interop
+* [x] Severity mapping (glambot to fleet format)
+* [x] Category tagging (presentation/*)
+* [x] Round-trip serialization (FindingSet JSON)
+* [x] Feature-gated fleet module
+
+=== Remaining for v1.0
+* [ ] Wire CLI `fix` subcommand to analyzer fix() methods (currently prints placeholder)
+* [ ] ClusterFuzzLite configuration
+* [ ] Stress test workflow
+* [ ] HTML accessibility checks (ARIA, keyboard nav)
+
+== v1.1 - Enhanced Presentation Quality (Next)
+
+**Target:** 2026-03
+
+=== Visual Enhancements
+* Color contrast checking (WCAG)
+* Font readability analysis
+* Image optimization detection
+* Responsive design validation
+
+=== Accessibility Improvements
+* ARIA label validation
+* Keyboard navigation checking
+* Screen reader compatibility
+* Focus management validation
+* WCAG AAA compliance
+
+=== SEO Enhancements
+* Schema.org validation
+* Sitemap.xml checking
+* Canonical URL validation
+* Mobile-friendliness testing
+* Page speed insights integration
+
+== v1.2 - Advanced Analysis
+
+**Target:** 2026-04
+
+=== New Analyzers
+* Typography analyzer (font pairing, hierarchy)
+* Content quality analyzer (readability scores)
+* Brand consistency analyzer
+* Internationalization analyzer (i18n completeness)
+
+=== Integration
+* Link rot detection (check external links)
+* Image analysis (file size, format optimization)
+* Code block syntax highlighting validation
+* Diagram accessibility checking
+
+=== Reporting
+* HTML report generation
+* Trend analysis over time
+* Comparison reports (before/after)
+* Team dashboards
+
+== v2.0 - AI-Powered Presentation
+
+**Target:** 2026-Q3
+
+=== AI Features
+* LLM-based content quality analysis
+* Automated alt-text generation
+* Style guide compliance checking
+* Natural language suggestions
+
+=== Neurosymbolic Features
+* Hypatia integration for rule-based validation
+* A2ML integration for verified documentation
+* Formal verification of accessibility claims
+* Proof-carrying presentation quality
+
+=== Advanced Checks
+* Design system compliance
+* Brand guideline validation
+* Cross-platform consistency
+* Localization quality
+
+== v2.5 - Visual Testing
+
+**Target:** 2026-Q4
+
+=== Visual Regression
+* Screenshot comparison
+* Visual diff detection
+* Layout shift detection
+* Cross-browser rendering validation
+
+=== Performance
+* Page load time analysis
+* Bundle size optimization
+* Image lazy-loading validation
+* Critical CSS extraction
+
+=== Automation
+* Automatic fix PRs
+* Continuous presentation monitoring
+* Quality trend alerts
+* Regression notifications
+
+== v3.0 - Autonomous Presentation Management
+
+**Target:** 2027
+
+=== Autonomous Features
+* Self-healing presentation issues
+* Predictive quality analysis
+* Automated A/B testing
+* Dynamic optimization
+
+=== Ecosystem Intelligence
+* Best practice learning
+* Style trend detection
+* Industry benchmark comparison
+* Competitive analysis
+
+=== Integration
+* Full gitbot-fleet integration
+* CI/CD pipeline integration
+* Design tool integrations (Figma, Sketch)
+* CMS integrations
+
+== Long-term Vision
+
+* Real-time presentation monitoring
+* Collaborative quality improvement
+* Crowdsourced accessibility testing
+* Machine learning-based optimization
+* Integration with avatar-fabrication-facility for visual branding
+* Distributed presentation quality network
+
+== Contributing
+
+See link:CONTRIBUTING.md[Contributing Guidelines] for how to contribute to glambot development.
+
+== Versioning
+
+glambot follows semantic versioning (SemVer). Breaking changes will only be introduced in major version releases.

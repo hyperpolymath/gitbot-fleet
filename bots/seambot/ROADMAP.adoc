@@ -1,0 +1,308 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= Seambot Roadmap
+
+:toc: macro
+:toclevels: 3
+:icons: font
+
+Development roadmap for seambot -- Architectural Seam Hygiene Auditor.
+
+toc::[]
+
+== Vision
+
+Seambot aims to be the *definitive seam hygiene auditor*, ensuring architectural boundaries remain explicit, stable, and correctly exercised over time.
+
+== Current Status (v0.1.0)
+
+[cols="1,3,1"]
+|===
+|Feature |Status |Completeness
+
+|**Core Features**
+|
+|
+
+|Register verification
+|[line-through]#Implemented# -- Complete with JSON schema validation and path security
+|100%
+
+|Conformance checking
+|[line-through]#Implemented# -- Complete with emptiness detection
+|100%
+
+|Drift detection
+|[line-through]#Implemented# -- SHA-256 fingerprinting with symbol extraction
+|100%
+
+|Freeze stamps
+|[line-through]#Implemented# -- Register hash verification, stage matching
+|100%
+
+|Hidden channel detection
+|[line-through]#Implemented# -- All 5 channel types functional
+|100%
+
+|**Hidden Channel Types**
+|
+|
+
+|Undeclared imports
+|[line-through]#Implemented# -- Rust, Python, JS/TS import parsing
+|100%
+
+|Shared global state
+|[line-through]#Implemented# -- static mut, lazy_static, once_cell, Arc<Mutex>
+|100%
+
+|Filesystem coupling
+|[line-through]#Implemented# -- std::fs, tokio::fs, File operations
+|100%
+
+|Database coupling
+|[line-through]#Implemented# -- SQL regex parsing, ORM detection (Diesel/SQLx/SeaORM/Sequelize/Mongoose/Ecto), shared DB env vars, migration scanning
+|100%
+
+|Network coupling
+|[line-through]#Implemented# -- HTTP clients, gRPC, WebSocket, shared endpoints and service env vars
+|100%
+
+|**Platform Support**
+|
+|
+
+|GitHub integration (App)
+|[line-through]#Full support# -- JWT auth, Checks API, PR comments, webhook verification
+|100%
+
+|GitHub integration (Token)
+|[line-through]#Full support# -- ForgeClient trait via REST API
+|100%
+
+|GitLab integration
+|[line-through]#Full support# -- Commit statuses, issue/MR notes, issues via Projects API
+|100%
+
+|Bitbucket integration
+|[line-through]#Full support# -- Build statuses, issue comments, issues via Repositories API
+|100%
+
+|Multi-forge CLI
+|[line-through]#Full support# -- `forge` subcommand with auto-detection from git remote
+|100%
+
+|**Output Formats**
+|
+|
+
+|Text
+|[line-through]#Implemented#
+|100%
+
+|JSON
+|[line-through]#Implemented#
+|100%
+
+|Markdown
+|[line-through]#Implemented#
+|100%
+
+|SARIF
+|[line-through]#Implemented# -- SARIF 2.1.0 with deduplicated rules
+|100%
+
+|**Security Hardening**
+|
+|
+
+|Path traversal prevention
+|[line-through]#Implemented# -- Rejects .., null bytes, absolute paths
+|100%
+
+|JSON schema validation
+|[line-through]#Implemented# -- Validates register before processing
+|100%
+
+|Branch name sanitization
+|[line-through]#Implemented# -- Rejects shell metacharacters
+|100%
+
+|Constant-time webhook verification
+|[line-through]#Implemented# -- XOR-fold HMAC-SHA256 comparison
+|100%
+
+|**Testing**
+|
+|
+
+|Test coverage
+|[line-through]#68 tests# across 8 files -- all passing
+|100%
+
+|**Fleet Integration**
+|
+|
+
+|gitbot-shared-context
+|[line-through]#Implemented# -- Finding publishing for cross-bot coordination
+|100%
+|===
+
+== Completed SONNET-TASKS (2026-02-08)
+
+All six tasks from SONNET-TASKS.md have been completed:
+
+. [line-through]#*Task 1: Update STATE.scm*# -- Accurately reflects 90%+ completion
+. [line-through]#*Task 2: Wire Multi-Forge Abstraction*# -- ForgeClient trait wired into CLI, GitLab and Bitbucket clients fully implemented
+. [line-through]#*Task 3: Fix Compiler Warnings*# -- Zero warnings from `cargo check` and `cargo clippy`
+. [line-through]#*Task 4: Expand Test Coverage*# -- From 21 to 68 tests across hidden channels, drift, reports, fleet, security
+. [line-through]#*Task 5: Security Hardening*# -- Path traversal prevention, JSON schema validation, branch sanitization, constant-time comparison
+. [line-through]#*Task 6: ECOSYSTEM.scm and META.scm Updates*# -- Full ecosystem position and 6 ADRs documented
+
+== Near-Term Goals (v0.2.0 - Q1 2026)
+
+=== 1. Advanced Hidden Channel Detection
+
+*Priority: MEDIUM*
+
+* [ ] Environment variable coupling (shared config keys beyond DB vars)
+* [ ] Process coupling (IPC, shared memory)
+* [ ] Improve database coupling accuracy (reduce false positives on common SQL keywords)
+
+*Why:* Detect remaining forms of hidden coupling beyond the current five types.
+
+*Effort:* 2-3 weeks
+
+=== 2. Seam Visualization
+
+*Priority: MEDIUM*
+
+* [ ] Generate seam dependency graphs (DOT/Mermaid)
+* [ ] Visualize hidden channels in diagrams
+* [ ] Interactive HTML report with clickable seams
+* [ ] Timeline view of seam evolution
+
+*Why:* Make seam architecture easy to understand at a glance.
+
+*Effort:* 2-3 weeks
+
+=== 3. Automated Seam Discovery
+
+*Priority: LOW (Research)*
+
+* [ ] Infer potential seams from module boundaries
+* [ ] Suggest seam register entries based on code structure
+* [ ] Detect implicit seams (high coupling without declaration)
+* [ ] Recommend seam types based on patterns
+
+*Why:* Help teams discover their implicit architecture.
+
+*Effort:* 4-5 weeks (research + implementation)
+
+== Mid-Term Goals (v0.3.0 - Q2 2026)
+
+=== 1. Cross-Repo Seam Support
+
+*Priority: HIGH*
+
+* [ ] Detect seams spanning multiple repositories
+* [ ] Validate cross-repo conformance examples
+* [ ] Track cross-repo drift
+* [ ] Coordinate with git-loom for multi-repo management
+
+*Why:* Many architectures span multiple repos.
+
+*Effort:* 3-4 weeks
+
+=== 2. Seam Health Metrics
+
+*Priority: MEDIUM*
+
+* [ ] Coupling score per seam (0-100)
+* [ ] Seam stability index (drift frequency)
+* [ ] Conformance compliance rate
+* [ ] Hidden channel density
+
+*Why:* Quantify seam health and track over time.
+
+*Effort:* 2 weeks
+
+=== 3. Language-Specific Analyzers
+
+*Priority: MEDIUM*
+
+* [ ] Rust module boundaries (mod, pub, crate) -- deeper analysis
+* [ ] ReScript module system
+* [ ] Java package boundaries
+* [ ] Go package dependencies -- deeper analysis
+
+*Why:* Better hidden channel detection for specific languages.
+
+*Effort:* 2-3 weeks
+
+== Long-Term Vision (v1.0.0 - Q3-Q4 2026)
+
+=== 1. Architectural Patterns Library
+
+*Priority: MEDIUM*
+
+* [ ] Pre-defined seam patterns (Hexagonal, Onion, Clean)
+* [ ] Pattern validation ("Does this match Hexagonal Architecture?")
+* [ ] Pattern templates for seam registers
+* [ ] Anti-pattern detection
+
+*Why:* Help teams apply proven architectural patterns.
+
+*Effort:* 3-4 weeks
+
+=== 2. Runtime Seam Validation
+
+*Priority: RESEARCH*
+
+* [ ] Runtime instrumentation to detect seam violations
+* [ ] Dynamic hidden channel detection
+* [ ] Performance impact analysis of seam crossings
+* [ ] Integration with observability tools (OpenTelemetry)
+
+*Why:* Validate seams at runtime, not just static analysis.
+
+*Effort:* 8-10 weeks (research + implementation)
+
+== Technical Debt
+
+=== Medium Priority
+
+* [ ] Performance optimization (parallel seam scanning for large monorepos)
+* [ ] Structured logging improvements (filterable, parseable)
+* [ ] Metrics export (Prometheus format)
+* [ ] Configuration file support (seambot.toml)
+
+=== Low Priority
+
+* [ ] WASM compilation (run in browser)
+* [ ] Plugin system for custom analyzers
+* [ ] Alternative output formats (HTML, PDF)
+* [ ] Platform adapters for additional forges (Gitea, Codeberg, SourceHut)
+
+== Non-Goals
+
+Seambot will NOT:
+
+* Auto-generate seam definitions (human judgment required)
+* Infer architecture from code (explicit is better than implicit)
+* Provide AI design suggestions (governance, not design)
+* Perform cross-language semantic analysis (relies on declared boundaries)
+* Mutate code (read-only auditor)
+
+== Versioning
+
+Seambot follows semantic versioning:
+
+* *v0.x.y* -- Pre-1.0, breaking changes allowed between minor versions
+* *v1.x.y* -- Stable API, breaking changes only in major versions
+
+== Feedback
+
+Have suggestions for the roadmap? Open an issue or discussion on GitHub.
