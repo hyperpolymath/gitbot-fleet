@@ -1,0 +1,34 @@
+{
+  "repo": "hyperpolymath/indieweb2-bastion",
+  "scan_timestamp": "2026-02-14T00:00:00Z",
+  "commit": "fc8914b37f3ade434bba934cbc224a6bcd9d8500",
+  "findings": [
+    {
+      "id": "cmd-inject-interactive-tidy",
+      "type": "security",
+      "severity": "medium",
+      "message": "Unquoted variable expansion in shell script may allow command injection",
+      "location": {"file": "scripts/interactive_tidy.sh", "line": 0},
+      "auto_fixable": true,
+      "fix_suggestion": "Quote all variable expansions with double quotes"
+    },
+    {
+      "id": "panic-path-integration-test",
+      "type": "quality",
+      "severity": "medium",
+      "message": "unwrap() calls in integration tests may mask error details",
+      "location": {"file": "graphql-dns-api/tests/integration_test.rs", "line": 0},
+      "auto_fixable": false,
+      "fix_suggestion": "Replace unwrap() with expect() or proper error handling"
+    },
+    {
+      "id": "panic-path-crypto-test",
+      "type": "quality",
+      "severity": "medium",
+      "message": "unwrap() calls in crypto test code",
+      "location": {"file": "odns-rs/common/src/crypto.rs", "line": 0},
+      "auto_fixable": false,
+      "fix_suggestion": "Replace unwrap() with expect() providing context"
+    }
+  ]
+}
