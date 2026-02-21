@@ -95,3 +95,8 @@ OPSM Core
 gitbot-fleet (execution fleet for OPSM batch operations)
 
 ----
+
+
+== Architecture
+
+See link:TOPOLOGY.md[TOPOLOGY.md] for a visual architecture map and completion dashboard.
