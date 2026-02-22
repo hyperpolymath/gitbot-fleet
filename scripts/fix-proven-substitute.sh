@@ -15,6 +15,19 @@ FINDING_JSON="${2:?Missing finding JSON file}"
 PROVEN_MODULE="${3:?Missing proven module name (e.g., SafeCommand)}"
 LANGUAGE="${4:?Missing language (e.g., rust, elixir, rescript)}"
 
+# Validate inputs: prevent directory traversal and injection
+# PROVEN_MODULE must be a valid identifier (alphanumeric + underscores)
+if [[ ! "$PROVEN_MODULE" =~ ^[a-zA-Z][a-zA-Z0-9_]*$ ]]; then
+    echo "ERROR: Invalid proven module name: '$PROVEN_MODULE' (must be alphanumeric identifier)"
+    exit 1
+fi
+
+# LANGUAGE must be a known safe value
+if [[ ! "$LANGUAGE" =~ ^[a-z]+$ ]]; then
+    echo "ERROR: Invalid language: '$LANGUAGE' (must be lowercase alpha)"
+    exit 1
+fi
+
 PROVEN_BINDINGS_BASE="/var/mnt/eclipse/repos/proven/bindings"
 
 # Extract finding details

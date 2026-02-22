@@ -11,6 +11,12 @@ FINDING_FILE="$1"
 REPO_NAME="${GITHUB_REPOSITORY:-unknown/unknown}"
 COMMIT_SHA="${GITHUB_SHA:-unknown}"
 
+# Validate FLEET_REPO format (must be owner/repo, no path traversal)
+if [[ ! "$FLEET_REPO" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+    echo "Error: Invalid FLEET_REPO format: $FLEET_REPO (expected owner/repo)"
+    exit 1
+fi
+
 # Validate input
 if [ ! -f "$FINDING_FILE" ]; then
     echo "Error: Finding file not found: $FINDING_FILE"
@@ -27,12 +33,13 @@ echo "📤 Submitting findings from $REPO_NAME to gitbot-fleet..."
 
 # Create timestamped filename
 TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
-REPO_SLUG=$(echo "$REPO_NAME" | tr '/' '-')
+# Sanitize repo slug: replace / with -, strip any path traversal or special chars
+REPO_SLUG=$(echo "$REPO_NAME" | tr '/' '-' | tr -cd 'a-zA-Z0-9._-')
 TARGET_FILE="shared-context/findings/${REPO_SLUG}/${TIMESTAMP}.json"
 
 # Clone or update fleet repo
 FLEET_DIR="/tmp/gitbot-fleet-$$"
-trap "rm -rf $FLEET_DIR" EXIT
+trap 'rm -rf "$FLEET_DIR"' EXIT
 
 if [ -n "${GITHUB_TOKEN:-}" ]; then
     git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${FLEET_REPO}.git" "$FLEET_DIR"
@@ -88,8 +95,11 @@ echo "🌐 View: https://github.com/${FLEET_REPO}/blob/${FINDINGS_BRANCH}/${TARG
 
 # Trigger fleet processing (if webhook exists)
 if [ -n "${FLEET_WEBHOOK_URL:-}" ]; then
+    # Use jq to safely construct JSON payload (prevents injection via REPO_NAME)
+    payload=$(jq -n --arg repo "$REPO_NAME" --argjson findings "${FINDING_COUNT:-0}" \
+        '{repo: $repo, findings: $findings}')
     curl -X POST "$FLEET_WEBHOOK_URL" \
         -H "Content-Type: application/json" \
-        -d "{\"repo\": \"$REPO_NAME\", \"findings\": $FINDING_COUNT}"
-    echo "🔔 Triggered fleet processing"
+        -d "$payload"
+    echo "Triggered fleet processing"
 fi

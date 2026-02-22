@@ -19,6 +19,33 @@
 
 set -euo pipefail
 
+# --- Input Validation ---
+# Validate that a value is a safe path component (no traversal, no slashes in leaf)
+validate_safe_name() {
+    local name="$1"
+    local label="${2:-value}"
+    if [[ "$name" == *".."* || "$name" == *"/"* || "$name" == "" ]]; then
+        echo "ERROR: Unsafe $label: '$name' (contains path separator or traversal)" >&2
+        return 1
+    fi
+    return 0
+}
+
+# Validate that a path stays within a base directory (prevents symlink/traversal escape)
+validate_path_within() {
+    local path="$1"
+    local base="$2"
+    local resolved
+    resolved=$(realpath -m "$path" 2>/dev/null || echo "$path")
+    local resolved_base
+    resolved_base=$(realpath -m "$base" 2>/dev/null || echo "$base")
+    if [[ "$resolved" != "$resolved_base"/* && "$resolved" != "$resolved_base" ]]; then
+        echo "ERROR: Path '$path' escapes base '$base'" >&2
+        return 1
+    fi
+    return 0
+}
+
 # --- Configuration ---
 VERISIMDB_DATA="${VERISIMDB_DATA:-/var/mnt/eclipse/repos/verisimdb-data}"
 REPOS_BASE="${REPOS_BASE:-/var/mnt/eclipse/repos}"
@@ -120,7 +147,21 @@ execute_entry() {
     auto_fixable=$(echo "$entry" | jq -r '.auto_fixable // false')
     fix_script=$(echo "$entry" | jq -r '.fix_script // "none"')
 
+    # Validate repo name (prevent directory traversal)
+    if ! validate_safe_name "$repo" "repo"; then
+        echo "  SKIP: $pattern_id (unsafe repo name)"
+        ((SKIPPED++)) || true
+        return
+    fi
+
     local repo_path="$REPOS_BASE/$repo"
+
+    # Double-check path stays within REPOS_BASE
+    if ! validate_path_within "$repo_path" "$REPOS_BASE"; then
+        echo "  SKIP: $pattern_id (repo path escapes base)"
+        ((SKIPPED++)) || true
+        return
+    fi
 
     # Skip if repo doesn't exist locally
     if [[ ! -d "$repo_path" ]]; then
@@ -139,7 +180,10 @@ execute_entry() {
             fi
 
             # Try fix script first, then robot-repo-automaton
-            if [[ "$fix_script" != "none" && "$fix_script" != "null" && -x "$FLEET_SCRIPTS/$fix_script" ]]; then
+            # Validate fix_script: must not contain path separators or traversal
+            if [[ "$fix_script" != "none" && "$fix_script" != "null" ]] && \
+               validate_safe_name "$fix_script" "fix_script" && \
+               [[ -x "$FLEET_SCRIPTS/$fix_script" ]]; then
                 # Write finding JSON to temp file for fix script
                 local tmp_finding
                 tmp_finding=$(mktemp /tmp/dispatch-finding-XXXXXX.json)
@@ -189,7 +233,9 @@ execute_entry() {
             local findings_dir="$REPOS_BASE/gitbot-fleet/shared-context/findings/pending"
             mkdir -p "$findings_dir"
 
-            local finding_file="$findings_dir/${repo}--${pattern_id}.json"
+            # Sanitize pattern_id for use in filename (strip unsafe chars)
+            local safe_pattern_id="${pattern_id//[^a-zA-Z0-9._-]/_}"
+            local finding_file="$findings_dir/${repo}--${safe_pattern_id}.json"
             echo "$entry" | jq '. + {dispatch_strategy: "review", needs_pr: true}' > "$finding_file"
             echo "        Written: $finding_file"
             ((EXECUTED++)) || true

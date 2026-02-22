@@ -181,7 +181,10 @@ process_findings() {
                 # Record outcomes for completed fixes
                 if [[ $fixed_count -gt 0 ]]; then
                     log_bot "hypatia" "Recording $fixed_count fix outcomes to learning pipeline"
-                    echo "{\"pattern\":\"auto-fix\",\"repo\":\"$repo_name\",\"outcome\":\"success\",\"count\":$fixed_count,\"fixed_at\":\"$(date -Iseconds)\",\"bot\":\"robot-repo-automaton\"}" \
+                    # Use jq to safely construct JSON (prevents injection via repo_name)
+                    jq -n --arg repo "$repo_name" --argjson count "$fixed_count" \
+                        --arg fixed_at "$(date -Iseconds)" \
+                        '{pattern: "auto-fix", repo: $repo, outcome: "success", count: $count, fixed_at: $fixed_at, bot: "robot-repo-automaton"}' \
                         >> "$SHARED_CONTEXT/learning/fix-outcomes.jsonl"
                 fi
             fi
@@ -315,7 +318,10 @@ learn_from_findings() {
         "\(.type)|\(.location.file // "unknown")|\(.id)"' "$findings_file" | while IFS='|' read -r type file finding_id; do
 
         # Record pattern observation (feeds learning_engine.lgt)
-        echo "{\"type\":\"$type\",\"file\":\"$file\",\"repo\":\"$repo_name\",\"observed\":\"$(date -Iseconds)\"}" \
+        # Use jq to safely construct JSON (prevents injection via type/file/repo_name)
+        jq -n --arg type "$type" --arg file "$file" --arg repo "$repo_name" \
+            --arg observed "$(date -Iseconds)" \
+            '{type: $type, file: $file, repo: $repo, observed: $observed}' \
             >> "$SHARED_CONTEXT/learning/observed-patterns.jsonl"
 
         # Check if we should generate new rule

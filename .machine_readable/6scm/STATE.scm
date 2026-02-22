@@ -8,7 +8,7 @@
     (version "2.0")
     (schema-version "RSR-2026")
     (created "2026-01-04")
-    (updated "2026-02-13")
+    (updated "2026-02-22")
     (project "gitbot-fleet")
     (repo "https://github.com/hyperpolymath/gitbot-fleet"))
 
@@ -31,7 +31,16 @@
       (rhodibot (status "active") (location "separate-repo"))
       (echidnabot (status "active") (location "separate-repo"))
       (sustainabot (status "active") (location "separate-repo"))
-      (robot-repo-automaton (status "active") (location "separate-repo")))
+      (robot-repo-automaton (status "active") (location "robot-repo-automaton/")))
+    (security-fixes
+      ("dispatch-runner.sh: directory traversal + command injection patched")
+      ("submit-finding.sh: FLEET_REPO validation, trap quoting, JSON injection fix")
+      ("fleet-coordinator.sh: JSON injection fixes in learn_from_findings + fix-outcomes")
+      ("process-review-findings.sh: EXTRA_LABEL sanitization, body temp file injection fix")
+      ("fix-proven-substitute.sh: PROVEN_MODULE + LANGUAGE input validation")
+      (".gitignore: SPDX header fixed, ReScript build artifacts added")
+      ("robot-repo-automaton main.rs: full actuation pipeline wired (scan→fix→commit→PR)")
+      ("Cargo.toml: shared-context dependency path corrected"))
     (working-features
       ("Fleet coordinator with triangle-aware routing")
       ("Dispatch runner: reads JSONL manifests, executes fixes")
@@ -87,6 +96,15 @@
       ("Implement outcome-driven confidence promotion")))
 
   (session-history
+    (snapshot "2026-02-22"
+      (accomplishments
+        ("Patched 5 critical taint flow vulnerabilities in shell scripts")
+        ("Wired robot-repo-automaton actuation: scan→fix→commit→push→PR pipeline")
+        ("Fixed Cargo.toml shared-context dependency path")
+        ("Added .gitignore entries for ReScript build artifacts")
+        ("Fixed SPDX header in .gitignore (MPL-2.0 → PMPL-1.0-or-later)")
+        ("Created .claude/CLAUDE.md, justfile, .github/CODEOWNERS, .well-known/security.txt")
+        ("panic-attack assail scan: 71 weak points identified, stored in verisimdb-data")))
     (snapshot "2026-02-13"
       (accomplishments
         ("Created dispatch-runner.sh — manifest-to-execution bridge")

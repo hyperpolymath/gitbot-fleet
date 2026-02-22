@@ -128,7 +128,11 @@ for repo in $(echo "${!REPO_FINDINGS[@]}" | tr ' ' '\n' | sort); do
 
     title="safety-triangle: $finding_count substitute-tier finding(s) need review"
     labels="safety-triangle,substitute-tier,hypatia"
-    [[ -n "$EXTRA_LABEL" ]] && labels+=",${EXTRA_LABEL}"
+    # Sanitize EXTRA_LABEL: only allow alphanumeric, hyphens, underscores
+    if [[ -n "$EXTRA_LABEL" ]]; then
+        local safe_label="${EXTRA_LABEL//[^a-zA-Z0-9_-]/}"
+        [[ -n "$safe_label" ]] && labels+=",${safe_label}"
+    fi
 
     if [[ "$DRY_RUN" == "true" ]]; then
         echo "    (dry-run) Would create issue: '$title'"
@@ -138,13 +142,19 @@ for repo in $(echo "${!REPO_FINDINGS[@]}" | tr ' ' '\n' | sort); do
         # Check if gh is available and repo exists on GitHub
         if command -v gh &>/dev/null; then
             if gh repo view "$GH_OWNER/$repo" &>/dev/null 2>&1; then
-                if echo -e "$body" | gh issue create \
+                # Write body to temp file to avoid echo -e interpreting
+                # escape sequences from finding data (prevents injection)
+                local body_file
+                body_file=$(mktemp /tmp/review-body-XXXXXX.md)
+                printf '%b' "$body" > "$body_file"
+                if gh issue create \
                     --repo "$GH_OWNER/$repo" \
                     --title "$title" \
-                    --body-file - \
+                    --body-file "$body_file" \
                     --label "$labels" 2>/dev/null; then
                     echo "    Issue created"
                     ((CREATED++)) || true
+                    rm -f "$body_file"
 
                     # Move processed findings to done/
                     mkdir -p "$FLEET_BASE/shared-context/findings/done"
@@ -154,6 +164,7 @@ for repo in $(echo "${!REPO_FINDINGS[@]}" | tr ' ' '\n' | sort); do
                 else
                     echo "    WARN: gh issue create failed (labels may not exist)"
                     ((SKIPPED++)) || true
+                    rm -f "$body_file"
                 fi
             else
                 echo "    SKIP: $repo not found on GitHub"
