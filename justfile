@@ -59,6 +59,18 @@ panic-scan:
         echo "panic-attack not built — run 'cd /var/mnt/eclipse/repos/panic-attacker && cargo build --release'"; \
     fi
 
+# Run release maintenance hard-pass on a target repository
+maintenance-hard-pass repo *ARGS:
+    bash scripts/maintenance-hard-pass.sh --repo "{{repo}}" {{ARGS}}
+
+# Discover and register repo coverage for gitbot-fleet/hypatia
+enroll-repos repos_root="/var/mnt/eclipse/repos" apply="false":
+    @if [ "{{apply}}" = "true" ]; then \
+        bash scripts/enroll-hypatia-fleet.sh --repos-root "{{repos_root}}" --apply; \
+    else \
+        bash scripts/enroll-hypatia-fleet.sh --repos-root "{{repos_root}}"; \
+    fi
+
 # Check license compliance
 license-check:
     @echo "Checking for banned AGPL-3.0 headers..."

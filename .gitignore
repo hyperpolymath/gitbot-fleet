@@ -31,3 +31,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Generated enrollment registry
+shared-context/enrollment/repos.json

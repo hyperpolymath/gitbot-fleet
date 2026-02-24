@@ -77,6 +77,25 @@ Findings → observed-patterns.jsonl → threshold (5+) → propose_new_rule()
   → Human reviews PR → Approved rule deployed to hypatia
 ```
 
+### Maintenance Release Gate Routing
+
+Use this routing model for repository maintenance and release preparation:
+
+1. `rhodibot` (Tier 1) for structural policy findings, machine-readable invariants, and permission-policy exceptions.
+2. `glambot` (Tier 2) for docs/readability/presentation quality findings that do not block runtime correctness.
+3. `finishbot` (Tier 2, final gate) for hard-pass release enforcement.
+
+Operational commands:
+
+```bash
+just maintenance-hard-pass /absolute/path/to/repo
+just enroll-repos
+```
+
+- `maintenance-hard-pass` fails on warnings or failures and is the mandatory release gate.
+- `enroll-repos` scans existing and new repos under the repos root and writes a registry at `shared-context/enrollment/repos.json`.
+- Optional directive enrollment (`apply=true`) writes `.machine_readable/bot_directives/FLEET-ENROLLMENT.a2ml` into repos that already include `.machine_readable/`.
+
 ---
 
 ## 3. Per-Bot Reference Cards

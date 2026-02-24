@@ -16,6 +16,20 @@ Bot fleet for repository quality enforcement across the Hyperpolymath ecosystem.
 
 Gitbot Fleet is the central orchestration repository for all quality-enforcement bots in the Hyperpolymath ecosystem. Each bot specializes in a specific aspect of repository health and compliance.
 
+== Maintenance Gate Operations
+
+Use these commands to run maintenance gating across repos:
+
+[source,bash]
+----
+just maintenance-hard-pass /absolute/path/to/repo
+just enroll-repos
+----
+
+`maintenance-hard-pass` enforces fail-on-warn release gating using the target repo maintenance script.
+
+`enroll-repos` refreshes repository coverage metadata for gitbot-fleet and hypatia. Use `just enroll-repos /var/mnt/eclipse/repos true` to also write enrollment directives into repos that already have `.machine_readable/`.
+
 == Bot Roster
 
 [cols="1,3,1"]
