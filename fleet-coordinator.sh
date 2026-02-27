@@ -42,13 +42,14 @@ BOT EXECUTION ORDER (from bot_integration.lgt):
     1. rhodibot    (Verifier - structure, policy, licensing)
     2. echidnabot  (Verifier - verification, fuzzing)
     3. sustainabot       (Verifier - sustainability)
-    4. glambot     (Finisher - accessibility, SEO) [depends: rhodibot]
-    5. seambot     (Finisher - integration) [depends: rhodibot, echidnabot]
-    6. finishbot (Finisher - release, quality) [depends: rhodibot, glambot]
-    7. accessibilitybot (Finisher - WCAG compliance) [depends: rhodibot, glambot]
-    8. cipherbot     (Specialist - crypto hygiene) [depends: rhodibot, echidnabot]
-    9. robot-repo-automaton (Executor - fixes)
-   10. hypatia (Engine - rule coordination)
+    4. panicbot    (Verifier - panic-attack auditing) [depends: rhodibot]
+    5. glambot     (Finisher - accessibility, SEO) [depends: rhodibot]
+    6. seambot     (Finisher - integration) [depends: rhodibot, echidnabot]
+    7. finishbot (Finisher - release, quality) [depends: rhodibot, glambot]
+    8. accessibilitybot (Finisher - WCAG compliance) [depends: rhodibot, glambot]
+    9. cipherbot     (Specialist - crypto hygiene) [depends: rhodibot, echidnabot]
+   10. robot-repo-automaton (Executor - fixes)
+   11. hypatia (Engine - rule coordination)
 EOF
 }
 
@@ -83,6 +84,23 @@ run_hypatia_scan() {
         echo "$findings_file"
     else
         log_error "Scan failed for $repo_name"
+        return 1
+    fi
+}
+
+run_panicbot_scan() {
+    local repo_path="$1"
+    local repo_name
+    repo_name=$(basename "$repo_path")
+
+    log_bot "panicbot" "Running panic-attack audit on $repo_name..."
+
+    if command -v panicbot &>/dev/null; then
+        panicbot fleet "$repo_path" --mode advisor --format json
+    elif command -v panic-attack &>/dev/null; then
+        panic-attack assail "$repo_path" --output-format json
+    else
+        log_warn "Neither panicbot nor panic-attack found on PATH"
         return 1
     fi
 }
@@ -618,6 +636,7 @@ deploy_bots() {
     "rhodibot": {"status": "ready", "tier": "verifier"},
     "echidnabot": {"status": "ready", "tier": "verifier"},
     "sustainabot": {"status": "ready", "tier": "verifier"},
+    "panicbot": {"status": "ready", "tier": "verifier"},
     "glambot": {"status": "ready", "tier": "finisher"},
     "seambot": {"status": "ready", "tier": "finisher"},
     "finishbot": {"status": "ready", "tier": "finisher"},

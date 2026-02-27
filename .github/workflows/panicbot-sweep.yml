@@ -1,0 +1,116 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Panicbot Sweep — weekly batch scan of all repos via panic-attack.
+#
+# Catches drift in dormant repos that don't get per-PR scans.
+# Active repos are already scanned on every push via hypatia-scan.yml.
+
+name: Panicbot Sweep
+
+on:
+  schedule:
+    # Sunday 04:00 UTC — weekly sweep of all repos
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Scan scope (all, or a specific repo name)'
+        required: false
+        default: 'all'
+        type: string
+      mode:
+        description: 'Bot operating mode'
+        required: false
+        default: 'advisor'
+        type: choice
+        options:
+          - advisor
+          - auditor
+          - guardian
+
+permissions: read-all
+
+jobs:
+  sweep:
+    name: Panicbot Sweep Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout gitbot-fleet
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          workspaces: |
+            bots/panicbot -> target
+            shared-context -> target
+
+      - name: Build panicbot
+        run: |
+          cd bots/panicbot
+          cargo build --release
+
+      - name: Install panic-attack
+        run: |
+          if ! command -v panic-attack &>/dev/null; then
+            echo "::warning::panic-attack not found, attempting cargo install"
+            cargo install panic-attacker || echo "::error::Failed to install panic-attack"
+          fi
+
+      - name: Run sweep
+        env:
+          PANICBOT_MODE: ${{ inputs.mode || 'advisor' }}
+          PANICBOT_SCOPE: ${{ inputs.scope || 'all' }}
+        run: |
+          set -euo pipefail
+
+          PANICBOT="./bots/panicbot/target/release/panicbot"
+          FINDINGS_DIR="shared-context/findings"
+          SESSION_ID="$(date +%Y%m%d-%H%M%S)"
+
+          mkdir -p "$FINDINGS_DIR"
+
+          echo "::group::Panicbot Sweep ($PANICBOT_SCOPE)"
+          echo "Mode: $PANICBOT_MODE"
+          echo "Session: $SESSION_ID"
+
+          if [[ "$PANICBOT_SCOPE" == "all" ]]; then
+            # Scan the repos we have access to (gitbot-fleet itself + test fixtures)
+            echo "Scanning gitbot-fleet repository..."
+            $PANICBOT fleet . --mode "$PANICBOT_MODE" --format json \
+              > "$FINDINGS_DIR/gitbot-fleet-${SESSION_ID}.json" 2>&1 || true
+          else
+            # Scan a specific repo
+            echo "Scanning $PANICBOT_SCOPE..."
+            $PANICBOT fleet "$PANICBOT_SCOPE" --mode "$PANICBOT_MODE" --format json \
+              > "$FINDINGS_DIR/${PANICBOT_SCOPE}-${SESSION_ID}.json" 2>&1 || true
+          fi
+
+          echo "::endgroup::"
+
+      - name: Process findings
+        if: always()
+        run: |
+          FINDINGS_DIR="shared-context/findings"
+          TOTAL=$(find "$FINDINGS_DIR" -name "*.json" -newer "$FINDINGS_DIR" 2>/dev/null | wc -l)
+
+          echo "## Panicbot Sweep Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Findings files**: $TOTAL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Mode**: ${{ inputs.mode || 'advisor' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Scope**: ${{ inputs.scope || 'all' }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload findings artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: panicbot-sweep-findings
+          path: shared-context/findings/
+          retention-days: 90
+          if-no-files-found: ignore

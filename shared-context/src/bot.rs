@@ -28,6 +28,8 @@ pub enum BotId {
     Accessibilitybot,
     /// Cryptographic hygiene and post-quantum readiness specialist
     Cipherbot,
+    /// Targeted audit bot wrapping panic-attack static analysis
+    Panicbot,
     /// Custom/external bot
     Custom(u32),
 }
@@ -45,6 +47,7 @@ impl fmt::Display for BotId {
             BotId::Hypatia => write!(f, "hypatia"),
             BotId::Accessibilitybot => write!(f, "accessibilitybot"),
             BotId::Cipherbot => write!(f, "cipherbot"),
+            BotId::Panicbot => write!(f, "panicbot"),
             BotId::Custom(id) => write!(f, "custom-{}", id),
         }
     }
@@ -54,7 +57,7 @@ impl BotId {
     /// Get the tier this bot belongs to
     pub fn tier(&self) -> Tier {
         match self {
-            BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot => Tier::Verifier,
+            BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot | BotId::Panicbot => Tier::Verifier,
             BotId::Glambot | BotId::Seambot | BotId::Finishbot | BotId::Accessibilitybot => Tier::Finisher,
             BotId::Cipherbot => Tier::Specialist,
             BotId::RobotRepoAutomaton => Tier::Executor,
@@ -76,6 +79,7 @@ impl BotId {
             BotId::Hypatia,
             BotId::Accessibilitybot,
             BotId::Cipherbot,
+            BotId::Panicbot,
         ]
     }
 
@@ -92,6 +96,7 @@ impl BotId {
             "hypatia" | "cicd-hyper-a" | "cicdhypera" => Some(BotId::Hypatia),
             "accessibilitybot" | "accessibility-bot" => Some(BotId::Accessibilitybot),
             "cipherbot" | "cipher-bot" => Some(BotId::Cipherbot),
+            "panicbot" | "panic-bot" => Some(BotId::Panicbot),
             _ => None,
         }
     }
@@ -308,6 +313,26 @@ impl BotInfo {
                 ],
                 can_fix: true,
                 depends_on: vec![BotId::Rhodibot, BotId::Echidnabot],
+            },
+            BotId::Panicbot => Self {
+                id,
+                name: "Panicbot".to_string(),
+                description: "Targeted audit bot wrapping panic-attack static analysis".to_string(),
+                version: "0.1.0".to_string(),
+                categories: vec![
+                    "static-analysis/unsafe-code".to_string(),
+                    "static-analysis/panic-path".to_string(),
+                    "static-analysis/command-injection".to_string(),
+                    "static-analysis/hardcoded-secret".to_string(),
+                    "static-analysis/unsafe-ffi".to_string(),
+                    "static-analysis/unsafe-deser".to_string(),
+                    "static-analysis/race-condition".to_string(),
+                    "static-analysis/resource-leak".to_string(),
+                    "static-analysis/unchecked-error".to_string(),
+                    "static-analysis/path-traversal".to_string(),
+                ],
+                can_fix: false,
+                depends_on: vec![BotId::Rhodibot],
             },
             BotId::Custom(_) => Self {
                 id,

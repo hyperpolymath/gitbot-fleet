@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+[package]
+name = "panicbot"
+version = "0.1.0"
+edition = "2021"
+license = "PMPL-1.0-or-later"
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
+description = "Targeted audit bot wrapping panic-attack static analysis for gitbot-fleet"
+repository = "https://github.com/hyperpolymath/gitbot-fleet"
+keywords = ["static-analysis", "security", "audit", "gitbot-fleet"]
+categories = ["development-tools"]
+
+[[bin]]
+name = "panicbot"
+path = "src/main.rs"
+
+[dependencies]
+# Fleet integration
+gitbot-shared-context = { path = "../../shared-context" }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Unique IDs
+uuid = { version = "1", features = ["v4"] }
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
