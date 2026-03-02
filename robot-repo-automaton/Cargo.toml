@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+
+[package]
+name = "robot-repo-automaton"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+description = "Automated repository management executor - applies rules from hypatia"
+license = "PMPL-1.0-or-later"
+repository = "https://github.com/hyperpolymath/robot-repo-automaton"
+homepage = "https://github.com/hyperpolymath/robot-repo-automaton"
+keywords = ["github", "automation", "ci-cd", "repository", "compliance"]
+categories = ["development-tools", "command-line-utilities"]
+readme = "README.adoc"
+
+[lib]
+name = "robot_repo_automaton"
+path = "src/lib.rs"
+
+[[bin]]
+name = "robot-repo-automaton"
+path = "src/main.rs"
+
+[dependencies]
+# Fleet coordination
+gitbot-shared-context = { path = "../shared-context" }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Web framework (for webhook receiver)
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# HTTP client (for GitHub API)
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Git operations
+# Using vendored-openssl to avoid system OpenSSL dependency (libssl-dev)
+git2 = { version = "0.20", features = ["vendored-openssl"], default-features = false }
+gix = { version = "0.68", features = ["blocking-http-transport-reqwest-rust-tls"] }
+
+# S-expression parsing (for ERROR-CATALOG.scm)
+lexpr = "0.2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Path handling
+glob = "0.3"
+walkdir = "2"
+regex = "1"
+
+# Async utilities
+futures = "0.3"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Secrets
+secrecy = { version = "0.10", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+wiremock = "0.6"
+
+[features]
+default = []
+webhook = []  # Enable webhook server mode

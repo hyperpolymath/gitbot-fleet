@@ -1,0 +1,355 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+
+= Robot Repo Automaton
+
+image:https://img.shields.io/badge/license-PMPL--1.0--or--later-blue.svg[License: PMPL-1.0-or-later,link="https://github.com/hyperpolymath/palimpsest-license"]
+
+:toc: macro
+:toclevels: 3
+:icons: font
+
+Tier 3 Executor in the hyperpolymath gitbot-fleet ecosystem. Applies automated
+repository fixes with confidence-based gating.
+
+toc::[]
+
+== Overview
+
+*robot-repo-automaton* is the execution layer (Tier 3 Executor) that takes
+findings from Tier 1 Verifiers and Tier 2 Finishers in the gitbot-fleet
+ecosystem and applies automated fixes to repositories. It is the only bot
+that actually *modifies code*.
+
+It operates by:
+
+. Parsing an error catalog (`ERROR-CATALOG.scm`) that defines known issues,
+  detection methods, and fix patterns
+. Scanning repositories for compliance issues using multiple detection methods
+. Classifying each fix by confidence level (High, Medium, Low)
+. Auto-applying high-confidence fixes and proposing low-confidence ones for
+  human review
+. Committing changes with descriptive messages
+. Reporting fix outcomes back to hypatia's neurosymbolic learning loop
+
+=== Key Capabilities
+
+* *Four fix types*: delete, modify, create, disable
+* *Modify operations*: replace-line, insert-before, insert-after, replace-pattern,
+  prepend, append -- with safety checks and rollback on failure
+* *File creation*: template-based with variable expansion (`{{REPO}}`, `{{OWNER}}`,
+  `{{LICENSE}}`, `{{YEAR}}`, `{{AUTHOR}}`, `{{EMAIL}}`)
+* *Confidence thresholds*: per-repo configuration via `.bot_directives/`, with
+  auto-apply, propose, and skip decisions
+* *Safety*: binary file detection, gitignore checking, in-memory rollback
+* *59 tests* across 9 test files covering all fix types, detection, catalog
+  parsing, confidence classification, fleet coordination, and dry run
+
+== Architecture
+
+[source]
+----
+hypatia (neurosymbolic rules engine)
+       |
+       v
++--------------------------------------+
+|  robot-repo-automaton (Tier 3)       |
+|  +----------------+                 |
+|  |    Catalog     |  <-- Parse ERROR-CATALOG.scm (S-expressions)
+|  |    Parser      |
+|  +-------+--------+                 |
+|          |                           |
+|  +-------v--------+                 |
+|  |    Detector    |  <-- Scan repos (file existence, language, content)
+|  +-------+--------+                 |
+|          |                           |
+|  +-------v--------+                 |
+|  |   Confidence   |  <-- Classify fix confidence (high/medium/low)
+|  |   Threshold    |
+|  +-------+--------+                 |
+|          |                           |
+|  +-------v--------+                 |
+|  |     Fixer      |  <-- Apply fixes (delete, modify, create, disable)
+|  +-------+--------+                 |
+|          |                           |
+|  +-------v--------+                 |
+|  |  Hook Manager  |  <-- Git hook injection (pre-commit, pre-push)
+|  +----------------+                 |
++---------|----------------------------+
+          |
+          v
+  gitbot-fleet (coordination via shared-context)
+----
+
+=== Source Modules
+
+[cols="1,3", options="header"]
+|===
+| Module | Purpose
+
+| `catalog.rs`
+| S-expression parser for `ERROR-CATALOG.scm`. Parses error types, detection
+  methods, fix actions, severity levels, and affected repos.
+
+| `detector.rs`
+| Scans repositories for issues. Supports file-existence detection, language
+  detection (30+ languages), and content-match detection (stub).
+
+| `fixer.rs`
+| Applies automated fixes: delete files, modify files with line-level
+  operations and regex, create files from templates, disable workflows.
+  Includes safety checks and rollback support.
+
+| `confidence.rs`
+| Confidence threshold system. Classifies fixes as High/Medium/Low confidence,
+  reads per-repo thresholds from `.bot_directives/robot-repo-automaton.scm`,
+  and decides whether to auto-apply, propose, or skip each fix.
+
+| `fleet.rs`
+| Integration with gitbot-fleet shared-context. Publishes detection findings,
+  fix results, and fix outcomes to the fleet coordination layer.
+
+| `hypatia.rs`
+| Integration with the hypatia neurosymbolic rules engine. Fetches rulesets,
+  executes rules on repositories, and reports results to the learning pipeline.
+
+| `github.rs`
+| GitHub API client. Lists org repos, creates PRs, check runs, issues, branches,
+  and clones repositories.
+
+| `hooks.rs`
+| Git hook management. Generates and installs pre-commit, pre-push, and
+  commit-msg hooks. Includes a `PreCommitChecker` for RSR compliance, secret
+  detection, and SPDX header validation.
+
+| `config.rs`
+| TOML configuration loading with environment variable overrides.
+
+| `error.rs`
+| Error type definitions using `thiserror`.
+
+| `main.rs`
+| CLI interface with subcommands: `scan`, `fix`, `scan-org`, `hooks`,
+  `pre-commit`, `pre-push`, `catalog`.
+
+| `lib.rs`
+| Library root with module re-exports and prelude.
+|===
+
+== Installation
+
+[source,bash]
+----
+# Build from source
+cargo build --release
+
+# Install
+cargo install --path .
+----
+
+== Usage
+
+=== Scan a Repository
+
+[source,bash]
+----
+# Scan for issues
+robot-repo-automaton scan --repo /path/to/repo
+
+# JSON output
+robot-repo-automaton scan --repo /path/to/repo --format json
+----
+
+=== Fix Issues
+
+[source,bash]
+----
+# Fix all detected issues (dry run first)
+robot-repo-automaton fix --repo /path/to/repo --dry-run
+
+# Fix and commit
+robot-repo-automaton fix --repo /path/to/repo --commit
+
+# Fix only specific error types
+robot-repo-automaton fix --repo /path/to/repo --only ERR-WF-001
+
+# Skip certain error types
+robot-repo-automaton fix --repo /path/to/repo --skip ERR-WF-003
+----
+
+=== Organization-wide Operations
+
+[source,bash]
+----
+# Scan all repos in an organization
+export GITHUB_TOKEN=ghp_...
+robot-repo-automaton scan-org
+
+# Scan specific repos only
+robot-repo-automaton scan-org --repos repo1,repo2
+
+# Skip certain repos
+robot-repo-automaton scan-org --skip-repos archived-repo
+----
+
+=== Hook Management
+
+[source,bash]
+----
+# Install hooks (pre-commit, pre-push, commit-msg)
+robot-repo-automaton hooks install --repo /path/to/repo
+
+# Check hook status
+robot-repo-automaton hooks status --repo /path/to/repo
+
+# Remove hooks
+robot-repo-automaton hooks remove --repo /path/to/repo
+----
+
+=== View Error Catalog
+
+[source,bash]
+----
+# Show catalog summary
+robot-repo-automaton catalog
+
+# Show high severity errors
+robot-repo-automaton catalog --severity high
+
+# Show details for specific error
+robot-repo-automaton catalog --id ERR-WF-001 --show-repos
+----
+
+== Confidence Threshold System
+
+robot-repo-automaton uses a three-tier confidence system to determine which
+fixes are safe to auto-apply.
+
+[cols="1,2,3", options="header"]
+|===
+| Level | Behavior | Examples
+
+| *High*
+| Auto-apply without review
+| SPDX header insertion, LICENSE creation, .editorconfig creation
+
+| *Medium*
+| Apply with review flag
+| Known pattern modifications, workflow disabling
+
+| *Low*
+| Propose only (generate diff preview, do not modify)
+| Complex multi-file changes, uncertain deletions
+|===
+
+=== Per-Repository Configuration
+
+Repos can override the default threshold via `.bot_directives/robot-repo-automaton.scm`:
+
+[source,scheme]
+----
+(bot-directive
+  (name . "robot-repo-automaton")
+  (auto-apply-threshold . "medium"))  ;; "high" (default), "medium", or "low"
+----
+
+== Configuration
+
+Create a `config.toml` file (see `config.toml.example` for all options):
+
+[source,toml]
+----
+catalog_path = "ERROR-CATALOG.scm"
+
+[github]
+org = "hyperpolymath"
+
+[automation]
+auto_fix_threshold = 0.95
+pr_threshold = 0.80
+alert_threshold = 0.50
+dry_run = false
+
+[hooks]
+pre_commit = true
+pre_push = true
+----
+
+== Error Catalog Format
+
+The error catalog uses S-expression format (Guile Scheme compatible):
+
+[source,scheme]
+----
+(define error-catalog
+  '((metadata
+     (format-version . "1.0")
+     (purpose . "Repository compliance rules"))
+
+    (error-type
+     (id . "ERR-WF-001")
+     (name . "duplicate-codeql-workflows")
+     (severity . "high")
+     (category . "workflows")
+     (description . "Duplicate CodeQL workflow files")
+     (detection
+      (method . "file-existence")
+      (files . (".github/workflows/codeql.yml"
+                ".github/workflows/codeql-analysis.yml"))
+      (condition . "both-exist"))
+     (fix
+      (action . "delete")
+      (target . ".github/workflows/codeql-analysis.yml"))
+     (commit-message . "chore: remove duplicate codeql workflow"))))
+----
+
+=== Fix Action Types
+
+[cols="1,3", options="header"]
+|===
+| Action | Description
+
+| `delete`
+| Remove the target file.
+
+| `modify`
+| Apply a line-level transformation. Requires a `modification` field with spec
+  such as `replace-line:N:content`, `insert-before:N:content`,
+  `replace-pattern:regex:replacement`, `prepend:content`, or `append:content`.
+
+| `create`
+| Create the target file from a template or `fallback` content. Supports
+  variable expansion. Creates parent directories automatically.
+
+| `disable`
+| Rename the target file to `.yml.disabled`.
+|===
+
+== Testing
+
+[source,bash]
+----
+# Run all 59 tests
+cargo test
+
+# Run with output
+cargo test -- --nocapture
+
+# Run specific test module
+cargo test --test fixer_tests
+cargo test --test catalog_tests
+cargo test --test detector_tests
+----
+
+== Related Projects
+
+* link:https://github.com/hyperpolymath/hypatia[hypatia] -- Neurosymbolic CI/CD intelligence platform (rule engine)
+* link:https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] -- Bot fleet coordination (shared context)
+* link:https://github.com/hyperpolymath/rhodium-standard-repositories[rhodium-standard-repositories] -- Repository standards (RSR)
+* link:https://github.com/hyperpolymath/gitvisor[gitvisor] -- Unified dashboard for automation status
+
+== License
+
+PMPL-1.0-or-later -- See link:LICENSE[LICENSE] file.
+
+Copyright (C) 2025-2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
