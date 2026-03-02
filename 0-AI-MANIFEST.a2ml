@@ -23,7 +23,7 @@ These 6 SCM files MUST exist in `.machine_readable/` directory ONLY:
 
 **CRITICAL:** If ANY of these files exist in the root directory, this is an ERROR.
 
-### Bot Directives: `.bot_directives/` ONLY
+### Bot Directives: `.machine_readable/bot_directives/` ONLY
 
 Bot-specific instructions for:
 - rhodibot - Git operations
@@ -64,13 +64,13 @@ gitbot-fleet/
 │   ├── AGENTIC.scm
 │   ├── NEUROSYM.scm
 │   └── PLAYBOOK.scm
-└── .bot_directives/            # Bot instructions
+│   └── bot_directives/         # Bot instructions
 ```
 
 ## SESSION STARTUP CHECKLIST
 
 ✅ Read THIS file (0-AI-MANIFEST.a2ml) first
-✅ Understand canonical locations (.machine_readable/, .bot_directives/)
+✅ Understand canonical locations (.machine_readable/, .machine_readable/bot_directives/)
 ✅ Know the invariants (no SCM duplication, etc.)
 ✅ Check for MCP enforcement (if applicable)
 ✅ Read `.machine_readable/STATE.scm` for current status
@@ -105,7 +105,7 @@ When ending a session:
 
 After reading this file, demonstrate understanding by stating:
 
-**"I have read the AI manifest. SCM files are located in `.machine_readable/` ONLY, bot directives in `.bot_directives/`, and I will not create duplicate files in the root directory."**
+**"I have read the AI manifest. SCM files are located in `.machine_readable/` ONLY, bot directives in `.machine_readable/bot_directives/`, and I will not create duplicate files in the root directory."**
 
 ## META
 

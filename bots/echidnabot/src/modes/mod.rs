@@ -201,7 +201,8 @@ impl BotMode {
     }
 }
 
-/// Parse a bot mode from a `.bot_directives/echidnabot.scm` file content.
+/// Parse a bot mode from a `.machine_readable/bot_directives/echidnabot.scm`
+/// file content (legacy format supported by callers).
 ///
 /// Looks for `(mode ...)` S-expression in the directive file.
 /// Returns `BotMode::Verifier` (default) if parsing fails or mode not found.

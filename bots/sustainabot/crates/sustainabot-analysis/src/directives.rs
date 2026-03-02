@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
-//! Parser for `.bot_directives/*.scm` S-expression files.
+//! Parser for `.machine_readable/bot_directives/*.scm` S-expression files
+//! (with legacy `.bot_directives/*.scm` fallback).
 //!
 //! These files control what bots are allowed to do in a given repository.
 
@@ -27,11 +28,22 @@ pub struct BotDirective {
 
 /// Check if a specific bot has a directive in the given repo.
 ///
-/// Looks for `.bot_directives/{bot_name}.scm` in the repo root.
+/// Looks for `.machine_readable/bot_directives/{bot_name}.scm` in the repo root
+/// first, then legacy `.bot_directives/{bot_name}.scm`.
 pub fn check_directive(repo_path: &Path, bot_name: &str) -> Option<BotDirective> {
-    let directive_path = repo_path
+    let preferred_path = repo_path
+        .join(".machine_readable")
+        .join("bot_directives")
+        .join(format!("{}.scm", bot_name));
+    let legacy_path = repo_path
         .join(".bot_directives")
         .join(format!("{}.scm", bot_name));
+
+    let directive_path = if preferred_path.exists() {
+        preferred_path
+    } else {
+        legacy_path
+    };
 
     if !directive_path.exists() {
         return None;

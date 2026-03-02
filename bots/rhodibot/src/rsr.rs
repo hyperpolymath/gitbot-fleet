@@ -142,22 +142,22 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
     },
     CheckDef {
-        name: "STATE.scm",
-        description: "Project state file",
+        name: ".machine_readable/STATE.scm",
+        description: "Project state file in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
         severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
     },
     CheckDef {
-        name: "META.scm",
-        description: "Meta information",
+        name: ".machine_readable/META.scm",
+        description: "Meta information in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
         severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
     },
     CheckDef {
-        name: "ECOSYSTEM.scm",
-        description: "Ecosystem position",
+        name: ".machine_readable/ECOSYSTEM.scm",
+        description: "Ecosystem position in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
         severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
@@ -192,8 +192,8 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
     },
     CheckDef {
-        name: ".bot_directives",
-        description: "Bot directives directory",
+        name: ".machine_readable/bot_directives",
+        description: "Bot directives directory in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 2,
         severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
@@ -224,6 +224,12 @@ impl BannedPattern {
 
 /// Banned file patterns (CCCP language policy)
 pub const BANNED_PATTERNS: &[BannedPattern] = &[
+    BannedPattern {
+        name: ".bot_directives",
+        description: "Legacy bot directives directory at repo root (use .machine_readable/bot_directives)",
+        category: CheckCategory::Structure,
+        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+    },
     BannedPattern {
         name: "package-lock.json",
         description: "npm lock file (use Deno)",

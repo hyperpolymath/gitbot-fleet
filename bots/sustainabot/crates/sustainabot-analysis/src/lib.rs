@@ -12,6 +12,7 @@ pub mod carbon;
 pub mod dependencies;
 pub mod directives;
 pub mod language;
+pub mod migration;
 pub mod patterns;
 pub mod security;
 

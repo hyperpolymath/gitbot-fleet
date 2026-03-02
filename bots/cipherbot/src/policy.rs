@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-//! Policy Engine — reads `.bot_directives/cipherbot.scm` for repo-specific
+//! Policy Engine — reads `.machine_readable/bot_directives/cipherbot.scm`
+//! (with legacy `.bot_directives/cipherbot.scm` fallback) for repo-specific
 //! crypto policy enforcement.
 //!
 //! Supports:
@@ -12,7 +13,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-/// Cipherbot policy configuration parsed from `.bot_directives/cipherbot.scm`.
+/// Cipherbot policy configuration parsed from
+/// `.machine_readable/bot_directives/cipherbot.scm` (legacy fallback supported).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CipherbotPolicy {
     /// Bot name (should be "cipherbot").
@@ -52,11 +54,19 @@ impl Default for CipherbotPolicy {
 }
 
 impl CipherbotPolicy {
-    /// Load policy from `.bot_directives/cipherbot.scm` in the given repo root.
+    /// Load policy from `.machine_readable/bot_directives/cipherbot.scm` in the
+    /// given repo root (with legacy fallback).
     ///
     /// Returns default policy if the file doesn't exist or can't be parsed.
     pub fn load(repo_root: &Path) -> Self {
-        let policy_path = repo_root.join(".bot_directives/cipherbot.scm");
+        let policy_path = if repo_root
+            .join(".machine_readable/bot_directives/cipherbot.scm")
+            .exists()
+        {
+            repo_root.join(".machine_readable/bot_directives/cipherbot.scm")
+        } else {
+            repo_root.join(".bot_directives/cipherbot.scm")
+        };
         if !policy_path.exists() {
             tracing::info!("No cipherbot.scm policy found, using defaults");
             return Self::default();

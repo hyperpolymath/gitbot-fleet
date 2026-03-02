@@ -17,8 +17,10 @@
 
 pub mod axiom_tracker;
 pub mod confidence;
+pub mod migration_scanner;
 pub mod solver_integrity;
 
 pub use axiom_tracker::{AxiomFlag, AxiomReport, AxiomTracker};
 pub use confidence::{ConfidenceLevel, ConfidenceReport};
+pub use migration_scanner::{MigrationScanReport, MigrationScanner, MigrationSeverity};
 pub use solver_integrity::{IntegrityReport, IntegrityStatus, SolverIntegrity};

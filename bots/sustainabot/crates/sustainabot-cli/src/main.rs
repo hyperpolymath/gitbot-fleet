@@ -424,20 +424,20 @@ fn run_security_correlation(
     path: &std::path::Path,
     _results: &mut Vec<sustainabot_metrics::AnalysisResult>,
 ) {
-    // Check for .bot_directives/panic-attack.scm
+    // Check for .machine_readable/bot_directives/panic-attack.scm
     let directive = sustainabot_analysis::directives::check_directive(path, "panic-attack");
 
     match directive {
         Some(ref d) if !d.allow => {
             eprintln!(
-                "Security scan denied by .bot_directives/panic-attack.scm: {}",
+                "Security scan denied by .machine_readable/bot_directives/panic-attack.scm: {}",
                 d.notes.as_deref().unwrap_or("no reason given")
             );
             return;
         }
         None => {
             eprintln!(
-                "Warning: No .bot_directives/panic-attack.scm found in {}. \
+                "Warning: No .machine_readable/bot_directives/panic-attack.scm found in {}. \
                  Running security scan anyway.",
                 path.display()
             );

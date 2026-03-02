@@ -84,6 +84,74 @@ pub struct AdjudicateReport {
     pub recommendations: Vec<String>,
 }
 
+/// Report from `panic-attack migration-snapshot <target> --label <label>`.
+///
+/// Contains migration-specific metrics: deprecated/modern API counts,
+/// health score, version bracket, config format, and optional build/bundle data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MigrationSnapshotReport {
+    /// Snapshot label (e.g., "before-v12-migration")
+    pub label: String,
+    /// ISO 8601 timestamp
+    pub timestamp: String,
+    /// Path to the scanned target
+    pub target_path: PathBuf,
+    /// Number of deprecated API calls (Js.*, Belt.*)
+    pub deprecated_api_count: usize,
+    /// Number of modern @rescript/core API calls
+    pub modern_api_count: usize,
+    /// Ratio of modern to total API calls (0.0 - 1.0)
+    pub api_migration_ratio: f64,
+    /// Overall migration health score (0.0 - 1.0)
+    pub health_score: f64,
+    /// Detected ReScript version bracket
+    pub version_bracket: String,
+    /// Configuration format (bsconfig, rescript_json, both, none)
+    pub config_format: String,
+    /// Build time in milliseconds (if --build-time was passed)
+    #[serde(default)]
+    pub build_time_ms: Option<u64>,
+    /// Bundle size in bytes (if --bundle-size was passed)
+    #[serde(default)]
+    pub bundle_size_bytes: Option<u64>,
+    /// Number of ReScript source files
+    pub file_count: usize,
+    /// Total lines of ReScript code
+    pub rescript_lines: usize,
+    /// Detailed deprecated pattern instances
+    #[serde(default)]
+    pub deprecated_patterns: Vec<serde_json::Value>,
+}
+
+/// Report from `panic-attack migration-diff <before> <after>`.
+///
+/// Compares two migration snapshots and produces deltas.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MigrationDiffReport {
+    /// Label of the before snapshot
+    pub before_label: String,
+    /// Label of the after snapshot
+    pub after_label: String,
+    /// Change in health score
+    pub health_delta: f64,
+    /// Change in deprecated API count (negative = improvement)
+    pub deprecated_delta: i64,
+    /// Change in modern API count (positive = improvement)
+    pub modern_delta: i64,
+    /// Change in build time (negative = faster)
+    #[serde(default)]
+    pub build_time_delta_ms: Option<i64>,
+    /// Change in bundle size (negative = smaller)
+    #[serde(default)]
+    pub bundle_size_delta_bytes: Option<i64>,
+    /// Deprecated patterns that were removed
+    #[serde(default)]
+    pub patterns_removed: Vec<serde_json::Value>,
+    /// New deprecated patterns introduced
+    #[serde(default)]
+    pub patterns_added: Vec<serde_json::Value>,
+}
+
 /// Report from `panic-attack diagnostics` — preflight health check.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticsReport {
@@ -202,6 +270,67 @@ pub fn run_diagnostics(timeout: Duration) -> Result<DiagnosticsReport> {
         supported_languages: Vec::new(),
         messages: vec!["Diagnostics constructed from --version check".to_string()],
     })
+}
+
+/// Run `panic-attack migration-snapshot <target> --label <label>`.
+///
+/// Captures a point-in-time migration health snapshot for a ReScript repository.
+/// Optionally includes build time and bundle size measurements.
+pub fn run_migration_snapshot(
+    target: &Path,
+    label: &str,
+    build_time: bool,
+    bundle_size: bool,
+    timeout: Duration,
+) -> Result<MigrationSnapshotReport> {
+    let target_str = target.display().to_string();
+    let mut args = vec![
+        "migration-snapshot",
+        &target_str,
+        "--label",
+        label,
+    ];
+
+    // Allocate owned strings for optional flags so references stay valid
+    let build_flag = "--build-time".to_string();
+    let bundle_flag = "--bundle-size".to_string();
+
+    if build_time {
+        args.push(&build_flag);
+    }
+    if bundle_size {
+        args.push(&bundle_flag);
+    }
+
+    let output = invoke_panic_attack(&args, timeout)
+        .context("Failed to run panic-attack migration-snapshot")?;
+
+    serde_json::from_str::<MigrationSnapshotReport>(&output)
+        .context("Failed to parse panic-attack migration-snapshot output as JSON")
+}
+
+/// Run `panic-attack migration-diff <before.json> <after.json>`.
+///
+/// Compares two migration snapshots and produces a delta report showing
+/// health score changes, deprecated API removals, and build/bundle deltas.
+pub fn run_migration_diff(
+    before: &Path,
+    after: &Path,
+    timeout: Duration,
+) -> Result<MigrationDiffReport> {
+    let before_str = before.display().to_string();
+    let after_str = after.display().to_string();
+    let args = vec![
+        "migration-diff",
+        &before_str,
+        &after_str,
+    ];
+
+    let output = invoke_panic_attack(&args, timeout)
+        .context("Failed to run panic-attack migration-diff")?;
+
+    serde_json::from_str::<MigrationDiffReport>(&output)
+        .context("Failed to parse panic-attack migration-diff output as JSON")
 }
 
 /// Locate the `panic-attack` binary on PATH.
@@ -382,6 +511,78 @@ mod tests {
         assert_eq!(report.reports_analyzed, 3);
         assert!((report.robustness_score - 67.5).abs() < f64::EPSILON);
         assert_eq!(report.recommendations.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_migration_snapshot_report() {
+        let json = r#"{
+            "label": "before-v12",
+            "timestamp": "2026-03-01T10:00:00Z",
+            "target_path": "/tmp/rescript-repo",
+            "deprecated_api_count": 42,
+            "modern_api_count": 18,
+            "api_migration_ratio": 0.3,
+            "health_score": 0.45,
+            "version_bracket": "V11",
+            "config_format": "bsconfig",
+            "build_time_ms": 3200,
+            "bundle_size_bytes": 524288,
+            "file_count": 15,
+            "rescript_lines": 2800,
+            "deprecated_patterns": []
+        }"#;
+
+        let report: MigrationSnapshotReport = serde_json::from_str(json).unwrap();
+        assert_eq!(report.label, "before-v12");
+        assert_eq!(report.deprecated_api_count, 42);
+        assert_eq!(report.modern_api_count, 18);
+        assert!(report.health_score < 0.5);
+        assert_eq!(report.version_bracket, "V11");
+        assert_eq!(report.config_format, "bsconfig");
+        assert_eq!(report.build_time_ms, Some(3200));
+    }
+
+    #[test]
+    fn test_parse_migration_diff_report() {
+        let json = r#"{
+            "before_label": "before-v12",
+            "after_label": "after-v12",
+            "health_delta": 0.35,
+            "deprecated_delta": -30,
+            "modern_delta": 25,
+            "build_time_delta_ms": -800,
+            "bundle_size_delta_bytes": -102400,
+            "patterns_removed": [],
+            "patterns_added": []
+        }"#;
+
+        let report: MigrationDiffReport = serde_json::from_str(json).unwrap();
+        assert_eq!(report.before_label, "before-v12");
+        assert!(report.health_delta > 0.0);
+        assert!(report.deprecated_delta < 0); // Improvement
+        assert!(report.modern_delta > 0); // Improvement
+    }
+
+    #[test]
+    fn test_migration_snapshot_optional_fields() {
+        let json = r#"{
+            "label": "quick-scan",
+            "timestamp": "2026-03-01T10:00:00Z",
+            "target_path": "/tmp/repo",
+            "deprecated_api_count": 5,
+            "modern_api_count": 50,
+            "api_migration_ratio": 0.91,
+            "health_score": 0.88,
+            "version_bracket": "V12Current",
+            "config_format": "rescript_json",
+            "file_count": 8,
+            "rescript_lines": 1200
+        }"#;
+
+        let report: MigrationSnapshotReport = serde_json::from_str(json).unwrap();
+        assert!(report.build_time_ms.is_none());
+        assert!(report.bundle_size_bytes.is_none());
+        assert!(report.deprecated_patterns.is_empty());
     }
 
     #[test]

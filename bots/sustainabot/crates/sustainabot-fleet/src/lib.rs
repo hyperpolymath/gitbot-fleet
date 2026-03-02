@@ -202,7 +202,8 @@ fn convert_to_finding(result: &AnalysisResult) -> Finding {
 
 /// Run sustainabot as a fleet member with directive awareness.
 ///
-/// Reads `.bot_directives/sustainabot.scm` to determine allowed scopes,
+/// Reads `.machine_readable/bot_directives/sustainabot.scm` (legacy fallback
+/// supported) to determine allowed scopes,
 /// then runs analysis respecting the directive.
 pub fn run_fleet_analysis(
     repo_path: &Path,
@@ -214,7 +215,7 @@ pub fn run_fleet_analysis(
     if let Some(ref d) = directive {
         if !d.allow {
             eprintln!(
-                "Sustainabot denied by .bot_directives/sustainabot.scm: {}",
+                "Sustainabot denied by .machine_readable/bot_directives/sustainabot.scm: {}",
                 d.notes.as_deref().unwrap_or("no reason given")
             );
             return Ok(());

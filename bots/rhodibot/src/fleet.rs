@@ -53,15 +53,16 @@ fn rule_id(check_name: &str) -> String {
         "CONTRIBUTING.md" => format!("{}-004", RULE_PREFIX),
         "CODE_OF_CONDUCT.md" => format!("{}-005", RULE_PREFIX),
         ".claude/CLAUDE.md" => format!("{}-006", RULE_PREFIX),
-        "STATE.scm" => format!("{}-007", RULE_PREFIX),
-        "META.scm" => format!("{}-008", RULE_PREFIX),
-        "ECOSYSTEM.scm" => format!("{}-009", RULE_PREFIX),
+        ".machine_readable/STATE.scm" => format!("{}-007", RULE_PREFIX),
+        ".machine_readable/META.scm" => format!("{}-008", RULE_PREFIX),
+        ".machine_readable/ECOSYSTEM.scm" => format!("{}-009", RULE_PREFIX),
         ".github/workflows" => format!("{}-010", RULE_PREFIX),
         ".editorconfig" => format!("{}-011", RULE_PREFIX),
         ".gitattributes" => format!("{}-012", RULE_PREFIX),
         ".gitignore" => format!("{}-013", RULE_PREFIX),
         "justfile" => format!("{}-014", RULE_PREFIX),
-        ".bot_directives" => format!("{}-015", RULE_PREFIX),
+        ".machine_readable/bot_directives" => format!("{}-015", RULE_PREFIX),
+        "no-.bot_directives" => format!("{}-LEGACY-001", RULE_PREFIX),
         "license-type" => format!("{}-LIC-001", RULE_PREFIX),
         name if name.starts_with("no-") => {
             format!("{}-BAN-{}", RULE_PREFIX, name.strip_prefix("no-").unwrap_or(name))
@@ -79,15 +80,16 @@ fn suggestion_for(check_name: &str) -> Option<String> {
         "CONTRIBUTING.md" => Some("Add a CONTRIBUTING.md with contribution guidelines".to_string()),
         "CODE_OF_CONDUCT.md" => Some("Add a CODE_OF_CONDUCT.md (Contributor Covenant recommended)".to_string()),
         ".claude/CLAUDE.md" => Some("Create .claude/CLAUDE.md with AI assistant instructions".to_string()),
-        "STATE.scm" => Some("Add .machine_readable/STATE.scm with project state".to_string()),
-        "META.scm" => Some("Add .machine_readable/META.scm with meta information".to_string()),
-        "ECOSYSTEM.scm" => Some("Add .machine_readable/ECOSYSTEM.scm with ecosystem position".to_string()),
+        ".machine_readable/STATE.scm" => Some("Add .machine_readable/STATE.scm with project state".to_string()),
+        ".machine_readable/META.scm" => Some("Add .machine_readable/META.scm with meta information".to_string()),
+        ".machine_readable/ECOSYSTEM.scm" => Some("Add .machine_readable/ECOSYSTEM.scm with ecosystem position".to_string()),
         ".github/workflows" => Some("Add GitHub Actions workflows in .github/workflows/".to_string()),
         ".editorconfig" => Some("Add .editorconfig for consistent formatting".to_string()),
         ".gitattributes" => Some("Add .gitattributes for line ending and diff config".to_string()),
         ".gitignore" => Some("Add .gitignore for build artifacts".to_string()),
         "justfile" => Some("Add a justfile as the primary build system".to_string()),
-        ".bot_directives" => Some("Create .bot_directives/ directory for bot configs".to_string()),
+        ".machine_readable/bot_directives" => Some("Create .machine_readable/bot_directives/ for bot configs".to_string()),
+        "no-.bot_directives" => Some("Migrate legacy .bot_directives/ to .machine_readable/bot_directives/".to_string()),
         "license-type" => Some("Set repository license to an approved type (PMPL-1.0-or-later recommended)".to_string()),
         name if name.starts_with("no-") => {
             let banned_file = name.strip_prefix("no-").unwrap_or(name);
@@ -102,7 +104,7 @@ fn is_fixable(check_name: &str) -> bool {
     matches!(check_name,
         "SECURITY.md" | "CODE_OF_CONDUCT.md" | "CONTRIBUTING.md" |
         ".editorconfig" | ".gitattributes" | ".gitignore" |
-        ".claude/CLAUDE.md" | ".bot_directives"
+        ".claude/CLAUDE.md" | ".machine_readable/bot_directives"
     )
 }
 

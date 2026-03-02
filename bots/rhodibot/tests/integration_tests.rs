@@ -86,10 +86,10 @@ mod rsr_tests {
 
         let files = &[
             "README.adoc", "LICENSE.txt", "SECURITY.md", "CONTRIBUTING.md",
-            "CODE_OF_CONDUCT.md", ".claude/CLAUDE.md", "STATE.scm",
-            "META.scm", "ECOSYSTEM.scm", ".github/workflows",
+            "CODE_OF_CONDUCT.md", ".claude/CLAUDE.md", ".machine_readable/STATE.scm",
+            ".machine_readable/META.scm", ".machine_readable/ECOSYSTEM.scm", ".github/workflows",
             ".editorconfig", ".gitattributes", ".gitignore",
-            "justfile", ".bot_directives",
+            "justfile", ".machine_readable/bot_directives",
         ];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
@@ -428,7 +428,7 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE.txt", "justfile", ".bot_directives"];
+        let files = &["README.adoc", "LICENSE.txt", "justfile", ".machine_readable/bot_directives"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -446,8 +446,8 @@ mod rsr_tests {
         assert!(jf_check.is_some(), "should have justfile check");
         assert_eq!(jf_check.unwrap().status, CheckStatus::Pass);
 
-        let bd_check = report.checks.iter().find(|c| c.name == ".bot_directives");
-        assert!(bd_check.is_some(), "should have .bot_directives check");
+        let bd_check = report.checks.iter().find(|c| c.name == ".machine_readable/bot_directives");
+        assert!(bd_check.is_some(), "should have .machine_readable/bot_directives check");
         assert_eq!(bd_check.unwrap().status, CheckStatus::Pass);
     }
 
@@ -1139,7 +1139,7 @@ mod fleet_tests {
                     message: "Go module (use Rust) detected - policy violation".to_string(),
                 },
                 Check {
-                    name: "STATE.scm".to_string(),
+                    name: ".machine_readable/STATE.scm".to_string(),
                     category: CheckCategory::Structure,
                     severity: Severity::Recommended,
                     status: CheckStatus::Skip,
