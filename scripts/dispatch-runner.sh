@@ -47,11 +47,22 @@ validate_path_within() {
 }
 
 # --- Configuration ---
+# Hypatia's local data store is the primary source for dispatch manifests.
+# Falls back to central verisimdb-data if HYPATIA_DATA is not set.
+HYPATIA_DATA="${HYPATIA_DATA:-/var/mnt/eclipse/repos/hypatia/data/verisimdb}"
 VERISIMDB_DATA="${VERISIMDB_DATA:-/var/mnt/eclipse/repos/verisimdb-data}"
 REPOS_BASE="${REPOS_BASE:-/var/mnt/eclipse/repos}"
 FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var/mnt/eclipse/repos/gitbot-fleet/scripts}"
-RRA_BIN="${RRA_BIN:-/var/mnt/eclipse/repos/robot-repo-automaton/target/release/robot-repo-automaton}"
-MANIFEST_PATH="${VERISIMDB_DATA}/dispatch/pending.jsonl"
+RRA_BIN="${RRA_BIN:-/var/mnt/eclipse/repos/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
+
+# Try hypatia's data first, then fall back to central verisimdb-data
+if [[ -f "${HYPATIA_DATA}/dispatch/pending.jsonl" ]]; then
+    MANIFEST_PATH="${HYPATIA_DATA}/dispatch/pending.jsonl"
+elif [[ -f "${VERISIMDB_DATA}/dispatch/pending.jsonl" ]]; then
+    MANIFEST_PATH="${VERISIMDB_DATA}/dispatch/pending.jsonl"
+else
+    MANIFEST_PATH="${HYPATIA_DATA}/dispatch/pending.jsonl"
+fi
 
 DRY_RUN=false
 FILTER_TIER=""
@@ -105,7 +116,9 @@ echo "  Dry run:   $DRY_RUN"
 echo ""
 
 # --- Outcome recording ---
-OUTCOME_FILE="${VERISIMDB_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
+# Write outcomes to hypatia's local store (primary) and central store (backup)
+OUTCOME_FILE="${HYPATIA_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
+OUTCOME_FILE_CENTRAL="${VERISIMDB_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
 mkdir -p "$(dirname "$OUTCOME_FILE")"
 
 record_outcome() {
@@ -131,6 +144,10 @@ record_outcome() {
         '{pattern_id: $pid, recipe_id: $rid, repo: $repo, file: $file, outcome: $outcome, timestamp: $ts, bot: $bot}')
 
     echo "$json" >> "$OUTCOME_FILE"
+    # Also write to central store if it exists
+    if [[ -d "$(dirname "$OUTCOME_FILE_CENTRAL")" ]] || mkdir -p "$(dirname "$OUTCOME_FILE_CENTRAL")" 2>/dev/null; then
+        echo "$json" >> "$OUTCOME_FILE_CENTRAL"
+    fi
 }
 
 # --- Execute a single manifest entry ---
@@ -324,3 +341,30 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo ""
     echo "(Dry run — no changes were made)"
 fi
+
+# --- Kin Protocol: write heartbeat ---
+KIN_DIR="${HOME}/.hypatia/kin"
+mkdir -p "$KIN_DIR"
+
+HEARTBEAT_STATUS="healthy"
+[[ "$FAILED" -gt 0 ]] && HEARTBEAT_STATUS="degraded"
+
+cat > "${KIN_DIR}/gitbot-fleet.heartbeat.json" <<HEARTBEAT
+{
+  "kin_id": "gitbot-fleet",
+  "role": "executor",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "${HEARTBEAT_STATUS}",
+  "version": "0.2.0",
+  "last_run": {
+    "total_processed": ${TOTAL},
+    "executed": ${EXECUTED},
+    "succeeded": ${SUCCEEDED},
+    "failed": ${FAILED},
+    "skipped": ${SKIPPED},
+    "dry_run": ${DRY_RUN}
+  },
+  "errors": [],
+  "capabilities": ["dispatch", "fix_execute", "pr_create", "review", "advisory"]
+}
+HEARTBEAT
