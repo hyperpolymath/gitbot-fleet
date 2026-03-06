@@ -34,7 +34,7 @@ while IFS= read -r -d '' file; do
 
         # Only fix URLs for known HTTPS-capable domains
         if grep -qP "http://($SAFE_DOMAINS)" "$file" 2>/dev/null; then
-            sed -i "s|http://\($SAFE_DOMAINS\)|https://\1|g" "$file" 2>/dev/null || true
+            sed -i -E "s#http://($SAFE_DOMAINS)#https://\1#g" "$file" 2>/dev/null || true
             count=$(grep -cP "http://($SAFE_DOMAINS)" "$file" 2>/dev/null || echo 0)
             echo "  FIXED $rel_path"
             ((FIXED_COUNT++)) || true
