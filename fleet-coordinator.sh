@@ -301,7 +301,7 @@ EOF
                 echo "bash \"$FLEET_DIR/scripts/fix-unpinned-actions.sh\" \"\$REPO_PATH\" \"$finding_json\"" >> "$fix_script"
                 ;;
             missing_permissions)
-                echo "bash \"$FLEET_DIR/scripts/fix-missing-permissions.sh\" \"\$REPO_PATH\" \"$finding_json\"" >> "$fix_script"
+                echo "bash \"$FLEET_DIR/scripts/fix-workflow-permissions.sh\" \"\$REPO_PATH\" \"$finding_json\"" >> "$fix_script"
                 ;;
             missing_spdx)
                 echo "bash \"$FLEET_DIR/scripts/fix-missing-spdx.sh\" \"\$REPO_PATH\" \"$finding_json\"" >> "$fix_script"
@@ -443,7 +443,7 @@ RULE_EOF
 
     auto_fixable(missing_permissions(_), true).
 
-    fix_script(missing_permissions(_), 'scripts/fix-missing-permissions.sh').
+    fix_script(missing_permissions(_), 'scripts/fix-workflow-permissions.sh').
 
 :- end_object.
 RULE_EOF
