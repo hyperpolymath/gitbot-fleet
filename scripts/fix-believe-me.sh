@@ -27,8 +27,12 @@ while IFS= read -r -d '' file; do
         echo "  FOUND $rel_path — $count believe_me call(s)"
 
         # Add TODO comments above believe_me calls (only on non-comment lines)
-        # Use a unique marker so re-runs are idempotent
-        sed -i '/^\s*--/!{/believe_me/{/PROOF_TODO/!s/\(.*believe_me\)/-- PROOF_TODO: Replace believe_me with actual proof\n\1/}}' "$file" 2>/dev/null || true
+        # Skip if PROOF_TODO already exists on the preceding line (prevents duplicates on re-run)
+        if grep -B1 'believe_me' "$file" 2>/dev/null | grep -q 'PROOF_TODO'; then
+            echo "    (PROOF_TODO comments already present — skipping)"
+        else
+            sed -i '/^\s*--/!{/believe_me/{/PROOF_TODO/!s/\(.*believe_me\)/-- PROOF_TODO: Replace believe_me with actual proof\n\1/}}' "$file" 2>/dev/null || true
+        fi
 
         ((FIXED_COUNT++)) || true
     fi

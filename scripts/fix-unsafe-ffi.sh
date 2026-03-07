@@ -30,7 +30,6 @@ while IFS= read -r -d '' file; do
 
     # Process the file line-by-line using a temp file for output
     tmpfile="$(mktemp)"
-    trap "rm -f '$tmpfile'" EXIT
 
     prev_line=""
     line_num=0
@@ -66,7 +65,6 @@ while IFS= read -r -d '' file; do
     fi
 
     rm -f "$tmpfile"
-    trap - EXIT
 
 done < <(find "$REPO_PATH" -type f -name "*.rs" \
     -not -path "*/\.git/*" \

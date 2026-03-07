@@ -192,6 +192,18 @@ execute_entry() {
             return
         fi
         repo_path="$REPOS_BASE/$repo"
+
+        # If repo not found, check path overrides (monorepo subdirectories)
+        if [[ ! -d "$repo_path" ]]; then
+            local overrides="$FLEET_SCRIPTS/repo-path-overrides.json"
+            if [[ -f "$overrides" ]]; then
+                local override
+                override=$(jq -r --arg r "$repo" '.[$r] // empty' "$overrides" 2>/dev/null || true)
+                if [[ -n "$override" && -d "$override" ]]; then
+                    repo_path="$override"
+                fi
+            fi
+        fi
     fi
 
     # Double-check path stays within REPOS_BASE

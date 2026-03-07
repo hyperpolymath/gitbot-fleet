@@ -50,11 +50,16 @@ fi
 # Create temp file with SPDX header
 TEMP_FILE=$(mktemp)
 
-# Write SPDX header
-echo "${COMMENT_PREFIX} SPDX-License-Identifier: ${DEFAULT_LICENSE}" > "$TEMP_FILE"
-
-# Append original file content
-cat "$FULL_PATH" >> "$TEMP_FILE"
+# Check if line 1 is a shebang — if so, preserve it before the SPDX header
+FIRST_LINE=$(head -1 "$FULL_PATH")
+if [[ "$FIRST_LINE" == "#!"* ]]; then
+    echo "$FIRST_LINE" > "$TEMP_FILE"
+    echo "${COMMENT_PREFIX} SPDX-License-Identifier: ${DEFAULT_LICENSE}" >> "$TEMP_FILE"
+    tail -n +2 "$FULL_PATH" >> "$TEMP_FILE"
+else
+    echo "${COMMENT_PREFIX} SPDX-License-Identifier: ${DEFAULT_LICENSE}" > "$TEMP_FILE"
+    cat "$FULL_PATH" >> "$TEMP_FILE"
+fi
 
 # Replace original file
 mv "$TEMP_FILE" "$FULL_PATH"

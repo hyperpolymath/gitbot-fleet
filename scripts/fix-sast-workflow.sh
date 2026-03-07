@@ -64,7 +64,7 @@ for i in "${!LANGUAGES[@]}"; do
   if [[ $i -gt 0 ]]; then
     LANG_MATRIX+=", "
   fi
-  LANG_MATRIX+="'${LANGUAGES[$i]}'"
+  LANG_MATRIX+="\"${LANGUAGES[$i]}\""
 done
 LANG_MATRIX+="]"
 

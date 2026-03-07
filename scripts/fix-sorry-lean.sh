@@ -35,9 +35,12 @@ while IFS= read -r -d '' file; do
         echo "  FOUND $rel_path — $count sorry occurrence(s)"
 
         # Add PROOF_TODO comment above sorry lines (only on non-comment lines)
-        # Idempotent: skip if PROOF_TODO already present on the line or preceding line
-        # Uses sed to insert a comment line before any line containing sorry as a word
-        sed -i '/^\s*--/!{/\bsorry\b/{/PROOF_TODO/!s/\(.*\bsorry\b\)/-- PROOF_TODO: Replace sorry with actual proof\n\1/}}' "$file" 2>/dev/null || true
+        # Skip if PROOF_TODO already exists on a preceding line (prevents duplicates on re-run)
+        if grep -B1 '\bsorry\b' "$file" 2>/dev/null | grep -q 'PROOF_TODO'; then
+            echo "    (PROOF_TODO comments already present — skipping)"
+        else
+            sed -i '/^\s*--/!{/\bsorry\b/{/PROOF_TODO/!s/\(.*\bsorry\b\)/-- PROOF_TODO: Replace sorry with actual proof\n\1/}}' "$file" 2>/dev/null || true
+        fi
 
         ((FIXED_COUNT++)) || true
         SORRY_TOTAL=$((SORRY_TOTAL + count))

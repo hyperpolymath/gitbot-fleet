@@ -31,8 +31,12 @@ while IFS= read -r -d '' file; do
         count=$(grep -v '^\s*--' "$file" 2>/dev/null | grep -c 'unsafeCoerce' || echo 0)
         echo "  FOUND [Haskell] $rel_path — $count unsafeCoerce call(s)"
 
-        # Idempotent: only add comment if SAFETY marker not already present on that line group
-        sed -i '/^\s*--/!{/unsafeCoerce/{/SAFETY.*unsafeCoerce/!s/\(.*unsafeCoerce\)/-- SAFETY: unsafeCoerce bypasses type checker — replace with safe cast\n\1/}}' "$file" 2>/dev/null || true
+        # Idempotent: skip if SAFETY comment already exists on preceding line
+        if grep -B1 'unsafeCoerce' "$file" 2>/dev/null | grep -q 'SAFETY'; then
+            echo "    (SAFETY comments already present — skipping)"
+        else
+            sed -i '/^\s*--/!{/unsafeCoerce/{/SAFETY.*unsafeCoerce/!s/\(.*unsafeCoerce\)/-- SAFETY: unsafeCoerce bypasses type checker — replace with safe cast\n\1/}}' "$file" 2>/dev/null || true
+        fi
 
         ((FIXED_COUNT++)) || true
     fi
@@ -50,8 +54,12 @@ while IFS= read -r -d '' file; do
         count=$(grep -c 'Obj\.magic' "$file" || echo 0)
         echo "  FOUND [OCaml] $rel_path — $count Obj.magic call(s)"
 
-        # Idempotent: only add comment if SAFETY marker not already present
-        sed -i '/Obj\.magic/{/SAFETY.*Obj\.magic/!s/\(.*Obj\.magic\)/(* SAFETY: Obj.magic bypasses type checker — use proper conversion *)\n\1/}' "$file" 2>/dev/null || true
+        # Idempotent: skip if SAFETY comment already exists on preceding line
+        if grep -B1 'Obj\.magic' "$file" 2>/dev/null | grep -q 'SAFETY'; then
+            echo "    (SAFETY comments already present — skipping)"
+        else
+            sed -i '/Obj\.magic/{/SAFETY.*Obj\.magic/!s/\(.*Obj\.magic\)/(* SAFETY: Obj.magic bypasses type checker — use proper conversion *)\n\1/}' "$file" 2>/dev/null || true
+        fi
 
         ((FIXED_COUNT++)) || true
     fi
@@ -69,8 +77,12 @@ while IFS= read -r -d '' file; do
         count=$(grep -c 'Admitted' "$file" || echo 0)
         echo "  FOUND [Coq] $rel_path — $count Admitted usage(s)"
 
-        # Idempotent: only add comment if PROOF_TODO marker not already present
-        sed -i '/Admitted/{/PROOF_TODO/!s/\(.*Admitted\)/(* PROOF_TODO: Replace Admitted with actual proof *)\n\1/}' "$file" 2>/dev/null || true
+        # Idempotent: skip if PROOF_TODO comment already exists on preceding line
+        if grep -B1 'Admitted' "$file" 2>/dev/null | grep -q 'PROOF_TODO'; then
+            echo "    (PROOF_TODO comments already present — skipping)"
+        else
+            sed -i '/Admitted/{/PROOF_TODO/!s/\(.*Admitted\)/(* PROOF_TODO: Replace Admitted with actual proof *)\n\1/}' "$file" 2>/dev/null || true
+        fi
 
         ((FIXED_COUNT++)) || true
     fi
