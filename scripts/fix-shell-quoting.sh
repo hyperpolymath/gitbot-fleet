@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Missing finding JSON file}"
 
@@ -26,7 +29,7 @@ echo ""
 SHELL_FILES=()
 while IFS= read -r -d '' f; do
     SHELL_FILES+=("$f")
-done < <(find "$REPO_PATH" -type f \( -name "*.sh" -o -name "*.bash" \) -not -path "*/\.git/*" -not -path "*/node_modules/*" -not -path "*/target/*" -print0 2>/dev/null)
+done < <(find "$REPO_PATH" -type f \( -name "*.sh" -o -name "*.bash" \) -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
 # Also check .yml/.yaml files for shell: sections
 while IFS= read -r -d '' f; do

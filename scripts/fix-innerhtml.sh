@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Missing finding JSON file}"
 
@@ -48,7 +51,7 @@ while IFS= read -r -d '' file; do
                 sed -i "${line_num}s/\.innerHTML\s*=/.textContent =/" "$file" 2>/dev/null || true
                 changed=true
             fi
-        done < <(grep -nP '\.innerHTML\s*=' "$file" 2>/dev/null | cut -d: -f1)
+        done < <(grep -nP '\.innerHTML\s*=' "$file" 2>/dev/null | cut -d: -f1 | sort -rn)
     fi
 
     # Pattern 2: .innerHTML used in concatenation (.innerHTML += ...)
@@ -80,8 +83,8 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f \( -name "*.js" -o -name "*.mjs" -o -name "*.jsx" -o -name "*.res" \) \
-    -not -path "*/node_modules/*" -not -path "*/\.git/*" -not -path "*/target/*" \
-    -not -path "*/_build/*" -not -name "*.min.js" -print0 2>/dev/null)
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" \
+    -not -name "*.min.js" -print0 2>/dev/null)
 
 echo ""
 if [[ "$FIXED_COUNT" -gt 0 ]]; then

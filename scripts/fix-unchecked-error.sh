@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Missing finding JSON file}"
 
@@ -32,7 +35,7 @@ while IFS= read -r -d '' file; do
                 sed -i "${line_num}i\\    // TODO: handle error instead of discarding with let _ =" "$file" 2>/dev/null || true
                 changed=true
             fi
-        done < <(grep -nP 'let\s+_\s*=\s*\S+' "$file" 2>/dev/null | cut -d: -f1)
+        done < <(grep -nP 'let\s+_\s*=\s*\S+' "$file" 2>/dev/null | cut -d: -f1 | sort -rn)
     fi
 
     if [[ "$changed" == "true" ]]; then
@@ -40,7 +43,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f -name "*.rs" \
-    -not -path "*/\.git/*" -not -path "*/target/*" -print0 2>/dev/null)
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
 # --- Go: Find unchecked errors (err not used after assignment) ---
 while IFS= read -r -d '' file; do
@@ -55,7 +58,7 @@ while IFS= read -r -d '' file; do
                 sed -i "${line_num}i\\	// TODO: handle error instead of discarding" "$file" 2>/dev/null || true
                 changed=true
             fi
-        done < <(grep -nP ',\s*_\s*:?=\s*\S+\(' "$file" 2>/dev/null | cut -d: -f1)
+        done < <(grep -nP ',\s*_\s*:?=\s*\S+\(' "$file" 2>/dev/null | cut -d: -f1 | sort -rn)
     fi
 
     if [[ "$changed" == "true" ]]; then
@@ -63,7 +66,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f -name "*.go" \
-    -not -path "*/\.git/*" -not -path "*/vendor/*" -print0 2>/dev/null)
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
 # --- Elixir: Find bare function calls ignoring {:error, _} returns ---
 while IFS= read -r -d '' file; do
@@ -79,7 +82,7 @@ while IFS= read -r -d '' file; do
                     sed -i "${line_num}i\\    # TODO: handle {:error, reason} return from ${func}" "$file" 2>/dev/null || true
                     changed=true
                 fi
-            done < <(grep -nP "^\\s+${func//./\\.}\(" "$file" 2>/dev/null | cut -d: -f1)
+            done < <(grep -nP "^\\s+${func//./\\.}\(" "$file" 2>/dev/null | cut -d: -f1 | sort -rn)
         fi
     done
 
@@ -88,7 +91,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f \( -name "*.ex" -o -name "*.exs" \) \
-    -not -path "*/_build/*" -not -path "*/deps/*" -not -path "*/\.git/*" -print0 2>/dev/null)
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
 echo ""
 if [[ "$FIXED_COUNT" -gt 0 ]]; then

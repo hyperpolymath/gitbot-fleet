@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Missing finding JSON file}"
 
@@ -67,7 +70,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f \( -name "*.sh" -o -name "*.bash" -o -name "*.env.example" \) \
-    -not -path "*/\.git/*" -not -path "*/node_modules/*" -print0 2>/dev/null)
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
 # --- YAML/config files ---
 while IFS= read -r -d '' file; do
@@ -97,14 +100,14 @@ while IFS= read -r -d '' file; do
 
         sed -i "${line_num}i\\  # SECURITY: replace hardcoded secret with environment variable" "$file" 2>/dev/null || true
         changed=true
-    done < <(grep -niP "^\\s*${SECRET_KEYS}:\\s*[\"'].+[\"']" "$file" 2>/dev/null || true)
+    done < <(grep -niP "^\\s*${SECRET_KEYS}:\\s*[\"'].+[\"']" "$file" 2>/dev/null | sort -t: -k1,1 -rn || true)
 
     if [[ "$changed" == "true" ]]; then
         echo "  FIXED $rel_path — added secret warnings"
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f \( -name "*.yml" -o -name "*.yaml" -o -name "*.toml" \) \
-    -not -path "*/\.git/*" -not -path "*/node_modules/*" \
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" \
     -not -path "*/.github/workflows/*" -print0 2>/dev/null)
 
 # --- Elixir config files ---
@@ -128,7 +131,7 @@ while IFS= read -r -d '' file; do
                     sed -i "${line_num}i\\      # SECURITY: replace hardcoded secret with System.get_env/1" "$file" 2>/dev/null || true
                     changed=true
                 fi
-            done < <(grep -nP "${SECRET_KEYS}:\\s*\"[^\"]{8,}\"" "$file" 2>/dev/null | cut -d: -f1)
+            done < <(grep -nP "${SECRET_KEYS}:\\s*\"[^\"]{8,}\"" "$file" 2>/dev/null | cut -d: -f1 | sort -rn)
         fi
     fi
 
@@ -137,7 +140,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f \( -name "*.ex" -o -name "*.exs" \) \
-    -not -path "*/_build/*" -not -path "*/deps/*" -not -path "*/\.git/*" -print0 2>/dev/null)
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
 echo ""
 if [[ "$FIXED_COUNT" -gt 0 ]]; then

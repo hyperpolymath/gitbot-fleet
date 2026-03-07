@@ -17,6 +17,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Missing finding JSON file}"
 
@@ -28,13 +31,8 @@ echo "  Repo:    $REPO_PATH"
 echo "  Pattern: $PATTERN_ID"
 echo ""
 
-# Directories to skip
-SKIP_DIRS=(".git" "target" "node_modules" "_build" ".lake")
-
-FIND_EXCLUDES=()
-for d in "${SKIP_DIRS[@]}"; do
-    FIND_EXCLUDES+=(-not -path "*/${d}/*")
-done
+# Use shared third-party exclusions
+FIND_EXCLUDES=(-not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}")
 
 FIXED_COUNT=0
 

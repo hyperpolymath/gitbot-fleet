@@ -15,6 +15,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Missing finding JSON file}"
 
@@ -41,7 +44,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f -name "*.hs" \
-    -not -path "*/\.git/*" \
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" \
     -not -path "*/.stack-work/*" \
     -not -path "*/dist-newstyle/*" \
     -print0 2>/dev/null)
@@ -64,8 +67,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f -name "*.ml" \
-    -not -path "*/\.git/*" \
-    -not -path "*/_build/*" \
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" \
     -not -path "*/_opam/*" \
     -print0 2>/dev/null)
 
@@ -87,8 +89,7 @@ while IFS= read -r -d '' file; do
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f -name "*.v" \
-    -not -path "*/\.git/*" \
-    -not -path "*/_build/*" \
+    -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" \
     -print0 2>/dev/null)
 
 echo ""
