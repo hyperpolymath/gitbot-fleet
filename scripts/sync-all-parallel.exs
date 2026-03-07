@@ -31,11 +31,6 @@ defmodule SyncAll do
 
   @ignored_dirs ~w[logs monitoring .git-private-farm]
 
-  @skip_dirs ~w[
-    winget-pkgs compiler-source node_modules target _build
-    .lake deps vendor __pycache__
-  ]
-
   defstruct [
     :repos_dir,
     :dry_run,
@@ -165,24 +160,30 @@ defmodule SyncAll do
 
   defp is_submodule?(rel, repos_dir) do
     parts = Path.split(rel)
+    num_parts = length(parts)
 
-    # Walk parent directories looking for .gitmodules
-    1..(length(parts) - 1)
-    |> Enum.any?(fn n ->
-      parent = parts |> Enum.take(n) |> Path.join()
-      parent_abs = Path.join(repos_dir, parent)
-      gitmodules = Path.join(parent_abs, ".gitmodules")
+    # Top-level repos can't be submodules
+    if num_parts <= 1 do
+      false
+    else
+      # Walk parent directories looking for .gitmodules
+      1..(num_parts - 1)//1
+      |> Enum.any?(fn n ->
+        parent = parts |> Enum.take(n) |> Path.join()
+        parent_abs = Path.join(repos_dir, parent)
+        gitmodules = Path.join(parent_abs, ".gitmodules")
 
-      if File.exists?(gitmodules) do
-        subpath = parts |> Enum.drop(n) |> Path.join()
-        case File.read(gitmodules) do
-          {:ok, content} -> String.contains?(content, "path = #{subpath}")
-          _ -> false
+        if File.exists?(gitmodules) do
+          subpath = parts |> Enum.drop(n) |> Path.join()
+          case File.read(gitmodules) do
+            {:ok, content} -> String.contains?(content, "path = #{subpath}")
+            _ -> false
+          end
+        else
+          false
         end
-      else
-        false
-      end
-    end)
+      end)
+    end
   end
 
   # --- Phase 1: Parallel Sync ---
