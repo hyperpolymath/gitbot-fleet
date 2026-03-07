@@ -49,8 +49,8 @@ validate_path_within() {
 # --- Configuration ---
 # Hypatia's local data store is the primary source for dispatch manifests.
 # Falls back to central verisimdb-data if HYPATIA_DATA is not set.
-HYPATIA_DATA="${HYPATIA_DATA:-/var/mnt/eclipse/repos/hypatia/data/verisimdb}"
-VERISIMDB_DATA="${VERISIMDB_DATA:-/var/mnt/eclipse/repos/verisimdb-data}"
+HYPATIA_DATA="${HYPATIA_DATA:-/var/mnt/eclipse/repos/nextgen-databases/verisimdb/verisimdb-data}"
+VERISIMDB_DATA="${VERISIMDB_DATA:-/var/mnt/eclipse/repos/nextgen-databases/verisimdb/verisimdb-data}"
 REPOS_BASE="${REPOS_BASE:-/var/mnt/eclipse/repos}"
 FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var/mnt/eclipse/repos/gitbot-fleet/scripts}"
 RRA_BIN="${RRA_BIN:-/var/mnt/eclipse/repos/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
@@ -154,7 +154,7 @@ record_outcome() {
 execute_entry() {
     local entry="$1"
 
-    local tier strategy repo pattern_id recipe_id confidence auto_fixable fix_script
+    local tier strategy repo pattern_id recipe_id confidence auto_fixable fix_script program_path
     tier=$(echo "$entry" | jq -r '.tier')
     strategy=$(echo "$entry" | jq -r '.strategy')
     repo=$(echo "$entry" | jq -r '.repo')
@@ -163,15 +163,21 @@ execute_entry() {
     confidence=$(echo "$entry" | jq -r '.confidence // 0')
     auto_fixable=$(echo "$entry" | jq -r '.auto_fixable // false')
     fix_script=$(echo "$entry" | jq -r '.fix_script // "none"')
+    program_path=$(echo "$entry" | jq -r '.program_path // ""')
 
-    # Validate repo name (prevent directory traversal)
-    if ! validate_safe_name "$repo" "repo"; then
-        echo "  SKIP: $pattern_id (unsafe repo name)"
-        ((SKIPPED++)) || true
-        return
+    # Resolve repo path: prefer program_path from manifest, fall back to REPOS_BASE/repo
+    local repo_path=""
+    if [[ -n "$program_path" && -d "$program_path" ]]; then
+        repo_path="$program_path"
+    else
+        # Validate repo name (prevent directory traversal)
+        if ! validate_safe_name "$repo" "repo"; then
+            echo "  SKIP: $pattern_id (unsafe repo name)"
+            ((SKIPPED++)) || true
+            return
+        fi
+        repo_path="$REPOS_BASE/$repo"
     fi
-
-    local repo_path="$REPOS_BASE/$repo"
 
     # Double-check path stays within REPOS_BASE
     if ! validate_path_within "$repo_path" "$REPOS_BASE"; then
@@ -194,6 +200,21 @@ execute_entry() {
             if [[ "$DRY_RUN" == "true" ]]; then
                 echo "        (dry-run) Would execute fix"
                 return
+            fi
+
+            # Resolve fix_script from registry if not set in manifest
+            if [[ "$fix_script" == "none" || "$fix_script" == "null" ]]; then
+                local registry="$FLEET_SCRIPTS/fix-script-registry.json"
+                if [[ -f "$registry" ]]; then
+                    # Try recipe_id first, then category
+                    fix_script=$(jq -r --arg rid "$recipe_id" '.registry.by_recipe[$rid] // empty' "$registry" 2>/dev/null || true)
+                    if [[ -z "$fix_script" || "$fix_script" == "null" ]]; then
+                        local category
+                        category=$(echo "$entry" | jq -r '.category // ""')
+                        fix_script=$(jq -r --arg cat "$category" '.registry.by_category[$cat] // empty' "$registry" 2>/dev/null || true)
+                    fi
+                    [[ -z "$fix_script" ]] && fix_script="none"
+                fi
             fi
 
             # Try fix script first, then robot-repo-automaton
