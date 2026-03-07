@@ -13,8 +13,8 @@ echo "Fixing missing SPDX header in $REPO_PATH..."
 FILE_PATH=$(jq -r '.location.file' "$FINDING_FILE")
 FULL_PATH="$REPO_PATH/$FILE_PATH"
 
-# Default license (can be overridden by repo's LICENSE file)
-DEFAULT_LICENSE="AGPL-3.0-or-later"
+# Default license for hyperpolymath repos
+DEFAULT_LICENSE="PMPL-1.0-or-later"
 
 if [[ ! -f "$FULL_PATH" ]]; then
     echo "ERROR: File not found: $FULL_PATH"

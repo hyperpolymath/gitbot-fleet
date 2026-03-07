@@ -62,23 +62,6 @@ if ! diff -q "$FILE" "${FILE}.bak" >/dev/null 2>&1; then
     # Add comment explaining the change
     sed -i "${LINE}i\\    // SECURITY FIX: Replaced CORS wildcard with environment-based origin" "$FILE"
 
-    # Create git commit if in git repo
-    if [[ -d "$REPO_PATH/.git" ]]; then
-        cd "$REPO_PATH"
-        git add "$FILE"
-        git commit -m "security: replace CORS wildcard with environment variable
-
-Replaced Access-Control-Allow-Origin: '*' with environment-based origin
-whitelist to prevent CORS misconfiguration vulnerability (CWE-942).
-
-Set ALLOWED_ORIGINS environment variable to configure permitted origins.
-
-Auto-fixed by: robot-repo-automaton
-Finding: $(jq -r '.id' "$FINDING_FILE")
-
-Co-Authored-By: Hypatia Scanner <hypatia@reposystem.dev>"
-    fi
-
     rm -f "${FILE}.bak"
     exit 0
 else
