@@ -166,8 +166,9 @@ execute_entry() {
     program_path=$(echo "$entry" | jq -r '.program_path // ""')
 
     # Resolve repo path: prefer program_path from manifest, fall back to REPOS_BASE/repo
+    # Never use "." as program_path — that would scan the entire working directory
     local repo_path=""
-    if [[ -n "$program_path" && -d "$program_path" ]]; then
+    if [[ -n "$program_path" && "$program_path" != "." && "$program_path" != "./" && -d "$program_path" ]]; then
         repo_path="$program_path"
     else
         # Validate repo name (prevent directory traversal)
