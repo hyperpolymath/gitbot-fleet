@@ -16,6 +16,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: fix-deno-permissions.sh <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Usage: fix-deno-permissions.sh <repo-path> <finding-json>}"
 
@@ -48,10 +51,8 @@ while IFS= read -r -d '' script_file; do
     echo "[fix-deno-permissions] Fixed (short form): ${script_file}"
     MODIFIED=$((MODIFIED + 1))
   fi
-done < <(find "${REPO_PATH}" \
-  -path "${REPO_PATH}/.git" -prune -o \
-  -path "${REPO_PATH}/node_modules" -prune -o \
-  -name '*.sh' -type f -print0 2>/dev/null)
+done < <(find "${REPO_PATH}" -name '*.sh' -type f \
+  -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
 # --- Fix justfile and Makefile ---
 for build_file in "${REPO_PATH}/justfile" "${REPO_PATH}/Justfile" \
@@ -76,11 +77,10 @@ while IFS= read -r -d '' nested_config; do
     MODIFIED=$((MODIFIED + 1))
   fi
 done < <(find "${REPO_PATH}" \
-  -path "${REPO_PATH}/.git" -prune -o \
-  -path "${REPO_PATH}/node_modules" -prune -o \
   \( -name 'deno.json' -o -name 'deno.jsonc' \) \
   -not -path "${REPO_PATH}/deno.json" \
   -not -path "${REPO_PATH}/deno.jsonc" \
+  -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" \
   -type f -print0 2>/dev/null)
 
 if [[ ${MODIFIED} -eq 0 ]]; then

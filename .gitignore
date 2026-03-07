@@ -34,3 +34,9 @@ logs/
 
 # Generated enrollment registry
 shared-context/enrollment/repos.json
+
+# Runtime findings output
+shared-context/findings/
+
+# Hypatia scan cache
+.hypatia/

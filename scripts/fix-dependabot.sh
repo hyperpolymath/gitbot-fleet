@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
 REPO_PATH="${1:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 
