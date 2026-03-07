@@ -16,6 +16,8 @@
 #   --repo REPO       Only process entries for a specific repo
 #   --limit N         Process at most N entries
 #   --manifest PATH   Path to manifest (default: verisimdb-data/dispatch/pending.jsonl)
+#   --parallel N      Run up to N fix scripts concurrently (default: 1)
+#   --dedup-repo      Group entries by repo, run only first per repo+category
 
 set -euo pipefail
 
@@ -69,6 +71,8 @@ FILTER_TIER=""
 FILTER_STRATEGY=""
 FILTER_REPO=""
 LIMIT=0
+PARALLEL=1
+DEDUP_REPO=false
 
 # Counters
 TOTAL=0
@@ -86,6 +90,8 @@ while [[ $# -gt 0 ]]; do
         --repo)       FILTER_REPO="$2"; shift 2 ;;
         --limit)      LIMIT="$2"; shift 2 ;;
         --manifest)   MANIFEST_PATH="$2"; shift 2 ;;
+        --parallel)   PARALLEL="$2"; shift 2 ;;
+        --dedup-repo) DEDUP_REPO=true; shift ;;
         -h|--help)
             head -18 "$0" | tail -16
             exit 0
@@ -303,8 +309,47 @@ execute_entry() {
     esac
 }
 
+# --- Deduplication ---
+# When --dedup-repo is set, only process the first entry per repo+category combo.
+# This avoids running the same fix script on the same repo multiple times.
+declare -A SEEN_REPO_CAT=()
+
+should_skip_dedup() {
+    local line="$1"
+    if [[ "$DEDUP_REPO" != "true" ]]; then
+        return 1
+    fi
+    local repo category key
+    repo=$(echo "$line" | jq -r '.repo')
+    category=$(echo "$line" | jq -r '.category // "unknown"')
+    key="${repo}::${category}"
+    if [[ -n "${SEEN_REPO_CAT[$key]+x}" ]]; then
+        return 0
+    fi
+    SEEN_REPO_CAT["$key"]=1
+    return 1
+}
+
 # --- Main loop ---
 LINE_NUM=0
+ACTIVE_JOBS=0
+PARALLEL_TMPDIR=$(mktemp -d /tmp/dispatch-parallel-XXXXXX)
+
+# Parallel wrapper: run execute_entry in background, track jobs
+run_entry() {
+    local line="$1"
+    if [[ "$PARALLEL" -le 1 ]]; then
+        execute_entry "$line"
+    else
+        # Wait if we've hit the parallel limit
+        while [[ "$ACTIVE_JOBS" -ge "$PARALLEL" ]]; do
+            wait -n 2>/dev/null || true
+            ((ACTIVE_JOBS--)) || true
+        done
+        execute_entry "$line" &
+        ((ACTIVE_JOBS++)) || true
+    fi
+}
 
 while IFS= read -r line; do
     # Skip empty lines
@@ -333,6 +378,11 @@ while IFS= read -r line; do
         [[ "$entry_repo" != "$FILTER_REPO" ]] && continue
     fi
 
+    # Deduplicate by repo+category
+    if should_skip_dedup "$line"; then
+        continue
+    fi
+
     ((TOTAL++)) || true
 
     # Check limit
@@ -341,9 +391,15 @@ while IFS= read -r line; do
         break
     fi
 
-    execute_entry "$line"
+    run_entry "$line"
 
 done < "$MANIFEST_PATH"
+
+# Wait for all background jobs to finish
+if [[ "$PARALLEL" -gt 1 ]]; then
+    wait
+fi
+rm -rf "$PARALLEL_TMPDIR" 2>/dev/null || true
 
 # --- Summary ---
 echo ""
