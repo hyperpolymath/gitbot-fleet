@@ -26,8 +26,10 @@ while IFS= read -r -d '' file; do
     # Pattern 1: curl | bash / curl | sh (pipe-to-shell)
     if grep -qP 'curl\s.*\|\s*(ba)?sh' "$file" 2>/dev/null; then
         echo "  FOUND curl|bash in $rel_path"
-        # Add warning comment
-        sed -i 's/\(.*curl.*|.*sh\)/# WARNING: Pipe-to-shell is unsafe — download and verify first\n\1/' "$file" 2>/dev/null || true
+        # Add warning comment (idempotent — skip if already annotated)
+        if ! grep -q "WARNING: Pipe-to-shell is unsafe" "$file" 2>/dev/null; then
+            sed -i 's/\(.*curl.*|.*sh\)/# WARNING: Pipe-to-shell is unsafe — download and verify first\n\1/' "$file" 2>/dev/null || true
+        fi
         ((changes++)) || true
     fi
 
