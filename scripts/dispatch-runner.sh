@@ -57,6 +57,14 @@ REPOS_BASE="${REPOS_BASE:-/var/mnt/eclipse/repos}"
 FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var/mnt/eclipse/repos/gitbot-fleet/scripts}"
 RRA_BIN="${RRA_BIN:-/var/mnt/eclipse/repos/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
 
+# Third-party subdirectories inside monorepos that must NOT be modified.
+# Fix scripts will skip these paths entirely.
+THIRD_PARTY_PATHS=(
+    "developer-ecosystem/package-publishers/winget-pkgs"
+    "developer-ecosystem/package-publishers/macports-ports"
+    "echidna/HOL"
+)
+
 # Try hypatia's data first, then fall back to central verisimdb-data
 if [[ -f "${HYPATIA_DATA}/dispatch/pending.jsonl" ]]; then
     MANIFEST_PATH="${HYPATIA_DATA}/dispatch/pending.jsonl"
@@ -192,6 +200,16 @@ execute_entry() {
         ((SKIPPED++)) || true
         return
     fi
+
+    # Skip third-party paths that must not be modified
+    local rel_repo_path="${repo_path#"$REPOS_BASE"/}"
+    for tp in "${THIRD_PARTY_PATHS[@]}"; do
+        if [[ "$rel_repo_path" == "$tp" || "$rel_repo_path" == "$tp/"* ]]; then
+            echo "  SKIP: $repo (third-party path: $tp)"
+            ((SKIPPED++)) || true
+            return
+        fi
+    done
 
     # Skip if repo doesn't exist locally
     if [[ ! -d "$repo_path" ]]; then
