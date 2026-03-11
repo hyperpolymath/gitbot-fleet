@@ -35,7 +35,8 @@
       "PathTraversal": "fix-tmp-paths.sh",
       "TodoMarkers": "fix-todo-markers.sh",
       "BelieveMe": "fix-believe-me.sh",
-      "WorkflowHygiene": "fix-workflow-hygiene.sh"
+      "WorkflowHygiene": "fix-workflow-hygiene.sh",
+      "LicenseHygiene": "fix-license-hygiene.sh"
     },
     "by_recipe": {
       "recipe-heredoc-to-install": "fix-heredoc-install.sh",
@@ -75,7 +76,9 @@
       "synthetic-eliminate-AtomExhaustion": "fix-atom-exhaustion.sh",
       "synthetic-eliminate-UnsafeTypeCoercion": "fix-unsafe-type-coercion.sh",
       "recipe-workflow-hygiene": "fix-workflow-hygiene.sh",
-      "recipe-remove-irrelevant-workflow": "fix-workflow-hygiene.sh"
+      "recipe-remove-irrelevant-workflow": "fix-workflow-hygiene.sh",
+      "recipe-license-hygiene": "fix-license-hygiene.sh",
+      "recipe-reuse-dual-license": "fix-license-hygiene.sh"
     }
   }
 }
