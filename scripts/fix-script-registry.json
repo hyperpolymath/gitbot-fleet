@@ -34,7 +34,8 @@
       "HeredocEval": "fix-heredoc-install.sh",
       "PathTraversal": "fix-tmp-paths.sh",
       "TodoMarkers": "fix-todo-markers.sh",
-      "BelieveMe": "fix-believe-me.sh"
+      "BelieveMe": "fix-believe-me.sh",
+      "WorkflowHygiene": "fix-workflow-hygiene.sh"
     },
     "by_recipe": {
       "recipe-heredoc-to-install": "fix-heredoc-install.sh",
@@ -72,7 +73,9 @@
       "proven-substitute-UncheckedAllocation": "fix-tmp-paths.sh",
       "synthetic-eliminate-HardcodedSecret": "fix-secret-to-env.sh",
       "synthetic-eliminate-AtomExhaustion": "fix-atom-exhaustion.sh",
-      "synthetic-eliminate-UnsafeTypeCoercion": "fix-unsafe-type-coercion.sh"
+      "synthetic-eliminate-UnsafeTypeCoercion": "fix-unsafe-type-coercion.sh",
+      "recipe-workflow-hygiene": "fix-workflow-hygiene.sh",
+      "recipe-remove-irrelevant-workflow": "fix-workflow-hygiene.sh"
     }
   }
 }
