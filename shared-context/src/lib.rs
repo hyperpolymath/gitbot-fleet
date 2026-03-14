@@ -43,6 +43,7 @@ pub mod bot;
 pub mod context;
 pub mod finding;
 pub mod health;
+pub mod panel;
 pub mod reporting;
 pub mod state;
 pub mod storage;
@@ -52,6 +53,10 @@ pub use bot::{BotId, BotInfo, Tier};
 pub use context::Context;
 pub use finding::{Finding, Severity};
 pub use health::{FleetHealth, HealthStatus};
+pub use panel::{
+    IsolationTier, PanelContext, PanelFileExpectation, PanelId, PanelManifest, PanelPhase,
+    PanelValidation, WiringCheck, WiringStatus,
+};
 pub use reporting::{FleetReport, ReportFormat};
 pub use state::{RepoState, SessionState};
 pub use storage::ContextStorage;
