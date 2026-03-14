@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-03-14T12:19:03Z",
+  "event": "scan_complete",
+  "critical": 43,
+  "high": 33,
+  "repos_scanned": 5
+}
+{
+  "timestamp": "2026-03-14T12:19:03Z",
+  "event": "critical_autofix_trigger",
+  "critical_count": 43,
+  "action": "run-fleet.sh fix --severity critical"
+}
