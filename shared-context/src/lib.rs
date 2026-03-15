@@ -44,6 +44,7 @@ pub mod context;
 pub mod finding;
 pub mod health;
 pub mod panel;
+pub mod panel_checker;
 pub mod reporting;
 pub mod state;
 pub mod storage;
@@ -60,6 +61,10 @@ pub use panel::{
 pub use reporting::{FleetReport, ReportFormat};
 pub use state::{RepoState, SessionState};
 pub use storage::ContextStorage;
+pub use panel_checker::{
+    PccObligation, PccPanelResult, PccSummary, find_pcc_binary, pcc_result_to_manifest,
+    pcc_results_to_findings, run_pcc_verify,
+};
 pub use triangle::{ConfidenceThresholds, DispatchStrategy, TriangleTier};
 
 use thiserror::Error;
