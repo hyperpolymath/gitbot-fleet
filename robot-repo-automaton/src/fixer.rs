@@ -388,8 +388,8 @@ impl Fixer {
     /// Create a file with template expansion
     ///
     /// Supports template variables:
-    /// - `{{REPO}}` - Repository name
-    /// - `{{OWNER}}` - Repository owner
+    /// - `gitbot-fleet` - Repository name
+    /// - `hyperpolymath` - Repository owner
     /// - `{{LICENSE}}` - License identifier
     /// - `{{YEAR}}` - Current year
     fn apply_create(
@@ -549,8 +549,8 @@ impl Fixer {
         let year = chrono::Utc::now().format("%Y").to_string();
 
         content
-            .replace("{{REPO}}", repo_name)
-            .replace("{{OWNER}}", "hyperpolymath")
+            .replace("gitbot-fleet", repo_name)
+            .replace("hyperpolymath", "hyperpolymath")
             .replace("{{LICENSE}}", "PMPL-1.0-or-later")
             .replace("{{YEAR}}", &year)
             .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")
