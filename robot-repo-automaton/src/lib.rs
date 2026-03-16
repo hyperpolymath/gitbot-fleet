@@ -49,6 +49,7 @@
 //! # }
 //! ```
 
+#![forbid(unsafe_code)]
 pub mod catalog;
 pub mod confidence;
 pub mod hypatia;

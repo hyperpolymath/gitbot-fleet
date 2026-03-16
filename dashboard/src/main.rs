@@ -4,6 +4,7 @@
 //! Provides real-time monitoring, health status, findings explorer,
 //! and fleet management through a web interface.
 
+#![forbid(unsafe_code)]
 use axum::{
     extract::{Path, Query, State, WebSocketUpgrade},
     http::StatusCode,

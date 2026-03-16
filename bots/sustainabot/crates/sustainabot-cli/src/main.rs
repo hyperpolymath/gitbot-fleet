@@ -6,6 +6,7 @@
 //! Ecological and economic code analysis tool.
 //! Built with Eclexia principles - proving resource-aware design works.
 
+#![forbid(unsafe_code)]
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::fs;

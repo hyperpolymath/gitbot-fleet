@@ -24,6 +24,7 @@
 //! - Protocol: QUIC + HTTP/3 + IPv6 (IPv4 disabled)
 //! - Fallback: SPHINCS+ for all hybrid PQ systems
 
+#![forbid(unsafe_code)]
 pub mod analyzers;
 pub mod cli;
 pub mod fleet;

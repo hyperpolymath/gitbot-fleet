@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 //! Unified Fleet CLI - Single entry point for all gitbot-fleet operations
 
+#![forbid(unsafe_code)]
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use colored::*;

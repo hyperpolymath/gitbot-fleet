@@ -5,6 +5,7 @@
 //!
 //! Produces machine-readable SARIF that GitHub/IDEs render as inline annotations.
 
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use sustainabot_metrics::AnalysisResult;
 

@@ -10,6 +10,7 @@
 //! All webhook inputs are validated via the [`sanitize`] module before
 //! being used in API calls or markdown output. Tokens are never logged.
 
+#![forbid(unsafe_code)]
 pub mod config;
 pub mod fleet;
 pub mod github;

@@ -6,6 +6,7 @@
 //! Publishes ecological and economic analysis findings to the shared context
 //! layer for consumption by other bots in the fleet.
 
+#![forbid(unsafe_code)]
 use anyhow::Result;
 use gitbot_shared_context::{BotId, Context, Finding, Severity};
 use std::path::{Path, PathBuf};

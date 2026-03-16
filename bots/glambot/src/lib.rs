@@ -12,6 +12,7 @@
 //!
 //! Part of the Hyperpolymath Gitbot Fleet.
 
+#![forbid(unsafe_code)]
 pub mod analyzers;
 pub mod config;
 pub mod error;

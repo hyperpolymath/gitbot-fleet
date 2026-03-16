@@ -22,6 +22,7 @@
 //! - **Language** (3.1.1/3.1.5): Language attribute and reading level
 //! - **CSS** (1.4.4/1.4.12): CSS accessibility best practices
 
+#![forbid(unsafe_code)]
 pub mod analyzers;
 pub mod fleet;
 pub mod report;

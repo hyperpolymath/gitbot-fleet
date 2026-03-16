@@ -9,6 +9,7 @@
 //!
 //! Both backends implement the same `PolicyEngine` trait.
 
+#![forbid(unsafe_code)]
 use anyhow::{Context, Result};
 use std::path::Path;
 use sustainabot_metrics::{AnalysisResult, ResourceProfile};

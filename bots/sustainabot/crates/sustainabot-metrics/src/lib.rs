@@ -6,6 +6,7 @@
 //! Core data types for ecological and economic code analysis.
 //! Inspired by Eclexia's resource-aware design principles.
 
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 use std::ops::{Add, Mul};
 

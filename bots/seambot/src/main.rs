@@ -7,6 +7,7 @@
 //! Seambot is a governor and auditor, not a designer. It ensures that
 //! declared seams remain explicit, stable, and correctly exercised over time.
 
+#![forbid(unsafe_code)]
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
