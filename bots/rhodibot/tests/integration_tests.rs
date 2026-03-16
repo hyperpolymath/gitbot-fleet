@@ -499,7 +499,7 @@ mod rsr_tests {
             .and(path("/repos/test-org/test-repo/contents/Cargo.toml"))
             .and(header("Accept", "application/vnd.github.raw+json"))
             .respond_with(ResponseTemplate::new(200).set_body_string(
-                "[package]\nname = \"test\"\nauthors = [\"Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>\"]\n"
+                "[package]\nname = \"test\"\nauthors = [\"Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>\"]\n"
             ))
             .mount(&server)
             .await;

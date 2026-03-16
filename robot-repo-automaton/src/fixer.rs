@@ -554,7 +554,7 @@ impl Fixer {
             .replace("{{LICENSE}}", "PMPL-1.0-or-later")
             .replace("{{YEAR}}", &year)
             .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")
-            .replace("{{EMAIL}}", "jonathan.jewell@open.ac.uk")
+            .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
     }
 
     /// Commit changes to the repository
