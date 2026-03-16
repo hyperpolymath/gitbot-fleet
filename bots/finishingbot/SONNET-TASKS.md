@@ -13,7 +13,7 @@ Finishingbot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyz
 **File**: `Cargo.toml`
 
 ### 1.1 Fix license
-- Line 8: Change `license = "AGPL-3.0-or-later"` → `license = "PMPL-1.0-or-later"`
+- Line 8: Change `license = "PMPL-1.0-or-later"` → `license = "PMPL-1.0-or-later"`
 
 ### 1.2 Fix author
 - Line 6: Change `authors = ["Hyperpolymath <dev@hyperpolymath.org>"]` → `authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]`
@@ -25,7 +25,7 @@ Finishingbot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyz
   // SPDX-License-Identifier: PMPL-1.0-or-later
   // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
   ```
-- If any file has `AGPL-3.0-or-later`, change to `PMPL-1.0-or-later`
+- If any file has `PMPL-1.0-or-later`, change to `PMPL-1.0-or-later`
 
 ### Verification
 - `cargo check` compiles

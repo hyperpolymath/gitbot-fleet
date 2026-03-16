@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # SPDX-FileCopyrightText: 2024-2025 hyperpolymath
 #
 # Oikos Bot Ontology for Virtuoso/RDF
@@ -23,7 +23,7 @@ eco: a owl:Ontology ;
     dc:title "Oikos Bot Ontology"@en ;
     dc:description "Semantic vocabulary for ecological and economic code analysis"@en ;
     dc:creator "Hyperpolymath" ;
-    dc:license <https://spdx.org/licenses/AGPL-3.0-or-later.html> ;
+    dc:license <https://spdx.org/licenses/PMPL-1.0-or-later.html> ;
     owl:versionInfo "0.1.0" .
 
 # =============================================================================

@@ -28,7 +28,7 @@ Glambot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyzes re
 **File**: `Cargo.toml`
 
 ### 2.1 Fix license
-- If `license` field says `AGPL-3.0-or-later`, change to `PMPL-1.0-or-later`
+- If `license` field says `PMPL-1.0-or-later`, change to `PMPL-1.0-or-later`
 
 ### 2.2 Fix author
 - Ensure authors = `["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]`

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # Oikos Bot Container Image
 #
 # Build: vordr build -t oikos:latest -f containers/Containerfile .
@@ -48,7 +48,7 @@ LABEL org.opencontainers.image.title="Oikos Bot"
 LABEL org.opencontainers.image.description="Ecological & Economic Code Analysis Platform"
 LABEL org.opencontainers.image.version="0.1.0-beta"
 LABEL org.opencontainers.image.source="https://github.com/hyperpolymath/oikos-bot"
-LABEL org.opencontainers.image.licenses="AGPL-3.0-or-later"
+LABEL org.opencontainers.image.licenses="PMPL-1.0-or-later"
 
 WORKDIR /app
 

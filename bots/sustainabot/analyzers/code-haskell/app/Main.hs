@@ -119,7 +119,7 @@ printVersion :: IO ()
 printVersion = do
   putStrLn "eco-analyzer 0.1.0"
   putStrLn "Copyright (c) 2024 Hyperpolymath"
-  putStrLn "License: AGPL-3.0-or-later"
+  putStrLn "License: PMPL-1.0-or-later"
   exitSuccess
 
 -- | Run analysis on a path

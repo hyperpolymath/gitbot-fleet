@@ -165,7 +165,7 @@ impl LicenseAnalyzer {
         if content_lower.contains("gnu affero general public license")
             || content_lower.contains("agpl-3.0")
         {
-            return Some("AGPL-3.0-or-later".to_string());
+            return Some("PMPL-1.0-or-later".to_string());
         }
 
         if content_lower.contains("gnu general public license")

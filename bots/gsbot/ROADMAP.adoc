@@ -325,4 +325,4 @@ Priority areas for contribution:
 
 == License
 
-AGPL-3.0-or-later - see `LICENSE.txt`
+PMPL-1.0-or-later - see `LICENSE.txt`
