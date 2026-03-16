@@ -32,7 +32,7 @@ name = "accessibilitybot"
 version = "0.1.0"
 edition = "2021"
 license = "PMPL-1.0-or-later"
-authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 description = "WCAG 2.3 AAA Accessibility Compliance Bot for gitbot-fleet"
 
 [dependencies]

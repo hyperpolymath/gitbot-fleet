@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Resource utilization analysis
--- SPDX-License-Identifier: AGPL-3.0-or-later
+-- SPDX-License-Identifier: PMPL-1.0-or-later
 --
 -- Analyzes memory, CPU, and I/O efficiency patterns in code.
 module Eco.Resource

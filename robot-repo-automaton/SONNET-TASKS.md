@@ -128,7 +128,7 @@ Robot-repo-automaton should NOT blindly apply every fix. It needs confidence thr
 
 ### 5.1 Cargo.toml
 - License: `PMPL-1.0-or-later`
-- Author: `"Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"`
+- Author: `"Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"`
 
 ### 5.2 SPDX headers on all `.rs` files
 

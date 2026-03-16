@@ -2,7 +2,7 @@ image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,
 image:https://img.shields.io/github/v/release/hyperpolymath/echidnabot?include_prereleases[GitHub Release]
 
 // SPDX-License-Identifier: PMPL-1.0-or-later
-// Copyright (c) 2025-2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+// Copyright (c) 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = echidnabot: Proof-Aware CI Bot
 
@@ -403,7 +403,7 @@ This project is licensed under PMPL-1.0-or-later (Palimpsest License).
 
 See link:LICENSE[LICENSE] for details.
 
-**Author:** Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+**Author:** Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 == Contributing
 

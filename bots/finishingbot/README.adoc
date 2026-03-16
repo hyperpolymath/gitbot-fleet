@@ -1,7 +1,7 @@
 image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
 // SPDX-License-Identifier: PMPL-1.0-or-later
-// Copyright (c) 2025 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+// Copyright (c) 2025 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = finishing-bot: Release Readiness Validator
 
@@ -446,7 +446,7 @@ See link:LICENSE[LICENSE] for details.
 
 == Author
 
-Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 == Contributing
 

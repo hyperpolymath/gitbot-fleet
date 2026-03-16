@@ -149,7 +149,7 @@ The repo has ZERO tests despite importing test libraries.
 
 ### 5.1 Cargo.toml
 - License: must be `PMPL-1.0-or-later` (not AGPL)
-- Author: must be `"Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"`
+- Author: must be `"Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"`
 
 ### 5.2 SPDX headers
 - Every `.rs` file needs:

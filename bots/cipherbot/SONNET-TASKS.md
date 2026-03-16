@@ -41,7 +41,7 @@ name = "cipherbot"
 version = "0.1.0"
 edition = "2021"
 license = "PMPL-1.0-or-later"
-authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 description = "Cryptographic Hygiene & Post-Quantum Readiness Bot for gitbot-fleet"
 
 [dependencies]

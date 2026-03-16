@@ -14,7 +14,7 @@ Rhodibot is a Tier 1 (Verifier) bot in the gitbot-fleet ecosystem — the RSR (R
 
 ### 1.1 Cargo.toml
 - Line ~: Change `license = "AGPL-3.0-or-later"` → `license = "PMPL-1.0-or-later"`
-- Line ~: Change `authors = ["hyperpolymath <hyperpolymath@users.noreply.github.com>"]` → `authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]`
+- Line ~: Change `authors = ["hyperpolymath <hyperpolymath@users.noreply.github.com>"]` → `authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]`
 
 ### 1.2 SCM file license headers
 All files in `.machine_readable/` (STATE.scm, META.scm, ECOSYSTEM.scm, AGENTIC.scm, PLAYBOOK.scm, NEUROSYM.scm):

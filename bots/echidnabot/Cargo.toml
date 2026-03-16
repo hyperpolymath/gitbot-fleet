@@ -7,7 +7,7 @@ description = "Proof-aware CI bot that orchestrates ECHIDNA for theorem proof ve
 repository = "https://github.com/hyperpolymath/echidnabot"
 keywords = ["theorem-prover", "formal-verification", "ci", "bot", "echidna"]
 categories = ["development-tools", "science"]
-authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 readme = "README.adoc"
 
 [lib]

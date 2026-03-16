@@ -32,7 +32,7 @@ authors = ["Jonathan D.A. Jewell <jonathan.jewell@gmail.com>"]  # WRONG
 
 **Solution:**
 ```toml
-authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]  # CORRECT
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]  # CORRECT
 ```
 
 **Compliance:** Follows CRITICAL attribution requirements from global CLAUDE.md
@@ -274,7 +274,7 @@ test scheduler::job_queue::tests::test_enqueue_and_start ... ok
 ```
 fix: restore source files and update comprehensive documentation
 
-- fix: correct author email to jonathan.jewell@open.ac.uk (was gmail)
+- fix: correct author email to j.d.a.jewell@open.ac.uk (was gmail)
 - fix: restore deleted src/main.rs, graphql.rs, echidna_client.rs, sqlite.rs
 - docs: comprehensive META.scm with 8 Architecture Decision Records
 - docs: comprehensive ECOSYSTEM.scm with position and relationships
@@ -364,7 +364,7 @@ echidnabot is a **companion project** to ECHIDNA:
 
 1. **Comprehensive Documentation Pays Off** - META.scm/ECOSYSTEM.scm/STATE.scm provide clear context for contributors
 2. **Build System Must Be Solid** - cargo clean && cargo build resolved stale artifact issues
-3. **Author Attribution Matters** - Consistent email across all repos (jonathan.jewell@open.ac.uk)
+3. **Author Attribution Matters** - Consistent email across all repos (j.d.a.jewell@open.ac.uk)
 4. **Tests Are Green Light** - 7/7 passing tests give confidence to proceed
 5. **Clear Milestones Enable Progress Tracking** - 75% completion clearly communicated via STATE.scm
 

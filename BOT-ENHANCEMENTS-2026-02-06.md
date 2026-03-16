@@ -109,7 +109,7 @@ Finished `dev` profile [unoptimized + debuginfo] target(s) in 37.49s
 name = "sustainabot-fleet"
 version = "0.1.0"
 edition = "2021"
-authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 license = "PMPL-1.0-or-later"
 
 [dependencies]

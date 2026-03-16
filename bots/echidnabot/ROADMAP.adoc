@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-// Copyright (c) 2025-2026 Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+// Copyright (c) 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = Echidnabot Roadmap
 
@@ -96,7 +96,7 @@ toc::[]
 
 * [x] License: PMPL-1.0-or-later
 * [x] SPDX headers on all `.rs` files
-* [x] Author: Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
+* [x] Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 * [x] SCM files in `.machine_readable/`
 
 == Remaining Work (v0.2.0 -- Q1-Q2 2026)
@@ -190,5 +190,5 @@ Echidnabot will **NOT**:
 * **v1.x.y** -- Stable API, breaking changes only in major versions
 
 **Repository:** https://github.com/hyperpolymath/echidnabot +
-**Maintainer:** Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk> +
+**Maintainer:** Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk> +
 **License:** PMPL-1.0-or-later

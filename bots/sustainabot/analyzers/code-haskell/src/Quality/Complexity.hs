@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Cyclomatic and cognitive complexity analysis
--- SPDX-License-Identifier: AGPL-3.0-or-later
+-- SPDX-License-Identifier: PMPL-1.0-or-later
 --
 -- Implements complexity metrics based on:
 -- - McCabe's Cyclomatic Complexity

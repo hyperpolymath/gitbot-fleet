@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Coupling and cohesion analysis
--- SPDX-License-Identifier: AGPL-3.0-or-later
+-- SPDX-License-Identifier: PMPL-1.0-or-later
 --
 -- Implements Robert C. Martin's instability/abstractness metrics
 -- and LCOM (Lack of Cohesion of Methods).

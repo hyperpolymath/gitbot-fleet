@@ -16,7 +16,7 @@ Finishingbot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyz
 - Line 8: Change `license = "AGPL-3.0-or-later"` → `license = "PMPL-1.0-or-later"`
 
 ### 1.2 Fix author
-- Line 6: Change `authors = ["Hyperpolymath <dev@hyperpolymath.org>"]` → `authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]`
+- Line 6: Change `authors = ["Hyperpolymath <dev@hyperpolymath.org>"]` → `authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]`
 
 ### 1.3 Fix SPDX headers
 - Audit ALL `.rs` files in `src/` for SPDX headers
