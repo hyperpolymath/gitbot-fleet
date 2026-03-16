@@ -86,7 +86,7 @@
       (severity "low")
       (pattern "^name:")
       (description "Workflow file missing SPDX license header")
-      (fix "Add '# SPDX-License-Identifier: AGPL-3.0-or-later' as first line")
+      (fix "Add '# SPDX-License-Identifier: PMPL-1.0-or-later' as first line")
       (auto-fixable #t))
 
     (workflow-linter-self-detection
@@ -238,7 +238,7 @@
     (sha-pin-format
       "Format: uses: action/name@SHA # version")
     (spdx-header
-      "First line: # SPDX-License-Identifier: AGPL-3.0-or-later")
+      "First line: # SPDX-License-Identifier: PMPL-1.0-or-later")
     (rust-toolchain-fix
       "uses: dtolnay/rust-toolchain@SHA\\n        with:\\n          toolchain: stable"))
 
