@@ -37,8 +37,8 @@ It operates by:
 * *Four fix types*: delete, modify, create, disable
 * *Modify operations*: replace-line, insert-before, insert-after, replace-pattern,
   prepend, append -- with safety checks and rollback on failure
-* *File creation*: template-based with variable expansion (`{{REPO}}`, `{{OWNER}}`,
-  `{{LICENSE}}`, `{{YEAR}}`, `{{AUTHOR}}`, `{{EMAIL}}`)
+* *File creation*: template-based with variable expansion (`gitbot-fleet`, `hyperpolymath`,
+  `PMPL-1.0-or-later`, `{{YEAR}}`, `Jonathan D.A. Jewell`, `{{EMAIL}}`)
 * *Confidence thresholds*: per-repo configuration via `.bot_directives/`, with
   auto-apply, propose, and skip decisions
 * *Safety*: binary file detection, gitignore checking, in-memory rollback

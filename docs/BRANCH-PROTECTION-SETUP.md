@@ -37,11 +37,11 @@ In your repository's **Settings > Branches > Branch protection rules** for
 ### From the RSR template
 
 Repos bootstrapped from `rsr-template-repo` already include
-`.github/workflows/static-analysis-gate.yml`. Replace `{{OWNER}}` with your
+`.github/workflows/static-analysis-gate.yml`. Replace `hyperpolymath` with your
 GitHub org/user name:
 
 ```bash
-sed -i 's/{{OWNER}}/hyperpolymath/g' .github/workflows/static-analysis-gate.yml
+sed -i 's/hyperpolymath/hyperpolymath/g' .github/workflows/static-analysis-gate.yml
 ```
 
 ### Adding to an existing repo
@@ -53,7 +53,7 @@ cp /path/to/rsr-template-repo/.github/workflows/static-analysis-gate.yml \
    your-repo/.github/workflows/static-analysis-gate.yml
 
 cd your-repo
-sed -i 's/{{OWNER}}/hyperpolymath/g' .github/workflows/static-analysis-gate.yml
+sed -i 's/hyperpolymath/hyperpolymath/g' .github/workflows/static-analysis-gate.yml
 git add .github/workflows/static-analysis-gate.yml
 git commit -m "ci: add static analysis gate for branch protection"
 git push
@@ -158,7 +158,7 @@ the ad-hoc sustainabot submission path.
 ## Checklist for New Repos
 
 - [ ] Copy `static-analysis-gate.yml` into `.github/workflows/`
-- [ ] Replace `{{OWNER}}` placeholder
+- [ ] Replace `hyperpolymath` placeholder
 - [ ] Push to trigger first run
 - [ ] Add required status checks in branch protection settings
 - [ ] Install local pre-push hook (optional but recommended)

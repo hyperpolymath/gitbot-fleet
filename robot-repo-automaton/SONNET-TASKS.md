@@ -73,7 +73,7 @@ Currently only "delete" fix type works. "Modify" is a stub.
 
 ### 3.1 Implement file creation
 - Create new files as specified by fix patterns
-- Support template expansion (variables like `{{REPO}}`, `{{OWNER}}`, `{{LICENSE}}`)
+- Support template expansion (variables like `gitbot-fleet`, `hyperpolymath`, `PMPL-1.0-or-later`)
 - Common creation targets:
   - Missing LICENSE files
   - Missing .editorconfig
