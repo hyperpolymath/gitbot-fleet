@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= Floor Raise Campaign — 2026-03-20
+:toc:
+:toclevels: 2
+
+== Purpose
+
+Systematically raise the architectural floor across all 256 hyperpolymath
+repositories by propagating foundational tool integrations that have been
+built but underadopted.
+
+== Gap Analysis (as of 2026-03-20)
+
+[cols="2,1,1,1"]
+|===
+| Category | Missing | Total | Gap %
+
+| 0-AI-MANIFEST.a2ml | 18 | 256 | 7%
+| Trustfile.a2ml | 78 | 256 | 30%
+| Dustfile.a2ml | 206 | 256 | 80%
+| `assail` recipe in Justfile | 170 | 256 | 66%
+| proven.a2ml integration | 256 | 256 | 100%
+| verisimdb.a2ml integration | 256 | 256 | 100%
+| feedback-o-tron.a2ml integration | 256 | 256 | 100%
+| vexometer.a2ml integration | 256 | 256 | 100%
+|===
+
+== Dispatch Manifests
+
+=== Phase 1: Structural (472 actions)
+
+File: `floor-raise-2026-03-20.jsonl`
+
+* 18 missing AI manifests (confidence: 0.98)
+* 78 missing Trustfiles (confidence: 0.98)
+* 206 missing Dustfiles (confidence: 0.98)
+* 170 missing assail recipes (confidence: 0.95)
+
+=== Phase 2: Integrations (1024 actions)
+
+File: `floor-raise-integrations-2026-03-20.jsonl`
+
+* 256 missing proven.a2ml (confidence: 0.97)
+* 256 missing verisimdb.a2ml (confidence: 0.97)
+* 256 missing feedback-o-tron.a2ml (confidence: 0.97)
+* 256 missing vexometer.a2ml (confidence: 0.97)
+
+== Fix Scripts (8 new)
+
+[cols="1,2"]
+|===
+| Script | Purpose
+
+| `fix-missing-trustfile.sh` | Add Trustfile.a2ml (provenance contract)
+| `fix-missing-dustfile.sh` | Add Dustfile.a2ml (cleanup contract)
+| `fix-missing-ai-manifest.sh` | Add 0-AI-MANIFEST.a2ml (AI entry point)
+| `fix-missing-assail-recipe.sh` | Add `assail` recipe to Justfile
+| `fix-missing-proven-ref.sh` | Add proven integration reference
+| `fix-missing-verisimdb-feed.sh` | Add VeriSimDB feed configuration
+| `fix-missing-feedback-integration.sh` | Add feedback-o-tron integration
+| `fix-missing-vexometer-hooks.sh` | Add vexometer friction hooks
+|===
+
+== Execution
+
+[source,bash]
+----
+# Phase 1: Structural fixes (dry-run first)
+./scripts/dispatch-runner.sh --manifest campaigns/floor-raise-2026-03-20.jsonl --dry-run
+
+# Phase 1: Execute
+./scripts/dispatch-runner.sh --manifest campaigns/floor-raise-2026-03-20.jsonl --parallel 8
+
+# Phase 2: Integration references (dry-run first)
+./scripts/dispatch-runner.sh --manifest campaigns/floor-raise-integrations-2026-03-20.jsonl --dry-run
+
+# Phase 2: Execute
+./scripts/dispatch-runner.sh --manifest campaigns/floor-raise-integrations-2026-03-20.jsonl --parallel 8
+----
+
+== PanLL Monitoring
+
+Seven new panels in PanLL provide real-time visibility:
+
+1. **FloorRaise** (FR) — Master dashboard with adoption metrics
+2. **ProvenAdoption** (PrA) — Per-repo proven module usage
+3. **ContractileCompleteness** (CC) — Must/Trust/Dust/K9 coverage
+4. **ManifestCoverage** (MC) — AI manifest presence
+5. **VerisimdbFeeds** (VF) — Data feed health
+6. **FeedbackRouting** (FBR) — Upstream bug report status
+7. **VexometerFriction** (VxF) — Irritation surface measurements
+
+== Expected Outcomes
+
+After full execution:
+
+* 0-AI-MANIFEST.a2ml: 256/256 (100%)
+* Trustfile.a2ml: 256/256 (100%)
+* Dustfile.a2ml: 256/256 (100%)
+* `assail` recipe: all repos with Justfiles
+* Integration references: 256/256 for all four tools
+* Total actions: 1,496 across 256 repos

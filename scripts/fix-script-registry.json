@@ -36,7 +36,15 @@
       "TodoMarkers": "fix-todo-markers.sh",
       "BelieveMe": "fix-believe-me.sh",
       "WorkflowHygiene": "fix-workflow-hygiene.sh",
-      "LicenseHygiene": "fix-license-hygiene.sh"
+      "LicenseHygiene": "fix-license-hygiene.sh",
+      "MissingTrustfile": "fix-missing-trustfile.sh",
+      "MissingDustfile": "fix-missing-dustfile.sh",
+      "MissingAIManifest": "fix-missing-ai-manifest.sh",
+      "MissingAssailRecipe": "fix-missing-assail-recipe.sh",
+      "MissingProvenRef": "fix-missing-proven-ref.sh",
+      "MissingVerisimdbFeed": "fix-missing-verisimdb-feed.sh",
+      "MissingFeedbackIntegration": "fix-missing-feedback-integration.sh",
+      "MissingVexometerHooks": "fix-missing-vexometer-hooks.sh"
     },
     "by_recipe": {
       "recipe-heredoc-to-install": "fix-heredoc-install.sh",
@@ -78,7 +86,15 @@
       "recipe-workflow-hygiene": "fix-workflow-hygiene.sh",
       "recipe-remove-irrelevant-workflow": "fix-workflow-hygiene.sh",
       "recipe-license-hygiene": "fix-license-hygiene.sh",
-      "recipe-reuse-dual-license": "fix-license-hygiene.sh"
+      "recipe-reuse-dual-license": "fix-license-hygiene.sh",
+      "recipe-add-trustfile": "fix-missing-trustfile.sh",
+      "recipe-add-dustfile": "fix-missing-dustfile.sh",
+      "recipe-add-ai-manifest": "fix-missing-ai-manifest.sh",
+      "recipe-add-assail": "fix-missing-assail-recipe.sh",
+      "recipe-add-proven-ref": "fix-missing-proven-ref.sh",
+      "recipe-add-verisimdb-feed": "fix-missing-verisimdb-feed.sh",
+      "recipe-add-feedback-integration": "fix-missing-feedback-integration.sh",
+      "recipe-add-vexometer-hooks": "fix-missing-vexometer-hooks.sh"
     }
   }
 }
