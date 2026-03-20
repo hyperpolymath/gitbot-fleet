@@ -27,7 +27,8 @@ on:
           - auditor
           - guardian
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   sweep:
