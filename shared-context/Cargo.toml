@@ -32,7 +32,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["sync", "fs"] }
 
 # File watching (for context updates)
-notify = "7"
+notify = "8"
 
 [dev-dependencies]
 tempfile = "3"
