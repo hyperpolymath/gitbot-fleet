@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -8,3 +9,65 @@ updates:
       actions:
         patterns:
           - "*"
+
+  # Rust dependencies
+  - package-ecosystem: "cargo"
+    directory: "/robot-repo-automaton"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/shared-context"
+    schedule:
+      interval: "weekly"
+  
+  - package-ecosystem: "cargo"
+    directory: "/bots/echidnabot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/glambot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/rhodibot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/seambot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/sustainabot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/finishingbot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/accessibilitybot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/cipherbot"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "cargo"
+    directory: "/bots/panicbot"
+    schedule:
+      interval: "weekly"
+
+  # Python dependencies for gsbot
+  - package-ecosystem: "pip"
+    directory: "/bots/gsbot"
+    schedule:
+      interval: "weekly"
