@@ -12319,3 +12319,15 @@
 {"bot":"hypatia","file":"src/abi/Types.idr","fixed_at":"2026-03-22T11:22:21.598462Z","outcome":"success","pattern":"recipe-remove-believe-me","repo":"batch-template-fixes"}
 {"bot":"hypatia","file":"src/main.rs","fixed_at":"2026-03-22T11:22:25.997452Z","outcome":"failure","pattern":"recipe-todo-to-fill","repo":"test-repo"}
 {"bot":"hypatia","file":"src/abi/Foreign.idr","fixed_at":"2026-03-22T11:22:59.192011Z","outcome":"success","pattern":"recipe-remove-believe-me","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"ci-scripts/mirror-push.sh","fixed_at":"2026-03-22T13:02:47.830157Z","outcome":"success","pattern":"recipe-shell-quote-vars","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"src/main.rs","fixed_at":"2026-03-22T13:02:48.111405Z","outcome":"failure","pattern":"recipe-todo-to-fill","repo":"test-repo"}
+{"bot":"hypatia","file":".github/workflows/mirror.yml","fixed_at":"2026-03-22T13:03:38.084499Z","outcome":"success","pattern":"recipe-shell-quote-vars","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"scripts/deploy.sh","fixed_at":"2026-03-22T13:04:18.769825Z","outcome":"success","pattern":"recipe-shell-quote-vars","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"src/abi/Types.idr","fixed_at":"2026-03-22T13:04:52.395416Z","outcome":"success","pattern":"recipe-remove-believe-me","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"scripts/test.sh","fixed_at":"2026-03-22T13:04:52.882771Z","outcome":"success","pattern":"recipe-shell-quote-vars","repo":"test-repo"}
+{"bot":"hypatia","file":"src/abi/Foreign.idr","fixed_at":"2026-03-22T13:05:29.975489Z","outcome":"success","pattern":"recipe-remove-believe-me","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"src/abi/Layout.idr","fixed_at":"2026-03-22T13:05:59.479371Z","outcome":"success","pattern":"recipe-remove-believe-me","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"justfile","fixed_at":"2026-03-22T13:06:29.844821Z","outcome":"success","pattern":"recipe-todo-to-fill","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"src/main.rs","fixed_at":"2026-03-22T13:06:57.789581Z","outcome":"success","pattern":"recipe-todo-to-fill","repo":"batch-template-fixes"}
+{"bot":"hypatia","file":"src/main.rs","fixed_at":"2026-03-22T13:19:39.102994Z","outcome":"failure","pattern":"recipe-todo-to-fill","repo":"test-repo"}
+{"bot":"hypatia","file":"ci-scripts/mirror-push.sh","fixed_at":"2026-03-22T13:19:44.201350Z","outcome":"success","pattern":"recipe-shell-quote-vars","repo":"batch-template-fixes"}
