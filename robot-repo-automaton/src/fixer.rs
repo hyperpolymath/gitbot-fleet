@@ -443,6 +443,26 @@ impl Fixer {
         let content = self.get_template_content(&fix.target, fix);
         let expanded = self.expand_template(&content);
 
+        // Guard: refuse to create files with empty or near-empty content.
+        // This prevents bots from pushing useless boilerplate when no
+        // template exists for the target file.
+        if expanded.trim().is_empty() {
+            warn!(
+                "Refusing to create {} — template produced empty content",
+                target_path.display()
+            );
+            return Ok(FixResult {
+                issue_id: issue.error_type_id.clone(),
+                success: false,
+                action_taken: "Skipped — no template content available".to_string(),
+                files_modified: vec![],
+                error: Some(format!(
+                    "No template for '{}'; file would be empty",
+                    fix.target
+                )),
+            });
+        }
+
         std::fs::write(target_path, &expanded)?;
         info!("Created: {}", target_path.display());
 

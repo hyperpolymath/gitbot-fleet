@@ -192,11 +192,33 @@ impl ThresholdConfig {
             }
         }
 
+        let target = &fix.target;
+
+        // GUARD: Protected files are NEVER auto-applied for destructive actions.
+        // Deletions of protected files are always skipped (Low).
+        // Modifications of protected files require human review (Low).
+        // Creating over protected paths is blocked (Low).
+        if is_protected_file(target) {
+            match fix.action {
+                FixAction::Create => {
+                    // Creating a missing standard protected file is OK at medium
+                    // (human still reviews), but never high
+                    return ConfidenceLevel::Medium;
+                }
+                FixAction::Delete | FixAction::Modify | FixAction::Disable => {
+                    warn!(
+                        "Protected file '{}' targeted for {:?} — forcing Low confidence",
+                        target, fix.action
+                    );
+                    return ConfidenceLevel::Low;
+                }
+            }
+        }
+
         // Default classification based on action type and issue properties
         match fix.action {
             // Creating missing standard files is high confidence
             FixAction::Create => {
-                let target = &fix.target;
                 if is_standard_file(target) {
                     ConfidenceLevel::High
                 } else {
@@ -276,6 +298,49 @@ impl ThresholdConfig {
     }
 }
 
+/// Check if a file is protected from bot deletion or modification.
+///
+/// Protected files include project state, documentation, and checkpoint files
+/// that bots should NEVER delete or overwrite. These represent intentional
+/// project work that cannot be regenerated from templates.
+fn is_protected_file(target: &str) -> bool {
+    let basename = target.rsplit('/').next().unwrap_or(target);
+
+    // Exact protected filenames (case-insensitive check on basename)
+    let protected_names = [
+        "TODO.md", "TODO.adoc", "TODO.txt",
+        "BLOCKERS.md", "BLOCKERS.adoc",
+        "CHANGELOG.md", "CHANGELOG.adoc",
+        "README.md", "README.adoc", "README.rst",
+        "TOPOLOGY.md", "TOPOLOGY.adoc",
+        "ARCHITECTURE.md", "ARCHITECTURE.adoc",
+        "ROADMAP.md", "ROADMAP.adoc",
+    ];
+    if protected_names.iter().any(|&p| p.eq_ignore_ascii_case(basename)) {
+        return true;
+    }
+
+    // Protected extensions — checkpoint and manifest files
+    let protected_extensions = [".scm", ".a2ml"];
+    if protected_extensions.iter().any(|ext| basename.ends_with(ext)) {
+        return true;
+    }
+
+    // Protected directories — never touch contents
+    let protected_dirs = [
+        ".machine_readable/",
+        "src/abi/",
+        "docs/",
+        "spec/",
+        "verification/",
+    ];
+    if protected_dirs.iter().any(|dir| target.contains(dir)) {
+        return true;
+    }
+
+    false
+}
+
 /// Check if a file is a standard repository file (high confidence to create)
 fn is_standard_file(target: &str) -> bool {
     let standard_files = [
@@ -285,9 +350,6 @@ fn is_standard_file(target: &str) -> bool {
         "SECURITY.md",
         ".gitignore",
         ".gitattributes",
-        "CODE_OF_CONDUCT.md",
-        "CONTRIBUTING.md",
-        "CONTRIBUTING.adoc",
     ];
 
     standard_files.contains(&target)
@@ -466,5 +528,87 @@ mod tests {
         // Medium confidence fix with medium threshold -> auto-apply
         let decision = config.decide(&issue, &fix);
         assert!(matches!(decision, FixDecision::AutoApply));
+    }
+
+    // === Protected file tests ===
+
+    #[test]
+    fn test_protected_file_delete_always_low() {
+        let config = ThresholdConfig::default();
+        // Even with perfect detection confidence, deleting TODO.md is Low
+        let issue = make_issue("TEST", 1.0);
+        let fix = make_fix(FixAction::Delete, "TODO.md");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::Low);
+    }
+
+    #[test]
+    fn test_protected_scm_files() {
+        let config = ThresholdConfig::default();
+        let issue = make_issue("TEST", 1.0);
+
+        // .scm files are always protected
+        let fix = make_fix(FixAction::Delete, ".machine_readable/STATE.scm");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::Low);
+
+        let fix = make_fix(FixAction::Modify, "META.scm");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::Low);
+    }
+
+    #[test]
+    fn test_protected_a2ml_files() {
+        let config = ThresholdConfig::default();
+        let issue = make_issue("TEST", 1.0);
+
+        let fix = make_fix(FixAction::Delete, "0-AI-MANIFEST.a2ml");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::Low);
+    }
+
+    #[test]
+    fn test_protected_dirs_block_modifications() {
+        let config = ThresholdConfig::default();
+        let issue = make_issue("TEST", 1.0);
+
+        let fix = make_fix(FixAction::Delete, ".machine_readable/6a2/STATE.a2ml");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::Low);
+
+        let fix = make_fix(FixAction::Modify, "docs/architecture.md");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::Low);
+
+        let fix = make_fix(FixAction::Delete, "src/abi/Types.idr");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::Low);
+    }
+
+    #[test]
+    fn test_non_protected_file_still_classifies_normally() {
+        let config = ThresholdConfig::default();
+        let issue = make_issue("TEST", 1.0);
+
+        // A random file should NOT be protected
+        let fix = make_fix(FixAction::Delete, "old-script.sh");
+        assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::High);
+    }
+
+    #[test]
+    fn test_protected_readme_variants() {
+        let config = ThresholdConfig::default();
+        let issue = make_issue("TEST", 1.0);
+
+        for name in &["README.md", "README.adoc", "README.rst"] {
+            let fix = make_fix(FixAction::Delete, name);
+            assert_eq!(
+                config.classify_fix(&issue, &fix),
+                ConfidenceLevel::Low,
+                "Expected {} to be protected",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_contributing_removed_from_standard_files() {
+        // CONTRIBUTING.md and CODE_OF_CONDUCT.md are NOT standard files
+        // (no templates exist for them)
+        assert!(!is_standard_file("CONTRIBUTING.md"));
+        assert!(!is_standard_file("CODE_OF_CONDUCT.md"));
     }
 }

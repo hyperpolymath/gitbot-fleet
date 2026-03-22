@@ -100,9 +100,14 @@ fn suggestion_for(check_name: &str) -> Option<String> {
 }
 
 /// Whether a failed check can be auto-fixed by robot-repo-automaton
+/// Whether a failed check can be auto-fixed by robot-repo-automaton.
+///
+/// Only files with proper templates in robot-repo-automaton/templates/ are
+/// fixable. Files without templates (CONTRIBUTING.md, CODE_OF_CONDUCT.md)
+/// would produce empty boilerplate and are excluded.
 fn is_fixable(check_name: &str) -> bool {
     matches!(check_name,
-        "SECURITY.md" | "CODE_OF_CONDUCT.md" | "CONTRIBUTING.md" |
+        "SECURITY.md" |
         ".editorconfig" | ".gitattributes" | ".gitignore" |
         ".claude/CLAUDE.md" | ".machine_readable/bot_directives"
     )
