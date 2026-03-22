@@ -24,3 +24,10 @@
   "critical_count": 2545,
   "action": "run-fleet.sh fix --severity critical"
 }
+{
+  "timestamp": "2026-03-22T02:01:35Z",
+  "event": "scan_complete",
+  "critical": 0,
+  "high": 0,
+  "repos_scanned": 31
+}

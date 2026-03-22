@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-03-15T02:07:05Z",
-  "repos_scanned": 193,
-  "total_findings": 7084,
-  "failed": 0,
-  "elapsed_seconds": 420
+  "timestamp": "2026-03-22T02:01:35Z",
+  "repos_scanned": 31,
+  "total_findings": 0,
+  "failed": 231,
+  "elapsed_seconds": 80
 }
