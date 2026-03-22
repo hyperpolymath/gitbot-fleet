@@ -3,7 +3,7 @@
 
 # GitHub App Setup Guide
 
-This guide explains how to create and configure a GitHub App for Oikos Bot.
+This guide explains how to create and configure a GitHub App for SustainaBot.
 
 ## Prerequisites
 
@@ -18,7 +18,7 @@ This guide explains how to create and configure a GitHub App for Oikos Bot.
 
    | Field | Value |
    |-------|-------|
-   | **GitHub App name** | Oikos Bot (or your chosen name) |
+   | **GitHub App name** | SustainaBot (or your chosen name) |
    | **Homepage URL** | Your repo URL |
    | **Webhook URL** | `https://your-domain.com/webhooks/github` |
    | **Webhook secret** | Generate a secure random string |
@@ -81,7 +81,7 @@ For production, use a secrets manager. For Kubernetes:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: oikos-bot
+  name: sustainabot
 type: Opaque
 stringData:
   GITHUB_APP_ID: "123456"

@@ -181,6 +181,25 @@ def is_high_energy(energy_joules: Float) -> Bool
 
 Built-in policies (in `policies/`): energy threshold, carbon budget, memory efficiency, security-sustainability correlation.
 
+=== Green Web Integration
+
+SustainaBot receives **Green Web findings** from https://github.com/hyperpolymath/hypatia[Hypatia]'s neurosymbolic scanner. Hypatia's `green_web.ex` rule module detects:
+
+* Non-green hosting providers (AWS, Vultr, GoDaddy, etc.)
+* Missing Green Web Foundation badges in README
+* Non-green CDN providers (CloudFront, StackPath)
+* Non-green container registries
+
+Hypatia routes these findings through its **fleet dispatcher** as `:control` actions, which arrive at SustainaBot via the `reportEcoScore` GraphQL mutation. SustainaBot then:
+
+1. Incorporates the hosting/infrastructure eco score into its overall `HealthIndex`
+2. Generates SARIF annotations with fix suggestions (e.g., migrate from AWS to Hetzner)
+3. Opens PRs to add Green Web Foundation badges where missing
+
+This creates a full pipeline: **Hypatia detects** → **fleet dispatcher routes** → **SustainaBot acts**.
+
+See https://api.thegreenwebfoundation.org[Green Web Foundation API] for domain verification.
+
 === Fleet Integration
 
 SustainaBot runs as a https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] member for multi-repo orchestration:

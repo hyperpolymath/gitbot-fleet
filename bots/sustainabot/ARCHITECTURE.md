@@ -135,8 +135,25 @@ sustainabot ──────── SARIF ──────── GitHub Secur
      |       |
      |       +── shared-context ──── Cross-bot findings
      |
+     |── hypatia (green_web.ex) ──── Green Web hosting/CDN/registry checks
+     |       |                        Routes via fleet_dispatcher.ex
+     |       +── reportEcoScore ──── GraphQL mutation → eco_score findings
+     |
      +── .bot_directives/ ────────── Per-repo permission control
 ```
+
+### Hypatia Green Web Integration
+
+SustainaBot receives infrastructure-level sustainability findings from Hypatia's
+`green_web.ex` rule module via the fleet dispatch pipeline:
+
+1. **Hypatia** scans repos for hosting provider, CDN, container registry choices
+2. **fleet_dispatcher.ex** classifies Green Web findings as `:control` actions
+3. **`dispatch_to_sustainabot/1`** sends a `reportEcoScore` GraphQL mutation
+4. **SustainaBot** incorporates the infrastructure eco score and generates fix suggestions
+
+This separates concerns: Hypatia owns *detection* (scanning 500+ repos), SustainaBot
+owns *action* (PRs, badges, SARIF annotations).
 
 ## Scoring
 
