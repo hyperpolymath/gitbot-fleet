@@ -21,6 +21,8 @@ use tokio::sync::RwLock;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing::{info, warn};
 
+mod groove;
+
 /// Dashboard application state
 #[derive(Clone)]
 struct AppState {
@@ -58,6 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build router
     let app = Router::new()
+        // Groove discovery endpoint — returns capability manifest for service mesh.
+        // See Groove.idr gitbotFleetManifest for the canonical ABI definition.
+        .route("/.well-known/groove", get(groove::groove_manifest))
+        .route("/health", get(groove::health))
         .route("/", get(index_handler))
         .route("/api/health", get(health_handler))
         .route("/api/status", get(status_handler))
