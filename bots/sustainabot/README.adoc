@@ -1,324 +1,146 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
-// SPDX-FileCopyrightText: 2024-2025 Jonathan D.A. Jewell
+# SustainaBot
 
-= SustainaBot
+**SustainaBot** is a code analysis tool that evaluates software through an ecological, economic, and engineering quality lens. It integrates with existing developer workflows to highlight inefficiencies, potential risks, and sustainability trade-offs in codebases.
 
-:toc: auto
-:toclevels: 2
+Rather than replacing tools like Dependabot, CodeQL, or linters, SustainaBot complements them by focusing on **resource usage, cost implications, and environmental impact**.
 
-image:https://img.shields.io/badge/RSR-Gold-ffd700[RSR Gold,link=https://github.com/hyperpolymath/rhodium-standard-repositories]
-image:https://img.shields.io/github/v/release/hyperpolymath/sustainabot?include_prereleases[GitHub Release]
-image:https://github.com/hyperpolymath/sustainabot/actions/workflows/ci.yml/badge.svg[CI,link=https://github.com/hyperpolymath/sustainabot/actions/workflows/ci.yml]
-image:https://api.securityscorecards.dev/projects/github.com/hyperpolymath/sustainabot/badge[OpenSSF Scorecard,link=https://securityscorecards.dev/viewer/?uri=github.com/hyperpolymath/sustainabot]
+---
 
-**SustainaBot** -- Ecological & Economic Code Analysis
-
-The only tool that correlates security findings with sustainability impact.
-
-== What It Does
-
-SustainaBot statically analyzes your code and reports:
-
-* **Eco Score** (0-100) -- energy efficiency, carbon intensity, resource waste patterns
-* **Econ Score** (0-100) -- allocative efficiency, technical debt, complexity economics
-* **Security-Sustainability Correlation** -- functions that are both high-energy AND have security weak points get elevated severity
-* **Concrete Fix Suggestions** -- inline annotations with actionable improvements
-
-Output formats: **SARIF 2.1.0** (for GitHub Security tab / IDE annotations), **JSON**, **text**.
-
-== Quick Start
-
-[source,bash]
-----
-# Build from source
-cargo install --path crates/sustainabot-cli --locked
-
-# Analyze a single file
-sustainabot analyze src/main.rs
-
-# Check a directory with eco threshold
-sustainabot check ./src --eco-threshold 50
-
-# Generate SARIF for CI integration
-sustainabot report ./src --format sarif --output results.sarif
-
-# Include security-sustainability correlation (requires --features security)
-sustainabot check ./src --security --format sarif --output results.sarif
-
-# Run with Eclexia policy evaluation
-sustainabot check ./src --policy-dir policies/
-----
-
-== GitHub Actions Integration
-
-Copy `examples/sustainabot-ci.yml` to `.github/workflows/sustainabot.yml`:
-
-[source,yaml]
-----
-name: Sustainability Analysis
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-permissions:
-  security-events: write
-  contents: read
-
-jobs:
-  sustainabot:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install sustainabot
-        run: cargo install --path . --locked
-      - name: Run analysis
-        run: |
-          sustainabot report ./src \
-            --format sarif \
-            --output results.sarif \
-            --eco-threshold 50
-      - name: Upload SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
-          category: sustainabot
-----
-
-Results appear as inline PR annotations and in the Security tab.
-
-== Architecture
-
-SustainaBot is a Rust workspace with 6 crates:
-
-[cols="1,2"]
-|===
-|Crate |Purpose
-
-|`sustainabot-cli` |CLI binary (`sustainabot` command)
-|`sustainabot-analysis` |tree-sitter AST parsing, pattern detection, dependency analysis, calibration
-|`sustainabot-metrics` |Core types: `AnalysisResult`, `ResourceProfile`, `HealthIndex`, `Confidence`
-|`sustainabot-sarif` |SARIF 2.1.0 output with full physical locations and fix suggestions
-|`sustainabot-eclexia` |Policy engine integration (Eclexia language or built-in fallback)
-|`sustainabot-fleet` |gitbot-fleet integration for multi-repo orchestration
-|===
-
-=== Analysis Pipeline
-
-----
-Source Code
-    |
-    v
-tree-sitter AST parsing (Rust, JavaScript, Python)
-    |
-    v
-Function-level analysis:
-  - Complexity metrics (cyclomatic, nesting depth)
-  - Resource estimation (energy, carbon, memory, duration)
-  - Pattern detection (7 anti-patterns with fix suggestions)
-    |
-    v
-Optional enrichment:
-  - panic-attack security scan (--security flag)
-  - Eclexia policy evaluation (--policy-dir flag)
-  - Dependency analysis (Cargo.toml, package.json)
-    |
-    v
-Output: SARIF / JSON / text
-----
-
-=== Pattern Detection
-
-SustainaBot detects 7 resource-waste patterns:
-
-[cols="1,2,1"]
-|===
-|Pattern |Description |Impact
-
-|`nested-loops` |O(n^k) complexity from nested iteration |High energy
-|`busy-wait` |Loops without sleep/await/yield |CPU waste
-|`string-concat-in-loop` |String allocation per iteration |Memory waste
-|`clone-in-loop` |Unnecessary deep copies in hot paths |Memory + CPU
-|`unbuffered-io` |I/O without BufReader/BufWriter |Syscall overhead
-|`large-allocation` |Single allocations >1MB |Memory pressure
-|`redundant-allocation` |`.to_string()` / `.to_owned()` where borrow suffices |Unnecessary allocation
-|===
+## 🚀 What It Does
 
-Each pattern produces a concrete fix suggestion that appears as a SARIF inline annotation.
+SustainaBot analyzes repositories and produces structured reports that help developers:
 
-=== Security-Sustainability Correlation
+* Identify inefficient patterns that increase compute, memory, or energy usage
+* Highlight potential cost drivers in infrastructure or runtime behavior
+* Correlate code quality and security issues with broader system impact
+* Generate actionable insights in standard formats (e.g., SARIF)
 
-When built with `--features security`, SustainaBot integrates with https://github.com/hyperpolymath/panic-attacker[panic-attack] to correlate security weak points with sustainability impact:
+---
 
-[cols="1,2"]
-|===
-|Weak Point Category |Sustainability Impact
+## 🧠 Core Concepts
 
-|`UnsafeCode` |Crash risk = all prior computation wasted (3x energy multiplier)
-|`PanicPath` |Abort = energy/carbon sunk cost (2.5x)
-|`UnboundedLoop` |CPU waste, carbon spike (4x)
-|`UncheckedAllocation` |Memory waste (2x)
-|`ResourceLeak` |Ongoing waste -- goroutines, handles (3.5x)
-|`RaceCondition` |Unpredictable resource usage (2x)
-|===
-
-Functions that are BOTH high-energy AND have security weak points get 1.5x boosted severity.
-
-=== Eclexia Policy Engine
-
-SustainaBot evaluates `.ecl` policy files written in https://github.com/hyperpolymath/eclexia[Eclexia], a resource-aware language where every function declares its own energy budget:
-
-[source]
-----
-def is_high_energy(energy_joules: Float) -> Bool
-    @requires: energy < 0.05J
-{
-    energy_joules > 50.0
-}
-----
+### Multi-Dimensional Analysis
 
-Built-in policies (in `policies/`): energy threshold, carbon budget, memory efficiency, security-sustainability correlation.
+SustainaBot evaluates code across three primary dimensions:
 
-=== Green Web Integration
+* **Ecological (Eco):** Estimated energy usage, resource intensity, and environmental impact
+* **Economic (Econ):** Cost implications of inefficient patterns or architectural decisions
+* **Quality:** Maintainability, security signals, and engineering best practices
 
-SustainaBot receives **Green Web findings** from https://github.com/hyperpolymath/hypatia[Hypatia]'s neurosymbolic scanner. Hypatia's `green_web.ex` rule module detects:
+These dimensions are combined into a unified **Health Index** to give an overall view of repository health.
 
-* Non-green hosting providers (AWS, Vultr, GoDaddy, etc.)
-* Missing Green Web Foundation badges in README
-* Non-green CDN providers (CloudFront, StackPath)
-* Non-green container registries
+> Note: Scores are heuristic-based and intended for guidance rather than exact measurement.
 
-Hypatia routes these findings through its **fleet dispatcher** as `:control` actions, which arrive at SustainaBot via the `reportEcoScore` GraphQL mutation. SustainaBot then:
+---
 
-1. Incorporates the hosting/infrastructure eco score into its overall `HealthIndex`
-2. Generates SARIF annotations with fix suggestions (e.g., migrate from AWS to Hetzner)
-3. Opens PRs to add Green Web Foundation badges where missing
+## 🧩 Architecture Overview
 
-This creates a full pipeline: **Hypatia detects** → **fleet dispatcher routes** → **SustainaBot acts**.
+SustainaBot is built as a modular Rust workspace with separate components for:
 
-See https://api.thegreenwebfoundation.org[Green Web Foundation API] for domain verification.
+* CLI interface
+* Static analysis engine
+* Metrics and scoring
+* SARIF report generation
+* Policy integration
 
-=== Fleet Integration
+This modular design allows components to be reused or extended independently.
 
-SustainaBot runs as a https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] member for multi-repo orchestration:
+---
 
-[source,bash]
-----
-sustainabot fleet ./repo --context /path/to/context.json
-----
-
-Respects `.bot_directives/sustainabot.scm` for scope control and threshold overrides.
-
-== Bot Directives
-
-SustainaBot respects `.bot_directives/*.scm` files for per-repo permissions:
-
-[source,scheme]
-----
-;; .bot_directives/sustainabot.scm
-(bot sustainabot
-  (allow #t)
-  (scopes (analysis policy fleet))
-  (deny ()))
-----
+## ⚙️ Installation
 
-== Development
+```bash
+cargo install sustainabot
+```
 
-[source,bash]
-----
-# Build all crates
-cargo build --workspace
+Or build from source:
 
-# Run tests (27 tests)
-cargo test --workspace
+```bash
+git clone https://github.com/hyperpolymath/gitbot-fleet
+cd gitbot-fleet/bots/sustainabot
+cargo build --release
+```
 
-# Build with security correlation
-cargo build --workspace --features sustainabot-cli/security
+---
 
-# Clippy
-cargo clippy --workspace
+## ▶️ Usage
 
-# Self-analysis (dogfooding)
-cargo run -p sustainabot-cli -- self-analyze
-----
+Run analysis on a repository:
 
-== Dogfooding
+```bash
+sustainabot analyze .
+```
 
-SustainaBot analyzes itself:
+Output formats include:
 
-[source,bash]
-----
-$ sustainabot self-analyze
-SustainaBot Self-Analysis (Dogfooding!)
-==========================================
+* JSON
+* Text summaries
+* SARIF (for GitHub integration)
 
-Analyzing sustainabot's own resource usage...
+---
 
-Function: analyze_source
-   Location: crates/sustainabot-analysis/src/analyzer.rs:45:4
-   Resources:
-     Energy:   0.50 J
-     Carbon:   0.0020 gCO2e
-     Memory:   1024 bytes
-   Health Index:
-     Eco:      75.0/100
-     Overall:  80.0/100
+## 🔗 GitHub Integration
 
-Meta-Analysis:
-This analyzer used minimal resources to analyze itself.
-Eclexia-inspired design: explicit resource tracking from day 1.
-----
+SustainaBot can integrate into GitHub workflows by producing SARIF output that is uploaded to GitHub’s code scanning interface.
 
-== Metrics
+Example GitHub Action:
 
-=== Health Index
+```yaml
+- name: Run SustainaBot
+  run: sustainabot analyze . --format sarif > results.sarif
 
-----
-HealthIndex = 0.4 * EcoScore + 0.3 * EconScore + 0.3 * QualityScore
-----
+- name: Upload SARIF
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
+```
 
-=== Confidence Levels
+---
 
-Each estimate carries a confidence tag:
+## 🌍 Example Insights
 
-* **Measured** -- from actual profiling data
-* **Calibrated** -- from pattern-based resource profiles
-* **Estimated** -- from heuristic complexity analysis
-* **Unknown** -- insufficient data
+SustainaBot may flag issues such as:
 
-== Languages Supported
+* Inefficient loops or excessive allocations
+* Redundant computations
+* Over-provisioned infrastructure assumptions
+* Patterns associated with higher runtime cost or energy usage
 
-* **Rust** (`.rs`) -- full pattern detection
-* **JavaScript** (`.js`) -- full pattern detection
-* **Python** (`.py`) -- basic pattern detection
+Recommendations are provided alongside findings to guide improvements.
 
-== Project Structure
+---
 
-[source]
-----
-sustainabot/
-+-- crates/
-|   +-- sustainabot-cli/          # CLI binary
-|   +-- sustainabot-analysis/     # AST analysis engine
-|   +-- sustainabot-metrics/      # Core types
-|   +-- sustainabot-sarif/        # SARIF 2.1.0 output
-|   +-- sustainabot-eclexia/      # Policy engine
-|   +-- sustainabot-fleet/        # Fleet integration
-+-- policies/                     # Eclexia policy files (.ecl)
-+-- examples/                     # CI workflow templates
-+-- .bot_directives/              # Bot permission directives
-+-- .machine_readable/            # SCM checkpoint files
-+-- Cargo.toml                    # Workspace configuration
-----
+## ⚠️ Limitations
 
-== License
+* Estimates of energy or cost are heuristic and may vary by environment
+* Language support may differ in depth (some languages have more complete pattern detection than others)
+* Results should be interpreted as advisory, not definitive
 
-Licensed under **PMPL-1.0-or-later** (Palimpsest License).
+---
 
-See link:LICENSE[LICENSE] for full details.
+## 🛣️ Roadmap
 
-'''
+Planned improvements include:
 
-_Part of the https://github.com/hyperpolymath[hyperpolymath] ecosystem._
+* Expanded language support
+* Improved scoring calibration
+* Better benchmarking and validation datasets
+* Enhanced GitHub App integration
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome. Please open issues or pull requests to suggest improvements, report bugs, or extend functionality.
+
+---
+
+## 📄 License
+
+See repository for license details.
+
+---
+
+## 🧭 Summary
+
+SustainaBot is an experimental but promising tool aimed at helping developers make more informed decisions about the broader impact of their code. It is best used alongside existing tooling as part of a holistic engineering workflow.
