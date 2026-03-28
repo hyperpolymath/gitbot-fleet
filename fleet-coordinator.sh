@@ -615,6 +615,12 @@ PR_BODY
 )" \
             --repo hyperpolymath/hypatia 2>/dev/null && {
                 log_bot "hypatia" "  ✓ Rule approval PR created"
+                # Enable auto-merge — PR merges automatically when CI passes
+                gh pr merge --auto --squash --repo hyperpolymath/hypatia 2>/dev/null && {
+                    log_bot "hypatia" "  ✓ Auto-merge enabled (squash on CI pass)"
+                } || {
+                    log_bot "hypatia" "  ⚠ Auto-merge not available (repo setting may be off)"
+                }
             }
     fi
 

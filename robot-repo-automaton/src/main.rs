@@ -440,6 +440,10 @@ async fn cmd_fix(
                 match github.create_pull_request(repo_name, pr).await {
                     Ok(created_pr) => {
                         println!("Created PR #{}: {}", created_pr.number, created_pr.html_url);
+                        // Enable auto-merge — PR merges automatically when CI passes
+                        if let Err(e) = github.enable_auto_merge(repo_name, created_pr.number).await {
+                            debug!("Auto-merge enable failed (non-fatal): {}", e);
+                        }
                     }
                     Err(e) => {
                         error!("Failed to create PR: {}", e);

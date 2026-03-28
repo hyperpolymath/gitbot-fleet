@@ -182,6 +182,81 @@ impl GitHubClient {
         Ok(pull_request)
     }
 
+    /// Enable auto-merge on a pull request (squash strategy).
+    ///
+    /// Uses the GitHub GraphQL API because the REST API does not support
+    /// enabling auto-merge. The PR will merge automatically once all
+    /// required status checks pass.
+    pub async fn enable_auto_merge(&self, repo: &str, pr_number: u64) -> Result<()> {
+        // First get the PR node_id via REST (needed for GraphQL mutation)
+        let pr_url = format!(
+            "{}/repos/{}/{}/pulls/{}",
+            self.base_url, self.org, repo, pr_number
+        );
+
+        let response = self
+            .client
+            .get(&pr_url)
+            .send()
+            .await?
+            .error_for_status()
+            .map_err(|e| Error::GitHub(e.to_string()))?;
+
+        #[derive(Deserialize)]
+        struct PrNodeId {
+            node_id: String,
+        }
+
+        let pr_info: PrNodeId = response.json().await?;
+
+        // GraphQL mutation to enable auto-merge
+        let graphql_url = "https://api.github.com/graphql";
+
+        #[derive(Serialize)]
+        struct GraphQLRequest {
+            query: String,
+        }
+
+        let mutation = GraphQLRequest {
+            query: format!(
+                r#"mutation {{
+                    enablePullRequestAutoMerge(input: {{
+                        pullRequestId: "{}",
+                        mergeMethod: SQUASH
+                    }}) {{
+                        pullRequest {{
+                            autoMergeRequest {{
+                                enabledAt
+                            }}
+                        }}
+                    }}
+                }}"#,
+                pr_info.node_id
+            ),
+        };
+
+        let result = self
+            .client
+            .post(graphql_url)
+            .json(&mutation)
+            .send()
+            .await?;
+
+        if result.status().is_success() {
+            info!("Enabled auto-merge (squash) on PR #{} in {}", pr_number, repo);
+        } else {
+            let status = result.status();
+            let body = result.text().await.unwrap_or_default();
+            debug!("Auto-merge request returned {}: {}", status, body);
+            info!(
+                "Auto-merge not available for PR #{} in {} (repo may not have it enabled)",
+                pr_number, repo
+            );
+        }
+
+        Ok(())
+    }
+
     /// Create a check run
     pub async fn create_check_run(
         &self,
