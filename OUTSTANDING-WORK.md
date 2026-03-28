@@ -78,16 +78,16 @@
 
 ```bash
 # echidnabot: Run tests
-cd /var/mnt/eclipse/repos/echidnabot && cargo test
+cd /var$REPOS_DIR/echidnabot && cargo test
 
 # robot-repo-automaton: Check build
-cd /var/mnt/eclipse/repos/robot-repo-automaton && cargo build
+cd /var$REPOS_DIR/robot-repo-automaton && cargo build
 
 # gitbot-fleet: Run benchmarks
-cd /var/mnt/eclipse/repos/gitbot-fleet && ./scripts/bench-fleet.sh run
+cd /var$REPOS_DIR/gitbot-fleet && ./scripts/bench-fleet.sh run
 
 # Update this file
-vim /var/mnt/eclipse/repos/OUTSTANDING-WORK.md
+vim /var$REPOS_DIR/OUTSTANDING-WORK.md
 ```
 
 ## License

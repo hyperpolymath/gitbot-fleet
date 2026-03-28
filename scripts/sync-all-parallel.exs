@@ -10,7 +10,7 @@
 #   elixir sync-all-parallel.exs [OPTIONS]
 #
 # Options:
-#   --repos-dir PATH   Base directory (default: /var/mnt/eclipse/repos)
+#   --repos-dir PATH   Base directory (default: /var$REPOS_DIR)
 #   --dry-run          Show what would happen
 #   --auto             Non-interactive mode (skip all issues)
 #   --concurrency N    Max concurrent git operations (default: 32)
@@ -100,7 +100,7 @@ defmodule SyncAll do
 
   defp parse_args(args) do
     parse_args(args, %SyncAll{
-      repos_dir: "/var/mnt/eclipse/repos",
+      repos_dir: "/var$REPOS_DIR",
       dry_run: false,
       auto_mode: false,
       concurrency: 32,

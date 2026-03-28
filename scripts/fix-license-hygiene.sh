@@ -6,8 +6,8 @@
 # Idempotent: only modifies what's missing or incorrect.
 #
 # Requires canonical templates at:
-#   /var/mnt/eclipse/repos/palimpsest-license/legal/MPL-2.0.txt
-#   /var/mnt/eclipse/repos/palimpsest-license/legal/PALIMPSEST-MPL-1.0.txt
+#   /var$REPOS_DIR/palimpsest-license/legal/MPL-2.0.txt
+#   /var$REPOS_DIR/palimpsest-license/legal/PALIMPSEST-MPL-1.0.txt
 set -euo pipefail
 
 FINDING_FILE="${1:?Usage: fix-license-hygiene.sh <finding.json>}"
@@ -37,13 +37,13 @@ fi
 cd "$REPO_DIR"
 
 # Template sources
-PALIMPSEST_REPO="/var/mnt/eclipse/repos/palimpsest-license"
+PALIMPSEST_REPO="/var$REPOS_DIR/palimpsest-license"
 MPL2_SRC="$PALIMPSEST_REPO/legal/MPL-2.0.txt"
 PMPL_SRC="$PALIMPSEST_REPO/legal/PALIMPSEST-MPL-1.0.txt"
 
 # Fallback to boj-server if palimpsest-license not available
 if [[ ! -f "$MPL2_SRC" ]]; then
-    MPL2_SRC="/var/mnt/eclipse/repos/boj-server/LICENSE"
+    MPL2_SRC="/var$REPOS_DIR/boj-server/LICENSE"
 fi
 
 changes=false

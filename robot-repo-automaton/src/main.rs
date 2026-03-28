@@ -681,13 +681,13 @@ fn resolve_repo_path(repo: &str) -> anyhow::Result<PathBuf> {
     }
 
     // Try as a relative path from common locations
-    let eclipse_path = PathBuf::from("/var/mnt/eclipse/repos").join(repo);
+    let eclipse_path = PathBuf::from("/var$REPOS_DIR").join(repo);
     if eclipse_path.exists() {
         return Ok(eclipse_path);
     }
 
     Err(anyhow::anyhow!(
-        "Repository not found: {} (tried local path and /var/mnt/eclipse/repos/{})",
+        "Repository not found: {} (tried local path and /var$REPOS_DIR/{})",
         repo,
         repo
     ))

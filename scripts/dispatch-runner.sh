@@ -51,11 +51,11 @@ validate_path_within() {
 # --- Configuration ---
 # Hypatia's local data store is the primary source for dispatch manifests.
 # Falls back to central verisimdb-data if HYPATIA_DATA is not set.
-HYPATIA_DATA="${HYPATIA_DATA:-/var/mnt/eclipse/repos/nextgen-databases/verisimdb/verisimdb-data}"
-VERISIMDB_DATA="${VERISIMDB_DATA:-/var/mnt/eclipse/repos/nextgen-databases/verisimdb/verisimdb-data}"
-REPOS_BASE="${REPOS_BASE:-/var/mnt/eclipse/repos}"
-FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var/mnt/eclipse/repos/gitbot-fleet/scripts}"
-RRA_BIN="${RRA_BIN:-/var/mnt/eclipse/repos/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
+HYPATIA_DATA="${HYPATIA_DATA:-/var$REPOS_DIR/nextgen-databases/verisimdb/verisimdb-data}"
+VERISIMDB_DATA="${VERISIMDB_DATA:-/var$REPOS_DIR/nextgen-databases/verisimdb/verisimdb-data}"
+REPOS_BASE="${REPOS_BASE:-/var$REPOS_DIR}"
+FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var$REPOS_DIR/gitbot-fleet/scripts}"
+RRA_BIN="${RRA_BIN:-/var$REPOS_DIR/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
 
 # Third-party subdirectories inside monorepos that must NOT be modified.
 # Fix scripts will skip these paths entirely.

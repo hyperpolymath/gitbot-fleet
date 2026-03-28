@@ -17,7 +17,7 @@ There are 3 compilation errors where the code calls `ctx.findings(BotId::RobotRe
 
 Steps:
 1. Read `src/fleet.rs` to identify the exact error lines
-2. Read the gitbot-shared-context crate API (check `/var/mnt/eclipse/repos/gitbot-fleet/crates/gitbot-shared-context/src/lib.rs` or the public API)
+2. Read the gitbot-shared-context crate API (check `/var$REPOS_DIR/gitbot-fleet/crates/gitbot-shared-context/src/lib.rs` or the public API)
 3. Fix the API calls to match the current gitbot-shared-context interface
 4. Common fixes:
    - `ctx.findings(bot_id)` may need to be `ctx.get_findings(bot_id)` or similar

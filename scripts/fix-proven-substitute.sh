@@ -28,7 +28,7 @@ if [[ ! "$LANGUAGE" =~ ^[a-z]+$ ]]; then
     exit 1
 fi
 
-PROVEN_BINDINGS_BASE="/var/mnt/eclipse/repos/proven/bindings"
+PROVEN_BINDINGS_BASE="/var$REPOS_DIR/proven/bindings"
 
 # Extract finding details
 FILE=$(jq -r '.file // .location // "unknown"' "$FINDING_JSON")
@@ -70,7 +70,7 @@ case "$LANGUAGE" in
         echo ""
         echo "CARGO.TOML DEPENDENCY:"
         echo "  [dependencies]"
-        echo "  proven = { path = \"/var/mnt/eclipse/repos/proven/bindings/rust\" }"
+        echo "  proven = { path = \"/var$REPOS_DIR/proven/bindings/rust\" }"
         ;;
 
     elixir)
@@ -79,7 +79,7 @@ case "$LANGUAGE" in
         echo "  alias Proven.${PROVEN_MODULE}"
         echo ""
         echo "MIX.EXS DEPENDENCY:"
-        echo "  {:proven, path: \"/var/mnt/eclipse/repos/proven/bindings/elixir\"}"
+        echo "  {:proven, path: \"/var$REPOS_DIR/proven/bindings/elixir\"}"
         ;;
 
     rescript)
@@ -95,7 +95,7 @@ case "$LANGUAGE" in
         echo ""
         echo "SHELL SUBSTITUTION:"
         echo "  Source the proven shell wrapper:"
-        echo "  . /var/mnt/eclipse/repos/proven/bindings/bash/proven.sh"
+        echo "  . /var$REPOS_DIR/proven/bindings/bash/proven.sh"
         echo "  ${PROVEN_MODULE}_call \"\$@\""
         ;;
 

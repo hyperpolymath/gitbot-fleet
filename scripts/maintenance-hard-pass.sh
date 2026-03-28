@@ -67,19 +67,19 @@ if [[ -x "$repo/scripts/maintenance/run-maintenance.sh" ]]; then
     runner="$repo/scripts/maintenance/run-maintenance.sh"
 elif [[ -x "$repo/run-maintenance.sh" ]]; then
     runner="$repo/run-maintenance.sh"
-elif [[ -x "/var/mnt/eclipse/repos/run-maintenance.sh" ]]; then
-    runner="/var/mnt/eclipse/repos/run-maintenance.sh"
+elif [[ -x "/var$REPOS_DIR/run-maintenance.sh" ]]; then
+    runner="/var$REPOS_DIR/run-maintenance.sh"
 else
     echo "error: no maintenance runner found for $repo" >&2
     echo "expected one of:" >&2
     echo "  $repo/scripts/maintenance/run-maintenance.sh" >&2
     echo "  $repo/run-maintenance.sh" >&2
-    echo "  /var/mnt/eclipse/repos/run-maintenance.sh" >&2
+    echo "  /var$REPOS_DIR/run-maintenance.sh" >&2
     exit 2
 fi
 
-if [[ -z "$panic_bin" && -x "/var/mnt/eclipse/repos/panic-attacker/target/release/panic-attack" ]]; then
-    panic_bin="/var/mnt/eclipse/repos/panic-attacker/target/release/panic-attack"
+if [[ -z "$panic_bin" && -x "/var$REPOS_DIR/panic-attacker/target/release/panic-attack" ]]; then
+    panic_bin="/var$REPOS_DIR/panic-attacker/target/release/panic-attack"
 fi
 
 cmd=("$runner" --repo "$repo" --output "$output" --strict --fail-on-warn)

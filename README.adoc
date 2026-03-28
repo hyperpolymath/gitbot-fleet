@@ -28,7 +28,7 @@ just enroll-repos
 
 `maintenance-hard-pass` enforces fail-on-warn release gating using the target repo maintenance script.
 
-`enroll-repos` refreshes repository coverage metadata for gitbot-fleet and hypatia. Use `just enroll-repos /var/mnt/eclipse/repos true` to also write enrollment directives into repos that already have `.machine_readable/`.
+`enroll-repos` refreshes repository coverage metadata for gitbot-fleet and hypatia. Use `just enroll-repos /var$REPOS_DIR true` to also write enrollment directives into repos that already have `.machine_readable/`.
 
 == Bot Roster
 

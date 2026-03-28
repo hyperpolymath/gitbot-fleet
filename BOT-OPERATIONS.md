@@ -106,7 +106,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Validate RSR (Repository Structure Requirements) compliance |
 | **Repo** | `hyperpolymath/rhodibot` |
-| **Path** | `/mnt/eclipse/repos/rhodibot/` |
+| **Path** | `$REPOS_DIR/rhodibot/` |
 | **Tech** | Rust 1.83+, Tokio, Axum, gix |
 | **Tier** | 1 (Verifier) |
 | **Completion** | **50%** |
@@ -137,7 +137,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Formal mathematical/statistical verification via ECHIDNA |
 | **Repo** | `hyperpolymath/echidnabot` |
-| **Path** | `/mnt/eclipse/repos/echidnabot/` |
+| **Path** | `$REPOS_DIR/echidnabot/` |
 | **Tech** | Rust |
 | **Tier** | 1 (Verifier) |
 | **Completion** | **75%** |
@@ -156,7 +156,7 @@ just enroll-repos
 - Integration tests
 - Full ABI/FFI (Idris2 + Zig)
 
-**Relationship to ECHIDNA**: echidnabot wraps the ECHIDNA theorem prover (`/mnt/eclipse/repos/echidna/`) for GitHub integration. ECHIDNA provides the 12 prover backends; echidnabot provides the bot lifecycle, webhook handling, and fleet coordination.
+**Relationship to ECHIDNA**: echidnabot wraps the ECHIDNA theorem prover (`$REPOS_DIR/echidna/`) for GitHub integration. ECHIDNA provides the 12 prover backends; echidnabot provides the bot lifecycle, webhook handling, and fleet coordination.
 
 ---
 
@@ -166,7 +166,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Analyze code for ecological carbon intensity and economic efficiency |
 | **Repo** | `hyperpolymath/sustainabot` |
-| **Path** | `/mnt/eclipse/repos/sustainabot/` |
+| **Path** | `$REPOS_DIR/sustainabot/` |
 | **Tech** | Rust (4-crate workspace), tree-sitter |
 | **Tier** | 1 (Verifier) |
 | **Completion** | **25%** |
@@ -201,7 +201,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Visual polish, WCAG accessibility, SEO, machine-readability |
 | **Repo** | `hyperpolymath/glambot` |
-| **Path** | `/mnt/eclipse/repos/glambot/` |
+| **Path** | `$REPOS_DIR/glambot/` |
 | **Tech** | Rust 1.83+, pulldown-cmark, scraper, HTML5ever |
 | **Tier** | 2 (Finisher) |
 | **Completion** | **60%** |
@@ -229,7 +229,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Track, enforce, and detect drift in architectural boundaries |
 | **Repo** | `hyperpolymath/seambot` |
-| **Path** | `/mnt/eclipse/repos/seambot/` |
+| **Path** | `$REPOS_DIR/seambot/` |
 | **Tech** | Rust 1.83+, walkdir, regex, tree-sitter |
 | **Tier** | 2 (Finisher) |
 | **Completion** | **55%** |
@@ -265,7 +265,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Gate releases by validating completeness and quality |
 | **Repo** | `hyperpolymath/finishingbot` |
-| **Path** | `/mnt/eclipse/repos/finishingbot/` |
+| **Path** | `$REPOS_DIR/finishingbot/` |
 | **Tech** | Rust 1.83+, git2, pulldown-cmark |
 | **Tier** | 2 (Finisher - LAST in pipeline) |
 | **Completion** | **65%** |
@@ -296,7 +296,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Neurosymbolic CI/CD intelligence platform |
 | **Repo** | `hyperpolymath/hypatia` |
-| **Path** | `/mnt/eclipse/repos/hypatia/` |
+| **Path** | `$REPOS_DIR/hypatia/` |
 | **Tech** | Rust + Haskell + Logtalk/Prolog + Ada/SPARK |
 | **Tier** | 0 (Engine) |
 | **Completion** | **70%** |
@@ -327,7 +327,7 @@ just enroll-repos
 |-------|-------|
 | **Purpose** | Execute fixes identified by fleet bots |
 | **Repo** | `hyperpolymath/robot-repo-automaton` |
-| **Path** | `/mnt/eclipse/repos/robot-repo-automaton/` |
+| **Path** | `$REPOS_DIR/robot-repo-automaton/` |
 | **Tech** | Rust 1.83+, Tokio, Axum, lexpr |
 | **Tier** | 3 (Executor) |
 | **Completion** | **~5%** |

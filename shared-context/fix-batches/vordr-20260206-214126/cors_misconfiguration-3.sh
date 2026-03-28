@@ -7,4 +7,4 @@ set -euo pipefail
 REPO_PATH="$1"
 FINDING_FILE="$2"
 
-bash "/var/mnt/eclipse/repos/gitbot-fleet/scripts/fix-cors-wildcard.sh" "$REPO_PATH" "/var/mnt/eclipse/repos/gitbot-fleet/shared-context/fix-batches/vordr-20260206-214126/finding-cors_misconfiguration-3.json"
+bash "/var$REPOS_DIR/gitbot-fleet/scripts/fix-cors-wildcard.sh" "$REPO_PATH" "/var$REPOS_DIR/gitbot-fleet/shared-context/fix-batches/vordr-20260206-214126/finding-cors_misconfiguration-3.json"

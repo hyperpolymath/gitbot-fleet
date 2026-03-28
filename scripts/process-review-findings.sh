@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-FLEET_BASE="${FLEET_BASE:-/var/mnt/eclipse/repos/gitbot-fleet}"
+FLEET_BASE="${FLEET_BASE:-/var$REPOS_DIR/gitbot-fleet}"
 PENDING_DIR="${FLEET_BASE}/shared-context/findings/pending"
 GH_OWNER="hyperpolymath"
 

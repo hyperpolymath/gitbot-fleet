@@ -11,7 +11,7 @@ just enroll-repos
 ## Apply enrollment directives to repos
 
 ```bash
-just enroll-repos /var/mnt/eclipse/repos true
+just enroll-repos /var$REPOS_DIR true
 ```
 
 This writes `.machine_readable/bot_directives/FLEET-ENROLLMENT.a2ml` into repos that already have `.machine_readable/`.

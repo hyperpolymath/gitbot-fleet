@@ -144,12 +144,12 @@ Successfully deployed 4 new security patterns to the hypatia scanner and ran fle
 - File type filtering prevents false positives
 
 ### Files Modified
-- `/var/mnt/eclipse/repos/hypatia/hypatia-cli.sh` - Added 4 new patterns
+- `/var$REPOS_DIR/hypatia/hypatia-cli.sh` - Added 4 new patterns
 - Patterns 5-8 inserted after existing Pattern 4 (CORS wildcard)
 
 ### Deployment Command
 ```bash
-cd /var/mnt/eclipse/repos/gitbot-fleet
+cd /var$REPOS_DIR/gitbot-fleet
 ./fleet-coordinator.sh run-scan <repo-path>
 ```
 

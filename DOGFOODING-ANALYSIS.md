@@ -390,7 +390,7 @@ let _permit = sem.acquire().await
 
 1. **Detailed self-scan:**
    ```bash
-   cd /var/mnt/eclipse/repos
+   cd /var$REPOS_DIR
    ./hypatia/hypatia-cli.sh scan hypatia > hypatia-self-scan.json
    ./hypatia/hypatia-cli.sh scan gitbot-fleet > fleet-self-scan.json
    for bot in rhodibot echidnabot glambot seambot finishbot robot-repo-automaton; do

@@ -99,10 +99,10 @@ All four rule proposals have exceeded the auto-approval threshold (10 observatio
 ## Configuration
 
 **Supervised Repos:** `/var/home/hyper/.git-private-farm.scm`
-**Fleet Coordinator:** `/var/mnt/eclipse/repos/gitbot-fleet/fleet-coordinator.sh`
-**Learning Monitor:** `/var/mnt/eclipse/repos/gitbot-fleet/learning-monitor.sh`
-**Findings Storage:** `/var/mnt/eclipse/repos/gitbot-fleet/shared-context/findings/`
-**Fix Scripts:** `/var/mnt/eclipse/repos/gitbot-fleet/scripts/`
+**Fleet Coordinator:** `/var$REPOS_DIR/gitbot-fleet/fleet-coordinator.sh`
+**Learning Monitor:** `/var$REPOS_DIR/gitbot-fleet/learning-monitor.sh`
+**Findings Storage:** `/var$REPOS_DIR/gitbot-fleet/shared-context/findings/`
+**Fix Scripts:** `/var$REPOS_DIR/gitbot-fleet/scripts/`
 
 ## Performance Metrics
 

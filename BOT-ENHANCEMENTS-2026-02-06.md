@@ -88,7 +88,7 @@ gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
 ### Verification
 
 ```bash
-$ cd /mnt/eclipse/repos/seambot && cargo check
+$ cd $REPOS_DIR/seambot && cargo check
 warning: unused imports (18 warnings)
 Finished `dev` profile [unoptimized + debuginfo] target(s) in 37.49s
 ```
@@ -178,7 +178,7 @@ EcologicalThresholds {
 ### Verification
 
 ```bash
-$ cd /mnt/eclipse/repos/sustainabot && cargo build --release
+$ cd $REPOS_DIR/sustainabot && cargo build --release
 warning: unused import: `Memory`
 warning: field `language` is never read
 Finished `release` profile [optimized] target(s) in 49.23s

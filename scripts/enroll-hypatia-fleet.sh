@@ -10,7 +10,7 @@ usage: $(basename "$0") [options]
 Discover and enroll repositories for gitbot-fleet/hypatia maintenance coverage.
 
 Options:
-  --repos-root <path>   Root containing repos (default: /var/mnt/eclipse/repos)
+  --repos-root <path>   Root containing repos (default: /var$REPOS_DIR)
   --registry <path>     Registry JSON output
                         (default: shared-context/enrollment/repos.json)
   --apply               Write enrollment directives into discovered repos
@@ -18,7 +18,7 @@ Options:
 USAGE
 }
 
-repos_root="/var/mnt/eclipse/repos"
+repos_root="/var$REPOS_DIR"
 registry=""
 apply=false
 

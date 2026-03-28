@@ -128,7 +128,7 @@ jq: parse error: Invalid numeric literal at line 7, column 22
 
 File to investigate:
 ```bash
-cd /var/mnt/eclipse/repos/hypatia
+cd /var$REPOS_DIR/hypatia
 less hypatia-cli.sh
 # Look for scan_file function
 # Check JSON generation (likely line ~100-200)
