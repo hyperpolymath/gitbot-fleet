@@ -1,0 +1,105 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell
+:toc: macro
+:toclevels: 2
+:icons: font
+
+= Gitbot Fleet Roadmap
+
+_Bot orchestration hub for automated repository quality enforcement across 500+ repos._
+
+toc::[]
+
+== Current State
+
+Gitbot Fleet coordinates 11 bots through a shared-context system with safety-triangle-aware
+routing. The fleet-coordinator dispatches findings from Hypatia scans to specialised bots
+based on confidence thresholds (Eliminate >= 0.95, Substitute >= 0.85, Control < 0.85).
+
+**Fleet roster (11 bots):**
+
+[cols="1,2,1"]
+|===
+| Bot | Purpose | Has Roadmap
+
+| rhodibot | Git operations, RSR enforcement | Yes
+| echidnabot | Quality verification, multi-prover | Yes
+| sustainabot | Dependency management | Yes
+| glambot | Presentation, badges, formatting | Yes
+| seambot | Integration seam maintenance | Yes
+| finishingbot | Completion of partial work | Yes
+| panicbot | Security scanning (panic-attack) | No (uses panic-attack roadmap)
+| gsbot | Git-seo, discoverability | Yes
+| accessibilitybot | Accessibility compliance | Yes
+| cipherbot | Cryptographic hygiene | Yes
+| the-hotchocolabot | Developer experience, warmth | Yes
+|===
+
+**Infrastructure:**
+
+* fleet-coordinator.sh -- orchestration layer
+* dispatch-runner.sh -- JSONL manifest execution
+* shared-context/ -- Rust crate for inter-bot communication
+* robot-repo-automaton -- Rust CLI for scan/fix/PR creation (~5% complete)
+* Hypatia scanner integration (~78% failure rate, needs work)
+
+== v1.0.0 -- Foundation Stabilisation (In Progress)
+
+* [x] Fleet coordinator shell orchestration
+* [x] Dispatch runner with JSONL manifests
+* [x] 7 fix scripts for eliminate-tier patterns
+* [x] Shared-context Rust crate for inter-bot communication
+* [x] Safety triangle routing (Eliminate/Substitute/Control)
+* [x] Health monitoring (660 lines)
+* [x] 11 bots deployed with individual roadmaps
+* [x] Bot modes for echidnabot (Verifier/Advisor/Consultant/Regulator)
+* [ ] Hypatia scanner reliability (reduce 78% failure rate to < 10%)
+* [ ] Robot-repo-automaton: confidence threshold system
+* [ ] Robot-repo-automaton: integration tests with fleet coordination
+* [ ] End-to-end integration tests across full workflow
+
+== v1.1.0 -- Robot-Repo-Automaton Maturity
+
+Robot-repo-automaton is currently at ~5% completion. This milestone brings it to production.
+
+* [x] License migration to PMPL-1.0-or-later
+* [x] Hypatia module renaming
+* [ ] Hypatia integration (currently ~10% -- HIGH BLOCKER)
+* [ ] Confidence threshold decision logic for auto-fix
+* [ ] End-to-end testing with Hypatia rules engine
+* [ ] Finding publication to shared-context
+* [ ] Production deployment to hyperpolymath repos
+* [ ] Learning loop: findings -> observed-patterns -> rules
+
+== v1.2.0 -- CI/CD Pipeline Integration
+
+* [ ] GitHub Actions integration for automated fleet runs
+* [ ] GitLab CI integration via mirror workflows
+* [ ] Scheduled fleet scans (cron-based)
+* [ ] PR-triggered scans with bot comments
+* [ ] Status checks: block merge on Eliminate-tier findings
+
+== v1.3.0 -- Observability and Analytics
+
+* [ ] Self-healing and auto-recovery for bot failures
+* [ ] Advanced analytics and metrics dashboard
+* [ ] Bot dependency graph visualisation
+* [ ] Fleet-wide finding aggregation and trending
+* [ ] Load testing and stress testing under org-scale workloads
+* [ ] VeriSimDB persistence for fleet metrics
+
+== v2.0.0 -- Intelligent Fleet
+
+* [ ] Echidnabot: proof verification of scan claims
+* [ ] Learning loop integration with Hypatia across all bots
+* [ ] Cross-bot coordination: bots trigger downstream bots on findings
+* [ ] Campaign system for fleet-wide remediation drives
+* [ ] PanLL dashboard panels for fleet status and findings
+* [ ] Groove protocol integration for inter-service communication
+
+== Long-Term
+
+* [ ] Multi-org federation: run fleet across multiple GitHub organisations
+* [ ] Bot plugin system: third-party bots with safety-triangle compliance
+* [ ] Formal verification of safety-triangle routing logic (via proven)
+* [ ] Chapel distributed execution for multi-machine fleet coordination
