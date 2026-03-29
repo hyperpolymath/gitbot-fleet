@@ -66,16 +66,36 @@ run_hypatia_scan() {
     # Generate findings file with timestamp
     local findings_file="$repo_findings_dir/${SESSION_ID}.json"
 
+    local scan_stderr
+    scan_stderr=$(mktemp /tmp/hypatia-stderr-XXXXXX)
+    local scan_exit=0
+
     if [[ -x "$FLEET_DIR/../hypatia/hypatia-cli.sh" ]]; then
         HYPATIA_FORMAT=json "$FLEET_DIR/../hypatia/hypatia-cli.sh" scan "$repo_path" \
-            > "$findings_file" 2>/dev/null || true
+            > "$findings_file" 2>"$scan_stderr" || scan_exit=$?
+    elif [[ -x "/var/mnt/eclipse/repos/hypatia/hypatia-cli.sh" ]]; then
+        HYPATIA_FORMAT=json "/var/mnt/eclipse/repos/hypatia/hypatia-cli.sh" scan "$repo_path" \
+            > "$findings_file" 2>"$scan_stderr" || scan_exit=$?
     else
-        log_warn "Hypatia CLI not found, using POC scanner"
-        "$FLEET_DIR/../hypatia/poc-scanner.sh" "$repo_path" > "$findings_file" 2>/dev/null || true
+        log_warn "Hypatia CLI not found at expected paths"
+        rm -f "$scan_stderr"
+        return 1
     fi
 
-    if [[ -f "$findings_file" ]]; then
-        local issue_count=$(jq 'length' "$findings_file" 2>/dev/null || echo 0)
+    # Exit 2 = real error; exit 0 = clean; exit 1 = findings found (both valid)
+    if [[ "$scan_exit" -eq 2 ]]; then
+        local err_msg
+        err_msg=$(head -3 "$scan_stderr" 2>/dev/null || echo "unknown error")
+        log_error "Scanner error for $repo_name (exit 2): $err_msg"
+        rm -f "$scan_stderr" "$findings_file"
+        return 1
+    fi
+    rm -f "$scan_stderr"
+
+    # Validate JSON output
+    if [[ -f "$findings_file" ]] && [[ -s "$findings_file" ]] && jq empty "$findings_file" 2>/dev/null; then
+        local issue_count
+        issue_count=$(jq 'if type == "array" then length elif .findings then (.findings | length) else 0 end' "$findings_file" 2>/dev/null || echo 0)
         log_bot "hypatia" "Found $issue_count issues in $repo_name"
 
         # Create/update latest.json symlink
@@ -83,7 +103,8 @@ run_hypatia_scan() {
 
         echo "$findings_file"
     else
-        log_error "Scan failed for $repo_name"
+        log_error "Scan produced invalid/empty JSON for $repo_name"
+        rm -f "$findings_file"
         return 1
     fi
 }

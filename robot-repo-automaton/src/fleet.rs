@@ -14,6 +14,8 @@ use crate::error::{Error, Result};
 use gitbot_shared_context::{BotId, Context, Finding, Severity as FleetSeverity};
 use std::path::PathBuf;
 use tracing::{debug, info};
+use chrono;
+use dirs;
 
 /// Fleet coordinator for robot-repo-automaton
 pub struct FleetCoordinator {
@@ -52,8 +54,13 @@ impl FleetCoordinator {
 
             ctx.complete_bot(BotId::RobotRepoAutomaton, findings_count, errors_count, files_analyzed)
                 .map_err(|e| Error::Internal(format!("Failed to complete bot: {}", e)))?;
+        }
 
-            // TODO: Persist context to ~/.gitbot-fleet/sessions/
+        // Persist session to disk (after mutable borrow is released)
+        if let Some(ref ctx) = self.context {
+            if let Err(e) = Self::persist_session_static(ctx) {
+                debug!("Failed to persist session (non-fatal): {}", e);
+            }
         }
 
         self.context = None;
@@ -185,6 +192,38 @@ impl FleetCoordinator {
     /// Get current context (for inspection)
     pub fn context(&self) -> Option<&Context> {
         self.context.as_ref()
+    }
+
+    /// Persist session context to disk for cross-session visibility.
+    ///
+    /// Writes a JSON summary of the session to ~/.gitbot-fleet/sessions/
+    /// so other bots and the fleet coordinator can see completed work.
+    fn persist_session_static(ctx: &Context) -> Result<()> {
+        let sessions_dir = dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+            .join(".gitbot-fleet/sessions");
+
+        std::fs::create_dir_all(&sessions_dir)
+            .map_err(|e| Error::Internal(format!("Failed to create sessions dir: {}", e)))?;
+
+        let session_file = sessions_dir.join(format!("{}.json", ctx.session_id));
+
+        let session_data = serde_json::json!({
+            "session_id": ctx.session_id.to_string(),
+            "repo_name": ctx.repo_name,
+            "completed_at": chrono::Utc::now().to_rfc3339(),
+            "findings_count": ctx.findings_from(BotId::RobotRepoAutomaton).len(),
+            "bot": "robot-repo-automaton",
+        });
+
+        let json = serde_json::to_string_pretty(&session_data)
+            .map_err(|e| Error::Internal(format!("Failed to serialize session: {}", e)))?;
+
+        std::fs::write(&session_file, json)
+            .map_err(|e| Error::Internal(format!("Failed to write session file: {}", e)))?;
+
+        info!("Session persisted to {}", session_file.display());
+        Ok(())
     }
 
     /// Check if connected to fleet

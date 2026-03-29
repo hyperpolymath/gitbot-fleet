@@ -188,18 +188,144 @@ impl Detector {
         }
     }
 
-    /// Detect language mismatch issues (e.g., CodeQL configured for wrong languages)
-    fn detect_language_mismatch(&self, _error_type: &ErrorType) -> Option<DetectedIssue> {
-        // This would require parsing the workflow file to compare configured vs actual
-        // For now, return None - implement when we have YAML parsing
-        None
+    /// Detect language mismatch issues (e.g., CodeQL configured for wrong languages).
+    ///
+    /// Checks that CI workflow language matrices match the actual languages
+    /// detected in the repository. Catches stale CodeQL configs, wrong
+    /// test runners, and mismatched linter configurations.
+    fn detect_language_mismatch(&self, error_type: &ErrorType) -> Option<DetectedIssue> {
+        let detection = &error_type.detection;
+
+        // extension_map maps workflow file patterns to expected language keys
+        // e.g., {"codeql.yml": "javascript-typescript", "rust.yml": "rust"}
+        if detection.extension_map.is_empty() {
+            return None;
+        }
+
+        let mut mismatches = Vec::new();
+
+        for (workflow_glob, expected_lang) in &detection.extension_map {
+            // Check if the workflow file exists
+            let matching_files = self.files_matching(workflow_glob);
+
+            if matching_files.is_empty() {
+                continue;
+            }
+
+            // Check if the expected language is actually present in the repo
+            let lang_present = self.languages.contains(expected_lang);
+
+            if !lang_present {
+                // Workflow references a language not found in this repo
+                for file in matching_files {
+                    mismatches.push(file.clone());
+                }
+            }
+        }
+
+        // Also check the reverse: repo has languages but no corresponding workflow
+        let repo_languages: Vec<String> = self.languages.iter().cloned().collect();
+        let configured_langs: Vec<&String> = detection.extension_map.values().collect();
+
+        for lang in &repo_languages {
+            // Map repo language to CodeQL language name
+            let codeql_lang = match lang.as_str() {
+                "javascript" | "typescript" => "javascript-typescript",
+                "python" => "python",
+                "go" => "go",
+                "rust" => "rust",
+                "java" | "kotlin" => "java-kotlin",
+                "ruby" => "ruby",
+                "csharp" => "csharp",
+                _ => continue,
+            };
+
+            if !configured_langs.iter().any(|c| c.as_str() == codeql_lang) {
+                // Language exists in repo but isn't in any workflow config
+                // This is informational, not always a problem
+            }
+        }
+
+        if mismatches.is_empty() {
+            None
+        } else {
+            Some(DetectedIssue {
+                error_type_id: error_type.id.clone(),
+                error_name: error_type.name.clone(),
+                severity: error_type.severity,
+                description: format!(
+                    "{} — {} workflow(s) reference languages not found in repo",
+                    error_type.description,
+                    mismatches.len()
+                ),
+                affected_files: mismatches,
+                confidence: 0.90,
+                suggested_fix: format!(
+                    "{:?} {} — update language matrix to match actual repo languages",
+                    error_type.fix.action, error_type.fix.target
+                ),
+                commit_message: error_type.commit_message.clone(),
+            })
+        }
     }
 
-    /// Detect content match issues
-    fn detect_content_match(&self, _error_type: &ErrorType) -> Option<DetectedIssue> {
-        // Would require regex matching in file contents
-        // Implement when needed
-        None
+    /// Detect content match issues by regex scanning file contents.
+    ///
+    /// Searches files matching the glob patterns in `detection.files` for
+    /// content matching the regex in `detection.condition`. This enables
+    /// detection of anti-patterns like `believe_me`, `sorry`, hardcoded
+    /// secrets, eval() usage, unpinned actions, etc.
+    fn detect_content_match(&self, error_type: &ErrorType) -> Option<DetectedIssue> {
+        let detection = &error_type.detection;
+
+        // condition holds the regex pattern to search for
+        let regex_str = detection.condition.as_deref()?;
+        let re = regex::Regex::new(regex_str).ok()?;
+
+        let mut affected = Vec::new();
+
+        // files holds glob patterns for which files to search
+        for file_glob in &detection.files {
+            let matching = self.files_matching(file_glob);
+
+            for file_path in matching {
+                // Skip binary files (> 1MB or non-UTF8)
+                if let Ok(metadata) = std::fs::metadata(file_path) {
+                    if metadata.len() > 1_048_576 {
+                        continue;
+                    }
+                }
+
+                if let Ok(content) = std::fs::read_to_string(file_path) {
+                    if re.is_match(&content) {
+                        affected.push(file_path.clone());
+                    }
+                }
+            }
+        }
+
+        if affected.is_empty() {
+            None
+        } else {
+            let match_count = affected.len();
+
+            Some(DetectedIssue {
+                error_type_id: error_type.id.clone(),
+                error_name: error_type.name.clone(),
+                severity: error_type.severity,
+                description: format!(
+                    "{} — pattern found in {} file(s)",
+                    error_type.description, match_count
+                ),
+                affected_files: affected,
+                confidence: 0.95,
+                suggested_fix: format!(
+                    "{:?} {}",
+                    error_type.fix.action, error_type.fix.target
+                ),
+                commit_message: error_type.commit_message.clone(),
+            })
+        }
     }
 
     /// Run all detections from a catalog

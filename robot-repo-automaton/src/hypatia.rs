@@ -23,6 +23,7 @@
 
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
+use dirs;
 
 /// Configuration for cicd-hyper-a integration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -199,41 +200,185 @@ impl CicdHyperAClient {
         }
     }
 
-    /// Fetch a ruleset from the registry
+    /// Fetch a ruleset from the registry.
+    ///
+    /// Tries the Hypatia API first; falls back to loading rules from the
+    /// local verisimdb-data recipes directory if the API is unavailable.
     pub async fn fetch_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
-        // In a real implementation, this would call the cicd-hyper-a API
-        // For now, return a placeholder that demonstrates the structure
         tracing::info!("Fetching ruleset: {} from {}", ruleset_id, self.config.api_url);
 
-        // Placeholder ruleset demonstrating the integration
+        // Try API first
+        let url = format!("{}/rulesets/{}", self.config.api_url, ruleset_id);
+        match self.http_client.get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+        {
+            Ok(response) if response.status().is_success() => {
+                match response.json::<Ruleset>().await {
+                    Ok(ruleset) => {
+                        tracing::info!("Fetched {} rules from API", ruleset.rules.len());
+                        return Ok(ruleset);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to parse API response: {}", e);
+                    }
+                }
+            }
+            Ok(response) => {
+                tracing::warn!("API returned status {}", response.status());
+            }
+            Err(e) => {
+                tracing::debug!("API unavailable ({}), falling back to local recipes", e);
+            }
+        }
+
+        // Fallback: load from local verisimdb-data recipes
+        self.load_local_ruleset(ruleset_id)
+    }
+
+    /// Load rules from local verisimdb-data recipes directory.
+    fn load_local_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
+        let recipes_dirs = [
+            PathBuf::from("/var/mnt/eclipse/repos/verisimdb-data/recipes"),
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join("Documents/hyperpolymath-repos/verisimdb-data/recipes"),
+        ];
+
+        let recipes_dir = recipes_dirs.iter().find(|d| d.is_dir());
+
+        let mut rules = Vec::new();
+
+        if let Some(dir) = recipes_dir {
+            tracing::info!("Loading local recipes from {}", dir.display());
+
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(recipe) = serde_json::from_str::<serde_json::Value>(&content) {
+                                if let Some(rule) = recipe_to_rule(&recipe) {
+                                    rules.push(rule);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no recipes found, provide core RSR rules as baseline
+        if rules.is_empty() {
+            rules = self.core_rsr_rules();
+        }
+
+        tracing::info!("Loaded {} rules for ruleset {}", rules.len(), ruleset_id);
+
         Ok(Ruleset {
             id: ruleset_id.to_string(),
-            name: "RSR Compliance".to_string(),
+            name: format!("RSR Compliance ({})", if recipes_dir.is_some() { "local" } else { "built-in" }),
             description: "Rhodium Standard Repositories compliance rules".to_string(),
-            version: "1.0.0".to_string(),
-            rules: vec![
-                Rule {
-                    id: "RSR-001".to_string(),
-                    name: "Missing README".to_string(),
-                    category: "structure".to_string(),
-                    severity: RuleSeverity::High,
-                    pattern: RulePattern::FileGlob {
-                        glob: "README.{md,adoc}".to_string(),
-                    },
-                    fix: Some(RuleFix::Create {
-                        path: "README.adoc".to_string(),
-                        content: "= Project Name\n\nDescription here.\n".to_string(),
-                    }),
-                    metadata: RuleMetadata {
-                        author: Some("cicd-hyper-a".to_string()),
-                        updated_at: Some("2026-01-18".to_string()),
-                        version: "1.0.0".to_string(),
-                        tags: vec!["rsr".to_string(), "documentation".to_string()],
-                        learned: false,
-                    },
-                },
-            ],
+            version: "2.0.0".to_string(),
+            rules,
         })
+    }
+
+    /// Core RSR rules that are always available even without recipes.
+    fn core_rsr_rules(&self) -> Vec<Rule> {
+        vec![
+            Rule {
+                id: "RSR-001".to_string(),
+                name: "Missing LICENSE".to_string(),
+                category: "structure".to_string(),
+                severity: RuleSeverity::Critical,
+                pattern: RulePattern::FileGlob { glob: "LICENSE*".to_string() },
+                fix: Some(RuleFix::Create {
+                    path: "LICENSE".to_string(),
+                    content: "PMPL-1.0-or-later\n\nSee https://github.com/hyperpolymath/palimpsest-license\n".to_string(),
+                }),
+                metadata: RuleMetadata {
+                    author: Some("hypatia".to_string()),
+                    updated_at: Some("2026-03-29".to_string()),
+                    version: "2.0.0".to_string(),
+                    tags: vec!["rsr".to_string(), "license".to_string()],
+                    learned: false,
+                },
+            },
+            Rule {
+                id: "RSR-002".to_string(),
+                name: "Missing SECURITY.md".to_string(),
+                category: "structure".to_string(),
+                severity: RuleSeverity::High,
+                pattern: RulePattern::FileGlob { glob: "SECURITY.md".to_string() },
+                fix: Some(RuleFix::Create {
+                    path: "SECURITY.md".to_string(),
+                    content: "# Security Policy\n\n## Reporting a Vulnerability\n\nPlease report security vulnerabilities to j.d.a.jewell@open.ac.uk.\n".to_string(),
+                }),
+                metadata: RuleMetadata {
+                    author: Some("hypatia".to_string()),
+                    updated_at: Some("2026-03-29".to_string()),
+                    version: "2.0.0".to_string(),
+                    tags: vec!["rsr".to_string(), "security".to_string()],
+                    learned: false,
+                },
+            },
+            Rule {
+                id: "RSR-003".to_string(),
+                name: "Missing .editorconfig".to_string(),
+                category: "structure".to_string(),
+                severity: RuleSeverity::Medium,
+                pattern: RulePattern::FileGlob { glob: ".editorconfig".to_string() },
+                fix: Some(RuleFix::Create {
+                    path: ".editorconfig".to_string(),
+                    content: "root = true\n\n[*]\nend_of_line = lf\ninsert_final_newline = true\ncharset = utf-8\ntrim_trailing_whitespace = true\nindent_style = space\nindent_size = 2\n".to_string(),
+                }),
+                metadata: RuleMetadata {
+                    author: Some("hypatia".to_string()),
+                    updated_at: Some("2026-03-29".to_string()),
+                    version: "2.0.0".to_string(),
+                    tags: vec!["rsr".to_string(), "formatting".to_string()],
+                    learned: false,
+                },
+            },
+            Rule {
+                id: "RSR-004".to_string(),
+                name: "SONNET-TASKS.md present".to_string(),
+                category: "hygiene".to_string(),
+                severity: RuleSeverity::Medium,
+                pattern: RulePattern::ContentRegex {
+                    regex: ".*".to_string(),
+                    file_glob: Some("SONNET-TASKS.md".to_string()),
+                },
+                fix: Some(RuleFix::Delete { path: "SONNET-TASKS.md".to_string() }),
+                metadata: RuleMetadata {
+                    author: Some("hypatia".to_string()),
+                    updated_at: Some("2026-03-29".to_string()),
+                    version: "2.0.0".to_string(),
+                    tags: vec!["hygiene".to_string()],
+                    learned: false,
+                },
+            },
+            Rule {
+                id: "RSR-005".to_string(),
+                name: "Unpinned GitHub Actions".to_string(),
+                category: "security".to_string(),
+                severity: RuleSeverity::High,
+                pattern: RulePattern::ContentRegex {
+                    regex: r"uses:\s+[\w-]+/[\w-]+@v\d+".to_string(),
+                    file_glob: Some(".github/workflows/*.yml".to_string()),
+                },
+                fix: None, // Requires SHA lookup — handled by fix-unpinned-actions.sh
+                metadata: RuleMetadata {
+                    author: Some("hypatia".to_string()),
+                    updated_at: Some("2026-03-29".to_string()),
+                    version: "2.0.0".to_string(),
+                    tags: vec!["security".to_string(), "supply-chain".to_string()],
+                    learned: false,
+                },
+            },
+        ]
     }
 
     /// Execute rules from a ruleset on a repository
@@ -324,9 +469,25 @@ impl CicdHyperAClient {
                         let file_path = repo_path.join(path);
                         std::fs::write(&file_path, content).is_ok()
                     }
-                    RuleFix::Command { .. } | RuleFix::Patch { .. } => {
-                        // Command and patch fixes require more complex handling
-                        false
+                    RuleFix::Command { command, args } => {
+                        // Execute command in the repo directory
+                        match std::process::Command::new(command)
+                            .args(args)
+                            .current_dir(repo_path)
+                            .stdout(std::process::Stdio::piped())
+                            .stderr(std::process::Stdio::piped())
+                            .output()
+                        {
+                            Ok(output) => output.status.success(),
+                            Err(e) => {
+                                tracing::warn!("Command fix failed for {}: {}", rule.id, e);
+                                false
+                            }
+                        }
+                    }
+                    RuleFix::Patch { patch } => {
+                        // Apply unified diff patch via `git apply`
+                        Self::apply_patch(repo_path, patch, &rule.id)
                     }
                 }
             } else {
@@ -343,6 +504,53 @@ impl CicdHyperAClient {
             fix_applied,
             error: None,
         }
+    }
+
+    /// Apply a unified diff patch via `git apply`.
+    /// Returns true if the patch was successfully applied.
+    fn apply_patch(repo_path: &Path, patch: &str, rule_id: &str) -> bool {
+        use std::io::Write;
+
+        // Step 1: dry-run check
+        let check_ok = (|| -> Option<bool> {
+            let mut child = std::process::Command::new("git")
+                .args(["apply", "--check", "-"])
+                .current_dir(repo_path)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .ok()?;
+
+            child.stdin.as_mut()?.write_all(patch.as_bytes()).ok()?;
+            drop(child.stdin.take());
+            let out = child.wait_with_output().ok()?;
+            Some(out.status.success())
+        })();
+
+        if check_ok != Some(true) {
+            tracing::warn!("Patch check failed for rule {}", rule_id);
+            return false;
+        }
+
+        // Step 2: apply for real
+        let apply_ok = (|| -> Option<bool> {
+            let mut child = std::process::Command::new("git")
+                .args(["apply", "-"])
+                .current_dir(repo_path)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .ok()?;
+
+            child.stdin.as_mut()?.write_all(patch.as_bytes()).ok()?;
+            drop(child.stdin.take());
+            let out = child.wait_with_output().ok()?;
+            Some(out.status.success())
+        })();
+
+        apply_ok.unwrap_or(false)
     }
 
     /// Report execution results back to Hypatia for the neurosymbolic learning loop.
@@ -391,6 +599,61 @@ impl CicdHyperAClient {
 
         Ok(())
     }
+}
+
+/// Convert a verisimdb-data recipe JSON to a Rule.
+fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
+    let id = recipe.get("id")?.as_str()?.to_string();
+    let name = recipe.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
+    let category = recipe.get("category").and_then(|v| v.as_str()).unwrap_or("general").to_string();
+    let _description = recipe.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    let severity = match recipe.get("severity").and_then(|v| v.as_str()).unwrap_or("medium") {
+        "critical" => RuleSeverity::Critical,
+        "high" => RuleSeverity::High,
+        "medium" => RuleSeverity::Medium,
+        "low" => RuleSeverity::Low,
+        _ => RuleSeverity::Info,
+    };
+
+    // Build pattern from recipe detection info
+    let pattern = if let Some(glob) = recipe.get("file_glob").and_then(|v| v.as_str()) {
+        RulePattern::FileGlob { glob: glob.to_string() }
+    } else if let Some(regex) = recipe.get("pattern").and_then(|v| v.as_str()) {
+        RulePattern::ContentRegex {
+            regex: regex.to_string(),
+            file_glob: recipe.get("applies_to").and_then(|v| v.as_str()).map(|s| s.to_string()),
+        }
+    } else {
+        return None;
+    };
+
+    // Build fix from recipe
+    let fix = recipe.get("fix_script").and_then(|v| v.as_str()).map(|script| {
+        RuleFix::Command {
+            command: script.to_string(),
+            args: vec![],
+        }
+    });
+
+    Some(Rule {
+        id,
+        name,
+        category,
+        severity,
+        pattern,
+        fix,
+        metadata: RuleMetadata {
+            author: recipe.get("author").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            updated_at: recipe.get("updated_at").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            version: recipe.get("version").and_then(|v| v.as_str()).unwrap_or("1.0.0").to_string(),
+            tags: recipe.get("tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default(),
+            learned: recipe.get("learned").and_then(|v| v.as_bool()).unwrap_or(false),
+        },
+    })
 }
 
 #[cfg(test)]

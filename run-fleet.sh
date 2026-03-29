@@ -116,16 +116,27 @@ cmd_scan() {
         ts_file=$(date +%s)
         local findings_file="$repo_findings_dir/${ts_file}.json"
 
-        # Run hypatia scan (JSON mode, suppress stderr progress)
+        # Run hypatia scan (JSON mode)
+        # Exit codes: 0=clean, 1=findings found, 2=error
         printf "  %-45s " "$repo_name"
-        if HYPATIA_FORMAT=json "$HYPATIA_CLI" scan "$repo_path" > "$findings_file" 2>/dev/null; then
-            : # exit 0 means clean
-        else
-            : # exit 1 means findings (expected)
-        fi
+        local scan_stderr
+        scan_stderr=$(mktemp /tmp/hypatia-stderr-XXXXXX)
+        local scan_exit=0
+        HYPATIA_FORMAT=json "$HYPATIA_CLI" scan "$repo_path" > "$findings_file" 2>"$scan_stderr" || scan_exit=$?
 
-        # Validate output is JSON
-        if [[ -f "$findings_file" ]] && jq empty "$findings_file" 2>/dev/null; then
+        if [[ "$scan_exit" -eq 2 ]]; then
+            # Real error — log it instead of swallowing
+            local err_msg
+            err_msg=$(head -5 "$scan_stderr" 2>/dev/null || echo "unknown error")
+            rm -f "$scan_stderr" "$findings_file"
+            echo -e "${RED}error${NC} (exit 2: $err_msg)"
+            ((failed++)) || true
+            continue
+        fi
+        rm -f "$scan_stderr"
+
+        # Validate output is valid JSON (exit 0 or 1 should produce JSON)
+        if [[ -f "$findings_file" ]] && [[ -s "$findings_file" ]] && jq empty "$findings_file" 2>/dev/null; then
             # Update latest.json symlink
             ln -sf "$(basename "$findings_file")" "$repo_findings_dir/latest.json"
 
@@ -344,19 +355,52 @@ cmd_fix() {
                 fix_script=$(jq -r --arg t "$ftype" '.registry.by_category[$t] // empty' "$REGISTRY" 2>/dev/null || true)
             fi
 
-            # Strategy 3: map hypatia pattern names to registry keys
+            # Strategy 3: map hypatia pattern/type names to registry category keys
+            # This covers ALL known hypatia finding patterns → registry categories
             if [[ -z "$fix_script" || "$fix_script" == "null" ]]; then
                 local registry_key=""
-                case "$fpattern" in
-                    unpinned_action)            registry_key="DependencyPinning" ;;
-                    missing_permissions)         registry_key="TokenPermissions" ;;
-                    missing_security_policy)     registry_key="SecurityPolicy" ;;
-                    missing_license_file)        registry_key="LicenseCompliance" ;;
-                    wildcard_cors)               registry_key="CORSWildcard" ;;
-                    missing_spdx*)               registry_key="MissingSPDX" ;;
-                    innerhtml_assignment)         registry_key="XSS" ;;
-                    rust_unwrap|unwrap_without_check) registry_key="PanicPath" ;;
-                    actions_expression_injection) registry_key="CommandInjection" ;;
+                case "${fpattern:-}${ftype:-}" in
+                    # --- Workflow / CI rules ---
+                    unpinned_action|*unpinned*)              registry_key="DependencyPinning" ;;
+                    missing_permissions|*permissions*)       registry_key="TokenPermissions" ;;
+                    missing_security_policy|*security_md*)   registry_key="SecurityPolicy" ;;
+                    missing_license_file|*license*)          registry_key="LicenseCompliance" ;;
+                    missing_spdx*|*spdx*)                    registry_key="MissingSPDX" ;;
+                    actions_expression_injection)            registry_key="CommandInjection" ;;
+                    *workflow_hygiene*|irrelevant_*|redundant_*) registry_key="WorkflowHygiene" ;;
+                    *dependabot*|missing_github_actions_dependabot) registry_key="DependencyUpdate" ;;
+                    deno_all_perms|*deno*perms*)             registry_key="ExcessivePermissions" ;;
+                    # --- Code safety rules ---
+                    innerhtml_assignment|*innerHTML*)        registry_key="XSS" ;;
+                    rust_unwrap|unwrap_without_check|*unwrap*) registry_key="PanicPath" ;;
+                    wildcard_cors|*cors*)                    registry_key="CORSWildcard" ;;
+                    eval_in_shell|*eval*)                    registry_key="DynamicCodeExecution" ;;
+                    hardcoded_tmp|*tmp_path*)                registry_key="UncheckedAllocation" ;;
+                    *sql_inject*|*parameteriz*)              registry_key="SQLInjection" ;;
+                    *shell_inject*|*shell_quot*)             registry_key="ShellInjection" ;;
+                    *http_url*|*insecure_http*)              registry_key="InsecureHTTP" ;;
+                    *path_traversal*)                        registry_key="PathTraversal" ;;
+                    *hardcoded_secret*|*secret*)             registry_key="HardcodedSecret" ;;
+                    *atom_exhaust*)                          registry_key="AtomExhaustion" ;;
+                    *unsafe_type*|*type_coercion*)           registry_key="UnsafeTypeCoercion" ;;
+                    *unsafe_deserial*)                       registry_key="UnsafeDeserialization" ;;
+                    *unsafe_ffi*)                            registry_key="UnsafeFFI" ;;
+                    *unsafe_code*|*sorry*|*believe_me*|*admitted*) registry_key="UnsafeCode" ;;
+                    *resource_leak*)                         registry_key="ResourceLeak" ;;
+                    *unchecked_error*)                       registry_key="UncheckedError" ;;
+                    *heredoc*)                               registry_key="HeredocEval" ;;
+                    # --- Root hygiene / structural rules ---
+                    *banned*|*stale*|*missing_requirement*)  registry_key="WorkflowHygiene" ;;
+                    *trustfile*)                             registry_key="MissingTrustfile" ;;
+                    *dustfile*)                              registry_key="MissingDustfile" ;;
+                    *ai_manifest*|*AI_MANIFEST*)             registry_key="MissingAIManifest" ;;
+                    *assail_recipe*)                         registry_key="MissingAssailRecipe" ;;
+                    *proven_ref*)                            registry_key="MissingProvenRef" ;;
+                    *verisimdb_feed*)                        registry_key="MissingVerisimdbFeed" ;;
+                    *feedback_integration*)                  registry_key="MissingFeedbackIntegration" ;;
+                    *vexometer*)                             registry_key="MissingVexometerHooks" ;;
+                    *todo*|*TODO*)                           registry_key="TodoMarkers" ;;
+                    *license_hygiene*)                       registry_key="LicenseHygiene" ;;
                 esac
                 if [[ -n "$registry_key" ]]; then
                     fix_script=$(jq -r --arg k "$registry_key" '.registry.by_category[$k] // empty' "$REGISTRY" 2>/dev/null || true)
