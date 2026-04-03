@@ -59,7 +59,7 @@ chrono = { version = "0.4", features = ["serde"] }
 minijinja = "2"
 
 # Fleet integration
-gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
+gitbot-shared-context = { path = "../../shared-context" }
 
 [dev-dependencies]
 tokio-test = "0.4"

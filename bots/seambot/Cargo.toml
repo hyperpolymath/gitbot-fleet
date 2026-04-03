@@ -65,7 +65,7 @@ rsa = { version = "0.9", features = ["pem"] }
 hmac-sha256 = "1"
 
 # Fleet integration
-gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
+gitbot-shared-context = { path = "../../shared-context" }
 
 # AsciiDoc parsing (basic)
 # Note: Full AsciiDoc parsing would need asciidoctor via subprocess

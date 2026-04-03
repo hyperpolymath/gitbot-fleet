@@ -55,7 +55,7 @@ pulldown-cmark = "0.12"
 chrono = { version = "0.4", features = ["serde"] }
 
 # Fleet integration (optional)
-gitbot-shared-context = { path = "../gitbot-fleet/shared-context", optional = true }
+gitbot-shared-context = { path = "../../shared-context", optional = true }
 uuid = { version = "1", features = ["v4", "serde"], optional = true }
 
 [features]

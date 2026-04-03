@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Fleet integration
-gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
+gitbot-shared-context = { path = "../../shared-context" }
 
 # CLI
 clap = { version = "4", features = ["derive"] }

@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Fleet coordination
-gitbot-shared-context = { path = "../gitbot-fleet/shared-context" }
+gitbot-shared-context = { path = "../../shared-context" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
