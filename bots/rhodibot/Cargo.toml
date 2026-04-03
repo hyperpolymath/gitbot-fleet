@@ -50,7 +50,7 @@ anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
 
 # Git operations
-gix = { version = "0.76", default-features = false, features = ["blocking-network-client"] }
+gix = { version = "0.81", default-features = false, features = ["blocking-network-client"] }
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }

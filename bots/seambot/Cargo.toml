@@ -56,7 +56,7 @@ minijinja = "2"
 regex = "1"
 
 # JWT for GitHub App authentication
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 
 # RSA key handling for GitHub App
 rsa = { version = "0.9", features = ["pem"] }
