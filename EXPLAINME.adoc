@@ -1,24 +1,300 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = Gitbot Fleet — Show Me The Receipts
 :toc:
+:toclevels: 3
 :icons: font
+:author: Jonathan D.A. Jewell
 
-The README makes claims. This file backs them up.
+The README makes claims. This file backs them up with architecture detail,
+code paths, and honest caveats sufficient for an external reviewer to trace
+what each bot does and how its work is gated.
+
+== Claim 1: "Automated, confidence-gated fixes across 500+ repositories"
 
 [quote, README]
 ____
 Bot fleet for repository quality enforcement across the Hyperpolymath ecosystem.
 ____
 
+=== How it works
+
+The fleet operates through a three-stage pipeline:
+
+[source]
+----
+hypatia (scanner)  →  findings JSONL  →  fleet-coordinator.sh  →  dispatch-runner.sh
+                                               ↓
+                                    ┌──────────┼──────────┐
+                                    ▼          ▼          ▼
+                               rhodibot   echidnabot  sustainabot
+                               (git ops)  (quality)   (deps)
+                                    ↓
+                        robot-repo-automaton
+                        (scan → fix → commit → PR)
+----
+
+`fleet-coordinator.sh` (root, 27K) is the execution layer. It reads findings
+JSONL from `shared-context/findings/`, determines the confidence tier for
+each finding, and dispatches accordingly. High-confidence patterns go to
+`dispatch-runner.sh` for automatic fix; lower-confidence patterns go to
+`process-review-findings.sh` for GitHub issue creation.
+
+=== Safety triangle
+
+The confidence thresholds that gate automated action are:
+
+[cols="1,2,2"]
+|===
+| Tier | Threshold | Action
+
+| *Eliminate*
+| `auto_execute >= 0.95`
+| Direct fix applied, committed, no review gate
+
+| *Substitute*
+| `review >= 0.85`
+| Proven module replacement proposed; requires human review
+
+| *Control*
+| `< 0.85`
+| Human review required; issue created, no auto-change
+|===
+
+The `confidence.rs` module in `robot-repo-automaton/src/` computes these
+scores. The design means the fleet will never auto-apply a fix it is less
+than 95% certain about.
+
+=== Code path for rhodibot
+
+`bots/rhodibot/src/main.rs` starts an Axum HTTP server on port 3000. GitHub
+sends webhook events; `webhook.rs` verifies the HMAC-SHA256 signature before
+dispatching. `rsr.rs` encodes the RSR (Rhodium Standard Repository) policy
+packs — Minimal / Standard / Strict / Enterprise / Custom — each with
+`Required`, `Recommended`, and `Optional` severity tiers. A check that is
+`Required` in the `Strict` pack blocks merge; the same check as `Recommended`
+in `Standard` only influences the score.
+
+=== Honest caveat
+
+The safety triangle is only as good as the confidence scores in
+`confidence.rs`. The scores are heuristic (pattern-matching-based), not
+formally verified. High-confidence fixes (>=0.95) can still be wrong if the
+pattern detector misfires. The `robot-repo-automaton` creates pull requests
+for review-tier findings rather than pushing directly to `main`, but the
+Eliminate tier applies fixes immediately. Any reviewer auditing this should
+inspect the pattern catalog in `robot-repo-automaton/src/catalog.rs` before
+trusting an automated fix.
+
+== Claim 2: "Each bot specializes in a specific aspect of repository health"
+
+[quote, README]
+____
+Each bot specializes in a specific aspect of repository health and compliance.
+Six bots, six domains.
+____
+
+=== How it works
+
+Each bot is a separate Rust binary in `bots/`. They share the `shared-context/`
+Rust crate for inter-bot communication (findings JSONL, session metadata, fix
+batches, learning state).
+
+[cols="1,3,2"]
+|===
+| Bot | Specialisation | Implementation
+
+| *rhodibot*
+| RSR structural compliance: required files, workflows, SPDX headers, directory
+layout. Runs as a GitHub App (webhook listener + Axum server). Policy packs
+allow per-repo tuning.
+| `bots/rhodibot/src/rsr.rs` + `webhook.rs`
+
+| *echidnabot*
+| Formal proof CI: verifies Coq/Lean/Agda/Isabelle proofs on every push.
+Bridges code forges to the ECHIDNA theorem proving platform. Also runs
+security fuzzing as a secondary function.
+| `bots/echidnabot/` (full Rust workspace with benches, fuzz, tests)
+
+| *sustainabot*
+| Ecological + economic + quality analysis. Computes a multi-dimensional
+Health Index covering energy heuristics, cost signals, and maintainability.
+Outputs SARIF for toolchain integration.
+| `bots/sustainabot/` (modular Rust workspace)
+
+| *glambot*
+| Presentation quality: visual polish, WCAG accessibility, SEO, machine
+readability for AI/bots. Checks alt text, heading hierarchy, colour contrast,
+Open Graph metadata.
+| `bots/glambot/`
+
+| *seambot*
+| Integration health: cross-component communication, API contracts, end-to-end
+flows. Verifies that advertised integrations are actually wired.
+| `bots/seambot/`
+
+| *finishingbot*
+| Release readiness: placeholder removal, license validation, claim verification,
+execution testing. Gates the path from draft to publishable.
+| `bots/finishingbot/`
+|===
+
+Additional bots present in `bots/`: `accessibilitybot`, `cipherbot`, `panicbot`
+(pre-commit gate wrapping panic-attacker), `gsbot` (game-server integration),
+`the-hotchocolabot` (onboarding/warmth checks).
+
+== Dogfooded Across The Account
+
+[cols="1,2,2"]
+|===
+| Technology | Role in Gitbot Fleet | Also Used In
+
+| *Rust* (rhodibot, echidnabot, sustainabot, shared-context, robot-repo-automaton)
+| Primary implementation language for all bots
+| protocol-squisher, verisimdb, ephapax, Stapeln FFI
+
+| *Hypatia*
+| External scanner whose JSONL findings feed fleet-coordinator.sh
+| Every RSR repo in the account; gitbot-fleet is a primary consumer
+
+| *Axum*
+| HTTP server for GitHub App webhook handlers (rhodibot, echidnabot)
+| Shared pattern with burble, boj-server
+
+| *Bash* (`fleet-coordinator.sh`, `dispatch-runner.sh`, 7 fix scripts)
+| Execution glue; `set -euo pipefail` throughout
+| infrastructure-automation, git-scripts
+
+| *ECHIDNA* (proof verification platform)
+| echidnabot's backend prover
+| `echidna` repo; neural-foundations neurosymbolic layer
+
+| *robot-repo-automaton*
+| Rust CLI: scan → detect → fix → PR (lives inside this repo)
+| Shared by all bots for automated fix application
+
+| *Stapeln containers*
+| `stapeln.toml` + Containerfile for bot deployment
+| All containerised services in the account
+
+| *Contractile.just*
+| `contractile.just` + `contractiles/` — shared build recipes
+| Universal across hyperpolymath repos
+
+| *jq*
+| All JSON construction in shell scripts uses jq (never string interpolation)
+| git-scripts, infrastructure-automation
+|===
+
 == File Map
 
-[cols="1,2"]
+[cols="1,3"]
 |===
-| Path | What's There
+| Path | What It Proves
 
-| `test(s)/` | Test suite
+| `fleet-coordinator.sh`
+| 27K Bash entry point. Reads `shared-context/findings/` JSONL, computes
+confidence tiers, dispatches to `dispatch-runner.sh` (Eliminate tier) or
+`process-review-findings.sh` (Substitute tier), or creates issues (Control
+tier). The orchestration logic lives entirely here.
+
+| `run-fleet.sh`
+| 24K Bash launcher for running the full fleet in sequence or parallel.
+Wraps `fleet-coordinator.sh` with setup, teardown, and reporting.
+
+| `bots/rhodibot/src/`
+| `main.rs` — Axum server, CLI parse.
+`rsr.rs` — Policy packs (Minimal/Standard/Strict/Enterprise/Custom) and
+severity (Required/Recommended/Optional). The RSR rule definitions.
+`webhook.rs` — HMAC-SHA256 verification of GitHub events.
+`github.rs` — GitHub API client.
+`sanitize.rs` — Input sanitisation before any repo operation.
+
+| `bots/echidnabot/`
+| Full Rust workspace. `src/` contains the prover bridge and CI integration.
+`fuzz/` contains fuzzing targets. `benches/` benchmarks proof verification.
+Proof verification is the critical path for formally verified repos.
+
+| `bots/sustainabot/`
+| Modular Rust workspace. CLI → static analysis engine → metrics/scoring →
+SARIF output → policy integration. Health Index computation lives in the
+metrics module.
+
+| `bots/glambot/`
+| Accessibility and presentation checks. WCAG contrast, alt text, heading
+hierarchy, Open Graph, machine-readability for AI indexers.
+
+| `bots/seambot/`
+| Integration health checks. Verifies API contracts and end-to-end wiring.
+
+| `bots/finishingbot/`
+| Release gate: placeholder scanning, license validation, execution tests.
+
+| `robot-repo-automaton/src/`
+| `main.rs` — CLI entry (scan/fix/PR subcommands).
+`detector.rs` — Pattern detection against the catalog.
+`catalog.rs` — Authoritative list of auto-fixable patterns with confidence.
+`confidence.rs` — Confidence score computation (the safety gate).
+`fixer.rs` — Applies fixes to filesystem.
+`github.rs` — PR creation.
+`hypatia.rs` — Reads Hypatia JSONL findings as additional signal.
+
+| `shared-context/`
+| Rust crate providing inter-bot communication primitives: findings JSONL
+schema, session metadata, fix batches, learning state, deployment status.
+All bots import this crate.
+
+| `shared-context/findings/`
+| Live JSONL findings from the most recent Hypatia scan. Fleet-coordinator
+reads this directory.
+
+| `shared-context/learning/`
+| Accumulated pattern data used to refine confidence scores over time.
+
+| `campaigns/`
+| Batch-mode campaign definitions for scanning entire repo subsets at once.
+
+| `dashboard/`
+| Completion dashboard and fleet status views.
+
+| `hooks/`
+| Git hooks installed into repos by the fleet to enforce pre-commit checks.
+
+| `scripts/`
+| `dispatch-runner.sh` — Eliminate-tier fix execution.
+`process-review-findings.sh` — Substitute-tier issue creation.
+`fix-*.sh` — Seven idempotent fix scripts for specific patterns.
+
+| `deploy/`
+| Deployment manifests and container launch configs.
+
+| `tasks/`
+| Scheduled task definitions.
+
+| `tests/`
+| Integration tests for the fleet coordinator and individual bots.
+
+| `.machine_readable/`
+| A2ML checkpoint files. Canonical AI session state.
+
+| `.hypatia/`
+| Hypatia rule overrides and scan configuration.
+
+| `TOPOLOGY.md`
+| Visual architecture map with completion dashboard. Start here for the
+big-picture relationship between bots.
+
+| `BOT-OPERATIONS.md`
+| Operational runbook for running the fleet in production.
+
+| `DOGFOODING-ANALYSIS.md`
+| Record of where each bot has been run against the hyperpolymath estate
+and what patterns it found.
 |===
 
 == Questions?
 
-Open an issue or reach out directly — happy to explain anything in more detail.
+Start with `TOPOLOGY.md` for the big picture, then `fleet-coordinator.sh`
+for the execution logic, and `robot-repo-automaton/src/confidence.rs` for
+the safety gate. For individual bot details, each `bots/<name>/README.adoc`
+has its own explanation.
