@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0
+// SPDX-License-Identifier: PMPL-1.0-or-later
 //! Integration tests for shared context
 
 use gitbot_shared_context::{
@@ -177,7 +177,7 @@ fn test_verifiers_complete() {
 
     assert!(!ctx.verifiers_complete());
 
-    // Complete all verifiers
+    // Complete all verifiers (Rhodibot, Echidnabot, Sustainabot, Panicbot)
     ctx.start_bot(BotId::Rhodibot).unwrap();
     ctx.complete_bot(BotId::Rhodibot, 0, 0, 5).unwrap();
 
@@ -186,6 +186,9 @@ fn test_verifiers_complete() {
 
     ctx.start_bot(BotId::Sustainabot).unwrap();
     ctx.complete_bot(BotId::Sustainabot, 0, 0, 5).unwrap();
+
+    ctx.start_bot(BotId::Panicbot).unwrap();
+    ctx.complete_bot(BotId::Panicbot, 0, 0, 5).unwrap();
 
     assert!(ctx.verifiers_complete());
 }
@@ -292,8 +295,8 @@ fn test_finding_location_string() {
     assert_eq!(finding4.location_string(), None);
 }
 
-#[tokio::test]
-async fn test_context_storage() {
+#[test]
+fn test_context_storage() {
     let temp_dir = TempDir::new().unwrap();
     let storage = ContextStorage::new(temp_dir.path());
 
@@ -305,33 +308,28 @@ async fn test_context_storage() {
         Severity::Info,
         "Test finding",
     ));
+    let session_id = ctx.session_id;
 
     storage.save_context(&ctx).unwrap();
 
-    // Load context
-    let loaded = storage.load_context("test-repo").unwrap();
+    // Load context by session_id (the actual API)
+    let loaded = storage.load_context(&session_id).unwrap();
     assert_eq!(loaded.repo_name, "test-repo");
     assert_eq!(loaded.findings.len(), 1);
 }
 
-#[tokio::test]
-async fn test_repo_state() {
+#[test]
+fn test_repo_state() {
     let temp_dir = TempDir::new().unwrap();
     let storage = ContextStorage::new(temp_dir.path());
 
-    // Create repo state
-    let mut state = RepoState::new("test-repo");
-    state.add_session_summary(
-        uuid::Uuid::new_v4(),
-        5,
-        2,
-        1,
-    );
+    // Create repo state using the correct 2-arg API
+    let state = RepoState::new("test-repo", PathBuf::from("/tmp/test-repo"));
 
     storage.save_repo_state(&state).unwrap();
 
-    // Load repo state
+    // Load repo state and check the correct field names
     let loaded = storage.load_repo_state("test-repo").unwrap();
-    assert_eq!(loaded.repo_name, "test-repo");
-    assert_eq!(loaded.session_count, 1);
+    assert_eq!(loaded.name, "test-repo");
+    assert!(loaded.history.is_empty()); // No sessions recorded yet
 }

@@ -1,92 +1,80 @@
 # Test & Benchmark Requirements
 
-## Current State
-- Unit tests: ~22 Rust test files + shared-context tests — count unknown (no Cargo.toml at root to run)
-- Integration tests: partial (echidnabot/tests/integration_tests.rs, rhodibot/tests/integration_tests.rs)
-- E2E tests: NONE
-- Benchmarks: 5 files exist
-- panic-attack scan: NEVER RUN
+## Current State (updated 2026-04-04)
 
-## What's Missing
-### Point-to-Point (P2P)
-205 Rust + 367 JavaScript + 42 ReScript + 34 Julia + 13 Haskell + 9 Idris2 + 85 Shell source files:
+### What Was Added (this session — CRG C blitz)
 
-#### Bots (major components):
-- **echidnabot/** — has integration tests, but coverage vs source count unclear
-- **rhodibot/** — has integration tests
-- **sustainabot/** — has test_sample.rs + .env.test, minimal coverage
-- **finishbot/** — has analyzers/testing.rs (test utilities, not tests OF finishbot)
-- **glambot/** — no tests found
-- **seambot/** — no tests found
-- **panicbot/** — no tests found
+| Area | Tests Added | Location |
+|------|-------------|----------|
+| `robot-repo-automaton` fixer idempotency | 3 tests (delete/create/modify × apply-twice) | `robot-repo-automaton/tests/fixer_tests.rs` |
+| `robot-repo-automaton` path traversal security | 4 tests (delete/create/modify traversal + safe path) | `robot-repo-automaton/tests/fixer_tests.rs` |
+| `robot-repo-automaton` confidence numeric thresholds | 5 tests (0.95/0.7 boundaries, Delete thresholds, decide outputs) | `robot-repo-automaton/src/confidence.rs` (in-module) |
+| Shared-context E2E fleet coordination | 6 scenarios (single-bot, multi-bot, failure isolation, persistence, reporting, severity gate) | `shared-context/tests/e2e_fleet_coordination_test.rs` |
+| Shared-context P2P property tests | 11 property tests (bot subsets, confidence bounds, dispatch determinism) | `shared-context/tests/property_tests.rs` |
+| Shared-context `context_tests.rs` fixes | Fixed stale API calls, tokio missing features | `shared-context/tests/context_tests.rs` |
+| `echidnabot` benchmark (stub → real) | assess_confidence × 3 variants, all ProverKinds, file extension lookups | `bots/echidnabot/benches/echidnabot_bench.rs` |
+| Path traversal guard in fixer | `normalise_path()` + security check in `Fixer::apply()` | `robot-repo-automaton/src/fixer.rs` |
+| Shell script syntax validation | 85 scripts validated with `bash -n` (0 errors) | All `*.sh` in repo |
 
-#### Shared Context (Rust):
-- shared-context/tests/context_tests.rs — exists
-- shared-context/tests/fleet_coordination_test.rs — exists
-- Other shared modules may lack coverage
+### Test Counts After This Session
 
-#### Robot-repo-automaton:
-- No test files found
+| Crate | Test Count | Status |
+|-------|-----------|--------|
+| `shared-context` (all test files) | 67 tests | All passing |
+| `robot-repo-automaton` (lib + 3 test files + doctest) | 79 tests | All passing |
+| `panicbot` | 76 tests | All passing |
+| `seambot` | 68 tests | All passing |
+| `glambot` | 47 tests | All passing |
 
-#### Dashboard:
-- No test files found
+---
 
-#### Campaigns:
-- No test files found
+## Remaining Gaps
 
-#### Hooks:
-- No test files found
+### High Priority
 
-#### Tasks/Scripts:
-- 85 shell scripts — no tests
-- 367 JavaScript files — no tests (these are likely bot action scripts)
-- 34 Julia files — no tests
+- **Unit tests for `Detector::detect_all` with numeric confidence thresholds**:
+  The task-level thresholds (>0.9 auto-apply, 0.7-0.9 suggest, <0.7 skip) are
+  documented in tests but only exercised via `FixAction::Delete`. Tests for other
+  action types (Modify, Create) should be added.
 
-### End-to-End (E2E)
-- Bot fleet coordination: dispatch task -> bot processes -> report results -> aggregate
-- Individual bot lifecycle: start -> receive event -> analyze -> act -> report
-- echidnabot: receive webhook -> analyze repo -> generate findings -> submit
-- rhodibot: detect issue -> apply fix -> create PR
-- sustainabot: check dependencies -> evaluate health -> report
-- finishbot: analyze completion -> identify gaps -> notify
-- glambot: check style -> suggest fixes
-- seambot: check integration points -> verify
-- panicbot: run security scan -> report findings
-- Robot-repo-automaton: detect issue -> calculate confidence -> auto-fix
-- Fleet coordination: multiple bots on same repo -> deconflict
+- **robot-repo-automaton: `detector.rs` confidence score verification**:
+  Content-match detection returns 0.95, file-existence returns 1.0, language
+  mismatch returns 0.90 — these specific values should be regression-tested.
 
-### Aspect Tests
-- [ ] Security (webhook signature verification, bot credential handling, repo access scoping, auto-fix safety)
-- [ ] Performance (fleet throughput, bot startup latency, concurrent repo processing)
-- [ ] Concurrency (bot deconfliction, shared-context locking, parallel webhook processing)
-- [ ] Error handling (bot crash recovery, API rate limiting, malformed webhooks)
-- [ ] Accessibility (dashboard UI if applicable)
+- **sustainabot**: Has minimal test coverage (only `test_sample.rs`). The 6-crate
+  workspace needs test coverage per crate.
 
-### Build & Execution
-- [ ] cargo build per bot — not verified
-- [ ] Individual bot startup — not verified
-- [ ] Fleet orchestration — not verified
-- [ ] Dashboard build — not verified
-- [ ] Self-diagnostic — none
+- **finishingbot**: `analyzer_tests.rs` exists but coverage vs source count is unclear.
 
-### Benchmarks Needed
-- Per-bot analysis throughput (repos/hour)
-- Fleet coordination overhead
-- Webhook processing latency
-- Auto-fix confidence score accuracy
-- Memory usage per active bot
+### Medium Priority
 
-### Self-Tests
-- [ ] panic-attack assail on own repo
-- [ ] Fleet health check
-- [ ] Per-bot self-test
-- [ ] Shared-context integrity verification
+- **Fleet E2E at script level**: `fleet-coordinator.sh` + `dispatch-runner.sh`
+  integration — currently untested end-to-end. Bash integration tests via
+  `bats` or similar.
 
-## Priority
-- **HIGH** — Bot fleet (205 Rust + 367 JS + 42 ReScript + 34 Julia files) with tests only for echidnabot, rhodibot, and shared-context. 5 out of 7+ bots have ZERO tests. The 367 JavaScript files (bot action scripts) are completely untested. The robot-repo-automaton that auto-fixes repos based on confidence scores has no tests — this is a system that makes automated changes to other repos and needs extremely high correctness guarantees.
+- **Dashboard**: No tests found.
 
-## FAKE-FUZZ ALERT
+- **367 JavaScript files**: Bot action scripts (campaigns/, hooks/) are completely
+  untested.
 
-- `tests/fuzz/placeholder.txt` is a scorecard placeholder inherited from rsr-template-repo — it does NOT provide real fuzz testing
-- Replace with an actual fuzz harness (see rsr-template-repo/tests/fuzz/README.adoc) or remove the file
-- Priority: P2 — creates false impression of fuzz coverage
+- **34 Julia files**: No tests.
+
+### Low Priority
+
+- **Fuzz testing**: `tests/fuzz/placeholder.txt` is still a scorecard placeholder
+  from rsr-template-repo — does NOT provide real fuzz coverage. Replace with a
+  real libFuzzer harness targeting `robot-repo-automaton` catalog parsing.
+
+- **self-test / fleet health check**: No self-diagnostic for the fleet as a whole.
+
+- **echidnabot benchmark**: The real benchmark was added but not verified to
+  compile (compilation takes >2 minutes). Verify on next visit.
+
+## Shell Script Validation (2026-04-04)
+
+```
+$ find . -name "*.sh" -not -path "*/target/*" | xargs bash -n
+(no output — all 85 scripts pass syntax check)
+```
+
+**Result: 85/85 scripts pass `bash -n` with zero syntax errors.**

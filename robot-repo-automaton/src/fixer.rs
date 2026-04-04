@@ -78,6 +78,34 @@ impl Fixer {
     pub fn apply(&self, issue: &DetectedIssue, fix: &Fix) -> Result<FixResult> {
         let target_path = self.repo_path.join(&fix.target);
 
+        // SECURITY: Reject any target path that escapes the repository root.
+        // Normalise both paths and verify the target is a child of repo_path.
+        // This prevents path traversal attacks (e.g. target = "../../etc/passwd").
+        let canonical_repo = self.repo_path.canonicalize().unwrap_or_else(|_| self.repo_path.clone());
+        // For the target we normalise without requiring the path to exist yet
+        // (it may be a to-be-created file), so we use a manual component walk.
+        let normalised_target = normalise_path(&target_path);
+        if !normalised_target.starts_with(&canonical_repo) {
+            warn!(
+                target = %fix.target,
+                repo = %self.repo_path.display(),
+                "SECURITY: fix target escapes repository root — rejecting"
+            );
+            return Ok(FixResult {
+                issue_id: issue.error_type_id.clone(),
+                success: false,
+                action_taken: format!(
+                    "REJECTED: target '{}' escapes repository boundary",
+                    fix.target
+                ),
+                files_modified: vec![],
+                error: Some(format!(
+                    "Security violation: target path '{}' is outside the repository directory",
+                    fix.target
+                )),
+            });
+        }
+
         match fix.action {
             FixAction::Delete => self.apply_delete(&target_path, issue),
             FixAction::Modify => self.apply_modify(&target_path, issue, fix),
@@ -646,6 +674,31 @@ impl Fixer {
 
         Ok(results)
     }
+}
+
+/// Normalise a path by resolving `.` and `..` components without requiring the
+/// path to exist on disk (unlike `Path::canonicalize`).
+///
+/// This is used for security validation: after normalisation we can check that
+/// the path starts with the repository root and has not escaped via `..` traversal.
+fn normalise_path(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut normalised = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                // Pop the last element, effectively resolving ".."
+                normalised.pop();
+            }
+            Component::CurDir => {
+                // Skip "." — it contributes nothing
+            }
+            other => {
+                normalised.push(other);
+            }
+        }
+    }
+    normalised
 }
 
 #[cfg(test)]

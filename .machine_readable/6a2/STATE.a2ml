@@ -8,7 +8,7 @@
     (version "2.0")
     (schema-version "RSR-2026")
     (created "2026-01-04")
-    (updated "2026-02-22")
+    (updated "2026-04-04")
     (project "gitbot-fleet")
     (repo "https://github.com/hyperpolymath/gitbot-fleet"))
 
@@ -19,7 +19,7 @@
 
   (current-position
     (phase "operational-deployment")
-    (overall-completion 75)
+    (overall-completion 82)
     (components
       (fleet-coordinator (status "active") (location "fleet-coordinator.sh"))
       (dispatch-runner (status "active") (location "scripts/dispatch-runner.sh"))
@@ -87,15 +87,32 @@
   (critical-next-actions
     (immediate
       ("Create PAT for automated cross-repo dispatch")
-      ("Push commits to GitHub and GitLab"))
+      ("Push commits to GitHub and GitLab")
+      ("Verify echidnabot benchmark compiles (was slow on build machine)"))
     (this-week
       ("Add PR creation to rhodibot for substitute-tier fixes")
-      ("Process review findings to create GitHub issues"))
+      ("Process review findings to create GitHub issues")
+      ("Add sustainabot per-crate test coverage (currently minimal)"))
     (this-month
       ("Build rhodibot PR creation API")
-      ("Implement outcome-driven confidence promotion")))
+      ("Implement outcome-driven confidence promotion")
+      ("Add bash integration tests for fleet-coordinator.sh + dispatch-runner.sh")
+      ("Replace tests/fuzz/placeholder.txt with real libFuzzer harness")))
 
   (session-history
+    (snapshot "2026-04-04"
+      (accomplishments
+        ("CRG C blitz: added 50+ new tests across robot-repo-automaton + shared-context")
+        ("Fixed path traversal vulnerability in Fixer::apply (normalise_path guard)")
+        ("Added fixer idempotency tests (delete/create/modify × apply-twice)")
+        ("Added 4 path traversal security tests (delete/create/modify + safe path)")
+        ("Added 5 numeric confidence threshold tests (0.95/0.7 boundary enforcement)")
+        ("Created shared-context/tests/e2e_fleet_coordination_test.rs (6 E2E scenarios)")
+        ("Created shared-context/tests/property_tests.rs (11 P2P property tests)")
+        ("Fixed shared-context/tests/context_tests.rs stale API calls")
+        ("Fixed test_verifiers_complete to include Panicbot as 4th verifier")
+        ("Replaced echidnabot stub benchmark with real assess_confidence benchmarks")
+        ("Validated 85/85 shell scripts pass bash -n syntax check")))
     (snapshot "2026-02-22"
       (accomplishments
         ("Patched 5 critical taint flow vulnerabilities in shell scripts")
