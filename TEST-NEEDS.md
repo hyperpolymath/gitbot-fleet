@@ -80,3 +80,19 @@ $ find . -name "*.sh" -not -path "*/target/*" | xargs bash -n
 ```
 
 **Result: 85/85 scripts pass `bash -n` with zero syntax errors.**
+
+## Session 9 additions (2026-04-04)
+
+### What Was Added
+
+| Area | Tests Added | Location |
+|------|-------------|----------|
+| Fleet E2E | 6 sections: repo structure, fleet member inventory (9 bots), bash syntax checks on all `.sh` scripts, fleet-coordinator help output, workflow YAML validity, bot Cargo.toml integrity | `tests/e2e.sh` |
+| CI runner | GitHub Actions workflow for E2E suite | `.github/workflows/e2e.yml` |
+
+### Updated Test Counts
+
+| Suite | Count | Status |
+|-------|-------|--------|
+| E2E (shell-based) | 6 test sections | All passing |
+| CI workflows | 21 | Running tests on GitHub Actions |
