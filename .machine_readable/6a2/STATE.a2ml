@@ -8,7 +8,7 @@
     (version "2.0")
     (schema-version "RSR-2026")
     (created "2026-01-04")
-    (updated "2026-04-04")
+    (updated "2026-04-04T19:00:00Z")
     (project "gitbot-fleet")
     (repo "https://github.com/hyperpolymath/gitbot-fleet"))
 
@@ -19,7 +19,7 @@
 
   (current-position
     (phase "operational-deployment")
-    (overall-completion 82)
+    (overall-completion 85)
     (components
       (fleet-coordinator (status "active") (location "fleet-coordinator.sh"))
       (dispatch-runner (status "active") (location "scripts/dispatch-runner.sh"))
@@ -112,7 +112,8 @@
         ("Fixed shared-context/tests/context_tests.rs stale API calls")
         ("Fixed test_verifiers_complete to include Panicbot as 4th verifier")
         ("Replaced echidnabot stub benchmark with real assess_confidence benchmarks")
-        ("Validated 85/85 shell scripts pass bash -n syntax check")))
+        ("Validated 85/85 shell scripts pass bash -n syntax check")
+        ("Session 9 dogfooding: Added tests/e2e.sh (6-section E2E suite) + .github/workflows/e2e.yml CI")))
     (snapshot "2026-02-22"
       (accomplishments
         ("Patched 5 critical taint flow vulnerabilities in shell scripts")
