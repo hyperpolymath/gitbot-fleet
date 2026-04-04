@@ -102,6 +102,9 @@ fn default_allowed_licenses() -> Vec<String> {
         "Apache-2.0".to_string(),
         "BSD-3-Clause".to_string(),
         "PMPL-1.0".to_string(),
+        // AGPL-3.0-or-later is used by co-developed repos (idaptik,
+        // airborne-submarine-squadron, game-server-admin)
+        "AGPL-3.0-or-later".to_string(),
     ]
 }
 

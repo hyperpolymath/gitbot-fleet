@@ -61,7 +61,7 @@ jobs:
         run: |
           if ! command -v panic-attack &>/dev/null; then
             echo "::warning::panic-attack not found, attempting cargo install"
-            cargo install panic-attacker || echo "::error::Failed to install panic-attack"
+            cargo install --git https://github.com/hyperpolymath/panic-attacker.git || echo "::error::Failed to install panic-attack"
           fi
 
       - name: Run sweep

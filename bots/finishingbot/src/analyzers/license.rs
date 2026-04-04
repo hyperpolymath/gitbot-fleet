@@ -10,6 +10,22 @@ use std::path::Path;
 use tracing::debug;
 use walkdir::WalkDir;
 
+/// Repositories that deliberately use AGPL-3.0-or-later instead of PMPL.
+/// These are co-developed projects with the user's son and use AGPL by deliberate choice.
+const AGPL_EXCEPTION_REPOS: &[&str] = &[
+    "game-server-admin",
+    "idaptik",
+    "airborne-submarine-squadron",
+];
+
+/// Check whether a repository path corresponds to an AGPL exception repo.
+fn is_agpl_exception(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| AGPL_EXCEPTION_REPOS.contains(&name))
+        .unwrap_or(false)
+}
+
 /// License validation analyzer
 pub struct LicenseAnalyzer;
 
@@ -114,9 +130,20 @@ impl LicenseAnalyzer {
     ) {
         let detected = self.detect_license(content);
 
+        // Determine the repository root from the LICENSE file path
+        let repo_root = path.parent().unwrap_or(path);
+
         match detected {
             Some(license) => {
-                if config.licenses.strict && !config.licenses.allowed.contains(&license) {
+                // AGPL-3.0-or-later is always valid for exception repos
+                if is_agpl_exception(repo_root)
+                    && (license == "AGPL-3.0-or-later" || license == "AGPL-3.0")
+                {
+                    debug!(
+                        "Detected AGPL-3.0-or-later in exception repo: {}",
+                        repo_root.display()
+                    );
+                } else if config.licenses.strict && !config.licenses.allowed.contains(&license) {
                     result.add(
                         Finding::new(
                             "LIC-003",
@@ -165,7 +192,7 @@ impl LicenseAnalyzer {
         if content_lower.contains("gnu affero general public license")
             || content_lower.contains("agpl-3.0")
         {
-            return Some("PMPL-1.0-or-later".to_string());
+            return Some("AGPL-3.0-or-later".to_string());
         }
 
         if content_lower.contains("gnu general public license")
@@ -231,6 +258,11 @@ impl LicenseAnalyzer {
                 let first_lines: String = content.lines().take(10).collect::<Vec<_>>().join("\n");
 
                 if !spdx_pattern.is_match(&first_lines) {
+                    let suggested_license = if is_agpl_exception(path) {
+                        "AGPL-3.0-or-later".to_string()
+                    } else {
+                        config.licenses.allowed.first().unwrap_or(&"<LICENSE>".to_string()).clone()
+                    };
                     result.add(
                         Finding::new(
                             "LIC-002",
@@ -241,7 +273,7 @@ impl LicenseAnalyzer {
                         .with_file(entry_path.to_path_buf())
                         .with_suggestion(&format!(
                             "Add '// SPDX-License-Identifier: {}' at the start",
-                            config.licenses.allowed.first().unwrap_or(&"<LICENSE>".to_string())
+                            suggested_license
                         ))
                         .fixable(),
                     );
@@ -253,7 +285,16 @@ impl LicenseAnalyzer {
     /// Add SPDX header to a file
     fn add_spdx_header(&self, path: &Path, allowed_licenses: &[String]) -> Result<()> {
         let content = std::fs::read_to_string(path)?;
-        let default_license = "PMPL-1.0-or-later".to_string();
+
+        // Use AGPL-3.0-or-later for exception repos, PMPL-1.0-or-later otherwise
+        let default_license = if path
+            .ancestors()
+            .any(|ancestor| is_agpl_exception(ancestor))
+        {
+            "AGPL-3.0-or-later".to_string()
+        } else {
+            "PMPL-1.0-or-later".to_string()
+        };
         let license = allowed_licenses.first().unwrap_or(&default_license);
 
         // Determine comment style based on extension

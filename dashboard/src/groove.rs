@@ -15,7 +15,7 @@ use axum::response::Json;
 ///
 /// Advertises the fleet's bot-orchestration capability in the standard Groove
 /// format.  Any groove-aware client can probe `GET /.well-known/groove` on
-/// port 7500 to discover this service.
+/// port 8080 to discover this service.
 ///
 /// ## Capabilities offered
 ///
@@ -46,8 +46,8 @@ pub async fn groove_manifest() -> Json<serde_json::Value> {
         },
         "consumes": ["octad-storage", "static-analysis"],
         "endpoints": {
-            "api": "http://localhost:7500/api",
-            "health": "http://localhost:7500/health"
+            "api": "http://localhost:8080/api",
+            "health": "http://localhost:8080/health"
         },
         "health": "/health",
         "applicability": ["individual", "team"]
