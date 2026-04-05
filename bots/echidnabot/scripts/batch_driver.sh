@@ -38,6 +38,9 @@ REPOS_ROOT="/var/mnt/eclipse/repos"
 TARGETS=(
   "echidna|safety|z3|examples|smt2"
   "echidna|safety|z3|proofs/z3|smt2"
+  "echidna|safety|cvc5|examples|smt2"
+  "echidna|safety|cvc5|proofs/z3|smt2"
+  "echidna|safety|vampire|proofs/tptp|p"
   "echidna|equiv|coq|proofs/coq|v"
   "echidna|equiv|lean|proofs/lean|lean"
   "echidna|equiv|agda|proofs/agda|agda"
@@ -115,6 +118,67 @@ run_z3() {
   fi
 }
 
+run_cvc5() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  output=$(timeout "${TIMEOUT_SEC}s" cvc5 "$file" 2>&1)
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # Same interpretation as Z3: "ran and produced a decision" = success.
+  if echo "$output" | grep -qE "^(sat|unsat|unknown)$"; then
+    echo success
+  elif echo "$output" | grep -qiE "error|parse"; then
+    echo failure
+  else
+    echo unknown
+  fi
+}
+
+run_dafny() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  output=$(timeout "${TIMEOUT_SEC}s" dafny verify --verification-time-limit=$((TIMEOUT_SEC - 1)) "$file" 2>&1)
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # Dafny prints "Dafny program verifier finished with N verified, M errors".
+  if echo "$output" | grep -qE "finished with [0-9]+ verified, 0 errors"; then
+    echo success
+  elif echo "$output" | grep -qE "finished with [0-9]+ verified, [1-9][0-9]* errors"; then
+    echo failure
+  else
+    echo unknown
+  fi
+}
+
+run_why3() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  output=$(timeout "${TIMEOUT_SEC}s" why3 prove -P z3 "$file" 2>&1)
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # why3 prints "Prover result is: Valid" on success, "Invalid" / "Timeout" /
+  # "Unknown" / "Failure" otherwise. Multiple goals → multiple lines.
+  if echo "$output" | grep -q "Prover result is: Valid" && \
+     ! echo "$output" | grep -qE "Invalid|Timeout|Unknown|Failure"; then
+    echo success
+  elif echo "$output" | grep -qE "Invalid|Failure"; then
+    echo failure
+  elif echo "$output" | grep -q "Timeout"; then
+    echo timeout
+  else
+    echo unknown
+  fi
+}
+
 run_coq() {
   local file="$1"
   local t0 t1 rc
@@ -155,10 +219,21 @@ run_agda() {
 run_idris2() {
   local file="$1"
   local t0 t1 rc
+  # Walk up to find the nearest .ipkg → that directory is the source root.
+  # Fallback to the file's own directory when no ipkg is present.
+  local dir source_dir rel
+  dir=$(dirname "$file")
+  source_dir="$dir"
+  while [ "$dir" != "/" ] && [ "$dir" != "" ]; do
+    if ls "$dir"/*.ipkg >/dev/null 2>&1; then
+      source_dir="$dir"
+      break
+    fi
+    dir=$(dirname "$dir")
+  done
+  rel="${file#"$source_dir"/}"
   t0=$(date +%s%3N)
-  # idris2 --check needs the file in its source directory; cd makes it find
-  # project-relative imports, and the module name must match the filename.
-  ( cd "$(dirname "$file")" && timeout "${TIMEOUT_SEC}s" idris2 --check "$(basename "$file")" >/dev/null 2>&1 )
+  ( cd "$source_dir" && timeout "${TIMEOUT_SEC}s" idris2 --source-dir . --check "$rel" >/dev/null 2>&1 )
   rc=$?
   t1=$(date +%s%3N)
   echo $((t1 - t0))
@@ -207,12 +282,15 @@ run_prover() {
   local prover="$1" file="$2"
   case "$prover" in
     z3)      run_z3      "$file" ;;
+    cvc5)    run_cvc5    "$file" ;;
     coq)     run_coq     "$file" ;;
     lean)    run_lean    "$file" ;;
     agda)    run_agda    "$file" ;;
     idris2)  run_idris2  "$file" ;;
     acl2)    run_acl2    "$file" ;;
     vampire) run_vampire "$file" ;;
+    dafny)   run_dafny   "$file" ;;
+    why3)    run_why3    "$file" ;;
     *)       echo 0; echo unknown ;;
   esac
 }
