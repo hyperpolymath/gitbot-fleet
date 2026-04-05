@@ -34,7 +34,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # Markdown parsing
-pulldown-cmark = "0.12"
+pulldown-cmark = "0.13"
 comrak = "0.29"
 
 # HTML parsing (for accessibility checks)
