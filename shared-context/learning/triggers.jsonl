@@ -38,3 +38,10 @@
   "high": 0,
   "repos_scanned": 157
 }
+{
+  "timestamp": "2026-04-05T01:02:21Z",
+  "event": "scan_complete",
+  "critical": 0,
+  "high": 0,
+  "repos_scanned": 0
+}
