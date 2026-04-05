@@ -38,7 +38,7 @@ pulldown-cmark = "0.13"
 comrak = "0.29"
 
 # HTML parsing (for accessibility checks)
-scraper = "0.21"
+scraper = "0.26"
 html5ever = "0.29"
 
 # Image metadata (for alt-text validation)
