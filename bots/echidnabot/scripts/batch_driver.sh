@@ -41,6 +41,12 @@ TARGETS=(
   "echidna|safety|cvc5|examples|smt2"
   "echidna|safety|cvc5|proofs/z3|smt2"
   "echidna|safety|vampire|proofs/tptp|p"
+  "echidna|safety|altergo|examples|smt2"
+  "echidna|safety|altergo|proofs/z3|smt2"
+  "echidna|invariant|metamath|proofs/metamath|mm"
+  "echidna|model-check|cadical|proofs/dimacs|cnf"
+  "echidna|correctness|z3|proofs/smt-lib-mined|smt2"
+  "echidna|correctness|cvc5|proofs/smt-lib-mined|smt2"
   "echidna|equiv|coq|proofs/coq|v"
   "echidna|equiv|lean|proofs/lean|lean"
   "echidna|equiv|agda|proofs/agda|agda"
@@ -154,6 +160,66 @@ run_dafny() {
   else
     echo unknown
   fi
+}
+
+run_alt_ergo() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  output=$(timeout "${TIMEOUT_SEC}s" alt-ergo "$file" 2>&1)
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # alt-ergo prints "Valid" / "Invalid" / "I don't know" / "Timeout" per goal.
+  if echo "$output" | grep -q "Valid" && ! echo "$output" | grep -qE "Invalid|Timeout"; then
+    echo success
+  elif echo "$output" | grep -qE "Invalid"; then
+    echo failure
+  elif echo "$output" | grep -qE "Timeout"; then
+    echo timeout
+  else
+    echo unknown
+  fi
+}
+
+run_metamath() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  output=$(echo "read \"$file\"
+verify proof *
+exit" | timeout "${TIMEOUT_SEC}s" metamath 2>&1)
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # metamath exits 0 regardless; parse output for ?Error / "were not proved".
+  if echo "$output" | grep -qE "^\?Error|were not proved"; then
+    echo failure
+  elif echo "$output" | grep -q "All proofs in the database were verified"; then
+    echo success
+  else
+    echo unknown
+  fi
+}
+
+run_cadical() {
+  local file="$1"
+  local t0 t1 rc
+  t0=$(date +%s%3N)
+  timeout "${TIMEOUT_SEC}s" cadical -q "$file" >/dev/null 2>&1
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # cadical exit codes: 10=SAT, 20=UNSAT, 0=unknown. Both 10 and 20 count
+  # as "solver ran and produced a decision" → success for our purposes.
+  case $rc in
+    10|20) echo success ;;
+    0)     echo unknown ;;
+    *)     echo failure ;;
+  esac
 }
 
 run_why3() {
@@ -281,17 +347,20 @@ run_vampire() {
 run_prover() {
   local prover="$1" file="$2"
   case "$prover" in
-    z3)      run_z3      "$file" ;;
-    cvc5)    run_cvc5    "$file" ;;
-    coq)     run_coq     "$file" ;;
-    lean)    run_lean    "$file" ;;
-    agda)    run_agda    "$file" ;;
-    idris2)  run_idris2  "$file" ;;
-    acl2)    run_acl2    "$file" ;;
-    vampire) run_vampire "$file" ;;
-    dafny)   run_dafny   "$file" ;;
-    why3)    run_why3    "$file" ;;
-    *)       echo 0; echo unknown ;;
+    z3)       run_z3       "$file" ;;
+    cvc5)     run_cvc5     "$file" ;;
+    altergo)  run_alt_ergo "$file" ;;
+    coq)      run_coq      "$file" ;;
+    lean)     run_lean     "$file" ;;
+    agda)     run_agda     "$file" ;;
+    idris2)   run_idris2   "$file" ;;
+    acl2)     run_acl2     "$file" ;;
+    vampire)  run_vampire  "$file" ;;
+    dafny)    run_dafny    "$file" ;;
+    why3)     run_why3     "$file" ;;
+    metamath) run_metamath "$file" ;;
+    cadical)  run_cadical  "$file" ;;
+    *)        echo 0; echo unknown ;;
   esac
 }
 
