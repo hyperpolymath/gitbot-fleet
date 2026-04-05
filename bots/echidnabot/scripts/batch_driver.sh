@@ -12,6 +12,9 @@
 #
 # Environment:
 #   VERISIM_URL       (default http://127.0.0.1:8080)
+#   VERISIM_TOKEN     (Bearer token; required when VERISIM_URL points at a
+#                      deployed endpoint like nesy-solver-api.fly.dev with
+#                      /ingest — the URL should then be the full ingest path)
 #   NOTIFY            (1=notify-send on each result, 0=silent; default 1)
 #   DRY_RUN           (1=print only, no HTTP; default 0)
 #   MAX_FILES         (cap per target, default 10)
@@ -22,6 +25,7 @@
 set -euo pipefail
 
 VERISIM_URL="${VERISIM_URL:-http://127.0.0.1:8080}"
+VERISIM_TOKEN="${VERISIM_TOKEN:-}"
 NOTIFY="${NOTIFY:-1}"
 DRY_RUN="${DRY_RUN:-0}"
 MAX_FILES="${MAX_FILES:-10}"
@@ -47,6 +51,8 @@ TARGETS=(
   "echidna|model-check|cadical|proofs/dimacs|cnf"
   "echidna|correctness|z3|proofs/smt-lib-mined|smt2"
   "echidna|correctness|cvc5|proofs/smt-lib-mined|smt2"
+  "echidna|model-check|kissat|proofs/dimacs|cnf"
+  "echidna|safety|eprover|proofs/tptp|p"
   "echidna|equiv|coq|proofs/coq|v"
   "echidna|equiv|lean|proofs/lean|lean"
   "echidna|equiv|agda|proofs/agda|agda"
@@ -199,6 +205,45 @@ exit" | timeout "${TIMEOUT_SEC}s" metamath 2>&1)
     echo failure
   elif echo "$output" | grep -q "All proofs in the database were verified"; then
     echo success
+  else
+    echo unknown
+  fi
+}
+
+run_kissat() {
+  local file="$1"
+  local t0 t1 rc
+  t0=$(date +%s%3N)
+  timeout "${TIMEOUT_SEC}s" kissat -q "$file" >/dev/null 2>&1
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # kissat shares cadical's exit code convention: 10=SAT, 20=UNSAT.
+  case $rc in
+    10|20) echo success ;;
+    0)     echo unknown ;;
+    *)     echo failure ;;
+  esac
+}
+
+run_eprover() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  output=$(timeout "${TIMEOUT_SEC}s" eprover --auto-schedule "$file" 2>&1)
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # E parses SZS status from its banner. "Theorem" or "ContradictoryAxioms"
+  # both count as successful termination.
+  if echo "$output" | grep -qE "SZS status (Theorem|Unsatisfiable|ContradictoryAxioms)"; then
+    echo success
+  elif echo "$output" | grep -qE "SZS status (CounterSatisfiable|Satisfiable)"; then
+    echo failure
+  elif echo "$output" | grep -qE "SZS status (Timeout|GaveUp|ResourceOut)"; then
+    echo timeout
   else
     echo unknown
   fi
@@ -360,6 +405,8 @@ run_prover() {
     why3)     run_why3     "$file" ;;
     metamath) run_metamath "$file" ;;
     cadical)  run_cadical  "$file" ;;
+    kissat)   run_kissat   "$file" ;;
+    eprover)  run_eprover  "$file" ;;
     *)        echo 0; echo unknown ;;
   esac
 }
@@ -407,11 +454,23 @@ verify_one() {
       prover_output:$prover_output, error_message:null}')
 
   if [ "$DRY_RUN" != "1" ]; then
-    local resp
-    resp=$(curl -sS -X POST "$VERISIM_URL/api/v1/proof_attempts" \
-      -H 'Content-Type: application/json' -d "$insert_body" \
-      --max-time 10 -w '\n%{http_code}')
-    local http_code="${resp##*$'\n'}"
+    local resp http_code
+    # Route choice:
+    #   - local verisim-api: POST direct to /api/v1/proof_attempts (no auth)
+    #   - deployed nesy-solver-api: POST to /ingest with bearer token
+    # Detection: VERISIM_TOKEN set ⇒ assume VERISIM_URL points at the
+    # nesy-solver-api ingress and use its /ingest endpoint.
+    if [ -n "$VERISIM_TOKEN" ]; then
+      resp=$(curl -sS -X POST "$VERISIM_URL/ingest" \
+        -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $VERISIM_TOKEN" \
+        -d "$insert_body" --max-time 10 -w '\n%{http_code}')
+    else
+      resp=$(curl -sS -X POST "$VERISIM_URL/api/v1/proof_attempts" \
+        -H 'Content-Type: application/json' -d "$insert_body" \
+        --max-time 10 -w '\n%{http_code}')
+    fi
+    http_code="${resp##*$'\n'}"
     if [ "$http_code" != "200" ] && [ "$http_code" != "201" ]; then
       echo "  insert failed (HTTP $http_code): ${resp%$'\n'*}" >&2
     fi
