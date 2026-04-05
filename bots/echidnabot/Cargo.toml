@@ -82,6 +82,7 @@ axum-test = "18"
 mockall = "0.14"
 tempfile = "3"
 wiremock = "0.6"
+bytes = "1"
 
 [profile.release]
 lto = true

@@ -117,6 +117,55 @@ impl ProofResultRecord {
     }
 }
 
+/// Proof obligation record — the canonical source of truth for claim/context/prover_hint.
+///
+/// Created before the scheduler job so the obligation is persisted even if job creation
+/// fails.  Once a job is created, `proof_job_id` is back-filled via
+/// [`Store::link_obligation_to_job`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProofObligationRecord {
+    /// UUID v4 assigned at creation time
+    pub id: Uuid,
+    /// FK to `repositories.id`
+    pub repo_id: Uuid,
+    /// Human-readable claim that must be proved (from hypatia / external scanner)
+    pub claim: String,
+    /// Original context/description from pattern detection
+    pub context: String,
+    /// Optional prover hint supplied by the caller (e.g. "lean", "coq")
+    pub prover_hint: Option<String>,
+    /// Lifecycle status: `pending` → `processing` → `completed` | `failed`
+    pub status: String,
+    /// Scheduler job UUID, populated by [`Store::link_obligation_to_job`]
+    pub proof_job_id: Option<String>,
+    /// Timestamp when this obligation was first recorded
+    pub created_at: DateTime<Utc>,
+    /// Timestamp when a final terminal status was reached (completed / failed)
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+impl ProofObligationRecord {
+    /// Construct a new pending obligation.
+    pub fn new(
+        repo_id: Uuid,
+        claim: String,
+        context: String,
+        prover_hint: Option<String>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            repo_id,
+            claim,
+            context,
+            prover_hint,
+            status: "pending".to_string(),
+            proof_job_id: None,
+            created_at: Utc::now(),
+            completed_at: None,
+        }
+    }
+}
+
 /// Check run record (for tracking GitHub/GitLab status updates)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckRunRecord {

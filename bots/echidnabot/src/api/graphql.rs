@@ -14,7 +14,7 @@ use crate::dispatcher::{
 };
 use crate::dispatcher::echidna_client::ProverStatus as CoreProverStatus;
 use crate::scheduler::{JobPriority, JobScheduler};
-use crate::store::models::{ProofJobRecord, Repository as StoreRepository};
+use crate::store::models::{ProofJobRecord, ProofObligationRecord, Repository as StoreRepository};
 use crate::store::Store;
 
 /// GraphQL schema type
@@ -277,6 +277,30 @@ pub struct RegisterRepoInput {
     pub enabled_provers: Option<Vec<ProverKind>>,
 }
 
+/// Input for submitting a proof obligation from an external scanner (e.g. hypatia)
+#[derive(async_graphql::InputObject)]
+pub struct ProofObligationInput {
+    /// Repository in "owner/name" format
+    pub repo: String,
+    /// Human-readable claim that must be proved
+    pub claim: String,
+    /// Original context/description from pattern detection
+    pub context: String,
+    /// Optional prover hint. When supplied (e.g. by hypatia's proof-strategy
+    /// rule picking the historically-best prover for this obligation class),
+    /// it overrides the default. Omitted → default Lean.
+    pub prover: Option<ProverKind>,
+}
+
+/// Result of submitting a proof obligation
+#[derive(SimpleObject, Clone)]
+pub struct ProofObligationResult {
+    /// Whether the obligation was successfully recorded
+    pub success: bool,
+    /// Scheduler job ID assigned to this obligation (UUID string), or empty on failure
+    pub proof_id: String,
+}
+
 /// Input for repository settings
 #[derive(async_graphql::InputObject)]
 pub struct RepoSettingsInput {
@@ -369,6 +393,114 @@ impl MutationRoot {
 
         let job = first_job.ok_or_else(|| async_graphql::Error::new("No jobs enqueued"))?;
         Ok(ProofJobRecord::from(job).into())
+    }
+
+    /// Record a proof obligation submitted by an external tool (e.g. hypatia fleet_dispatcher).
+    ///
+    /// This mutation RECORDS the obligation as a pending scheduler job — it does NOT immediately
+    /// invoke a prover. The scheduler will pick it up on its normal cycle. The repo must already
+    /// be registered with echidnabot; if it is not, this returns `success: false`.
+    ///
+    /// The `repo` argument must be in "owner/name" format. The mutation searches all platforms
+    /// for a matching registered repository and uses the first match found.
+    async fn submit_proof_obligation(
+        &self,
+        ctx: &Context<'_>,
+        input: ProofObligationInput,
+    ) -> async_graphql::Result<ProofObligationResult> {
+        let state = ctx.data::<GraphQLState>()?;
+
+        // Parse "owner/name" format
+        let (owner, name) = {
+            let parts: Vec<&str> = input.repo.splitn(2, '/').collect();
+            if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+                return Ok(ProofObligationResult {
+                    success: false,
+                    proof_id: String::new(),
+                });
+            }
+            (parts[0].to_string(), parts[1].to_string())
+        };
+
+        // Find a matching registered repository across all platforms
+        let repos = state
+            .store
+            .list_repositories(None)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        let repo = repos
+            .into_iter()
+            .find(|r| r.owner == owner && r.name == name);
+
+        let repo = match repo {
+            Some(r) => r,
+            None => {
+                return Ok(ProofObligationResult {
+                    success: false,
+                    proof_id: String::new(),
+                });
+            }
+        };
+
+        let chosen_prover = input
+            .prover
+            .map(map_prover_kind_to_core)
+            .unwrap_or(CoreProverKind::Lean);
+
+        // Derive a human-readable hint string from the chosen prover so that
+        // the obligation row is self-contained (e.g. a future query can show
+        // "which prover was requested" without joining proof_jobs).
+        let prover_hint = Some(format!("{:?}", chosen_prover).to_lowercase());
+
+        // 1. Persist the obligation FIRST — it is the source of truth for claim/context.
+        let obligation = ProofObligationRecord::new(
+            repo.id,
+            input.claim,
+            input.context,
+            prover_hint,
+        );
+        state
+            .store
+            .create_obligation(&obligation)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        // 2. Create a scheduler job whose file_paths carry an opaque reference to the
+        //    obligation row.  Nothing in file_paths encodes claim/context strings.
+        let job = crate::scheduler::ProofJob::new(
+            repo.id,
+            "manual-obligation".to_string(),
+            chosen_prover,
+            vec![format!("obligation:{}", obligation.id)],
+        )
+        .with_priority(JobPriority::Normal);
+
+        // 3. Persist job record, then enqueue.
+        let record = ProofJobRecord::from(job.clone());
+        state
+            .store
+            .create_job(&record)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        let _ = state
+            .scheduler
+            .enqueue(job.clone())
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        // 4. Back-fill the job ID onto the obligation row so it can be followed.
+        state
+            .store
+            .link_obligation_to_job(&obligation.id.to_string(), &job.id.0.to_string())
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        Ok(ProofObligationResult {
+            success: true,
+            proof_id: job.id.0.to_string(),
+        })
     }
 
     /// Request ML-powered tactic suggestions

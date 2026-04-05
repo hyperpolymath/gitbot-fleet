@@ -11,9 +11,9 @@
 
 use crate::error::{Error, Result};
 use crate::scheduler::{JobResult, ProofJob};
-use gitbot_shared_context::{BotId, Context, Finding, Severity};
+use gitbot_shared_context::{BotId, Context, ContextStorage, Finding, Severity};
 use std::path::PathBuf;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Fleet coordinator for echidnabot
 pub struct FleetCoordinator {
@@ -53,7 +53,19 @@ impl FleetCoordinator {
             ctx.complete_bot(BotId::Echidnabot, findings_count, errors_count, files_analyzed)
                 .map_err(|e| Error::Internal(format!("Failed to complete bot: {}", e)))?;
 
-            // TODO: Persist context to ~/.gitbot-fleet/sessions/
+            // Persist context to ~/.gitbot-fleet/sessions/<session_id>.json so the
+            // fleet-coordinator and other bots can pick up echidnabot findings after
+            // this bot's process has exited. Persistence failure is logged but does
+            // NOT fail disconnect — losing a session log is less bad than crashing
+            // a running bot. Callers that need strict durability should call the
+            // persistence API directly.
+            match ContextStorage::default() {
+                Ok(storage) => match storage.save_context(ctx) {
+                    Ok(path) => info!(path = %path.display(), "Persisted session context"),
+                    Err(e) => warn!("Failed to persist session context: {}", e),
+                },
+                Err(e) => warn!("Failed to open session storage: {}", e),
+            }
         }
 
         self.context = None;

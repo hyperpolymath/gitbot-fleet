@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 use uuid::Uuid;
 
-use super::{models::*, Store};
+use super::{models::{ProofJobRecord, ProofObligationRecord, ProofResultRecord, Repository}, Store};
+// Local row types (RepoRow, JobRow, ResultRow, ObligationRow) are defined below.
 use crate::adapters::Platform;
 use crate::dispatcher::ProverKind;
 use crate::error::{Error, Result};
@@ -105,6 +106,44 @@ impl SqliteStore {
         sqlx::query(
             r#"
             CREATE INDEX IF NOT EXISTS idx_jobs_status ON proof_jobs(status);
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Proof obligations — added in H2a (replaces file_paths hack from H2-B)
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS proof_obligations (
+                id              TEXT PRIMARY KEY,
+                repo_id         TEXT NOT NULL,
+                claim           TEXT NOT NULL,
+                context         TEXT NOT NULL,
+                prover_hint     TEXT,
+                status          TEXT NOT NULL DEFAULT 'pending',
+                proof_job_id    TEXT,
+                created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                completed_at    TEXT,
+                FOREIGN KEY (repo_id) REFERENCES repositories(id)
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_proof_obligations_status
+                ON proof_obligations(status);
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_proof_obligations_repo
+                ON proof_obligations(repo_id);
             "#,
         )
         .execute(&self.pool)
@@ -356,6 +395,53 @@ impl Store for SqliteStore {
         row.map(|r| r.try_into()).transpose()
     }
 
+    async fn create_obligation(&self, obligation: &ProofObligationRecord) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO proof_obligations (
+                id, repo_id, claim, context, prover_hint,
+                status, proof_job_id, created_at, completed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(obligation.id.to_string())
+        .bind(obligation.repo_id.to_string())
+        .bind(&obligation.claim)
+        .bind(&obligation.context)
+        .bind(&obligation.prover_hint)
+        .bind(&obligation.status)
+        .bind(&obligation.proof_job_id)
+        .bind(obligation.created_at.to_rfc3339())
+        .bind(obligation.completed_at.map(|t| t.to_rfc3339()))
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_obligation(&self, obligation_id: &str) -> Result<Option<ProofObligationRecord>> {
+        let row: Option<ObligationRow> = sqlx::query_as(
+            "SELECT * FROM proof_obligations WHERE id = ?",
+        )
+        .bind(obligation_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|r| r.try_into()).transpose()
+    }
+
+    async fn link_obligation_to_job(&self, obligation_id: &str, job_id: &str) -> Result<()> {
+        sqlx::query(
+            "UPDATE proof_obligations SET proof_job_id = ?, status = 'processing' WHERE id = ?",
+        )
+        .bind(job_id)
+        .bind(obligation_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     async fn health_check(&self) -> Result<bool> {
         let result: (i32,) = sqlx::query_as("SELECT 1")
             .fetch_one(&self.pool)
@@ -516,6 +602,42 @@ impl TryFrom<ResultRow> for ProofResultRecord {
             created_at: chrono::DateTime::parse_from_rfc3339(&row.created_at)
                 .map_err(|e| Error::Internal(e.to_string()))?
                 .with_timezone(&chrono::Utc),
+        })
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct ObligationRow {
+    id: String,
+    repo_id: String,
+    claim: String,
+    context: String,
+    prover_hint: Option<String>,
+    status: String,
+    proof_job_id: Option<String>,
+    created_at: String,
+    completed_at: Option<String>,
+}
+
+impl TryFrom<ObligationRow> for ProofObligationRecord {
+    type Error = Error;
+
+    fn try_from(row: ObligationRow) -> Result<Self> {
+        Ok(ProofObligationRecord {
+            id: Uuid::parse_str(&row.id).map_err(|e| Error::Internal(e.to_string()))?,
+            repo_id: Uuid::parse_str(&row.repo_id).map_err(|e| Error::Internal(e.to_string()))?,
+            claim: row.claim,
+            context: row.context,
+            prover_hint: row.prover_hint,
+            status: row.status,
+            proof_job_id: row.proof_job_id,
+            created_at: chrono::DateTime::parse_from_rfc3339(&row.created_at)
+                .map_err(|e| Error::Internal(e.to_string()))?
+                .with_timezone(&chrono::Utc),
+            completed_at: row.completed_at.map(|s| {
+                chrono::DateTime::parse_from_rfc3339(&s)
+                    .map(|t| t.with_timezone(&chrono::Utc))
+            }).transpose().map_err(|e| Error::Internal(e.to_string()))?,
         })
     }
 }

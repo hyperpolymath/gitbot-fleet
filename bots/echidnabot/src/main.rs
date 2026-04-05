@@ -47,8 +47,8 @@ enum Commands {
         #[arg(short = 'H', long, default_value = "0.0.0.0")]
         host: String,
 
-        /// Port to bind to
-        #[arg(short, long, default_value = "8080")]
+        /// Port to bind to (canonical: 9001)
+        #[arg(short, long, default_value = "9001")]
         port: u16,
     },
 

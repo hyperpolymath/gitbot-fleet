@@ -1058,6 +1058,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-test",
+ "bytes",
  "chrono",
  "clap",
  "config",

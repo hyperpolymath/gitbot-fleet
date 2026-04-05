@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::adapters::Platform;
 use crate::error::Result;
 use crate::scheduler::JobId;
-use models::{Repository, ProofJobRecord, ProofResultRecord};
+use models::{Repository, ProofJobRecord, ProofObligationRecord, ProofResultRecord};
 
 /// Abstract store trait for different database backends
 #[async_trait]
@@ -41,6 +41,11 @@ pub trait Store: Send + Sync {
     // Result operations
     async fn save_result(&self, result: &ProofResultRecord) -> Result<()>;
     async fn get_result_for_job(&self, job_id: JobId) -> Result<Option<ProofResultRecord>>;
+
+    // Proof obligation operations
+    async fn create_obligation(&self, obligation: &ProofObligationRecord) -> Result<()>;
+    async fn get_obligation(&self, obligation_id: &str) -> Result<Option<ProofObligationRecord>>;
+    async fn link_obligation_to_job(&self, obligation_id: &str, job_id: &str) -> Result<()>;
 
     // Utility
     async fn health_check(&self) -> Result<bool>;
