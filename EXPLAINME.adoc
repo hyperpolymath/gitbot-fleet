@@ -151,7 +151,7 @@ Additional bots present in `bots/`: `accessibilitybot`, `cipherbot`, `panicbot`
 
 | *Rust* (rhodibot, echidnabot, sustainabot, shared-context, robot-repo-automaton)
 | Primary implementation language for all bots
-| protocol-squisher, verisimdb, ephapax, Stapeln FFI
+| protocol-squisher, verisim, ephapax, Stapeln FFI
 
 | *Hypatia*
 | External scanner whose JSONL findings feed fleet-coordinator.sh

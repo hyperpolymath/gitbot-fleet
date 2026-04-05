@@ -203,7 +203,7 @@ impl CicdHyperAClient {
     /// Fetch a ruleset from the registry.
     ///
     /// Tries the Hypatia API first; falls back to loading rules from the
-    /// local verisimdb-data recipes directory if the API is unavailable.
+    /// local verisim-data recipes directory if the API is unavailable.
     pub async fn fetch_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
         tracing::info!("Fetching ruleset: {} from {}", ruleset_id, self.config.api_url);
 
@@ -233,17 +233,17 @@ impl CicdHyperAClient {
             }
         }
 
-        // Fallback: load from local verisimdb-data recipes
+        // Fallback: load from local verisim-data recipes
         self.load_local_ruleset(ruleset_id)
     }
 
-    /// Load rules from local verisimdb-data recipes directory.
+    /// Load rules from local verisim-data recipes directory.
     fn load_local_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
         let recipes_dirs = [
-            PathBuf::from("/var/mnt/eclipse/repos/verisimdb-data/recipes"),
+            PathBuf::from("/var/mnt/eclipse/repos/verisim-data/recipes"),
             dirs::home_dir()
                 .unwrap_or_default()
-                .join("Documents/hyperpolymath-repos/verisimdb-data/recipes"),
+                .join("Documents/hyperpolymath-repos/verisim-data/recipes"),
         ];
 
         let recipes_dir = recipes_dirs.iter().find(|d| d.is_dir());
@@ -601,7 +601,7 @@ impl CicdHyperAClient {
     }
 }
 
-/// Convert a verisimdb-data recipe JSON to a Rule.
+/// Convert a verisim-data recipe JSON to a Rule.
 fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     let id = recipe.get("id")?.as_str()?.to_string();
     let name = recipe.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();

@@ -3,7 +3,7 @@
 #
 # dispatch-runner.sh — Execute actions from hypatia dispatch manifests
 #
-# Reads pending.jsonl from verisimdb-data/dispatch/ and executes fixes
+# Reads pending.jsonl from verisim-data/dispatch/ and executes fixes
 # via robot-repo-automaton CLI, gitbot-fleet fix scripts, or advisory logging.
 #
 # Usage:
@@ -15,7 +15,7 @@
 #   --strategy STRAT  Only process entries matching strategy (auto_execute|review|report_only)
 #   --repo REPO       Only process entries for a specific repo
 #   --limit N         Process at most N entries
-#   --manifest PATH   Path to manifest (default: verisimdb-data/dispatch/pending.jsonl)
+#   --manifest PATH   Path to manifest (default: verisim-data/dispatch/pending.jsonl)
 #   --parallel N      Run up to N fix scripts concurrently (default: 1)
 #   --dedup-repo      Group entries by repo, run only first per repo+category
 
@@ -50,9 +50,9 @@ validate_path_within() {
 
 # --- Configuration ---
 # Hypatia's local data store is the primary source for dispatch manifests.
-# Falls back to central verisimdb-data if HYPATIA_DATA is not set.
-HYPATIA_DATA="${HYPATIA_DATA:-/var$REPOS_DIR/nextgen-databases/verisimdb/verisimdb-data}"
-VERISIMDB_DATA="${VERISIMDB_DATA:-/var$REPOS_DIR/nextgen-databases/verisimdb/verisimdb-data}"
+# Falls back to central verisim-data if HYPATIA_DATA is not set.
+HYPATIA_DATA="${HYPATIA_DATA:-/var$REPOS_DIR/nextgen-databases/verisim/verisim-data}"
+VERISIMDB_DATA="${VERISIMDB_DATA:-/var$REPOS_DIR/nextgen-databases/verisim/verisim-data}"
 REPOS_BASE="${REPOS_BASE:-/var$REPOS_DIR}"
 FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var$REPOS_DIR/gitbot-fleet/scripts}"
 RRA_BIN="${RRA_BIN:-/var$REPOS_DIR/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
@@ -65,7 +65,7 @@ THIRD_PARTY_PATHS=(
     "echidna/HOL"
 )
 
-# Try hypatia's data first, then fall back to central verisimdb-data
+# Try hypatia's data first, then fall back to central verisim-data
 if [[ -f "${HYPATIA_DATA}/dispatch/pending.jsonl" ]]; then
     MANIFEST_PATH="${HYPATIA_DATA}/dispatch/pending.jsonl"
 elif [[ -f "${VERISIMDB_DATA}/dispatch/pending.jsonl" ]]; then

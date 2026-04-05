@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+
+= Echidnabot Changelog
+:toc: left
+:toclevels: 2
+
+All notable changes to echidnabot are documented here.
+
+== [Unreleased]
+
+=== Changed
+
+==== VQL → VCL + verisimdb → verisim Rename (2026-04-05)
+
+Matches the ecosystem-wide rename. Internal identifiers updated,
+`github.com/hyperpolymath/verisimdb` URLs preserved.
+
+=== Added
+
+==== Inline-Claim Mode (A5, 2026-04-05)
+
+`ProofObligationInput` gains an optional `inline: Bool` flag. When
+`true`, the obligation's `claim` text IS the proof content: `process_job`
+short-circuits before `clone_repo`, fetches the obligation from the
+store, and calls `echidna.verify_proof` directly with the claim text.
+No git clone, no file walk.
+
+Sentinel `inline:<obligation_id>` distinguishes inline jobs from the
+legacy `obligation:<id>` clone path in `ProofJob.file_paths`.
+
+Tested end-to-end against live echidna server:
+  provable Z3 claim  → success=1, 1ms,  "Inline proof verified"
+  unsat Z3 claim     → success=0, 20ms, "Inline proof verification failed"
+
+Unblocks batch drivers and test harnesses that hold proofs in-memory
+and don't want echidnabot to git-clone a repo just to verify one file.
+Used by the Phase E playground at nesy-solver.dev.
+
+==== `batch_driver.sh` — Direct-Binary Prover Invocation
+
+A standalone bash script that walks local proof trees, invokes prover
+binaries directly (bypassing echidna's `/api/verify`, which has a
+parse+export round-trip bug that produces false positives), and POSTs
+outcomes to verisim-api's `/api/v1/proof_attempts`.
+
+Active runners as of 2026-04-05 (**16 provers**): z3, cvc5, alt-ergo,
+coq, lean, agda, idris2, vampire, eprover, metamath, cadical, kissat,
+dafny, why3, fstar, acl2 (runner present, podman wrapper deferred).
+
+Per-prover logic:
+
+* SMT solvers (`z3`, `cvc5`, `alt-ergo`): parse `sat`/`unsat`/`unknown`
+  from output.
+* Interactive provers (`coq`, `lean`, `agda`, `idris2`, `fstar`): cd to
+  file's source root, invoke binary, interpret exit code.
+* Idris2: walks up to find nearest `.ipkg` and uses that as
+  `--source-dir` so project-relative imports resolve.
+* ATPs (`vampire`, `eprover`): parse `% SZS status Theorem|
+  Unsatisfiable|CounterSatisfiable|Timeout`.
+* SAT solvers (`cadical`, `kissat`): exit codes 10=SAT, 20=UNSAT.
+* `metamath`: pipes `read "file"; verify proof *; exit` via stdin,
+  parses `?Error` / "were not proved".
+* `dafny`: parses "finished with N verified, M errors".
+* `why3`: invoked with `-P z3`, parses "Prover result is: Valid".
+
+Environment configuration: `VERISIM_URL`, `VERISIM_TOKEN`, `NOTIFY`
+(notify-send per result), `DRY_RUN`, `MAX_FILES`, `RATE_MS`,
+`TIMEOUT_SEC`, `STRATEGY_TAG`.
+
+Desktop notifications fire on every result (notify-send): urgency
+`critical` on failures, `normal` on success, `low` on unknown.
+
+=== Certificate Landscape (2026-04-05)
+
+After ~1,200 proof_attempts rows across 16 active provers:
+
+* *8 PROVEN* pairs: `safety/{z3,cvc5,vampire,eprover}`,
+  `correctness/{z3,cvc5}`, `linearity/idris2`, `model-check/cadical`.
+* *2 SANCTIFIED* classes: `safety` (4 provers, 282 attempts),
+  `correctness` (2 provers, 198 attempts).
