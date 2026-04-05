@@ -40,8 +40,28 @@ TARGETS=(
   "echidna|safety|z3|proofs/z3|smt2"
   "echidna|equiv|coq|proofs/coq|v"
   "echidna|equiv|lean|proofs/lean|lean"
+  "echidna|equiv|agda|proofs/agda|agda"
+  "echidna|totality|idris2|verification/proofs/idris2|idr"
   "ephapax|equiv|coq|formal|v"
+  "ephapax|linearity|idris2|src/formal/Ephapax/Formal|idr"
 )
+#
+# Deferred targets (runners exist but need environment setup):
+#   acl2   — /usr/local/bin/acl2 is a podman wrapper that pulls
+#            rubengamboa/acl2:latest on every invocation (hangs on pull).
+#            Needs a native ACL2 install + properly-certified book dir.
+#   vampire — /usr/local/bin/vampire installed, but we have no clean TPTP
+#             corpus in any of our repos (/external_corpora/tptp/*.p files
+#             are HTML dumps, not problems).
+#
+# The agda + idris2 targets above will mostly fail because they depend on
+# project/standard-library context not present at file-level invocation:
+#   • agda files use ℕ / std-lib symbols without explicit import paths set
+#     — needs agda-stdlib registered in ~/.agda/libraries
+#   • idris2 files expect project-relative module imports (e.g. module
+#     Echidna.Verification.*) — need a pack.toml or ipkg build root.
+# Their failures are therefore "real" in the sense that CI without those
+# setups would also fail; treat accordingly.
 
 # --- helpers ----------------------------------------------------------------
 
@@ -119,14 +139,81 @@ run_lean() {
   [ $rc -eq 0 ]   && echo success || echo failure
 }
 
+run_agda() {
+  local file="$1"
+  local t0 t1 rc
+  t0=$(date +%s%3N)
+  # Must cd into file's directory so Agda resolves module name from filename.
+  ( cd "$(dirname "$file")" && timeout "${TIMEOUT_SEC}s" agda "$(basename "$file")" >/dev/null 2>&1 )
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  [ $rc -eq 0 ]   && echo success || echo failure
+}
+
+run_idris2() {
+  local file="$1"
+  local t0 t1 rc
+  t0=$(date +%s%3N)
+  # idris2 --check needs the file in its source directory; cd makes it find
+  # project-relative imports, and the module name must match the filename.
+  ( cd "$(dirname "$file")" && timeout "${TIMEOUT_SEC}s" idris2 --check "$(basename "$file")" >/dev/null 2>&1 )
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  [ $rc -eq 0 ]   && echo success || echo failure
+}
+
+run_acl2() {
+  local file="$1"
+  local t0 t1 rc
+  t0=$(date +%s%3N)
+  # ACL2 reads events from stdin; pipe the file in with a (exit) sentinel.
+  # Non-zero exit on certification failure. :q exits the logic mode cleanly.
+  ( printf ':q\n(exit)\n' | cat "$file" - | timeout "${TIMEOUT_SEC}s" acl2 >/dev/null 2>&1 )
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  [ $rc -eq 0 ]   && echo success || echo failure
+}
+
+run_vampire() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  output=$(timeout "${TIMEOUT_SEC}s" vampire --mode casc -t "${TIMEOUT_SEC}s" "$file" 2>&1)
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  # Vampire prints "% SZS status Theorem" on success, "% SZS status CounterSatisfiable"
+  # or "Unsatisfiable" etc. on other outcomes. Exit code isn't reliable; parse SZS.
+  if echo "$output" | grep -qE "^% SZS status (Theorem|Unsatisfiable)"; then
+    echo success
+  elif echo "$output" | grep -qE "^% SZS status (CounterSatisfiable|Satisfiable)"; then
+    echo failure
+  elif echo "$output" | grep -qE "SZS status (Timeout|GaveUp)"; then
+    echo timeout
+  else
+    echo unknown
+  fi
+}
+
 # Dispatch to the right runner by prover name.
 run_prover() {
   local prover="$1" file="$2"
   case "$prover" in
-    z3)   run_z3   "$file" ;;
-    coq)  run_coq  "$file" ;;
-    lean) run_lean "$file" ;;
-    *)    echo 0; echo unknown ;;
+    z3)      run_z3      "$file" ;;
+    coq)     run_coq     "$file" ;;
+    lean)    run_lean    "$file" ;;
+    agda)    run_agda    "$file" ;;
+    idris2)  run_idris2  "$file" ;;
+    acl2)    run_acl2    "$file" ;;
+    vampire) run_vampire "$file" ;;
+    *)       echo 0; echo unknown ;;
   esac
 }
 
