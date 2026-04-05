@@ -22,7 +22,7 @@ built but underadopted.
 | Dustfile.a2ml | 206 | 256 | 80%
 | `assail` recipe in Justfile | 170 | 256 | 66%
 | proven.a2ml integration | 256 | 256 | 100%
-| verisimdb.a2ml integration | 256 | 256 | 100%
+| verisim.a2ml integration | 256 | 256 | 100%
 | feedback-o-tron.a2ml integration | 256 | 256 | 100%
 | vexometer.a2ml integration | 256 | 256 | 100%
 |===
@@ -43,7 +43,7 @@ File: `floor-raise-2026-03-20.jsonl`
 File: `floor-raise-integrations-2026-03-20.jsonl`
 
 * 256 missing proven.a2ml (confidence: 0.97)
-* 256 missing verisimdb.a2ml (confidence: 0.97)
+* 256 missing verisim.a2ml (confidence: 0.97)
 * 256 missing feedback-o-tron.a2ml (confidence: 0.97)
 * 256 missing vexometer.a2ml (confidence: 0.97)
 
@@ -58,7 +58,7 @@ File: `floor-raise-integrations-2026-03-20.jsonl`
 | `fix-missing-ai-manifest.sh` | Add 0-AI-MANIFEST.a2ml (AI entry point)
 | `fix-missing-assail-recipe.sh` | Add `assail` recipe to Justfile
 | `fix-missing-proven-ref.sh` | Add proven integration reference
-| `fix-missing-verisimdb-feed.sh` | Add VeriSimDB feed configuration
+| `fix-missing-verisim-feed.sh` | Add VeriSimDB feed configuration
 | `fix-missing-feedback-integration.sh` | Add feedback-o-tron integration
 | `fix-missing-vexometer-hooks.sh` | Add vexometer friction hooks
 |===

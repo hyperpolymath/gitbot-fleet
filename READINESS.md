@@ -65,7 +65,7 @@ These bots are wired in the OTP supervision tree but have limited external valid
 1. **PAT token**: Automated cross-repo dispatch requires a PAT with `repo` scope — currently missing
 2. **Fix scripts**: 310/600 auto-execute entries have null fix_script — recipes exist but no executable
 3. **False positive rate**: ~8% on some pattern categories; kanren context-facts would reduce to ~2-3%
-4. **VQL federation**: Local-only; multi-store federation not implemented
+4. **VCL federation**: Local-only; multi-store federation not implemented
 5. **Neural state persistence**: State dir exists but coordinator hasn't persisted to disk
 
 ---

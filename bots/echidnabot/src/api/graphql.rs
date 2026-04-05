@@ -290,6 +290,12 @@ pub struct ProofObligationInput {
     /// rule picking the historically-best prover for this obligation class),
     /// it overrides the default. Omitted → default Lean.
     pub prover: Option<ProverKind>,
+    /// When `true`, treat `claim` as the proof content itself and verify it
+    /// directly against echidna, skipping the clone-first pipeline. Useful
+    /// for batch drivers and test harnesses that hold proofs in-memory and
+    /// don't want echidnabot to git-clone a whole repo just to read one file.
+    /// When omitted or false, the legacy clone+walk pipeline is used.
+    pub inline: Option<bool>,
 }
 
 /// Result of submitting a proof obligation
@@ -468,11 +474,18 @@ impl MutationRoot {
 
         // 2. Create a scheduler job whose file_paths carry an opaque reference to the
         //    obligation row.  Nothing in file_paths encodes claim/context strings.
+        //    When `inline` is set, prefix the sentinel so process_job skips the
+        //    clone pipeline and verifies the obligation's claim directly.
+        let sentinel = if input.inline.unwrap_or(false) {
+            format!("inline:{}", obligation.id)
+        } else {
+            format!("obligation:{}", obligation.id)
+        };
         let job = crate::scheduler::ProofJob::new(
             repo.id,
             "manual-obligation".to_string(),
             chosen_prover,
-            vec![format!("obligation:{}", obligation.id)],
+            vec![sentinel],
         )
         .with_priority(JobPriority::Normal);
 

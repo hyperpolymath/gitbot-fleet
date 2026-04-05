@@ -533,6 +533,41 @@ async fn process_job(
         )));
     }
 
+    // Inline-claim shortcut (A5): sentinel `inline:<obligation_id>` means the
+    // obligation's `claim` column *is* the proof content to verify. Skip clone,
+    // skip file walk, call echidna once with the claim text.
+    if let Some(first) = job.file_paths.first() {
+        if let Some(obligation_id) = first.strip_prefix("inline:") {
+            let obligation = store
+                .get_obligation(obligation_id)
+                .await?
+                .ok_or_else(|| {
+                    echidnabot::Error::Echidna(format!(
+                        "inline obligation {} not found in store",
+                        obligation_id
+                    ))
+                })?;
+            let verify = echidna
+                .verify_proof(job.prover, &obligation.claim)
+                .await?;
+            let success =
+                verify.status == echidnabot::dispatcher::ProofStatus::Verified;
+            let tag = format!("inline:{}", obligation_id);
+            return Ok(echidnabot::scheduler::JobResult {
+                success,
+                message: if success {
+                    "Inline proof verified".to_string()
+                } else {
+                    "Inline proof verification failed".to_string()
+                },
+                prover_output: verify.prover_output,
+                duration_ms: start.elapsed().as_millis() as u64,
+                verified_files: if success { vec![tag.clone()] } else { vec![] },
+                failed_files: if success { vec![] } else { vec![tag] },
+            });
+        }
+    }
+
     let repo = store
         .get_repository(job.repo_id)
         .await?

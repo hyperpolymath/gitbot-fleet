@@ -8,7 +8,7 @@
     (version "2.0")
     (schema-version "RSR-2026")
     (created "2026-01-04")
-    (updated "2026-04-04T19:00:00Z")
+    (updated "2026-04-05T22:00:00Z")
     (project "gitbot-fleet")
     (repo "https://github.com/hyperpolymath/gitbot-fleet"))
 
@@ -100,6 +100,13 @@
       ("Replace tests/fuzz/placeholder.txt with real libFuzzer harness")))
 
   (session-history
+    (snapshot "2026-04-05-evening"
+      (accomplishments
+        ("Echidnabot: inline-claim mode (A5) — ProofObligationInput.inline=true bypasses clone, verifies claim text directly via echidna /api/verify")
+        ("batch_driver.sh: direct-binary invocation across 16 provers (z3, cvc5, alt-ergo, coq, lean, agda, idris2, vampire, eprover, metamath, cadical, kissat, dafny, why3, fstar, acl2-deferred)")
+        ("batch_driver auto-discovers .ipkg roots for Idris2 project-relative imports")
+        ("Ecosystem VQL->VCL + verisimdb->verisim rename applied (config.rs, fleet-coordinator, dispatch-runner, robot-repo-automaton hypatia client)")
+        ("Live learning loop: 8 PROVEN certs + 2 SANCTIFIED classes over ~1200 proof_attempts rows")))
     (snapshot "2026-04-04"
       (accomplishments
         ("CRG C blitz: added 50+ new tests across robot-repo-automaton + shared-context")
