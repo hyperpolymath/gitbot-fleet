@@ -559,7 +559,7 @@ dependencies = [
  "cssparser-macros",
  "dtoa-short",
  "itoa",
- "phf 0.13.1",
+ "phf 0.11.3",
  "smallvec",
 ]
 
@@ -1034,7 +1034,7 @@ dependencies = [
  "gitbot-shared-context",
  "glob",
  "globset",
- "html5ever 0.29.1",
+ "html5ever 0.39.0",
  "image",
  "predicates",
  "pulldown-cmark",
@@ -2014,6 +2014,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
 dependencies = [
  "phf_macros",
+ "phf_shared 0.11.3",
+]
+
+[[package]]
+name = "phf"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
+dependencies = [
  "phf_shared 0.13.1",
  "serde",
 ]
@@ -2064,8 +2073,8 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812f032b54b1e759ccd5f8b6677695d5268c588701effba24601f6932f8269ef"
 dependencies = [
- "phf_generator 0.13.1",
- "phf_shared 0.13.1",
+ "phf_generator 0.11.3",
+ "phf_shared 0.11.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -2698,10 +2707,10 @@ dependencies = [
  "cssparser",
  "ego-tree",
  "getopts",
- "html5ever 0.39.0",
+ "html5ever 0.29.1",
  "precomputed-hash",
  "selectors",
- "tendril 0.5.0",
+ "tendril 0.4.3",
 ]
 
 [[package]]
@@ -2715,8 +2724,8 @@ dependencies = [
  "derive_more",
  "log",
  "new_debug_unreachable",
- "phf 0.13.1",
- "phf_codegen 0.13.1",
+ "phf 0.11.3",
+ "phf_codegen 0.11.3",
  "precomputed-hash",
  "rustc-hash",
  "servo_arc",
