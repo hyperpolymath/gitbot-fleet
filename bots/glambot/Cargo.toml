@@ -49,7 +49,7 @@ thiserror = "2"
 anyhow = "1"
 
 # Directories
-dirs = "5"
+dirs = "6"
 
 # URL validation
 url = "2"
