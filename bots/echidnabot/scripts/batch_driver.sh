@@ -53,6 +53,7 @@ TARGETS=(
   "echidna|correctness|cvc5|proofs/smt-lib-mined|smt2"
   "echidna|model-check|kissat|proofs/dimacs|cnf"
   "echidna|safety|eprover|proofs/tptp|p"
+  "echidna|correctness|fstar|proofs/fstar|fst"
   "echidna|equiv|coq|proofs/coq|v"
   "echidna|equiv|lean|proofs/lean|lean"
   "echidna|equiv|agda|proofs/agda|agda"
@@ -267,6 +268,26 @@ run_cadical() {
   esac
 }
 
+run_fstar() {
+  local file="$1"
+  local t0 t1 output rc
+  t0=$(date +%s%3N)
+  # F* needs its lib path via env; binary is called fstar (symlink to fstar.exe).
+  # Works when cd'd to file's directory.
+  output=$( cd "$(dirname "$file")" && timeout "${TIMEOUT_SEC}s" fstar "$(basename "$file")" 2>&1 )
+  rc=$?
+  t1=$(date +%s%3N)
+  echo $((t1 - t0))
+  [ $rc -eq 124 ] && { echo timeout; return; }
+  if echo "$output" | grep -q "All verification conditions discharged successfully"; then
+    echo success
+  elif echo "$output" | grep -qE "Error|error was reported"; then
+    echo failure
+  else
+    echo unknown
+  fi
+}
+
 run_why3() {
   local file="$1"
   local t0 t1 output rc
@@ -407,6 +428,7 @@ run_prover() {
     cadical)  run_cadical  "$file" ;;
     kissat)   run_kissat   "$file" ;;
     eprover)  run_eprover  "$file" ;;
+    fstar)    run_fstar    "$file" ;;
     *)        echo 0; echo unknown ;;
   esac
 }
