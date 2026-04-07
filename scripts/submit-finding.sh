@@ -59,14 +59,28 @@ mkdir -p "$(dirname "$TARGET_FILE")"
 jq --arg repo "$REPO_NAME" \
    --arg commit "$COMMIT_SHA" \
    --arg timestamp "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-   '. + {
-       submission_metadata: {
-           repo: $repo,
-           commit: $commit,
-           submitted_at: $timestamp,
-           scanner_version: "hypatia-v2"
-       }
-   }' "$FINDING_FILE" > "$TARGET_FILE"
+   '
+   def submission_meta: {
+       repo: $repo,
+       commit: $commit,
+       submitted_at: $timestamp,
+       scanner_version: "hypatia-v2"
+   };
+
+   # Normalize input shape:
+   # - array    -> {findings: [...]}
+   # - object with findings[] -> keep findings
+   # - single finding object  -> wrap in findings[]
+   if type == "array" then
+       {findings: ., submission_metadata: submission_meta}
+   elif type == "object" and (has("findings")) and (.findings | type == "array") then
+       . + {submission_metadata: submission_meta}
+   elif type == "object" then
+       {findings: [.] , submission_metadata: submission_meta}
+   else
+       error("Unsupported findings JSON shape")
+   end
+   ' "$FINDING_FILE" > "$TARGET_FILE"
 
 # Create/update latest symlink
 ln -sf "$(basename "$TARGET_FILE")" "shared-context/findings/${REPO_SLUG}/latest.json"

@@ -54,6 +54,7 @@ based on confidence thresholds (Eliminate >= 0.95, Substitute >= 0.85, Control <
 * [x] 11 bots deployed with individual roadmaps
 * [x] Bot modes for echidnabot (Verifier/Advisor/Consultant/Regulator)
 * [ ] Hypatia scanner reliability (reduce 78% failure rate to < 10%)
+* [ ] Fix `scripts/submit-finding.sh` jq merge failure (`array + object`) blocking finding ingestion from Hypatia (Issue #46: https://github.com/hyperpolymath/gitbot-fleet/issues/46)
 * [ ] Robot-repo-automaton: confidence threshold system
 * [ ] Robot-repo-automaton: integration tests with fleet coordination
 * [ ] End-to-end integration tests across full workflow
