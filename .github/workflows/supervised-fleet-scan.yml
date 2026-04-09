@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Scheduled/dispatch pipeline for supervised-repo scanning via Hypatia + gitbot-fleet.
+name: Supervised Fleet Scan
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Maximum repos to scan (0 = all resolved)'
+        required: false
+        default: '0'
+      inventory_file:
+        description: 'Optional inventory file path (.git-private-repos or .git-private-farm.scm)'
+        required: false
+        default: ''
+      process_findings:
+        description: 'Run fleet process-findings after scan'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  supervised-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout gitbot-fleet
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+
+      - name: Clone Hypatia scanner
+        run: |
+          set -euo pipefail
+          git clone --depth=1 https://github.com/hyperpolymath/hypatia.git ../hypatia
+
+      - name: Run supervised fleet scan
+        env:
+          LIMIT: ${{ github.event.inputs.limit || '0' }}
+          INVENTORY_FILE: ${{ github.event.inputs.inventory_file || '' }}
+          PROCESS_FINDINGS: ${{ github.event.inputs.process_findings || 'true' }}
+          FLEET_SUPERVISED_REPOS_FILE: ${{ github.event.inputs.inventory_file || '' }}
+        run: |
+          set -euo pipefail
+          ARGS=(--limit "$LIMIT")
+          if [[ -n "$INVENTORY_FILE" ]]; then
+            ARGS+=(--inventory "$INVENTORY_FILE")
+          fi
+          if [[ "$PROCESS_FINDINGS" == "true" ]]; then
+            ARGS+=(--process)
+          fi
+
+          echo "Running: fleet-coordinator.sh scan-supervised ${ARGS[*]}"
+          bash fleet-coordinator.sh scan-supervised "${ARGS[@]}"

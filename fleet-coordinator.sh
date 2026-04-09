@@ -33,6 +33,7 @@ USAGE:
 
 COMMANDS:
     run-scan <repo>         Run full scan on repository
+    scan-supervised         Run hypatia scan across supervised repos inventory
     process-findings        Process pending findings and coordinate fixes
     generate-rules          Generate new rules from observed patterns
     status                  Show fleet status
@@ -106,6 +107,76 @@ run_hypatia_scan() {
         log_error "Scan produced invalid/empty JSON for $repo_name"
         rm -f "$findings_file"
         return 1
+    fi
+}
+
+scan_supervised_repos() {
+    local process_after=false
+    local limit=0
+    local inventory=""
+    local repos_root="/var/mnt/eclipse/repos"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --process)
+                process_after=true
+                shift
+                ;;
+            --limit)
+                limit="${2:-0}"
+                shift 2
+                ;;
+            --inventory)
+                inventory="${2:-}"
+                shift 2
+                ;;
+            --repos-root)
+                repos_root="${2:-}"
+                shift 2
+                ;;
+            *)
+                log_error "Unknown scan-supervised option: $1"
+                return 2
+                ;;
+        esac
+    done
+
+    local list_script="$FLEET_DIR/scripts/list-supervised-repos.sh"
+    if [[ ! -x "$list_script" ]]; then
+        log_error "Missing inventory resolver: $list_script"
+        return 1
+    fi
+
+    local -a args
+    args=(--repos-root "$repos_root" --limit "$limit")
+    if [[ -n "$inventory" ]]; then
+        args+=(--inventory "$inventory")
+    fi
+
+    local -a repo_paths
+    mapfile -t repo_paths < <("$list_script" "${args[@]}")
+
+    if [[ "${#repo_paths[@]}" -eq 0 ]]; then
+        log_warn "No supervised repositories resolved"
+        return 0
+    fi
+
+    log_info "Scanning ${#repo_paths[@]} supervised repos"
+    local scanned=0
+    local failed=0
+
+    for repo_path in "${repo_paths[@]}"; do
+        if run_hypatia_scan "$repo_path" >/dev/null; then
+            scanned=$((scanned + 1))
+        else
+            failed=$((failed + 1))
+        fi
+    done
+
+    log_info "Supervised scan complete: scanned=$scanned failed=$failed"
+
+    if [[ "$process_after" == true ]]; then
+        process_findings
     fi
 }
 
@@ -759,6 +830,11 @@ main() {
         run-scan)
             local repo="${2:-.}"
             run_hypatia_scan "$repo"
+            ;;
+
+        scan-supervised)
+            shift
+            scan_supervised_repos "$@"
             ;;
 
         process-findings)

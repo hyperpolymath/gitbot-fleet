@@ -26,6 +26,10 @@ build-shared:
 coordinate *ARGS:
     bash fleet-coordinator.sh {{ARGS}}
 
+# Scan supervised inventory (supports ~/.git-private-farm.scm and ~/.git-private-repos)
+scan-supervised *ARGS:
+    bash fleet-coordinator.sh scan-supervised --process {{ARGS}}
+
 # Run dispatch runner with a manifest
 dispatch manifest:
     bash scripts/dispatch-runner.sh "{{manifest}}"

@@ -10,6 +10,8 @@ FINDINGS_BRANCH="${FINDINGS_BRANCH:-findings-submissions}"
 FINDING_FILE="$1"
 REPO_NAME="${GITHUB_REPOSITORY:-unknown/unknown}"
 COMMIT_SHA="${GITHUB_SHA:-unknown}"
+PUSH_TOKEN="${FLEET_PUSH_TOKEN:-${GITHUB_TOKEN:-}}"
+DISPATCH_TOKEN="${FLEET_DISPATCH_TOKEN:-$PUSH_TOKEN}"
 
 # Validate FLEET_REPO format (must be owner/repo, no path traversal)
 if [[ ! "$FLEET_REPO" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
@@ -41,8 +43,8 @@ TARGET_FILE="shared-context/findings/${REPO_SLUG}/${TIMESTAMP}.json"
 FLEET_DIR="/tmp/gitbot-fleet-$$"
 trap 'rm -rf "$FLEET_DIR"' EXIT
 
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-    git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${FLEET_REPO}.git" "$FLEET_DIR"
+if [ -n "$PUSH_TOKEN" ]; then
+    git clone "https://x-access-token:${PUSH_TOKEN}@github.com/${FLEET_REPO}.git" "$FLEET_DIR"
 else
     git clone "git@github.com:${FLEET_REPO}.git" "$FLEET_DIR"
 fi
@@ -107,13 +109,62 @@ echo "✅ Successfully submitted $FINDING_COUNT findings"
 echo "📍 Location: $TARGET_FILE"
 echo "🌐 View: https://github.com/${FLEET_REPO}/blob/${FINDINGS_BRANCH}/${TARGET_FILE}"
 
-# Trigger fleet processing (if webhook exists)
+# Trigger repository_dispatch for fleet intake when token is available.
+if [ -n "$DISPATCH_TOKEN" ]; then
+    CRITICAL_COUNT=$(jq '[.findings[]? | select((.severity // "") | ascii_downcase == "critical")] | length' "$TARGET_FILE")
+    HIGH_COUNT=$(jq '[.findings[]? | select((.severity // "") | ascii_downcase == "high")] | length' "$TARGET_FILE")
+    SECRET_COUNT=$(jq '[.findings[]? | select((((.type // "") + " " + (.rule_id // "") + " " + (.message // "")) | ascii_downcase | test("secret|token|private[_-]?key|credential")))] | length' "$TARGET_FILE")
+
+    EVENT_TYPE="hypatia-general-findings"
+    if [ "$SECRET_COUNT" -gt 0 ]; then
+        EVENT_TYPE="hypatia-secret-alert"
+    elif [ "$CRITICAL_COUNT" -gt 0 ] || [ "$HIGH_COUNT" -gt 0 ]; then
+        EVENT_TYPE="hypatia-security-alert"
+    fi
+
+    dispatch_payload=$(jq -n \
+        --arg event_type "$EVENT_TYPE" \
+        --arg source_repo "$REPO_NAME" \
+        --arg sha "$COMMIT_SHA" \
+        --arg branch "$FINDINGS_BRANCH" \
+        --arg findings_path "$TARGET_FILE" \
+        --arg submitted_at "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --argjson findings_count "$FINDING_COUNT" \
+        --argjson critical "$CRITICAL_COUNT" \
+        --argjson high "$HIGH_COUNT" \
+        --argjson secret_like "$SECRET_COUNT" \
+        '{
+          event_type: $event_type,
+          client_payload: {
+            source_repo: $source_repo,
+            sha: $sha,
+            findings_count: $findings_count,
+            critical: $critical,
+            high: $high,
+            secret_like: $secret_like,
+            findings_branch: $branch,
+            findings_path: $findings_path,
+            submitted_at: $submitted_at
+          }
+        }')
+
+    if curl -fsS -X POST "https://api.github.com/repos/${FLEET_REPO}/dispatches" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        -d "$dispatch_payload" >/dev/null; then
+        echo "✅ Triggered repository_dispatch (${EVENT_TYPE}) for ${FLEET_REPO}"
+    else
+        echo "⚠️  repository_dispatch failed (push already completed)"
+    fi
+fi
+
+# Backward-compatible webhook trigger (optional).
 if [ -n "${FLEET_WEBHOOK_URL:-}" ]; then
-    # Use jq to safely construct JSON payload (prevents injection via REPO_NAME)
     payload=$(jq -n --arg repo "$REPO_NAME" --argjson findings "${FINDING_COUNT:-0}" \
         '{repo: $repo, findings: $findings}')
-    curl -X POST "$FLEET_WEBHOOK_URL" \
+    curl -fsS -X POST "$FLEET_WEBHOOK_URL" \
         -H "Content-Type: application/json" \
-        -d "$payload"
-    echo "Triggered fleet processing"
+        -d "$payload" >/dev/null
+    echo "Triggered fleet webhook"
 fi
