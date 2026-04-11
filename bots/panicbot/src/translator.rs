@@ -335,6 +335,13 @@ pub fn translate_all(
     weak_points
         .iter()
         .filter_map(|wp| {
+            // Skip weak points suppressed by panic-attack's context-aware FP engine.
+            // Suppressed = the logic engine found a defensive pattern (e.g. mutex guard,
+            // RAII, schema validation) that makes this finding likely a false positive.
+            if wp.suppressed {
+                return None;
+            }
+
             // Apply severity filter
             let severity_value = match wp.severity.to_lowercase().as_str() {
                 "low" => 0u8,

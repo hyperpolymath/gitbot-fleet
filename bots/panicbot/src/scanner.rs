@@ -67,6 +67,10 @@ pub struct WeakPoint {
     /// Recommended attack axes for dynamic validation.
     #[serde(default)]
     pub recommended_attack: Vec<String>,
+    /// Set by panic-attack's context-aware FP suppression engine.
+    /// Suppressed items are excluded from fleet counts and CI gates.
+    #[serde(default)]
+    pub suppressed: bool,
 }
 
 /// Report from `panic-attack adjudicate` — cross-report verdict.

@@ -1,42 +1,26 @@
-;; SPDX-License-Identifier: PMPL-1.0-or-later
-;; PLAYBOOK.scm - Operational runbook for robot-repo-automaton
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# PLAYBOOK.a2ml — Operational playbook
+[metadata]
+version = "0.1.0"
+last-updated = "2026-04-11"
 
-(define playbook
-  `((version . "1.0.0")
-    (project . "robot-repo-automaton")
+[deployment]
+# method = "gitops"  # gitops | manual | ci-triggered
+# target = "container"  # container | binary | library | wasm
 
-    (procedures
-      ((execute-fix
-         (steps
-           ("1. Load ERROR-CATALOG.scm"
-            "2. Match error pattern to fix action"
-            "3. Apply fix with git operations"
-            "4. Create commit with standardized message"
-            "5. Open PR or push directly (based on config)"))
-         (troubleshooting
-           ((issue . "Fix action failed")
-            (solution . "Check git status, verify permissions, review error log"))))
+[incident-response]
+# 1. Check .machine_readable/STATE.a2ml for current status
+# 2. Review recent commits and CI results
+# 3. Run `just validate` to check compliance
+# 4. Run `just security` to audit for vulnerabilities
 
-       (register-with-hypatia
-         (steps
-           ("1. Configure registry URL in config.toml"
-            "2. Fetch ruleset index from hypatia"
-            "3. Cache rulesets locally"
-            "4. Report execution results back to hypatia")))
+[release-process]
+# 1. Update version in STATE.a2ml, META.a2ml
+# 2. Run `just release-preflight` (validate + quality + security + maint-hard-pass)
+# 3. Tag and push
 
-       (add-new-fix-pattern
-         (steps
-           ("1. Add error pattern to ERROR-CATALOG.scm"
-            "2. Define fix action in Rust"
-            "3. Add test case"
-            "4. Update documentation"
-            "5. Test on sample repo before fleet deployment")))))
-
-    (alerts
-      ((high-priority
-         (trigger . "Fix creates breaking change")
-         (response
-           ("1. Revert commit immediately"
-            "2. Analyze why detection failed"
-            "3. Add test case to prevent recurrence"))
-         (escalation . "Disable auto-fix until root cause resolved"))))))
+[maintenance-operations]
+# Baseline audit: just maint-audit
+# Hard release gate: just maint-hard-pass
