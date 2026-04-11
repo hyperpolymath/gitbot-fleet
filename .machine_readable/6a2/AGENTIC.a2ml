@@ -1,64 +1,34 @@
-;; SPDX-License-Identifier: PMPL-1.0-or-later
-;; SPDX-FileCopyrightText: 2025 hyperpolymath
-;; AGENTIC.scm - AI agent interaction patterns
-;; Media-Type: application/agentic+scheme
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# AGENTIC.a2ml — AI agent constraints and capabilities
+[metadata]
+version = "0.1.0"
+last-updated = "2026-04-11"
 
-(agentic
-  (version "1.0")
-  (project "gitbot-fleet")
+[agent-permissions]
+can-edit-source = true
+can-edit-tests = true
+can-edit-docs = true
+can-edit-config = true
+can-create-files = true
 
-  (agent-capabilities
-    (can-read
-      ("Bot configurations")
-      ("Fleet status")
-      ("Bot documentation"))
-    (can-suggest
-      ("New bot additions")
-      ("Configuration changes")
-      ("Architecture improvements"))
-    (cannot
-      ("Deploy bots directly")
-      ("Modify webhook configurations")
-      ("Access bot secrets")))
+[agent-constraints]
+# What AI agents must NOT do:
+# - Never use banned language patterns (believe_me, unsafeCoerce, etc.)
+# - Never commit secrets or credentials
+# - Never use banned languages (TypeScript, Python, Go, etc.)
+# - Never place state files in repository root (must be in .machine_readable/)
+# - Never use AGPL license (use PMPL-1.0-or-later)
 
-  (interaction-patterns
-    (status-query
-      (trigger "What is the fleet status?")
-      (response "Read STATE.scm and summarize bot statuses"))
-    (bot-info
-      (trigger "Tell me about <bot-name>")
-      (response "Read ECOSYSTEM.scm member-bots section"))
-    (add-bot-guidance
-      (trigger "How do I add a new bot?")
-      (response "Read PLAYBOOK.scm adding-new-bot runbook")))
+[maintenance-integrity]
+fail-closed = true
+require-evidence-per-step = true
+allow-silent-skip = false
+require-rerun-after-fix = true
+release-claim-requires-hard-pass = true
 
-  (context-requirements
-    (always-read
-      ("README.adoc")
-      (".machine_readable/6scm/STATE.scm")
-      (".machine_readable/6scm/ECOSYSTEM.scm"))
-    (read-on-demand
-      (".machine_readable/6scm/META.scm")
-      (".machine_readable/6scm/PLAYBOOK.scm")
-      (".machine_readable/6scm/CICD-PATTERNS.scm")))
-
-  (cicd-interaction-patterns
-    (fix-workflow-security
-      (trigger "Fix CI/CD issues in <repo>")
-      (response "Read CICD-PATTERNS.scm, apply sha-pins and error-patterns"))
-    (update-sha-pins
-      (trigger "Update SHA pins for GitHub Actions")
-      (response "Read CICD-PATTERNS.scm sha-pins section, apply to workflows"))
-    (detect-codeql-issues
-      (trigger "Check CodeQL configuration")
-      (response "Use codeql-language-detection rules from CICD-PATTERNS.scm")))
-
-  (safety-boundaries
-    (require-human-approval
-      ("Adding new bots to fleet")
-      ("Changing bot permissions")
-      ("Modifying orchestration logic"))
-    (automated-allowed
-      ("Reading fleet status")
-      ("Generating documentation")
-      ("Suggesting improvements"))))
+[automation-hooks]
+# on-enter: Read 0-AI-MANIFEST.a2ml, then STATE.a2ml
+# on-exit: Update STATE.a2ml with session outcomes
+# on-commit: Run just validate-rsr
