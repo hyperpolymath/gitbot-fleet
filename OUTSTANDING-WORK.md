@@ -12,7 +12,7 @@
   - Learning loop: findings → observed-patterns → rules
 
 ### echidnabot
-- [ ] ~~Implement bot modes~~ ✅ COMPLETE (removed - done 2026-02-07)
+- [x] ~~Implement bot modes~~ ✅ COMPLETE (removed - done 2026-02-07)
 - [ ] **End-to-end integration tests** - Full workflow testing needed
 - [ ] **Test fleet integration** - Verify shared-context integration
 
