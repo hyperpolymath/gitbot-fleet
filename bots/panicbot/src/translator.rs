@@ -4,7 +4,7 @@
 //! Core responsibility: map each `WeakPoint` from the scanner output into a
 //! `Finding` struct with appropriate:
 //! - Fleet category (e.g., "static-analysis/unsafe-code")
-//! - Rule ID (canonical PA001–PA021 pattern for dedup with Hypatia findings)
+//! - Rule ID (canonical PA001–PA023 pattern for dedup with Hypatia findings)
 //! - Triangle tier (Eliminate / Substitute / Control)
 //! - Confidence score (honest assessment of detection accuracy)
 //! - Fixability (whether automated remediation is possible)
@@ -235,6 +235,31 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.92,
             fixability: Fixability::No,
+        }),
+        // PA022 — cryptographic primitive misuse: MD5/SHA-1 in security contexts
+        // (password, secret, token, auth, key, credential, hash, sign, verify, encrypt),
+        // and == comparisons on secret-named variables (timing side-channel).
+        // Confidence 0.75 — the context-window heuristic works well but has a modest
+        // false-positive rate when security vocabulary appears nearby for unrelated reasons.
+        "CryptoMisuse" => Some(CategoryMapping {
+            fleet_category: "static-analysis/crypto-misuse",
+            rule_id: "PA022",
+            rule_name: "Cryptographic primitive misuse",
+            triangle_tier: TriangleTier::Eliminate,
+            default_confidence: 0.75,
+            fixability: Fixability::Partial,
+        }),
+        // PA023 — supply chain integrity: unpinned or unverified dependencies and absent
+        // lock files. Cargo.toml git deps without rev=, absent Cargo.lock for lib/bin crates,
+        // Julia Manifest.toml without git-tree-sha1 entries, flake.nix inputs without narHash,
+        // deno.json import map entries without version pin. These are fixable by adding pins.
+        "SupplyChain" => Some(CategoryMapping {
+            fleet_category: "static-analysis/supply-chain",
+            rule_id: "PA023",
+            rule_name: "Supply chain integrity gap",
+            triangle_tier: TriangleTier::Eliminate,
+            default_confidence: 0.85,
+            fixability: Fixability::Yes,
         }),
         _ => None,
     }
@@ -578,7 +603,7 @@ mod tests {
             "ResourceLeak", "PathTraversal", "AtomExhaustion", "ExcessivePermissions",
             "UnsafeTypeCoercion", "UncheckedAllocation", "UnboundedLoop", "BlockingIO",
             "DeadlockPotential", "DynamicCodeExecution", "InsecureProtocol",
-            "InfiniteRecursion",
+            "InfiniteRecursion", "ProofDrift", "CryptoMisuse", "SupplyChain",
         ];
 
         let mut rule_ids = std::collections::HashSet::new();
@@ -591,6 +616,6 @@ mod tests {
                 cat
             );
         }
-        assert_eq!(rule_ids.len(), 20);
+        assert_eq!(rule_ids.len(), 23);
     }
 }
