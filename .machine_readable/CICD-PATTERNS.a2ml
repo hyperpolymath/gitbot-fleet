@@ -1,6 +1,6 @@
 ;; SPDX-License-Identifier: PMPL-1.0-or-later
 ;; SPDX-FileCopyrightText: 2025-2026 hyperpolymath
-;; CICD-PATTERNS.scm - CI/CD error patterns and fixes for bot learning
+;; CICD-PATTERNS.a2ml - CI/CD error patterns and fixes for bot learning
 ;; Media-Type: application/cicd-patterns+scheme
 ;; Generated: 2026-01-05 from cicd-hyper-a audit session
 ;; Updated: 2026-01-09 with RSR policy contradiction fixes
