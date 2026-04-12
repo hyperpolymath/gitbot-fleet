@@ -28,6 +28,7 @@ fn mock_assail_report() -> AssailReport {
                 severity: "High".to_string(),
                 description: "3 unsafe blocks in FFI boundary".to_string(),
                 recommended_attack: vec!["Memory".to_string()],
+            suppressed: false,
             },
             WeakPoint {
                 category: "HardcodedSecret".to_string(),
@@ -35,6 +36,7 @@ fn mock_assail_report() -> AssailReport {
                 severity: "Critical".to_string(),
                 description: "AWS_SECRET_ACCESS_KEY found in source code".to_string(),
                 recommended_attack: vec![],
+            suppressed: false,
             },
             WeakPoint {
                 category: "PanicPath".to_string(),
@@ -42,6 +44,7 @@ fn mock_assail_report() -> AssailReport {
                 severity: "Medium".to_string(),
                 description: "unwrap() on user-provided input".to_string(),
                 recommended_attack: vec!["CPU".to_string()],
+            suppressed: false,
             },
             WeakPoint {
                 category: "RaceCondition".to_string(),
@@ -49,6 +52,7 @@ fn mock_assail_report() -> AssailReport {
                 severity: "High".to_string(),
                 description: "Shared mutable state without synchronisation".to_string(),
                 recommended_attack: vec!["Concurrency".to_string()],
+            suppressed: false,
             },
             WeakPoint {
                 category: "UncheckedError".to_string(),
@@ -56,6 +60,7 @@ fn mock_assail_report() -> AssailReport {
                 severity: "Medium".to_string(),
                 description: "Result ignored from database query".to_string(),
                 recommended_attack: vec![],
+            suppressed: false,
             },
         ],
         statistics: serde_json::json!({"total_lines": 5000}),

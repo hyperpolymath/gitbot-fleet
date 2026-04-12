@@ -4,7 +4,7 @@
 //! Core responsibility: map each `WeakPoint` from the scanner output into a
 //! `Finding` struct with appropriate:
 //! - Fleet category (e.g., "static-analysis/unsafe-code")
-//! - Rule ID (canonical PA001–PA020 pattern for dedup with Hypatia findings)
+//! - Rule ID (canonical PA001–PA021 pattern for dedup with Hypatia findings)
 //! - Triangle tier (Eliminate / Substitute / Control)
 //! - Confidence score (honest assessment of detection accuracy)
 //! - Fixability (whether automated remediation is possible)
@@ -223,6 +223,19 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
             default_confidence: 0.65,
             fixability: Fixability::No,
         }),
+        // PA021 — formal verification drift: banned proof escape hatches (sorry, Admitted,
+        // believe_me, oops, trustMe, assert_total, %partial) or Julia mirror files that
+        // substitute `@test x isa Y` assertions for formally-proven theorems.
+        // Confidence is high because these keywords have essentially no false positives
+        // in proof assistant files — they exist only to bypass the checker.
+        "ProofDrift" => Some(CategoryMapping {
+            fleet_category: "static-analysis/proof-drift",
+            rule_id: "PA021",
+            rule_name: "Formal verification drift",
+            triangle_tier: TriangleTier::Control,
+            default_confidence: 0.92,
+            fixability: Fixability::No,
+        }),
         _ => None,
     }
 }
@@ -435,6 +448,7 @@ mod tests {
             severity: "Critical".to_string(),
             description: "AWS_SECRET_KEY found in source".to_string(),
             recommended_attack: vec![],
+            suppressed: false,
         };
         let config = PanicbotConfig::default();
         let finding = translate_weak_point(&wp, &config);
@@ -458,6 +472,7 @@ mod tests {
             severity: "Medium".to_string(),
             description: "Something new".to_string(),
             recommended_attack: vec![],
+            suppressed: false,
         };
         let config = PanicbotConfig::default();
         let finding = translate_weak_point(&wp, &config);
@@ -476,6 +491,7 @@ mod tests {
             severity: "High".to_string(),
             description: "unsafe block".to_string(),
             recommended_attack: vec![],
+            suppressed: false,
         };
         let config = PanicbotConfig {
             confidence_overrides: vec![crate::config::ConfidenceOverride {
@@ -497,6 +513,7 @@ mod tests {
                 severity: "Low".to_string(),
                 description: "low severity".to_string(),
                 recommended_attack: vec![],
+            suppressed: false,
             },
             WeakPoint {
                 category: "CommandInjection".to_string(),
@@ -504,6 +521,7 @@ mod tests {
                 severity: "Critical".to_string(),
                 description: "critical severity".to_string(),
                 recommended_attack: vec![],
+            suppressed: false,
             },
         ];
         let config = PanicbotConfig {
@@ -528,6 +546,7 @@ mod tests {
                     severity: "High".to_string(),
                     description: "fixable".to_string(),
                     recommended_attack: vec![],
+            suppressed: false,
                 },
                 &config,
             ),
@@ -538,6 +557,7 @@ mod tests {
                     severity: "High".to_string(),
                     description: "not fixable".to_string(),
                     recommended_attack: vec![],
+            suppressed: false,
                 },
                 &config,
             ),
