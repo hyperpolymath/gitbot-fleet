@@ -44,7 +44,7 @@ fn weak_point_at(category: &str, severity: &str, location: &str) -> WeakPoint {
 // --- Category Mapping Tests ---
 
 #[test]
-fn test_all_20_categories_have_mappings() {
+fn test_all_23_categories_have_mappings() {
     let categories = [
         "UnsafeCode",
         "PanicPath",
@@ -66,6 +66,9 @@ fn test_all_20_categories_have_mappings() {
         "DynamicCodeExecution",
         "InsecureProtocol",
         "InfiniteRecursion",
+        "ProofDrift",
+        "CryptoMisuse",
+        "SupplyChain",
     ];
 
     for cat in &categories {
@@ -383,7 +386,7 @@ fn test_all_confidence_values_in_valid_range() {
         "ResourceLeak", "PathTraversal", "AtomExhaustion", "ExcessivePermissions",
         "UnsafeTypeCoercion", "UncheckedAllocation", "UnboundedLoop", "BlockingIO",
         "DeadlockPotential", "DynamicCodeExecution", "InsecureProtocol",
-        "InfiniteRecursion",
+        "InfiniteRecursion", "ProofDrift", "CryptoMisuse", "SupplyChain",
     ];
 
     for cat in &categories {
