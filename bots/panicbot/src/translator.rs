@@ -4,7 +4,7 @@
 //! Core responsibility: map each `WeakPoint` from the scanner output into a
 //! `Finding` struct with appropriate:
 //! - Fleet category (e.g., "static-analysis/unsafe-code")
-//! - Rule ID (canonical PA001–PA023 pattern for dedup with Hypatia findings)
+//! - Rule ID (canonical PA001–PA025 pattern for dedup with Hypatia findings)
 //! - Triangle tier (Eliminate / Substitute / Control)
 //! - Confidence score (honest assessment of detection accuracy)
 //! - Fixability (whether automated remediation is possible)
@@ -260,6 +260,30 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
             triangle_tier: TriangleTier::Eliminate,
             default_confidence: 0.85,
             fixability: Fixability::Yes,
+        }),
+        // PA024 — input boundary: unchecked deserialization of CBOR/MessagePack (serde_cbor,
+        // ciborium, rmp_serde in Rust), JSON.parse without try-catch (JavaScript), JSON3.read
+        // without error handling (Julia). Confidence 0.72 — per-file heuristics have false
+        // positives when error handling is in the call site rather than the same file.
+        "InputBoundary" => Some(CategoryMapping {
+            fleet_category: "static-analysis/input-boundary",
+            rule_id: "PA024",
+            rule_name: "Unguarded input boundary",
+            triangle_tier: TriangleTier::Control,
+            default_confidence: 0.72,
+            fixability: Fixability::Partial,
+        }),
+        // PA025 — mutation gap: test suites with no mutation-test tooling or no assertion
+        // diversity. Rust projects without cargo-mutants config, Elixir without StreamData/
+        // ExUnitProperties, Julia @testset with only type-check assertions. Confidence 0.80 —
+        // absent tooling is factual; assertion diversity heuristic has modest FP rate.
+        "MutationGap" => Some(CategoryMapping {
+            fleet_category: "static-analysis/mutation-gap",
+            rule_id: "PA025",
+            rule_name: "Mutation coverage gap",
+            triangle_tier: TriangleTier::Substitute,
+            default_confidence: 0.80,
+            fixability: Fixability::Partial,
         }),
         _ => None,
     }
@@ -604,6 +628,7 @@ mod tests {
             "UnsafeTypeCoercion", "UncheckedAllocation", "UnboundedLoop", "BlockingIO",
             "DeadlockPotential", "DynamicCodeExecution", "InsecureProtocol",
             "InfiniteRecursion", "ProofDrift", "CryptoMisuse", "SupplyChain",
+            "InputBoundary", "MutationGap",
         ];
 
         let mut rule_ids = std::collections::HashSet::new();
@@ -616,6 +641,6 @@ mod tests {
                 cat
             );
         }
-        assert_eq!(rule_ids.len(), 23);
+        assert_eq!(rule_ids.len(), 25);
     }
 }

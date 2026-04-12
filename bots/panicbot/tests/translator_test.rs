@@ -69,6 +69,8 @@ fn test_all_23_categories_have_mappings() {
         "ProofDrift",
         "CryptoMisuse",
         "SupplyChain",
+        "InputBoundary",
+        "MutationGap",
     ];
 
     for cat in &categories {
@@ -387,6 +389,7 @@ fn test_all_confidence_values_in_valid_range() {
         "UnsafeTypeCoercion", "UncheckedAllocation", "UnboundedLoop", "BlockingIO",
         "DeadlockPotential", "DynamicCodeExecution", "InsecureProtocol",
         "InfiniteRecursion", "ProofDrift", "CryptoMisuse", "SupplyChain",
+        "InputBoundary", "MutationGap",
     ];
 
     for cat in &categories {
