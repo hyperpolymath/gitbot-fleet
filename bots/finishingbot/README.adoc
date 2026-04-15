@@ -166,7 +166,31 @@ finishing-bot claims
 
 # Release readiness
 finishing-bot release
+
+# Security analysis (requires panic-attacker)
+finishing-bot security --panic-attacker-path /path/to/panic-attacker
 ----
+
+=== Security Analysis
+
+finishing-bot integrates with `panic-attacker` for security validation:
+
+[source,bash]
+----
+# Run panic-attacker assail (static analysis)
+finishing-bot security --mode assail
+
+# Run full assault (static + dynamic)
+finishing-bot security --mode assault
+
+# For browser extensions (static only)
+finishing-bot security --mode assail --browser-extension
+----
+
+Requirements:
+- `panic-attacker` binary must be available
+- For browser extensions, only static analysis is performed
+- Results are saved to `docs/reports/security/panic-attacker-report.json`
 
 === Configuration
 
