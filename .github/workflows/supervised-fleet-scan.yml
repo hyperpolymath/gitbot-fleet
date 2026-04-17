@@ -43,6 +43,22 @@ jobs:
           INVENTORY_FILE: ${{ github.event.inputs.inventory_file || '' }}
           PROCESS_FINDINGS: ${{ github.event.inputs.process_findings || 'true' }}
           FLEET_SUPERVISED_REPOS_FILE: ${{ github.event.inputs.inventory_file || '' }}
+          # GITHUB_TOKEN is required for Hypatia's DependabotAlerts
+          # rule (DA001-DA004) to query per-repo Dependabot alerts via
+          # the GitHub REST API. The built-in secrets.GITHUB_TOKEN
+          # only has scope for the gitbot-fleet repo itself — for
+          # cross-repo scanning across the estate, promote this to a
+          # PAT secret (FLEET_SCAN_PAT) with `security_events` scope
+          # on every target repo. Without a valid token, the rule
+          # silently returns no findings and Dependabot alerts are
+          # missed. See
+          # 007-lang/audits/audit-dependabot-automation-gap-2026-04-17.md.
+          GITHUB_TOKEN: ${{ secrets.FLEET_SCAN_PAT || secrets.GITHUB_TOKEN }}
+          # HYPATIA_SEVERITY=low surfaces low-severity findings from
+          # every rule module. The Hypatia CLI's default threshold is
+          # "medium"; without this override, low-severity findings
+          # from any rule (not just DependabotAlerts) are dropped.
+          HYPATIA_SEVERITY: low
         run: |
           set -euo pipefail
           ARGS=(--limit "$LIMIT")
