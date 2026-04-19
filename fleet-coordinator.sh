@@ -74,8 +74,8 @@ run_hypatia_scan() {
     if [[ -x "$FLEET_DIR/../hypatia/hypatia-cli.sh" ]]; then
         HYPATIA_FORMAT=json "$FLEET_DIR/../hypatia/hypatia-cli.sh" scan "$repo_path" \
             > "$findings_file" 2>"$scan_stderr" || scan_exit=$?
-    elif [[ -x "/var/mnt/eclipse/repos/hypatia/hypatia-cli.sh" ]]; then
-        HYPATIA_FORMAT=json "/var/mnt/eclipse/repos/hypatia/hypatia-cli.sh" scan "$repo_path" \
+    elif [[ -x "/var/mnt/eclipse/repos/verification-ecosystem/hypatia/hypatia-cli.sh" ]]; then
+        HYPATIA_FORMAT=json "/var/mnt/eclipse/repos/verification-ecosystem/hypatia/hypatia-cli.sh" scan "$repo_path" \
             > "$findings_file" 2>"$scan_stderr" || scan_exit=$?
     else
         log_warn "Hypatia CLI not found at expected paths"

@@ -634,12 +634,15 @@ name = "gitbot-shared-context"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "git2",
+ "glob",
  "lexpr",
  "notify",
  "serde",
  "serde_json",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "uuid",
 ]

@@ -76,6 +76,26 @@ impl Fixer {
 
     /// Apply a fix for a detected issue
     pub fn apply(&self, issue: &DetectedIssue, fix: &Fix) -> Result<FixResult> {
+        // EXCLUSION REGISTRY GUARD: refuse the write if the target repo,
+        // origin, or target path is on the estate-wide denylist. In dry-run
+        // mode we still check so operators can preview denials without
+        // surprises. The guard returns Err on denial; map it to a
+        // FixResult::failure so one denied fix does not abort a batch.
+        if let Err(e) = crate::registry_guard::check_write(
+            &self.repo_path,
+            crate::exclusion_registry::Action::Write,
+            Some(&fix.target),
+        ) {
+            warn!(target = %fix.target, error = %e, "registry guard denied fix");
+            return Ok(FixResult {
+                issue_id: issue.error_type_id.clone(),
+                success: false,
+                action_taken: format!("DENIED by bot_exclusion_registry: {e}"),
+                files_modified: vec![],
+                error: Some(e.to_string()),
+            });
+        }
+
         let target_path = self.repo_path.join(&fix.target);
 
         // SECURITY: Reject any target path that escapes the repository root.
@@ -607,6 +627,15 @@ impl Fixer {
 
     /// Commit changes to the repository
     pub fn commit(&self, message: &str, files: &[PathBuf]) -> Result<()> {
+        // EXCLUSION REGISTRY GUARD: a commit is a write action even though
+        // apply() has already checked each file individually, because some
+        // commits come from non-apply paths (bulk tooling). Fail closed.
+        crate::registry_guard::check_write(
+            &self.repo_path,
+            crate::exclusion_registry::Action::Commit,
+            None,
+        )?;
+
         if self.dry_run {
             info!("[DRY RUN] Would commit: {}", message);
             return Ok(());

@@ -359,11 +359,11 @@ impl ReleaseAnalyzer {
         {
             let mut hasher = Sha512::new();
             hasher.update(&file_content);
-            format!("{:x}", hasher.finalize())
+            hex::encode(hasher.finalize())
         } else {
             let mut hasher = Sha256::new();
             hasher.update(&file_content);
-            format!("{:x}", hasher.finalize())
+            hex::encode(hasher.finalize())
         };
 
         if actual_hash.to_lowercase() != expected_hash.to_lowercase() {

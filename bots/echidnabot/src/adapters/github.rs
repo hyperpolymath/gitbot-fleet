@@ -102,6 +102,13 @@ impl PlatformAdapter for GitHubAdapter {
     }
 
     async fn create_check_run(&self, repo: &RepoId, check: CheckRun) -> Result<CheckRunId> {
+        let full = format!("{}/{}", repo.owner, repo.name);
+        gitbot_shared_context::registry_guard::check_github_write(
+            &full,
+            gitbot_shared_context::ExclusionAction::CreateCheckRun,
+        )
+        .map_err(|e| Error::GitHub(e.to_string()))?;
+
         let checks = self.client.checks(&repo.owner, &repo.name);
 
         use octocrab::params::checks::{CheckRunConclusion as OctoConclusion, CheckRunStatus as OctoStatus};
@@ -149,6 +156,13 @@ impl PlatformAdapter for GitHubAdapter {
     }
 
     async fn create_comment(&self, repo: &RepoId, pr: PrId, body: &str) -> Result<CommentId> {
+        let full = format!("{}/{}", repo.owner, repo.name);
+        gitbot_shared_context::registry_guard::check_github_write(
+            &full,
+            gitbot_shared_context::ExclusionAction::CreateCheckRun,
+        )
+        .map_err(|e| Error::GitHub(e.to_string()))?;
+
         let pr_num: u64 = pr.0.parse().map_err(|_| Error::GitHub("Invalid PR ID".to_string()))?;
 
         let comment = self
@@ -162,6 +176,13 @@ impl PlatformAdapter for GitHubAdapter {
     }
 
     async fn create_issue(&self, repo: &RepoId, issue: NewIssue) -> Result<IssueId> {
+        let full = format!("{}/{}", repo.owner, repo.name);
+        gitbot_shared_context::registry_guard::check_github_write(
+            &full,
+            gitbot_shared_context::ExclusionAction::CreateIssue,
+        )
+        .map_err(|e| Error::GitHub(e.to_string()))?;
+
         let created = self
             .client
             .issues(&repo.owner, &repo.name)

@@ -28,7 +28,7 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 
 ### ✅ Build System (Complete)
 
-- ✅ justfile - Just build recipes (20+ commands)
+- ✅ Justfile - Just build recipes (20+ commands)
 - ✅ Makefile - Make build recipes (traditional alternative)
 - ✅ setup.py - Python package configuration
 - ✅ requirements.txt - Dependency management
@@ -109,7 +109,7 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 **Required:**
 - ✅ All documentation files
 - ✅ .well-known/ directory
-- ✅ Build system (justfile or Makefile)
+- ✅ Build system (Justfile or Makefile)
 - ✅ CI/CD pipeline
 - ✅ Test suite with >80% coverage
 - ✅ TPCF declaration
@@ -144,7 +144,7 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 | Category | Status | Notes |
 |----------|--------|-------|
 | Documentation | ✅ Complete | 7 core docs + 3 .well-known |
-| Build System | ✅ Complete | justfile + Makefile |
+| Build System | ✅ Complete | Justfile + Makefile |
 | CI/CD | ✅ Complete | GitHub Actions, 4 Python versions |
 | Testing | ✅ Complete | Unit + integration, >80% coverage |
 | TPCF | ✅ Complete | Perimeter 3 declared |
@@ -169,7 +169,7 @@ Or manually:
 ls -la *.md .well-known/
 
 # Check build system
-ls -la justfile Makefile setup.py
+ls -la Justfile Makefile setup.py
 
 # Check tests
 pytest tests/ -v
@@ -289,7 +289,7 @@ These are inherent to the bot's purpose and documented.
 - ✅ Bronze-level RSR compliance achieved
 - ✅ All required documentation
 - ✅ .well-known/ directory complete
-- ✅ Build system (justfile + Makefile)
+- ✅ Build system (Justfile + Makefile)
 - ✅ CI/CD pipeline operational
 - ✅ Test suite with good coverage
 - ✅ TPCF Perimeter 3 declared

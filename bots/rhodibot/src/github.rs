@@ -133,6 +133,13 @@ impl GitHubClient {
         body: &str,
         labels: &[&str],
     ) -> Result<Issue> {
+        let full = format!("{}/{}", owner, repo);
+        gitbot_shared_context::registry_guard::check_github_write(
+            &full,
+            gitbot_shared_context::ExclusionAction::CreateIssue,
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
         let url = format!("{}/repos/{}/{}/issues", self.base_url, owner, repo);
         let mut request = self.client.post(&url);
 
@@ -163,6 +170,13 @@ impl GitHubClient {
         repo: &str,
         check_run: &CreateCheckRun,
     ) -> Result<CheckRun> {
+        let full = format!("{}/{}", owner, repo);
+        gitbot_shared_context::registry_guard::check_github_write(
+            &full,
+            gitbot_shared_context::ExclusionAction::CreateCheckRun,
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+
         let url = format!("{}/repos/{}/{}/check-runs", self.base_url, owner, repo);
         let mut request = self.client.post(&url);
 

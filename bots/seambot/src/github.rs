@@ -275,6 +275,12 @@ impl GitHubClient {
         head_sha: &str,
         name: &str,
     ) -> Result<CheckRunResponse> {
+        let full = format!("{}/{}", owner, repo);
+        gitbot_shared_context::registry_guard::check_github_write(
+            &full,
+            gitbot_shared_context::ExclusionAction::CreateCheckRun,
+        )?;
+
         let token = self.get_installation_token().await?;
 
         let url = format!(
@@ -519,6 +525,12 @@ impl GitHubClient {
         pr_number: u64,
         result: &CheckResult,
     ) -> Result<CommentResponse> {
+        let full = format!("{}/{}", owner, repo);
+        gitbot_shared_context::registry_guard::check_github_write(
+            &full,
+            gitbot_shared_context::ExclusionAction::CreateCheckRun,
+        )?;
+
         let token = self.get_installation_token().await?;
 
         let url = format!(

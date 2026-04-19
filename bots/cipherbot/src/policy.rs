@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
-//! Policy Engine — reads `.machine_readable/bot_directives/cipherbot.scm`
-//! (with legacy `.bot_directives/cipherbot.scm` fallback) for repo-specific
-//! crypto policy enforcement.
+//! Policy Engine — reads `.machine_readable/bot_directives/cipherbot.a2ml`
+//! for repo-specific crypto policy enforcement.
 //!
 //! Supports:
 //! - Minimum hash algorithm requirements
@@ -9,12 +8,14 @@
 //! - Post-quantum requirement enforcement
 //! - Maximum key age enforcement
 //! - Exception lists for legacy compatibility modules
+//!
+//! The SCM form was retired 2026-04-17; no fallback is supported.
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Cipherbot policy configuration parsed from
-/// `.machine_readable/bot_directives/cipherbot.scm` (legacy fallback supported).
+/// `.machine_readable/bot_directives/cipherbot.a2ml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CipherbotPolicy {
     /// Bot name (should be "cipherbot").
@@ -53,73 +54,131 @@ impl Default for CipherbotPolicy {
     }
 }
 
+/// Raw A2ML shape for cipherbot policy.
+#[derive(Debug, Default, Deserialize)]
+struct PolicyFile {
+    #[serde(default)]
+    bot: Option<String>,
+    #[serde(default)]
+    allow: Option<AllowField>,
+    #[serde(default)]
+    scope: Option<ScopeField>,
+    #[serde(default)]
+    mode: Option<String>,
+    /// Nested [policy] block (lithoglyph-style) or flat top-level keys.
+    #[serde(default)]
+    policy: Option<PolicyBlock>,
+    #[serde(default, rename = "min-hash")]
+    min_hash_top: Option<String>,
+    #[serde(default, rename = "min-symmetric")]
+    min_symmetric_top: Option<String>,
+    #[serde(default, rename = "require-pq")]
+    require_pq_top: Option<bool>,
+    #[serde(default, rename = "max-key-age-days")]
+    max_key_age_days_top: Option<u32>,
+    #[serde(default, rename = "allowed-exceptions")]
+    allowed_exceptions_top: Option<Vec<String>>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct PolicyBlock {
+    #[serde(default, rename = "min-hash")]
+    min_hash: Option<String>,
+    #[serde(default, rename = "min-symmetric")]
+    min_symmetric: Option<String>,
+    #[serde(default, rename = "require-pq")]
+    require_pq: Option<bool>,
+    #[serde(default, rename = "max-key-age-days")]
+    max_key_age_days: Option<u32>,
+    #[serde(default, rename = "allowed-exceptions")]
+    allowed_exceptions: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ScopeField {
+    One(String),
+    Many(Vec<String>),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum AllowField {
+    Bool(bool),
+    Scopes(Vec<String>),
+}
+
 impl CipherbotPolicy {
-    /// Load policy from `.machine_readable/bot_directives/cipherbot.scm` in the
-    /// given repo root (with legacy fallback).
-    ///
-    /// Returns default policy if the file doesn't exist or can't be parsed.
+    /// Load policy from `.machine_readable/bot_directives/cipherbot.a2ml` in
+    /// the given repo root. Returns default policy if the file doesn't exist
+    /// or can't be parsed.
     pub fn load(repo_root: &Path) -> Self {
-        let policy_path = if repo_root
-            .join(".machine_readable/bot_directives/cipherbot.scm")
-            .exists()
-        {
-            repo_root.join(".machine_readable/bot_directives/cipherbot.scm")
-        } else {
-            repo_root.join(".bot_directives/cipherbot.scm")
-        };
+        let policy_path = repo_root.join(".machine_readable/bot_directives/cipherbot.a2ml");
         if !policy_path.exists() {
-            tracing::info!("No cipherbot.scm policy found, using defaults");
+            tracing::info!("No cipherbot.a2ml policy found, using defaults");
             return Self::default();
         }
 
         match std::fs::read_to_string(&policy_path) {
-            Ok(content) => Self::parse_scm(&content),
+            Ok(content) => Self::parse_a2ml(&content).unwrap_or_else(|e| {
+                tracing::warn!("Failed to parse cipherbot.a2ml: {}", e);
+                Self::default()
+            }),
             Err(e) => {
-                tracing::warn!("Failed to read cipherbot.scm: {}", e);
+                tracing::warn!("Failed to read cipherbot.a2ml: {}", e);
                 Self::default()
             }
         }
     }
 
-    /// Parse a subset of S-expression policy format.
-    ///
-    /// This is a simplified parser that extracts key fields from the
-    /// bot-directive S-expression format.
-    fn parse_scm(content: &str) -> Self {
+    /// Parse cipherbot policy from A2ML/TOML content.
+    fn parse_a2ml(content: &str) -> Result<Self, toml::de::Error> {
+        let file: PolicyFile = toml::from_str(content)?;
         let mut policy = Self::default();
 
-        // Extract simple key-value pairs from the S-expression
-        for line in content.lines() {
-            let trimmed = line.trim();
-
-            if let Some(rest) = trimmed.strip_prefix("(mode .") {
-                if let Some(mode) = extract_string_value(rest) {
-                    policy.mode = mode;
-                }
-            } else if let Some(rest) = trimmed.strip_prefix("(min-hash .") {
-                if let Some(hash) = extract_string_value(rest) {
-                    policy.min_hash = Some(hash);
-                }
-            } else if let Some(rest) = trimmed.strip_prefix("(min-symmetric .") {
-                if let Some(sym) = extract_string_value(rest) {
-                    policy.min_symmetric = Some(sym);
-                }
-            } else if let Some(rest) = trimmed.strip_prefix("(require-pq .") {
-                policy.require_pq = rest.contains("#t");
-            } else if let Some(rest) = trimmed.strip_prefix("(max-key-age-days .") {
-                if let Some(days) = extract_number_value(rest) {
-                    policy.max_key_age_days = Some(days);
-                }
-            } else if let Some(rest) = trimmed.strip_prefix("(allow .") {
-                policy.allow = rest.contains("#t");
-            } else if let Some(rest) = trimmed.strip_prefix("(scope .") {
-                policy.scope = extract_list_values(rest);
-            } else if let Some(rest) = trimmed.strip_prefix("(allowed-exceptions .") {
-                policy.allowed_exceptions = extract_list_values(rest);
-            }
+        if let Some(name) = file.bot {
+            policy.name = name;
         }
 
-        policy
+        policy.allow = match file.allow {
+            Some(AllowField::Bool(b)) => b,
+            // List-of-scopes implies allow = true.
+            Some(AllowField::Scopes(_)) => true,
+            None => policy.allow,
+        };
+
+        if let Some(scope) = file.scope {
+            policy.scope = match scope {
+                ScopeField::One(s) => vec![s],
+                ScopeField::Many(v) => v,
+            };
+        }
+
+        if let Some(mode) = file.mode {
+            policy.mode = mode;
+        }
+
+        // Nested [policy] block wins; top-level kebab keys are the fallback
+        // for single-bot files where the author did not introduce a section.
+        let pb = file.policy.unwrap_or_default();
+
+        if let Some(h) = pb.min_hash.or(file.min_hash_top) {
+            policy.min_hash = Some(h);
+        }
+        if let Some(s) = pb.min_symmetric.or(file.min_symmetric_top) {
+            policy.min_symmetric = Some(s);
+        }
+        if let Some(b) = pb.require_pq.or(file.require_pq_top) {
+            policy.require_pq = b;
+        }
+        if let Some(d) = pb.max_key_age_days.or(file.max_key_age_days_top) {
+            policy.max_key_age_days = Some(d);
+        }
+        if let Some(ex) = pb.allowed_exceptions.or(file.allowed_exceptions_top) {
+            policy.allowed_exceptions = ex;
+        }
+
+        Ok(policy)
     }
 
     /// Check if a file path is within the policy scope.
@@ -140,35 +199,6 @@ impl CipherbotPolicy {
     }
 }
 
-/// Extract a quoted string value from an S-expression fragment.
-fn extract_string_value(s: &str) -> Option<String> {
-    let start = s.find('"')?;
-    let end = s[start + 1..].find('"')?;
-    Some(s[start + 1..start + 1 + end].to_string())
-}
-
-/// Extract a numeric value from an S-expression fragment.
-fn extract_number_value(s: &str) -> Option<u32> {
-    let trimmed = s.trim().trim_end_matches(')');
-    trimmed.trim().parse().ok()
-}
-
-/// Extract a list of string values from an S-expression fragment.
-fn extract_list_values(s: &str) -> Vec<String> {
-    let mut values = Vec::new();
-    let mut rest = s;
-    while let Some(start) = rest.find('"') {
-        rest = &rest[start + 1..];
-        if let Some(end) = rest.find('"') {
-            values.push(rest[..end].to_string());
-            rest = &rest[end + 1..];
-        } else {
-            break;
-        }
-    }
-    values
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,25 +213,47 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_scm() {
+    fn test_parse_a2ml_nested_policy_block() {
         let content = r#"
-(bot-directive
-  (name . "cipherbot")
-  (allow . #t)
-  (scope . ("src" "lib"))
-  (mode . "regulator")
-  (policy
-    (min-hash . "shake3-512")
-    (min-symmetric . "xchacha20-poly1305")
-    (require-pq . #t)
-    (max-key-age-days . 90)
-    (allowed-exceptions . ("legacy-compat-module"))))
+schema_version = "1.0"
+bot = "cipherbot"
+allow = true
+scope = ["src", "lib"]
+mode = "regulator"
+
+[policy]
+min-hash = "shake3-512"
+min-symmetric = "xchacha20-poly1305"
+require-pq = true
+max-key-age-days = 90
+allowed-exceptions = ["legacy-compat-module"]
 "#;
-        let policy = CipherbotPolicy::parse_scm(content);
+        let policy = CipherbotPolicy::parse_a2ml(content).unwrap();
         assert_eq!(policy.mode, "regulator");
         assert!(policy.require_pq);
         assert_eq!(policy.max_key_age_days, Some(90));
-        assert!(policy.allowed_exceptions.contains(&"legacy-compat-module".to_string()));
+        assert!(policy
+            .allowed_exceptions
+            .contains(&"legacy-compat-module".to_string()));
+    }
+
+    #[test]
+    fn test_parse_a2ml_flat_toplevel() {
+        // A directive where the author used only the top-level scalar keys
+        // (no nested [policy] section) — migrated from a minimal SCM.
+        let content = r#"
+bot = "cipherbot"
+allow = true
+scope = "src"
+mode = "advisor"
+min-hash = "sha256"
+require-pq = false
+"#;
+        let policy = CipherbotPolicy::parse_a2ml(content).unwrap();
+        assert_eq!(policy.mode, "advisor");
+        assert_eq!(policy.scope, vec!["src".to_string()]);
+        assert_eq!(policy.min_hash, Some("sha256".to_string()));
+        assert!(!policy.require_pq);
     }
 
     #[test]
@@ -218,23 +270,5 @@ mod tests {
         policy.allowed_exceptions = vec!["legacy-compat".to_string()];
         assert!(policy.is_exception(Path::new("src/legacy-compat/old.rs")));
         assert!(!policy.is_exception(Path::new("src/main.rs")));
-    }
-
-    #[test]
-    fn test_extract_string_value() {
-        assert_eq!(extract_string_value(r#" "hello")"#), Some("hello".to_string()));
-        assert_eq!(extract_string_value("no quotes"), None);
-    }
-
-    #[test]
-    fn test_extract_number_value() {
-        assert_eq!(extract_number_value(" 90)"), Some(90));
-        assert_eq!(extract_number_value(" abc)"), None);
-    }
-
-    #[test]
-    fn test_extract_list_values() {
-        let values = extract_list_values(r#"("src" "lib" "bin"))"#);
-        assert_eq!(values, vec!["src", "lib", "bin"]);
     }
 }

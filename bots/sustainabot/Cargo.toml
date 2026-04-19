@@ -46,8 +46,6 @@ tokio = { version = "1.42", features = ["full"] }
 # Carbon APIs
 reqwest = { version = "0.12", features = ["json"] }
 
-# S-expression parsing (for .bot_directives/*.scm)
-lexpr = "0.2"
 
 [profile.release]
 lto = true

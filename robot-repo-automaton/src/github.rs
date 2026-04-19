@@ -166,6 +166,9 @@ impl GitHubClient {
         repo: &str,
         pr: CreatePullRequest,
     ) -> Result<PullRequest> {
+        let full = format!("{}/{}", self.org, repo);
+        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreatePr)?;
+
         let url = format!("{}/repos/{}/{}/pulls", self.base_url, self.org, repo);
 
         let response = self
@@ -188,6 +191,9 @@ impl GitHubClient {
     /// enabling auto-merge. The PR will merge automatically once all
     /// required status checks pass.
     pub async fn enable_auto_merge(&self, repo: &str, pr_number: u64) -> Result<()> {
+        let full = format!("{}/{}", self.org, repo);
+        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::Merge)?;
+
         // First get the PR node_id via REST (needed for GraphQL mutation)
         let pr_url = format!(
             "{}/repos/{}/{}/pulls/{}",
@@ -263,6 +269,9 @@ impl GitHubClient {
         repo: &str,
         check: CreateCheckRun,
     ) -> Result<()> {
+        let full = format!("{}/{}", self.org, repo);
+        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreateCheckRun)?;
+
         let url = format!(
             "{}/repos/{}/{}/check-runs",
             self.base_url, self.org, repo
@@ -282,6 +291,9 @@ impl GitHubClient {
 
     /// Create an issue
     pub async fn create_issue(&self, repo: &str, issue: CreateIssue) -> Result<u64> {
+        let full = format!("{}/{}", self.org, repo);
+        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreateIssue)?;
+
         let url = format!("{}/repos/{}/{}/issues", self.base_url, self.org, repo);
 
         let response = self
@@ -333,6 +345,9 @@ impl GitHubClient {
         branch_name: &str,
         from_sha: &str,
     ) -> Result<()> {
+        let full = format!("{}/{}", self.org, repo);
+        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreateBranch)?;
+
         let url = format!("{}/repos/{}/{}/git/refs", self.base_url, self.org, repo);
 
         #[derive(Serialize)]

@@ -19,7 +19,7 @@ HotChocolaBot follows the [Rhodium Standard Repository Framework](https://rhodiu
 | **Memory Safety** | ✅ | Bronze+ | Rust ownership model, zero unsafe blocks |
 | **Offline-First** | ✅ | Bronze | No network calls, air-gapped capable |
 | **Documentation** | ✅ | Silver | Comprehensive docs, tutorials, examples |
-| **Build System** | ✅ | Bronze+ | justfile, Cargo, Nix, CI/CD |
+| **Build System** | ✅ | Bronze+ | Justfile, Cargo, Nix, CI/CD |
 | **Testing** | ✅ | Bronze | Unit tests, integration tests, mocks |
 | **Security** | ✅ | Bronze+ | SECURITY.md, audit, no CVEs |
 | **Community** | ✅ | Bronze+ | CoC, CONTRIBUTING, MAINTAINERS |
@@ -384,7 +384,7 @@ RSR requires a `.well-known/` directory with metadata:
 - [x] Memory Safety (zero unsafe blocks)
 - [x] Offline-First (no network calls)
 - [x] Documentation (README, SECURITY, CoC, etc.)
-- [x] Build System (justfile, Cargo, Nix, CI/CD)
+- [x] Build System (Justfile, Cargo, Nix, CI/CD)
 - [x] Testing (unit + integration, 100% pass rate)
 - [x] Security (SECURITY.md, audit, secure defaults)
 - [x] Community (CoC, CONTRIBUTING, MAINTAINERS, TPCF)

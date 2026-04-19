@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
-//! Parser for `.machine_readable/bot_directives/*.scm` S-expression files
-//! (with legacy `.bot_directives/*.scm` fallback).
+//! Parser for `.machine_readable/bot_directives/*.a2ml` files.
 //!
 //! These files control what bots are allowed to do in a given repository.
+//! The format is TOML-shaped A2ML; the SCM form was retired 2026-04-17.
 
 use anyhow::{Context, Result};
+use serde::Deserialize;
 use std::path::Path;
 
 /// A parsed bot directive
@@ -26,155 +27,108 @@ pub struct BotDirective {
     pub thresholds: Vec<(String, f64)>,
 }
 
+/// Raw A2ML shape (TOML deserialization target). Fields here mirror the
+/// migration-script output at `.machine_readable/bot_directives/<bot>.a2ml`.
+#[derive(Debug, Deserialize)]
+struct DirectiveFile {
+    #[serde(default)]
+    bot: Option<String>,
+    /// Either a single scope string or a list of scopes.
+    #[serde(default)]
+    scope: Option<ScopeField>,
+    #[serde(default)]
+    scopes: Option<Vec<String>>,
+    #[serde(default)]
+    allow: Option<AllowField>,
+    #[serde(default)]
+    deny: Option<Vec<String>>,
+    #[serde(default)]
+    notes: Option<String>,
+    #[serde(default)]
+    thresholds: Option<toml::value::Table>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ScopeField {
+    One(String),
+    Many(Vec<String>),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum AllowField {
+    Bool(bool),
+    Scopes(Vec<String>),
+}
+
 /// Check if a specific bot has a directive in the given repo.
 ///
-/// Looks for `.machine_readable/bot_directives/{bot_name}.scm` in the repo root
-/// first, then legacy `.bot_directives/{bot_name}.scm`.
+/// Looks for `.machine_readable/bot_directives/{bot_name}.a2ml`. Returns
+/// `None` if the file does not exist or fails to parse.
 pub fn check_directive(repo_path: &Path, bot_name: &str) -> Option<BotDirective> {
-    let preferred_path = repo_path
+    let path = repo_path
         .join(".machine_readable")
         .join("bot_directives")
-        .join(format!("{}.scm", bot_name));
-    let legacy_path = repo_path
-        .join(".bot_directives")
-        .join(format!("{}.scm", bot_name));
+        .join(format!("{}.a2ml", bot_name));
 
-    let directive_path = if preferred_path.exists() {
-        preferred_path
-    } else {
-        legacy_path
-    };
-
-    if !directive_path.exists() {
+    if !path.exists() {
         return None;
     }
 
-    match parse_directive(&directive_path, bot_name) {
+    match parse_directive(&path, bot_name) {
         Ok(d) => Some(d),
         Err(e) => {
-            tracing::warn!("Failed to parse directive {}: {}", directive_path.display(), e);
+            tracing::warn!("Failed to parse directive {}: {}", path.display(), e);
             None
         }
     }
 }
 
-/// Parse a bot directive SCM file.
+/// Parse a bot directive A2ML file.
 fn parse_directive(path: &Path, bot_name: &str) -> Result<BotDirective> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read directive: {}", path.display()))?;
 
-    let value = lexpr::from_str(&content)
-        .with_context(|| format!("Failed to parse S-expression: {}", path.display()))?;
+    let file: DirectiveFile = toml::from_str(&content)
+        .with_context(|| format!("Failed to parse A2ML: {}", path.display()))?;
 
-    let mut directive = BotDirective {
-        bot: bot_name.to_string(),
-        allow: true,
-        scopes: Vec::new(),
-        deny: Vec::new(),
-        notes: None,
-        thresholds: Vec::new(),
+    let mut scopes: Vec<String> = match file.scope {
+        Some(ScopeField::One(s)) => vec![s],
+        Some(ScopeField::Many(v)) => v,
+        None => Vec::new(),
+    };
+    if let Some(mut extra) = file.scopes {
+        scopes.append(&mut extra);
+    }
+
+    let allow = match file.allow {
+        // Plain boolean: honour as-is.
+        Some(AllowField::Bool(b)) => b,
+        // List-of-scopes: treat as allow = true + union the list into scopes.
+        Some(AllowField::Scopes(list)) => {
+            scopes.extend(list);
+            true
+        }
+        // No allow field → default to allowed (conservative parse).
+        None => true,
     };
 
-    // Walk the S-expression looking for known keys
-    if let Some(list) = value.as_cons() {
-        parse_sexp_list(list, &mut directive);
-    }
+    let thresholds = file
+        .thresholds
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(k, v)| v.as_float().map(|f| (k, f)))
+        .collect();
 
-    Ok(directive)
-}
-
-/// Recursively parse S-expression list pairs for directive fields.
-fn parse_sexp_list(cons: &lexpr::Cons, directive: &mut BotDirective) {
-    // Try to interpret as (key value) pairs
-    if let Some(car) = cons.car().as_symbol() {
-        match car {
-            "bot-directive" | "directive" => {
-                // Top-level wrapper, recurse into cdr
-                if let Some(rest) = cons.cdr().as_cons() {
-                    parse_sexp_list(rest, directive);
-                }
-            }
-            "allow" => {
-                if let Some(val) = cons.cdr().as_cons() {
-                    if let Some(b) = val.car().as_bool() {
-                        directive.allow = b;
-                    } else if let Some(s) = val.car().as_symbol() {
-                        directive.allow = s == "#t" || s == "true" || s == "yes";
-                    }
-                }
-            }
-            "deny" => {
-                if let Some(val) = cons.cdr().as_cons() {
-                    extract_string_list(val, &mut directive.deny);
-                }
-            }
-            "scope" | "scopes" => {
-                if let Some(val) = cons.cdr().as_cons() {
-                    extract_string_list(val, &mut directive.scopes);
-                }
-            }
-            "notes" | "note" => {
-                if let Some(val) = cons.cdr().as_cons() {
-                    if let Some(s) = val.car().as_str() {
-                        directive.notes = Some(s.to_string());
-                    }
-                }
-            }
-            "threshold" | "thresholds" => {
-                if let Some(val) = cons.cdr().as_cons() {
-                    parse_thresholds(val, &mut directive.thresholds);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // Try to recurse through sibling pairs
-    if let Some(next) = cons.cdr().as_cons() {
-        // Check if the next item is itself a list (not just a value)
-        if next.car().is_cons() {
-            if let Some(inner) = next.car().as_cons() {
-                parse_sexp_list(inner, directive);
-            }
-        }
-        // Continue with the rest
-        if next.cdr().is_cons() {
-            if let Some(rest) = next.cdr().as_cons() {
-                if rest.car().is_cons() {
-                    if let Some(inner) = rest.car().as_cons() {
-                        parse_sexp_list(inner, directive);
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn extract_string_list(cons: &lexpr::Cons, target: &mut Vec<String>) {
-    if let Some(s) = cons.car().as_str() {
-        target.push(s.to_string());
-    } else if let Some(s) = cons.car().as_symbol() {
-        target.push(s.to_string());
-    }
-    if let Some(rest) = cons.cdr().as_cons() {
-        extract_string_list(rest, target);
-    }
-}
-
-fn parse_thresholds(cons: &lexpr::Cons, target: &mut Vec<(String, f64)>) {
-    // Expect pairs like (energy 100.0) or (carbon 0.5)
-    if let Some(inner) = cons.car().as_cons() {
-        if let Some(key) = inner.car().as_symbol() {
-            if let Some(val_cons) = inner.cdr().as_cons() {
-                if let Some(v) = val_cons.car().as_f64() {
-                    target.push((key.to_string(), v));
-                }
-            }
-        }
-    }
-    if let Some(rest) = cons.cdr().as_cons() {
-        parse_thresholds(rest, target);
-    }
+    Ok(BotDirective {
+        bot: file.bot.unwrap_or_else(|| bot_name.to_string()),
+        allow,
+        scopes,
+        deny: file.deny.unwrap_or_default(),
+        notes: file.notes,
+        thresholds,
+    })
 }
 
 /// Check if the directive allows a specific scope
@@ -200,6 +154,14 @@ pub fn is_scope_allowed(directive: &BotDirective, scope: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write_directive(dir: &Path, bot: &str, body: &str) {
+        let d = dir.join(".machine_readable").join("bot_directives");
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join(format!("{}.a2ml", bot)), body).unwrap();
+    }
 
     #[test]
     fn test_default_directive() {
@@ -239,5 +201,55 @@ mod tests {
             thresholds: vec![],
         };
         assert!(!is_scope_allowed(&d, "anything"));
+    }
+
+    #[test]
+    fn test_parse_typical_bot_directive() {
+        let dir = TempDir::new().unwrap();
+        write_directive(
+            dir.path(),
+            "echidnabot",
+            r#"
+schema_version = "1.0"
+directive_type = "bot-directive"
+bot = "echidnabot"
+scope = "formal verification and fuzzing"
+allow = ["analysis", "fuzzing", "proof checks"]
+deny = ["write to core modules", "write to bindings"]
+notes = "May open findings; code changes require explicit approval"
+"#,
+        );
+
+        let directive = check_directive(dir.path(), "echidnabot").expect("should parse");
+        assert_eq!(directive.bot, "echidnabot");
+        assert!(directive.allow);
+        assert!(directive.scopes.contains(&"fuzzing".to_string()));
+        assert!(directive.scopes.contains(&"formal verification and fuzzing".to_string()));
+        assert!(directive.deny.contains(&"write to core modules".to_string()));
+        assert!(directive.notes.is_some());
+    }
+
+    #[test]
+    fn test_parse_allow_false() {
+        let dir = TempDir::new().unwrap();
+        write_directive(
+            dir.path(),
+            "rhodibot",
+            r#"
+schema_version = "1.0"
+bot = "rhodibot"
+allow = false
+"#,
+        );
+
+        let directive = check_directive(dir.path(), "rhodibot").expect("should parse");
+        assert!(!directive.allow);
+        assert!(!is_scope_allowed(&directive, "anything"));
+    }
+
+    #[test]
+    fn test_missing_file_returns_none() {
+        let dir = TempDir::new().unwrap();
+        assert!(check_directive(dir.path(), "nonexistent").is_none());
     }
 }
