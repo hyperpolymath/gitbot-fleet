@@ -129,3 +129,11 @@ htmlcov/
 *.bak
 # asdf version manager
 .tool-versions
+target/
+node_modules/
+_build/
+deps/
+.elixir_ls/
+.cache/
+build/
+dist/

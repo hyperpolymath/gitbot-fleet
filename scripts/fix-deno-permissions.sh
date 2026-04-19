@@ -9,7 +9,7 @@
 # Targets:
 #   - deno.json / deno.jsonc: replaces --allow-all in task definitions
 #   - Shell scripts (*.sh): replaces `deno run --allow-all`
-#   - justfile / Makefile: replaces `deno run --allow-all`
+#   - Justfile / Makefile: replaces `deno run --allow-all`
 #
 # Idempotent: only modifies files that contain --allow-all patterns.
 # Does NOT commit — dispatch-runner handles that.
@@ -54,7 +54,7 @@ while IFS= read -r -d '' script_file; do
 done < <(find "${REPO_PATH}" -name '*.sh' -type f \
   -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null)
 
-# --- Fix justfile and Makefile ---
+# --- Fix Justfile and Makefile ---
 for build_file in "${REPO_PATH}/justfile" "${REPO_PATH}/Justfile" \
                   "${REPO_PATH}/Makefile" "${REPO_PATH}/makefile"; do
   if [[ -f "${build_file}" ]]; then

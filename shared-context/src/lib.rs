@@ -41,10 +41,12 @@
 
 pub mod bot;
 pub mod context;
+pub mod exclusion_registry;
 pub mod finding;
 pub mod health;
 pub mod panel;
 pub mod panel_checker;
+pub mod registry_guard;
 pub mod reporting;
 pub mod state;
 pub mod storage;
@@ -52,6 +54,10 @@ pub mod triangle;
 
 pub use bot::{BotId, BotInfo, Tier};
 pub use context::Context;
+pub use exclusion_registry::{
+    Action as ExclusionAction, ActionContext, Decision as ExclusionDecision, DenyAxis,
+    ExclusionError, ExclusionRegistry,
+};
 pub use finding::{Finding, Severity};
 pub use health::{FleetHealth, HealthStatus};
 pub use panel::{

@@ -104,7 +104,7 @@ Each RSR check has a severity (Required, Recommended, Optional) that varies by p
 | .editorconfig | Optional | Recommended | Required | Required
 | .gitattributes | Optional | Recommended | Required | Required
 | .gitignore | Optional | Recommended | Required | Required
-| justfile | Optional | Optional | Recommended | Required
+| Justfile | Optional | Optional | Recommended | Required
 | .bot_directives | Optional | Optional | Recommended | Required
 |===
 
@@ -200,7 +200,7 @@ Options:
 | .editorconfig | Structure | 2
 | .gitattributes | Structure | 2
 | .gitignore | Structure | 2
-| justfile | Structure | 2
+| Justfile | Structure | 2
 | .bot_directives | Structure | 2
 |===
 

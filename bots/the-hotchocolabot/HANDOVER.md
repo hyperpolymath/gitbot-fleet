@@ -15,7 +15,7 @@ HotChocolaBot is a complete, production-ready educational robotics platform with
 - **Complete educational curriculum** (workshops, assessments, activities)
 - **Competition submission framework** (Robotics for Good 2025-2026)
 - **RSR Bronze compliance** (Rhodium Standard Repository Framework)
-- **CI/CD automation** (GitHub Actions, justfile, Nix)
+- **CI/CD automation** (GitHub Actions, Justfile, Nix)
 
 **Total Development**: 15,000+ lines of documentation, 50+ files, 6 commits
 
@@ -216,7 +216,7 @@ All printable as PDF packets (~15-20 pages per student).
 - ✅ Memory Safety - Zero unsafe blocks
 - ✅ Offline-First - No network calls
 - ✅ Documentation - Comprehensive (exceeds Silver)
-- ✅ Build System - justfile + Nix + CI/CD
+- ✅ Build System - Justfile + Nix + CI/CD
 - ✅ Testing - 100% pass rate
 - ✅ Security - SECURITY.md, cargo-audit
 - ✅ Community - CoC, CONTRIBUTING, TPCF
@@ -261,7 +261,7 @@ the-hotchocolabot/
 │   └── technical/          # Technical specifications
 ├── Cargo.toml              # Rust package manifest
 ├── Cargo.lock              # Locked dependencies
-├── justfile                # Build automation (50+ recipes)
+├── Justfile                # Build automation (50+ recipes)
 ├── flake.nix               # Nix reproducible builds
 ├── config.toml.example     # Configuration template
 ├── README.md               # Main documentation
@@ -497,7 +497,7 @@ just rsr-check
 # ✓ Memory Safety: Zero unsafe blocks
 # ✓ Offline-First: No network dependencies
 # ✓ Documentation: All files present
-# ✓ Build System: justfile + flake.nix + CI/CD
+# ✓ Build System: Justfile + flake.nix + CI/CD
 # ✓ Tests: 100% passing
 # ✓ RSR Level: Bronze
 ```
@@ -609,7 +609,7 @@ This project was developed autonomously to maximize use of Claude credits, with 
 - Full educational curriculum (workshops, assessments, activities)
 - Competition submission framework (video, partnerships, metrics)
 - RSR Bronze compliance (11 categories verified)
-- CI/CD automation (GitHub Actions, justfile, Nix)
+- CI/CD automation (GitHub Actions, Justfile, Nix)
 
 **Ready For**:
 - Hardware procurement and assembly

@@ -27,7 +27,7 @@ cargo clean && cargo build
 
 **Problem:** Cargo.toml had incorrect author email
 ```toml
-authors = ["Jonathan D.A. Jewell <jonathan.jewell@gmail.com>"]  # WRONG
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]  # WRONG
 ```
 
 **Solution:**

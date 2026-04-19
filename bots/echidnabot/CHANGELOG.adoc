@@ -11,7 +11,7 @@ All notable changes to echidnabot are documented here.
 
 === Changed
 
-==== VQL → VCL + verisimdb → verisim Rename (2026-04-05)
+==== VCL → VCL + verisimdb → verisim Rename (2026-04-05)
 
 Matches the ecosystem-wide rename. Internal identifiers updated,
 `github.com/hyperpolymath/verisimdb` URLs preserved.

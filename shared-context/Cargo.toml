@@ -34,6 +34,11 @@ tokio = { version = "1", features = ["sync", "fs"] }
 # File watching (for context updates)
 notify = "8"
 
+# Bot exclusion registry (exclusion_registry + registry_guard modules)
+toml = "1"
+glob = "0.3"
+git2 = { version = "0.20", default-features = false }
+
 [dev-dependencies]
 tempfile = "3"
 tokio-test = "0.4"

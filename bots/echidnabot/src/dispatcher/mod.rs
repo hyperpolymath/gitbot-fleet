@@ -29,7 +29,35 @@ pub enum ProofStatus {
     Unknown,
 }
 
-/// Prover kind matching ECHIDNA's supported backends
+/// Prover kind matching ECHIDNA's supported backends.
+///
+/// # DRIFT NOTICE (2026-04-17)
+///
+/// This local mirror carries **12 variants**, covering only the classic
+/// Tier 1–3 backends. Upstream `echidna::provers::ProverKind` (see
+/// `verification-ecosystem/echidna/src/rust/provers/mod.rs`) now carries
+/// **89 variants** as of commit `8f573f1`: the classic 49 solver backends
+/// plus the 40-variant HP-ecosystem TypeDiscipline family (linear, affine,
+/// phantom, modal, tropical, epistemic, choreographic, …).
+///
+/// The mirror is intentionally NOT extended here today. Compile-time effect
+/// is zero — this enum stands on its own, and `from_extension` / `tier` /
+/// `display_name` / `file_extensions` are all total over its 12 variants.
+/// Runtime effect IS present: proofs tagged with an HP-ecosystem discipline
+/// that reaches echidnabot will be routed as "unrecognised" by
+/// `from_extension`, even though the upstream echidna dispatcher would
+/// handle them fine.
+///
+/// Phase-2 decision (tracked in AI-WORK-todo.md): either (a) extend this
+/// mirror to the full 89 variants with a code-generation tool that reads
+/// echidna's enum at build time, or (b) switch echidnabot to a path-dep on
+/// echidna so `ProverKind` is shared by construction. Option (b) is cleaner
+/// but requires breaking the current self-contained deployment. Option (a)
+/// is a stepping stone.
+///
+/// See `standards/testing-and-benchmarking/TESTING-TAXONOMY.adoc` § Part VI
+/// CR-1 "Mirror-enum drift test" and CR-2 "Foreign-enum exhaustive-match
+/// lint" for the general pattern and the proposed estate-wide fix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ProverKind {
@@ -48,6 +76,13 @@ pub enum ProverKind {
     Pvs,
     Acl2,
     Hol4,
+    // Intentional gap vs echidna upstream — see DRIFT NOTICE above.
+    // NOT added here: FStar, Dafny, Why3, TLAPS, Twelf, Nuprl, Minlog,
+    // Imandra, Vampire, EProver, SPASS, AltErgo, GLPK, SCIP, MiniZinc,
+    // Chuffed, ORTools, TypedWasm, SPIN, CBMC, SeaHorn, CaDiCaL, Kissat,
+    // MiniSat, NuSMV, TLC, Alloy, Prism, UPPAAL, FramaC, Viper, Tamarin,
+    // ProVerif, KeY, DReal, ABC, Idris2 (the 37 classic backends beyond
+    // Tier 1–3) + the 40 HP-ecosystem TypeDiscipline variants.
 }
 
 impl ProverKind {
