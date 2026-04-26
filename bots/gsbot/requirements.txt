@@ -11,7 +11,7 @@ pandas>=2.1.4
 numpy>=1.26.2
 
 # API and Web
-aiohttp>=3.9.1
+aiohttp>=3.13.5
 requests>=2.31.0
 
 # Caching
