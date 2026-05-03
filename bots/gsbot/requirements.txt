@@ -15,7 +15,7 @@ aiohttp>=3.13.5
 requests>=2.31.0
 
 # Caching
-cachetools>=5.3.2
+cachetools>=6.2.6
 
 # Testing
 pytest>=8.4.2
