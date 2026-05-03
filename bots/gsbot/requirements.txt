@@ -31,4 +31,4 @@ pylint>=3.3.9
 
 # Utilities
 pyyaml>=6.0.1
-colorlog>=6.8.0
+colorlog>=6.10.1
