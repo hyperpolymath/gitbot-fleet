@@ -43,7 +43,7 @@ toml = "1.1"
 sqlx = { version = "0.8.1", features = ["runtime-tokio-rustls", "sqlite", "postgres", "uuid", "chrono"] }
 
 # GitHub API
-octocrab = "0.49"
+octocrab = "0.50"
 
 # HTTP client (for ECHIDNA communication)
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
