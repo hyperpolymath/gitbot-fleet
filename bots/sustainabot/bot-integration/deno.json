@@ -1,0 +1,46 @@
+{
+  "name": "@oikos/bot",
+  "version": "0.1.1-beta",
+  "exports": {
+    ".": "./src/Oikos.res.js",
+    "./router": "./src/Router.res.js",
+    "./tea": "./src/tea/ServerTea.res.js"
+  },
+  "publish": {
+    "include": ["src/**/*.js", "src/**/*.res", "bindings/**/*.js", "bindings/**/*.res", "rescript-runtime/**/*.js", "README.md", "LICENSE"]
+  },
+  "tasks": {
+    "build:rescript": "rescript build",
+    "watch:rescript": "rescript build -w",
+    "clean": "rescript clean",
+    "start": "deno run --allow-net --allow-env --allow-read src/Oikos.res.js",
+    "start:legacy": "deno run --allow-net --allow-env --allow-read src/Main.res.js",
+    "dev": "deno run --watch --allow-net --allow-env --allow-read src/Oikos.res.js",
+    "smee": "deno run --allow-net --allow-env scripts/smee-client.ts",
+    "test": "deno test --allow-net --allow-env --allow-read",
+    "lint": "deno lint",
+    "fmt": "deno fmt"
+  },
+  "imports": {
+    "@std/http": "jsr:@std/http@^1.0.0",
+    "@std/log": "jsr:@std/log@^0.224.0",
+    "@std/dotenv": "jsr:@std/dotenv@^0.225.0",
+    "@std/crypto": "jsr:@std/crypto@^1.0.0",
+    "@rescript/runtime/lib/es6/": "./rescript-runtime/"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "allowJs": true
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": false
+  }
+}

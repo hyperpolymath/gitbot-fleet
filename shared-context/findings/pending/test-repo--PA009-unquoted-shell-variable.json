@@ -1,0 +1,23 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.9,
+  "description": "Unquoted shell variable",
+  "formally_proven": false,
+  "pattern_id": "PA009-unquoted-shell-variable",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand",
+    "SafeSQL",
+    "SafeGit",
+    "SafeSSH"
+  ],
+  "recipe_id": "proven-substitute-CommandInjection",
+  "repo": "test-repo",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.920158Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

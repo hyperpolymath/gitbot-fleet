@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.88,
+  "description": "System command execution in wp-praxis/Core/cli-wrapper/lib/wp_praxis_cli/validator.ex",
+  "formally_proven": false,
+  "pattern_id": "PA009-system-command-execution-in-wp",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand"
+  ],
+  "recipe_id": "recipe-safe-command",
+  "repo": "hyperpolymath-archive",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.919253Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

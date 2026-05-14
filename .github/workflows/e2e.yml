@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+name: E2E Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ['**']
+permissions:
+  contents: read
+jobs:
+  e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install PyYAML (for workflow YAML validation)
+        run: pip install pyyaml --quiet
+      - name: Run E2E tests
+        run: bash tests/e2e.sh

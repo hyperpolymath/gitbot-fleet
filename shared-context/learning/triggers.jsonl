@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-03-14T12:19:03Z",
+  "event": "scan_complete",
+  "critical": 43,
+  "high": 33,
+  "repos_scanned": 5
+}
+{
+  "timestamp": "2026-03-14T12:19:03Z",
+  "event": "critical_autofix_trigger",
+  "critical_count": 43,
+  "action": "run-fleet.sh fix --severity critical"
+}
+{
+  "timestamp": "2026-03-15T02:07:05Z",
+  "event": "scan_complete",
+  "critical": 2545,
+  "high": 3477,
+  "repos_scanned": 193
+}
+{
+  "timestamp": "2026-03-15T02:07:05Z",
+  "event": "critical_autofix_trigger",
+  "critical_count": 2545,
+  "action": "run-fleet.sh fix --severity critical"
+}
+{
+  "timestamp": "2026-03-22T02:01:35Z",
+  "event": "scan_complete",
+  "critical": 0,
+  "high": 0,
+  "repos_scanned": 31
+}
+{
+  "timestamp": "2026-03-29T01:01:20Z",
+  "event": "scan_complete",
+  "critical": 0,
+  "high": 0,
+  "repos_scanned": 157
+}
+{
+  "timestamp": "2026-04-05T01:02:21Z",
+  "event": "scan_complete",
+  "critical": 0,
+  "high": 0,
+  "repos_scanned": 0
+}

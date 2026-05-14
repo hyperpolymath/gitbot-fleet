@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Testing
+tests/
+test-repo/
+
+# Development
+.env
+.env.local
+*.log
+
+# System
+.DS_Store
+Thumbs.db
+
+# Deployment (not needed in image)
+deploy/
+docker-compose.yml

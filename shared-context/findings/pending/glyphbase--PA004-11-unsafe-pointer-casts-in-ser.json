@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "11 unsafe pointer casts in server/native/src/lithoglyph_nif.zig",
+  "formally_proven": false,
+  "pattern_id": "PA004-11-unsafe-pointer-casts-in-ser",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "glyphbase",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.922063Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

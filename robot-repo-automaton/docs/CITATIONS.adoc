@@ -1,0 +1,36 @@
+= robot-repo-automaton - Citation Guide
+:toc:
+
+== BibTeX
+
+[source,bibtex]
+----
+@software{robot-repo-automaton_2025,
+  author = {Jewell, Jonathan D.A.},
+  title = {robot-repo-automaton},
+  year = {2025},
+  url = {https://github.com/hyperpolymath/robot-repo-automaton},
+  license = {PMPL-1.0-or-later}
+}
+----
+
+== Harvard Style
+
+Jewell, J.D.A. (2025) _robot-repo-automaton_ [Computer software]. Available at: https://github.com/hyperpolymath/robot-repo-automaton
+
+== OSCOLA
+
+Jonathan D.A. Jewell, 'robot-repo-automaton' (2025) <https://github.com/hyperpolymath/robot-repo-automaton>
+
+== MLA
+
+Jewell, Jonathan D.A. "robot-repo-automaton." 2025, github.com/hyperpolymath/robot-repo-automaton.
+
+== APA 7
+
+Jewell, J.D.A. (2025). _robot-repo-automaton_ [Computer software]. GitHub. https://github.com/hyperpolymath/robot-repo-automaton
+
+== See Also
+
+* link:../CITATION.cff[CITATION.cff]
+* link:../codemeta.json[codemeta.json]

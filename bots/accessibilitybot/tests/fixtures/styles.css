@@ -1,0 +1,54 @@
+/* SPDX-License-Identifier: PMPL-1.0-or-later */
+/* Test CSS file with various accessibility issues */
+
+/* Issue: px font size (should use rem) */
+body {
+    font-size: 16px;
+    line-height: 1.2;
+    color: #333;
+    background-color: #fff;
+}
+
+/* Issue: poor contrast - light gray on white */
+.light-text {
+    color: #ccc;
+    background-color: #eee;
+}
+
+/* Issue: outline none without replacement */
+button:focus {
+    outline: none;
+}
+
+/* Good: outline none with replacement */
+a:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #005fcc;
+}
+
+/* Issue: animation without reduced-motion */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Issue: sr-only with display: none (should use clip pattern) */
+.sr-only {
+    display: none;
+}
+
+/* Good contrast */
+.hero-text {
+    color: #000;
+    background-color: #fff;
+}
+
+/* Issue: medium contrast (passes AA but not AAA) */
+.secondary-text {
+    color: #595959;
+    background-color: #ffffff;
+}

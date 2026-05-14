@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.88,
+  "description": "System command execution in elixir-mcp/lib/feedback_a_tron/network_verifier.ex",
+  "formally_proven": false,
+  "pattern_id": "PA009-system-command-execution-in-el",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand"
+  ],
+  "recipe_id": "recipe-safe-command",
+  "repo": "feedback-o-tron",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.920790Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "DynamicCodeExecution",
+  "confidence": 0.85,
+  "description": "Dynamic code execution (eval/exec) in src/python/economic_toolkit/client.py",
+  "formally_proven": false,
+  "pattern_id": "PA011-dynamic-code-execution-eval-ex",
+  "proven_module": "SafeHtml",
+  "proven_modules": [
+    "SafeHtml",
+    "SafeTemplate"
+  ],
+  "recipe_id": "proven-substitute-DynamicCodeExecution",
+  "repo": "excel-economic-numbers-tool",
+  "severity": "Critical",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921243Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

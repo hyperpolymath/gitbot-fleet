@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Example GitHub Actions workflow for sustainabot SARIF integration
+#
+# This workflow runs sustainabot on your codebase and uploads the SARIF
+# results to GitHub's Security tab, giving you inline PR annotations.
+#
+# Usage: Copy this file to .github/workflows/sustainabot.yml in your repo.
+
+name: Sustainability Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  security-events: write
+  contents: read
+
+jobs:
+  sustainabot:
+    name: Eco & Economic Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install sustainabot
+        run: cargo install --path . --locked
+        # Or, if published to crates.io:
+        # run: cargo install sustainabot
+
+      - name: Run sustainability analysis
+        run: |
+          sustainabot report ./src \
+            --format sarif \
+            --output results.sarif \
+            --eco-threshold 50
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@6624720a57d4c312633c7b953db2f2da5bcb4c3a # v3
+        with:
+          sarif_file: results.sarif
+          category: sustainabot
+
+      # Optional: Run with policy evaluation
+      - name: Run policy evaluation
+        if: hashFiles('policies/') != ''
+        run: |
+          sustainabot check ./src \
+            --format text \
+            --policy-dir policies/ \
+            --eco-threshold 50

@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# STATE.a2ml — Robot Repo Automaton project state
+[metadata]
+project = "robot-repo-automaton"
+version = "0.3.0"
+last-updated = "2026-02-08T23:00:00+00:00"
+status = "active"
+session = "converted from scheme — 2026-04-11"
+
+[project-context]
+name = "Robot Repo Automaton"
+purpose = """"""
+completion-percentage = 85
+
+[position]
+phase = "Active development - Full fix execution pipeline"   # design | implementation | testing | maintenance | archived
+maturity = "experimental"  # experimental | alpha | beta | production | lts
+
+[route-to-mvp]
+milestones = [
+  # No milestones recorded
+]
+
+[blockers-and-issues]
+issues = [
+  # No blockers recorded
+]
+
+[critical-next-actions]
+actions = [
+  "Content-match detection",
+  "Hypatia API live integration",
+  "Webhook server mode",
+  "Batch org-wide operations",
+]
+
+[maintenance-status]
+last-run-utc = "2026-02-08T23:00:00+00:00T00:00:00Z"
+last-result = "unknown"  # unknown | pass | warn | fail
