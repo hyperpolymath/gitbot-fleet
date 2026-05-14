@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "2 unsafe pointer casts in bridge/zig/test/integration_test.zig",
+  "formally_proven": false,
+  "pattern_id": "PA004-2-unsafe-pointer-casts-in-brid",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "language-bridges",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.923110Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

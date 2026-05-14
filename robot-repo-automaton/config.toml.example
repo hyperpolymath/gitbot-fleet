@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# robot-repo-automaton configuration
+
+# Path to error catalog (Guile Scheme format)
+catalog_path = "ERROR-CATALOG.scm"
+
+# GitHub configuration
+[github]
+org = "hyperpolymath"
+api_url = "https://api.github.com"
+# Token should be set via GITHUB_TOKEN environment variable
+# app_id = 12345
+# app_key_path = "/path/to/private-key.pem"
+
+# hypatia registry configuration
+[registry]
+url = "https://registry.hypatia.reposystem.dev"
+global_rulesets = [
+    "hyperpolymath/rsr-compliance",
+    "hyperpolymath/security-baseline",
+    "hyperpolymath/quality-gates"
+]
+
+[registry.language_rulesets]
+rust = ["hyperpolymath/rust-clippy-strict", "hyperpolymath/rust-fuzzing"]
+rescript = ["hyperpolymath/rescript-deno"]
+gleam = ["hyperpolymath/gleam-beam"]
+haskell = ["hyperpolymath/haskell-hlint"]
+
+# Automation settings
+[automation]
+auto_fix_threshold = 0.95   # Auto-apply fixes with >95% confidence
+pr_threshold = 0.80         # Create PR for 80-95% confidence
+alert_threshold = 0.50      # Alert human for <80% confidence
+dry_run = false
+max_concurrent = 4
+
+# Hook configuration
+[hooks]
+pre_commit = true
+pre_push = true
+# template_dir = "/path/to/custom/hooks"

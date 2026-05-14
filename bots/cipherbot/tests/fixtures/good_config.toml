@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Test fixture: configuration with good crypto settings.
+
+[database]
+connection_string = "${DATABASE_URL}"
+
+[tls]
+min_version = "1.3"

@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "DynamicCodeExecution",
+  "confidence": 0.85,
+  "description": "Dynamic apply/3 in backend/lib/stapeln_web.ex",
+  "formally_proven": false,
+  "pattern_id": "PA011-dynamic-apply-3-in-backend-lib",
+  "proven_module": "SafeHtml",
+  "proven_modules": [
+    "SafeHtml",
+    "SafeTemplate"
+  ],
+  "recipe_id": "proven-substitute-DynamicCodeExecution",
+  "repo": "stapeln",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921899Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

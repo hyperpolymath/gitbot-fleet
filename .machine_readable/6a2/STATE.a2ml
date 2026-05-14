@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# STATE.a2ml — Gitbot Fleet project state
+[metadata]
+project = "gitbot-fleet"
+version = "2.0"
+last-updated = "2026-04-05T22:00:00Z"
+status = "active"
+session = "converted from scheme — 2026-04-11"
+
+[project-context]
+name = "Gitbot Fleet"
+purpose = """Bot fleet for repository quality enforcement with safety triangle execution"""
+completion-percentage = 85
+
+[position]
+phase = "operational-deployment"   # design | implementation | testing | maintenance | archived
+maturity = "experimental"  # experimental | alpha | beta | production | lts
+
+[route-to-mvp]
+milestones = [
+  # No milestones recorded
+]
+
+[blockers-and-issues]
+issues = [
+  # No blockers recorded
+]
+
+[critical-next-actions]
+actions = [
+  "Create PAT for automated cross-repo dispatch",
+  "Push commits to GitHub and GitLab",
+  "Verify echidnabot benchmark compiles (was slow on build machine)",
+  "Add PR creation to rhodibot for substitute-tier fixes",
+  "Process review findings to create GitHub issues",
+  "Add sustainabot per-crate test coverage (currently minimal)",
+  "Build rhodibot PR creation API",
+  "Implement outcome-driven confidence promotion",
+  "Add bash integration tests for fleet-coordinator.sh + dispatch-runner.sh",
+  "Replace tests/fuzz/placeholder.txt with real libFuzzer harness",
+]
+
+[maintenance-status]
+last-run-utc = "2026-04-05T22:00:00ZT00:00:00Z"
+last-result = "unknown"  # unknown | pass | warn | fail

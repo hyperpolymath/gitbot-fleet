@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Intake pipeline for cross-repo Hypatia/Gitbot dispatch events.
+name: Hypatia Dispatch Intake
+
+on:
+  repository_dispatch:
+    types:
+      - hypatia-security-alert
+      - hypatia-secret-alert
+      - secret-scanner-alert
+      - hypatia-general-findings
+
+permissions:
+  contents: write
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gitbot-fleet
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Record dispatch event
+        env:
+          EVENT_JSON: ${{ toJson(github.event) }}
+          EVENT_TYPE: ${{ github.event.action }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          git checkout findings-submissions 2>/dev/null || git checkout -b findings-submissions
+
+          TS="$(date -u +%Y%m%d-%H%M%S)"
+          EVENTS_DIR="shared-context/dispatch/events"
+          mkdir -p "$EVENTS_DIR"
+
+          EVENT_FILE="${EVENTS_DIR}/${TS}-${RUN_ID}-${EVENT_TYPE}.json"
+          printf '%s\n' "$EVENT_JSON" > "$EVENT_FILE"
+
+          SOURCE_REPO="$(jq -r '.client_payload.source_repo // "unknown"' "$EVENT_FILE")"
+          SOURCE_SHA="$(jq -r '.client_payload.sha // "unknown"' "$EVENT_FILE")"
+          FINDINGS_COUNT="$(jq -r '.client_payload.findings_count // .client_payload.incident_count // "n/a"' "$EVENT_FILE")"
+
+          jq -n \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg event_type "$EVENT_TYPE" \
+            --arg source_repo "$SOURCE_REPO" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg findings_count "$FINDINGS_COUNT" \
+            --arg event_file "$EVENT_FILE" \
+            '{
+              received_at: $ts,
+              event_type: $event_type,
+              source_repo: $source_repo,
+              source_sha: $source_sha,
+              findings_count: $findings_count,
+              event_file: $event_file
+            }' >> shared-context/dispatch/events.jsonl
+
+          git add "$EVENT_FILE" shared-context/dispatch/events.jsonl
+          git config user.name "Hypatia Dispatch Intake"
+          git config user.email "hypatia-dispatch@reposystem.dev"
+
+          if git diff --cached --quiet; then
+            echo "No dispatch intake changes to commit."
+            exit 0
+          fi
+
+          git commit -m "dispatch-intake: ${EVENT_TYPE} from ${SOURCE_REPO}"
+          git push origin findings-submissions
+
+      - name: Trigger fleet processing for incidents
+        if: contains(github.event.action, 'security') || contains(github.event.action, 'secret')
+        run: |
+          set -euo pipefail
+          echo "Incident event received: ${{ github.event.action }}"
+          echo "Source repo: ${{ github.event.client_payload.source_repo }}"
+          echo "Findings: ${{ github.event.client_payload.findings_count || github.event.client_payload.incident_count }}"

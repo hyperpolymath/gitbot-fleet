@@ -1,0 +1,20 @@
+{
+  "action": "substitute_text",
+  "auto_fixable": true,
+  "category": "InsecureProtocol",
+  "confidence": 0.93,
+  "description": "2 HTTP (non-HTTPS) URLs in tests/ai-isolation/network-tests/network_isolation_test.sh",
+  "fix_script": "fix-http-to-https.sh",
+  "match": "http:// URL",
+  "pattern_id": "PA014-2-http-non-https-urls-in-tests",
+  "proven_module": "SafeUrl",
+  "recipe_id": "recipe-http-to-https",
+  "replacement": "https:// URL",
+  "repo": "academic-workflow-suite",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "eliminate",
+  "timestamp": "2026-02-12T22:42:53.919150Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

@@ -1,0 +1,6 @@
+homepage: "https://github.com/hyperpolymath/robot-repo-automaton"
+language: rust
+main_repo: "https://github.com/hyperpolymath/robot-repo-automaton"
+sanitizers:
+  - address
+  - undefined

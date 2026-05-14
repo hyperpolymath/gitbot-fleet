@@ -1,0 +1,22 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeDeserialization",
+  "confidence": 0.95,
+  "description": "1 JSON.parseExn calls in impl/mcp/src/Server.res (use JSON.parse for safe Result)",
+  "formally_proven": true,
+  "pattern_id": "PA010-1-json-parseexn-calls-in-impl-",
+  "proven_module": "SafeJson",
+  "proven_modules": [
+    "SafeJson",
+    "SafeYAML",
+    "SafeXML"
+  ],
+  "recipe_id": "proven-substitute-UnsafeDeserialization",
+  "repo": "valence-shell",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.922470Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

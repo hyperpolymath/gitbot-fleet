@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "Raw pointer cast in src/ephapax-runtime/src/lib.rs",
+  "formally_proven": false,
+  "pattern_id": "PA004-raw-pointer-cast-in-src-ephapa",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "ephapax",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.922032Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

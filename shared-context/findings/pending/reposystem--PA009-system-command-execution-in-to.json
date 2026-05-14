@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.88,
+  "description": "System command execution in tools/hud/backend/lib/gitvisor/attestation/echidnabot.ex",
+  "formally_proven": false,
+  "pattern_id": "PA009-system-command-execution-in-to",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand"
+  ],
+  "recipe_id": "recipe-safe-command",
+  "repo": "reposystem",
+  "severity": "Medium",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921379Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

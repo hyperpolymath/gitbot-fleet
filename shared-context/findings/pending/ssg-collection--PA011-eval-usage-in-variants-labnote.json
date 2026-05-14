@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "DynamicCodeExecution",
+  "confidence": 0.85,
+  "description": "eval() usage in variants/labnote/tests/adapter_test.js",
+  "formally_proven": false,
+  "pattern_id": "PA011-eval-usage-in-variants-labnote",
+  "proven_module": "SafeHtml",
+  "proven_modules": [
+    "SafeHtml",
+    "SafeTemplate"
+  ],
+  "recipe_id": "proven-substitute-DynamicCodeExecution",
+  "repo": "ssg-collection",
+  "severity": "Critical",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.919164Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

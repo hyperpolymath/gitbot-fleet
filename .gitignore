@@ -1,0 +1,139 @@
+# RSR-compliant .gitignore
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-FileCopyrightText: 2025 hyperpolymath
+
+# Build artifacts
+/target/
+*.rs.bk
+
+# ReScript build artifacts
+**/lib/bs/
+**/lib/ocaml/
+**/.merlin
+**/rescript-runtime/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# Generated enrollment registry
+shared-context/enrollment/repos.json
+
+# Runtime findings output
+shared-context/findings/
+
+# Hypatia scan cache
+.hypatia/
+
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+
+# Build
+/target/
+/_build/
+/build/
+/dist/
+/out/
+/zig-out/
+/zig-cache/
+
+
+# Dependencies
+/node_modules/
+/vendor/
+/deps/
+/.elixir_ls/
+
+
+# Rust
+
+# Cargo.lock  # Keep for binaries
+
+
+# Elixir
+/cover/
+/doc/
+*.ez
+erl_crash.dump
+
+
+# Julia
+*.jl.cov
+*.jl.mem
+/Manifest.toml
+
+
+# ReScript
+/lib/bs/
+/.bsb.lock
+
+
+# Python (SaltStack only)
+__pycache__/
+*.py[cod]
+.venv/
+
+
+# Ada/SPARK
+*.ali
+/obj/
+/bin/
+
+
+# Haskell
+/.stack-work/
+/dist-newstyle/
+
+
+# Chapel
+*.chpl.tmp.*
+
+
+# Test/Coverage
+/coverage/
+htmlcov/
+
+
+# Machine-readable locks
+.machine_readable/.locks/
+
+
+# Temp
+/tmp/
+*.tmp
+*.bak
+# asdf version manager
+.tool-versions
+target/
+node_modules/
+_build/
+deps/
+.elixir_ls/
+.cache/
+build/
+dist/
