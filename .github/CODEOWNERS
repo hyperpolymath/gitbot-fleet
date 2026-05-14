@@ -4,7 +4,6 @@
 # CODEOWNERS — gitbot-fleet
 
 # Default owner for all files
-* @hyperpolymath
 
 # Core orchestration (security-critical — taint flow validated)
 /fleet-coordinator.sh @hyperpolymath
