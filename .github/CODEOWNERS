@@ -18,7 +18,6 @@
 /bots/ @hyperpolymath
 
 # Security-sensitive
-/.github/workflows/ @hyperpolymath
 /.well-known/ @hyperpolymath
 /SECURITY.md @hyperpolymath
 
