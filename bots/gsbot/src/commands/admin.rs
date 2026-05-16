@@ -35,7 +35,10 @@ pub async fn stats(ctx: Context<'_>) -> Result<(), Error> {
     let users = UserService::count(db).await?;
 
     let guilds = ctx.cache().guild_count();
-    let latency_ms = 0.0_f64; // shard latency not tracked here (Python used bot.latency)
+    // Faithful equivalent of discord.py's `bot.latency * 1000`: poise's
+    // `ping()` is the gateway heartbeat latency (zero until the shard has
+    // had its first heartbeat ack).
+    let latency_ms = ctx.ping().await.as_secs_f64() * 1000.0;
 
     let embed = serenity::CreateEmbed::new()
         .title("📊 Bot Statistics")
