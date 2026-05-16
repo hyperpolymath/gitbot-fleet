@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+[package]
+name = "gsbot"
+version = "0.2.0"
+edition = "2021"
+license = "PMPL-1.0-or-later"
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
+description = "Garment Sustainability Bot — a Discord bot promoting sustainability in the garment and fashion industry (Rust/SPARK)"
+repository = "https://github.com/hyperpolymath/gitbot-fleet"
+keywords = ["discord", "sustainability", "fashion", "gitbot-fleet"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "gsbot"
+path = "src/main.rs"
+
+[[bin]]
+name = "gsbot-load-fixtures"
+path = "src/bin/load_fixtures.rs"
+
+[[bin]]
+name = "gsbot-export-data"
+path = "src/bin/export_data.rs"
+
+[[bin]]
+name = "gsbot-backup-db"
+path = "src/bin/backup_db.rs"
+
+[lib]
+name = "gsbot"
+path = "src/lib.rs"
+
+[dependencies]
+# Discord (prefix-command framework over serenity — faithful map of discord.py cogs)
+poise = "0.6"
+serenity = { version = "0.12", default-features = false, features = [
+  "client", "gateway", "rustls_backend", "model", "cache",
+] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+
+# Persistence (SQLAlchemy/Alembic analogue)
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio-rustls", "sqlite", "macros", "chrono", "migrate",
+] }
+
+# Config / env (.env -> python-dotenv analogue)
+dotenvy = "0.15"
+
+# Logging (colorlog analogue)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "ansi"] }
+tracing-appender = "0.2"
+
+# Utilities
+anyhow = "1"
+thiserror = "2"
+chrono = { version = "0.4", features = ["clock"] }
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"

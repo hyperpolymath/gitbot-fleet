@@ -1,6 +1,8 @@
 # ⚓ ANCHOR: gitbot-fleet
 # This is the canonical authority for the gitbot-fleet repository.
 
+name = "gitbot-fleet"
+
 id: "org.hyperpolymath.gitbot-fleet"
 version: "1.0.0"
 clade: "unknown"

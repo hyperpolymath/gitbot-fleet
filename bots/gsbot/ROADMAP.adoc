@@ -16,12 +16,14 @@ GSBot is a feature-complete Discord bot for garment sustainability education and
 |===
 |Feature |Description |Status
 
-|Discord.py Integration
-|Full Discord bot with async command handling, cog-based architecture
+|poise/serenity Integration
+|Full Discord bot with async (tokio) prefix-command handling; one Rust
+ module per former cog
 |Done
 
-|SQLAlchemy ORM
-|Complete data layer with models, migrations (Alembic), session management
+|sqlx + SQLite
+|Complete data layer with row structs and SQL migrations applied at startup
+ via `sqlx::migrate!` (SQLite only)
 |Done
 
 |Caching Layer
@@ -29,11 +31,16 @@ GSBot is a feature-complete Discord bot for garment sustainability education and
 |Done
 
 |Logging System
-|Colored console output with file logging support
+|`tracing` console output with optional file logging (`tracing-appender`)
 |Done
 
 |Configuration
-|Environment-based settings with validation
+|`dotenvy` environment-based settings with validation
+|Done
+
+|SPARK seam (`src/domain.rs`)
+|Pure, total scoring kernel exposing a stable C ABI in `mod ffi` so a
+ formally-verified SPARK/Ada module can be substituted with no caller changes
 |Done
 |===
 
@@ -163,7 +170,7 @@ GSBot is a feature-complete Discord bot for garment sustainability education and
 |Done
 
 |Test Infrastructure
-|pytest with in-memory SQLite fixtures
+|`cargo test --all-targets` with `tempfile` / in-memory SQLite
 |Done
 |===
 
@@ -176,8 +183,7 @@ Target: Prepare for public deployment
 * [ ] Curate initial material dataset (20+ common materials with verified metrics)
 * [ ] Curate garment dataset (50+ common garment types)
 * [ ] Integrate Good On You API or scrape verified brand data
-* [ ] PostgreSQL production configuration
-* [ ] Database backup and recovery procedures
+* [ ] Database backup and recovery procedures (see `gsbot-backup-db`)
 
 === Deployment
 
@@ -290,27 +296,29 @@ Target: Multi-platform presence
 
 == Architecture Migration Notes
 
-The current Python implementation uses:
+The Python -> Rust/SPARK migration is *complete*. The current
+implementation uses:
 
-* discord.py (async Discord interactions)
-* SQLAlchemy (ORM)
-* SQLite (development database)
-* pytest (testing)
+* `poise` 0.6 over `serenity` 0.12 (async Discord interactions via `tokio`)
+* `sqlx` 0.8 + SQLite (`sqlx::migrate!` applied at startup)
+* `tracing` / `tracing-subscriber` / `tracing-appender` (logging)
+* `anyhow` / `thiserror` (errors), `dotenvy` (config)
+* `cargo test --all-targets` (testing)
 
-Per project language policy (`.claude/CLAUDE.md`), future development should consider:
+The Python prototype has been removed in full. Per the hyperpolymath estate
+Rust/SPARK standard (which governs over any generic template), no
+banned-language file may be reintroduced — the Hypatia scanner self-scans
+this repository and treats any such file as a CRITICAL finding.
 
-* **ReScript** for bot logic (compiles to JS, type-safe)
-* **Deno** runtime (replaces Node.js ecosystem)
-* **Rust** for performance-critical services or WASM modules
-* **Gleam** for backend services (BEAM or JS compilation)
+Future verification path (the *SPARK seam* is already in place):
 
-Migration path:
-
-1. Stabilize current Python implementation for production
-2. Create Deno-based bot using Discord API directly (no discord.py equivalent needed)
-3. Port business logic to ReScript modules
-4. Extract scoring algorithms to Rust WASM for cross-platform use
-5. Deprecate Python codebase
+1. `src/domain.rs` is the pure, total scoring kernel and exposes a stable
+   C ABI in `mod ffi`.
+2. Specify and formally verify a SPARK/Ada implementation of that numeric
+   core.
+3. Link it in place of the Rust bodies via the hyperpolymath Zig-FFI /
+   Idris2-ABI pattern — callers go through the safe Rust wrappers, so the
+   substitution is transparent and requires no caller changes.
 
 == Contributing
 

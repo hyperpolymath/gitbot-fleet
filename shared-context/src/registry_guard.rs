@@ -137,19 +137,17 @@ fn parse_full_name(url: &str) -> Option<String> {
     let s = url.strip_suffix(".git").unwrap_or(url);
 
     // git@host:owner/repo
-    if let Some(rest) = s.strip_prefix("git@") {
-        if let Some((_host, path)) = rest.split_once(':') {
-            return Some(path.to_string());
-        }
+    if let Some(rest) = s.strip_prefix("git@")
+        && let Some((_host, path)) = rest.split_once(':')
+    {
+        return Some(path.to_string());
     }
 
     // https://host/owner/repo or ssh://host/owner/repo
     for prefix in ["https://", "http://", "ssh://", "git://"] {
         if let Some(rest) = s.strip_prefix(prefix) {
             // Skip the host segment.
-            let mut parts = rest.splitn(2, '/');
-            let _host = parts.next()?;
-            let path = parts.next()?;
+            let (_host, path) = rest.split_once('/')?;
             return Some(path.to_string());
         }
     }

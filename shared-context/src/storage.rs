@@ -2,7 +2,7 @@
 //! Context storage backends
 
 use crate::context::Context;
-use crate::state::{RepoState, SessionState};
+use crate::state::RepoState;
 use crate::{ContextError, Result};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
@@ -22,6 +22,8 @@ impl ContextStorage {
     }
 
     /// Create storage in default location (~/.gitbot-fleet)
+    // Fallible (`Result`), so it cannot implement the infallible std `Default` trait; name kept as public API.
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Result<Self> {
         let home = std::env::var("HOME").map_err(|_| {
             ContextError::InvalidState("HOME environment variable not set".to_string())
@@ -86,12 +88,11 @@ impl ContextStorage {
         for entry in std::fs::read_dir(&sessions_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map(|e| e == "json").unwrap_or(false) {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    if let Ok(id) = uuid::Uuid::parse_str(stem) {
-                        sessions.push(id);
-                    }
-                }
+            if path.extension().map(|e| e == "json").unwrap_or(false)
+                && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                && let Ok(id) = uuid::Uuid::parse_str(stem)
+            {
+                sessions.push(id);
             }
         }
 
@@ -152,10 +153,10 @@ impl ContextStorage {
         for entry in std::fs::read_dir(&repos_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map(|e| e == "json").unwrap_or(false) {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    repos.push(stem.to_string());
-                }
+            if path.extension().map(|e| e == "json").unwrap_or(false)
+                && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+            {
+                repos.push(stem.to_string());
             }
         }
 
@@ -174,17 +175,16 @@ impl ContextStorage {
         for entry in std::fs::read_dir(&sessions_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map(|e| e == "json").unwrap_or(false) {
-                if let Ok(metadata) = entry.metadata() {
-                    if let Ok(modified) = metadata.modified() {
-                        sessions.push((path, modified));
-                    }
-                }
+            if path.extension().map(|e| e == "json").unwrap_or(false)
+                && let Ok(metadata) = entry.metadata()
+                && let Ok(modified) = metadata.modified()
+            {
+                sessions.push((path, modified));
             }
         }
 
         // Sort by modification time (newest first)
-        sessions.sort_by(|a, b| b.1.cmp(&a.1));
+        sessions.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         // Delete sessions beyond keep limit
         let mut deleted = 0;
@@ -221,6 +221,13 @@ impl ContextStorage {
 pub struct MemoryStorage {
     contexts: std::collections::HashMap<uuid::Uuid, Context>,
     repos: std::collections::HashMap<String, RepoState>,
+}
+
+#[cfg(test)]
+impl Default for MemoryStorage {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

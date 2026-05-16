@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: PMPL-1.0-or-later
 # Mustfile (A2ML Canonical)
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath)
+name = "mustfile"
+
 
 @abstract:
 Physical State contract for Gitbot Fleet. Baseline UX Manifesto invariants

@@ -6,6 +6,7 @@ K9!
 
 {
   pedigree = {
+    name = "ci-config",  # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
     schema_version = "1.0.0",
     component_type = "ci-configuration",
     security = {

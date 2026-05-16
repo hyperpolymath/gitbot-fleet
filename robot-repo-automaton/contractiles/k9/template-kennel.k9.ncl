@@ -6,6 +6,7 @@ K9!
 
 {
   pedigree = {
+    name = "template-kennel",  # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
     schema_version = "1.0.0",
     component_type = "TODO: describe component type (e.g., 'build-config', 'metadata')",
     security = {
