@@ -28,14 +28,14 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
     vec![
         // DES — REJECT
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:des(?:::|-|_)|DES(?:_CBC|_ECB|_CFB|_OFB)|des_ede|triple.?des|3des)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:des(?:::|-|_)|DES(?:_CBC|_ECB|_CFB|_OFB)|des_ede|triple.?des|3des)\b"#).expect("static regex is valid"),
             algorithm: "DES/3DES",
             status: CryptoStatus::Reject,
             message: "DES/3DES is cryptographically broken — brute-force is trivial with modern hardware.",
             suggestion: Some("Replace with XChaCha20-Poly1305 (256-bit) or AES-256-GCM"),
         },
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)crypto\.createCipher(?:iv)?\s*\(\s*['"](?:des|des3|des-ede3)['"]\s*"#).unwrap(),
+            regex: Regex::new(r#"(?i)crypto\.createCipher(?:iv)?\s*\(\s*['"](?:des|des3|des-ede3)['"]\s*"#).expect("static regex is valid"),
             algorithm: "DES/3DES",
             status: CryptoStatus::Reject,
             message: "DES/3DES via Node.js crypto is broken.",
@@ -43,7 +43,7 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
         },
         // RC4 — REJECT
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:rc4|arcfour|arc4)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:rc4|arcfour|arc4)\b"#).expect("static regex is valid"),
             algorithm: "RC4",
             status: CryptoStatus::Reject,
             message: "RC4 is cryptographically broken — biases in keystream are well-documented.",
@@ -51,14 +51,14 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
         },
         // AES-ECB — REJECT
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:aes[_-]?ecb|ECB[_-]?mode|mode\s*[:=]\s*['"]?ecb)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:aes[_-]?ecb|ECB[_-]?mode|mode\s*[:=]\s*['"]?ecb)\b"#).expect("static regex is valid"),
             algorithm: "AES-ECB",
             status: CryptoStatus::Reject,
             message: "AES-ECB mode reveals patterns in ciphertext — the famous ECB penguin attack.",
             suggestion: Some("Replace with XChaCha20-Poly1305 or AES-GCM"),
         },
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)crypto\.createCipher(?:iv)?\s*\(\s*['"]aes-\d+-ecb['"]\s*"#).unwrap(),
+            regex: Regex::new(r#"(?i)crypto\.createCipher(?:iv)?\s*\(\s*['"]aes-\d+-ecb['"]\s*"#).expect("static regex is valid"),
             algorithm: "AES-ECB",
             status: CryptoStatus::Reject,
             message: "AES-ECB mode via Node.js is insecure.",
@@ -66,7 +66,7 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
         },
         // AES-CBC — WARN
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:aes[_-]?\d*[_-]?cbc|CBC[_-]?mode|mode\s*[:=]\s*['"]?cbc)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:aes[_-]?\d*[_-]?cbc|CBC[_-]?mode|mode\s*[:=]\s*['"]?cbc)\b"#).expect("static regex is valid"),
             algorithm: "AES-CBC",
             status: CryptoStatus::Warn,
             message: "AES-CBC does not provide authenticated encryption — vulnerable to padding oracle attacks.",
@@ -74,7 +74,7 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
         },
         // AES-GCM 128-bit — WARN
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:aes[_-]?128[_-]?gcm|Aes128Gcm)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:aes[_-]?128[_-]?gcm|Aes128Gcm)\b"#).expect("static regex is valid"),
             algorithm: "AES-GCM-128",
             status: CryptoStatus::Warn,
             message: "AES-GCM with 128-bit key — prefer 256-bit for post-quantum safety margin.",
@@ -82,7 +82,7 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
         },
         // AES-GCM 256-bit — ACCEPT
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:aes[_-]?256[_-]?gcm|Aes256Gcm)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:aes[_-]?256[_-]?gcm|Aes256Gcm)\b"#).expect("static regex is valid"),
             algorithm: "AES-GCM-256",
             status: CryptoStatus::Accept,
             message: "AES-256-GCM is acceptable — strong AEAD with 256-bit key.",
@@ -90,7 +90,7 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
         },
         // XChaCha20-Poly1305 — PREFER
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:xchacha20[_-]?poly1305|XChaCha20Poly1305)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:xchacha20[_-]?poly1305|XChaCha20Poly1305)\b"#).expect("static regex is valid"),
             algorithm: "XChaCha20-Poly1305",
             status: CryptoStatus::Prefer,
             message: "XChaCha20-Poly1305 — ideal AEAD cipher with 256-bit key and 192-bit nonce.",
@@ -98,7 +98,7 @@ static SYMMETRIC_PATTERNS: LazyLock<Vec<SymmetricPattern>> = LazyLock::new(|| {
         },
         // ChaCha20-Poly1305 (regular, not extended nonce) — ACCEPT
         SymmetricPattern {
-            regex: Regex::new(r#"(?i)\b(?:chacha20[_-]?poly1305|ChaCha20Poly1305)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:chacha20[_-]?poly1305|ChaCha20Poly1305)\b"#).expect("static regex is valid"),
             algorithm: "ChaCha20-Poly1305",
             status: CryptoStatus::Accept,
             message: "ChaCha20-Poly1305 is strong but has a smaller nonce space than XChaCha20.",

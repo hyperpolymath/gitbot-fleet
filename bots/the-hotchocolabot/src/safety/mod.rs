@@ -3,8 +3,7 @@
 //! Implements phase-separated safety checks and state machine-based
 //! operation validation to prevent unsafe conditions.
 
-use anyhow::{Result, Context};
-use smlang::statemachine;
+use anyhow::Result;
 use tracing::{warn, error, info};
 use crate::config::SafetyConfig;
 use crate::control::DispenseController;
@@ -12,27 +11,81 @@ use crate::control::DispenseController;
 /// Safety monitor implementing CNO principles
 pub struct SafetyMonitor {
     config: SafetyConfig,
-    state_machine: SafetyStateMachine,
+    // Formal safety state machine (smlang). Held to keep the verified-state
+    // model alive alongside the monitor; intentionally retained even though the
+    // current demo flow drives safety via the explicit checks below.
+    #[allow(dead_code)]
+    state_machine: StateMachine<SafetyContext>,
     emergency_stop_triggered: bool,
     consecutive_failures: u32,
 }
 
-// Define safety state machine using smlang
-statemachine! {
-    transitions: {
-        *Uninitialized + Initialize / initialize_checks = Initialized,
-        Initialized + PassPreflight / run_preflight = Safe,
-        Initialized + FailPreflight = Unsafe,
-        Safe + StartOperation / begin_operation = Operating,
-        Safe + EmergencyStop = Unsafe,
-        Operating + CompleteOperation / finalize_operation = Safe,
-        Operating + DetectAnomaly / handle_anomaly = Anomaly,
-        Operating + EmergencyStop = Unsafe,
-        Anomaly + Recover / attempt_recovery = Safe,
-        Anomaly + FailRecovery = Unsafe,
-        Unsafe + Reset / perform_reset = Initialized,
+// Define safety state machine using smlang.
+//
+// The macro generates the full `States`/`Events` model for formal-safety
+// completeness; not every generated state is reached by the current demo flow,
+// so the generated items live in a private module that scopes the
+// (intentional) dead-code allowance without masking the rest of this file.
+mod sm {
+    #![allow(dead_code)]
+
+    use smlang::statemachine;
+    use tracing::{info, warn};
+
+    statemachine! {
+        transitions: {
+            *Uninitialized + Initialize / initialize_checks = Initialized,
+            Initialized + PassPreflight / run_preflight = Safe,
+            Initialized + FailPreflight = Unsafe,
+            Safe + StartOperation / begin_operation = Operating,
+            Safe + EmergencyStop = Unsafe,
+            Operating + CompleteOperation / finalize_operation = Safe,
+            Operating + DetectAnomaly / handle_anomaly = Anomaly,
+            Operating + EmergencyStop = Unsafe,
+            Anomaly + Recover / attempt_recovery = Safe,
+            Anomaly + FailRecovery = Unsafe,
+            Unsafe + Reset / perform_reset = Initialized,
+        }
+    }
+
+    /// Context carrying the safety state machine's actions.
+    ///
+    /// The `statemachine!` macro generates the `StateMachineContext` trait; the
+    /// action methods below preserve the original logging behaviour.
+    pub struct SafetyContext;
+
+    impl StateMachineContext for SafetyContext {
+        fn initialize_checks(&mut self) {
+            info!("Initializing safety checks");
+        }
+
+        fn run_preflight(&mut self) {
+            info!("Running preflight");
+        }
+
+        fn begin_operation(&mut self) {
+            info!("Beginning operation");
+        }
+
+        fn finalize_operation(&mut self) {
+            info!("Finalizing operation");
+        }
+
+        fn handle_anomaly(&mut self) {
+            warn!("Handling anomaly");
+        }
+
+        fn attempt_recovery(&mut self) {
+            info!("Attempting recovery");
+        }
+
+        fn perform_reset(&mut self) {
+            info!("Performing system reset");
+        }
     }
 }
+
+use sm::{SafetyContext, StateMachine};
 
 /// Safety check results
 #[derive(Debug)]
@@ -42,6 +95,11 @@ pub struct SafetyCheckResult {
     pub severity: SafetySeverity,
 }
 
+/// Severity classification for safety check results.
+///
+/// `Critical` is part of the intentional API even though no current check
+/// emits it; retained so the severity ladder stays complete.
+#[allow(dead_code)]
 #[derive(Debug, PartialEq)]
 pub enum SafetySeverity {
     Info,
@@ -54,7 +112,7 @@ impl SafetyMonitor {
     pub fn new(config: &SafetyConfig) -> Result<Self> {
         Ok(Self {
             config: config.clone(),
-            state_machine: SafetyStateMachine::new(),
+            state_machine: StateMachine::new(SafetyContext),
             emergency_stop_triggered: false,
             consecutive_failures: 0,
         })
@@ -192,6 +250,10 @@ impl SafetyMonitor {
     }
 
     /// Reset emergency stop after manual intervention
+    ///
+    /// Intentional safety-recovery API for operator intervention; not invoked
+    /// by the current demo control loop.
+    #[allow(dead_code)]
     pub fn reset_emergency_stop(&mut self) -> Result<()> {
         if self.consecutive_failures > 3 {
             anyhow::bail!("Too many consecutive failures. Manual inspection required.");
@@ -207,35 +269,6 @@ impl SafetyMonitor {
     pub fn record_success(&mut self) {
         self.consecutive_failures = 0;
     }
-}
-
-// State machine action implementations
-fn initialize_checks(_context: &mut ()) -> () {
-    info!("Initializing safety checks");
-}
-
-fn run_preflight(_context: &mut ()) -> () {
-    info!("Running preflight");
-}
-
-fn begin_operation(_context: &mut ()) -> () {
-    info!("Beginning operation");
-}
-
-fn finalize_operation(_context: &mut ()) -> () {
-    info!("Finalizing operation");
-}
-
-fn handle_anomaly(_context: &mut ()) -> () {
-    warn!("Handling anomaly");
-}
-
-fn attempt_recovery(_context: &mut ()) -> () {
-    info!("Attempting recovery");
-}
-
-fn perform_reset(_context: &mut ()) -> () {
-    info!("Performing system reset");
 }
 
 #[cfg(test)]

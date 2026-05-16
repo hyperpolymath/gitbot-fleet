@@ -28,7 +28,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
     vec![
         // RSA-1024 — REJECT
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\brsa[_-]?1024\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\brsa[_-]?1024\b"#).expect("static regex is valid"),
             algorithm: "RSA-1024",
             status: CryptoStatus::Reject,
             message: "RSA-1024 is factorable with current hardware — completely insecure.",
@@ -36,7 +36,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
         },
         // DH-1024 — REJECT
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\b(?:dh[_-]?1024|diffie.?hellman.?1024)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:dh[_-]?1024|diffie.?hellman.?1024)\b"#).expect("static regex is valid"),
             algorithm: "DH-1024",
             status: CryptoStatus::Reject,
             message: "DH-1024 is vulnerable to the Logjam attack — insecure.",
@@ -44,7 +44,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
         },
         // RSA-2048 — WARN
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\brsa[_-]?2048\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\brsa[_-]?2048\b"#).expect("static regex is valid"),
             algorithm: "RSA-2048",
             status: CryptoStatus::Warn,
             message: "RSA-2048 is not post-quantum safe — vulnerable to Shor's algorithm on quantum computers.",
@@ -52,7 +52,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
         },
         // ECDH P-256 — WARN
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\b(?:ecdh[_-]?p[_-]?256|P-?256|secp256r1|prime256v1|NistP256)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:ecdh[_-]?p[_-]?256|P-?256|secp256r1|prime256v1|NistP256)\b"#).expect("static regex is valid"),
             algorithm: "ECDH-P256",
             status: CryptoStatus::Warn,
             message: "ECDH with P-256 is not post-quantum safe — vulnerable to quantum attacks.",
@@ -60,7 +60,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
         },
         // X25519 — ACCEPT
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\b(?:x25519|curve25519)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:x25519|curve25519)\b"#).expect("static regex is valid"),
             algorithm: "X25519",
             status: CryptoStatus::Accept,
             message: "X25519 is strong for classical key exchange but not post-quantum safe.",
@@ -68,7 +68,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
         },
         // X448 — ACCEPT
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\b(?:x448|curve448)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:x448|curve448)\b"#).expect("static regex is valid"),
             algorithm: "X448",
             status: CryptoStatus::Accept,
             message: "X448 is strong for classical key exchange but not post-quantum safe.",
@@ -76,7 +76,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
         },
         // Kyber — PREFER
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\b(?:kyber[_-]?1024|ml[_-]?kem[_-]?1024)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:kyber[_-]?1024|ml[_-]?kem[_-]?1024)\b"#).expect("static regex is valid"),
             algorithm: "Kyber-1024",
             status: CryptoStatus::Prefer,
             message: "Kyber-1024 (ML-KEM-1024, FIPS 203) — ideal post-quantum key encapsulation.",
@@ -84,7 +84,7 @@ static KE_PATTERNS: LazyLock<Vec<KeyExchangePattern>> = LazyLock::new(|| {
         },
         // Kyber-768 — ACCEPT (lower security level)
         KeyExchangePattern {
-            regex: Regex::new(r#"(?i)\b(?:kyber[_-]?768|ml[_-]?kem[_-]?768)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:kyber[_-]?768|ml[_-]?kem[_-]?768)\b"#).expect("static regex is valid"),
             algorithm: "Kyber-768",
             status: CryptoStatus::Accept,
             message: "Kyber-768 (ML-KEM-768) provides PQ safety but Kyber-1024 is preferred.",

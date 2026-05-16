@@ -29,7 +29,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
     vec![
         // SSLv2/SSLv3 — REJECT
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)\b(?:sslv[23]|ssl[_-]?v[23]|SSLv[23])\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:sslv[23]|ssl[_-]?v[23]|SSLv[23])\b"#).expect("static regex is valid"),
             algorithm: "SSLv2/v3",
             status: CryptoStatus::Reject,
             message: "SSL 2.0/3.0 is deprecated and insecure — POODLE, DROWN attacks.",
@@ -37,7 +37,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
         },
         // TLS 1.0 — REJECT
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]0|TLSv1\.0)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]0|TLSv1\.0)\b"#).expect("static regex is valid"),
             algorithm: "TLS-1.0",
             status: CryptoStatus::Reject,
             message: "TLS 1.0 is deprecated (RFC 8996) — BEAST, CRIME attacks.",
@@ -45,7 +45,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
         },
         // TLS 1.1 — REJECT
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]1|TLSv1\.1)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]1|TLSv1\.1)\b"#).expect("static regex is valid"),
             algorithm: "TLS-1.1",
             status: CryptoStatus::Reject,
             message: "TLS 1.1 is deprecated (RFC 8996).",
@@ -53,7 +53,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
         },
         // TLS 1.2 — WARN
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]2|TLSv1\.2)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]2|TLSv1\.2)\b"#).expect("static regex is valid"),
             algorithm: "TLS-1.2",
             status: CryptoStatus::Warn,
             message: "TLS 1.2 is acceptable but TLS 1.3 provides better security and performance.",
@@ -61,7 +61,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
         },
         // TLS 1.3 — ACCEPT
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]3|TLSv1\.3)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:tls[_-]?1[_.]3|TLSv1\.3)\b"#).expect("static regex is valid"),
             algorithm: "TLS-1.3",
             status: CryptoStatus::Accept,
             message: "TLS 1.3 — strong protocol with reduced handshake and forward secrecy.",
@@ -71,7 +71,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
         // Note: cannot use negative lookahead in the regex crate;
         // we match all http:// and filter localhost in analyze_content.
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)\bhttp://"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bhttp://"#).expect("static regex is valid"),
             algorithm: "HTTP-plaintext",
             status: CryptoStatus::Reject,
             message: "Plaintext HTTP is insecure — always use HTTPS.",
@@ -79,7 +79,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
         },
         // verify_ssl: false — REJECT
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)(?:verify[_-]?ssl|ssl[_-]?verify|tls[_-]?verify|CURLOPT_SSL_VERIFYPEER)\s*[:=]\s*(?:false|0|no|off|False|FALSE)"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:verify[_-]?ssl|ssl[_-]?verify|tls[_-]?verify|CURLOPT_SSL_VERIFYPEER)\s*[:=]\s*(?:false|0|no|off|False|FALSE)"#).expect("static regex is valid"),
             algorithm: "TLS-verify-disabled",
             status: CryptoStatus::Reject,
             message: "TLS certificate verification disabled — enables MITM attacks.",
@@ -87,7 +87,7 @@ static PROTOCOL_PATTERNS: LazyLock<Vec<ProtocolPattern>> = LazyLock::new(|| {
         },
         // QUIC/HTTP3 — PREFER
         ProtocolPattern {
-            regex: Regex::new(r#"(?i)\b(?:quic|http[_/]?3|h3)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:quic|http[_/]?3|h3)\b"#).expect("static regex is valid"),
             algorithm: "QUIC/HTTP3",
             status: CryptoStatus::Prefer,
             message: "QUIC/HTTP3 — ideal protocol with built-in TLS 1.3 and multiplexing.",

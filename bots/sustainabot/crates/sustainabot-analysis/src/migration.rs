@@ -10,6 +10,7 @@
 //! - Produces SARIF-compatible findings for migration regressions
 //! - Feeds health deltas into the fleet dispatch pipeline
 
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -172,8 +173,14 @@ impl MigrationHealthTracker {
             return 0.0;
         }
 
-        let total_delta =
-            snapshots.last().unwrap().health_score - snapshots.first().unwrap().health_score;
+        let total_delta = snapshots
+            .last()
+            .expect("snapshots non-empty: len >= 2 checked above")
+            .health_score
+            - snapshots
+                .first()
+                .expect("snapshots non-empty: len >= 2 checked above")
+                .health_score;
         total_delta / (snapshots.len() - 1) as f64
     }
 
@@ -181,21 +188,63 @@ impl MigrationHealthTracker {
     ///
     /// Reads the panic-attack migration-snapshot output format.
     pub fn load_snapshot(path: &Path) -> anyhow::Result<MigrationHealthSnapshot> {
-        let content = std::fs::read_to_string(path)?;
-        let raw: serde_json::Value = serde_json::from_str(&content)?;
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("reading migration snapshot from {}", path.display()))?;
+        let raw: serde_json::Value = serde_json::from_str(&content)
+            .with_context(|| format!("parsing migration snapshot JSON from {}", path.display()))?;
+
+        // Correctness-critical fields: a missing/malformed value here must NOT
+        // be silently defaulted. Defaulting `health_score` to 0.0 or
+        // `deprecated_api_count` to 0 would fabricate or mask regressions that
+        // feed the fleet dispatch pipeline, so propagate a hard error instead.
+        let health_score = raw["health_score"].as_f64().with_context(|| {
+            format!(
+                "migration snapshot {} is missing a numeric `health_score`",
+                path.display()
+            )
+        })?;
+        let deprecated_count = raw["deprecated_api_count"].as_u64().with_context(|| {
+            format!(
+                "migration snapshot {} is missing an integer `deprecated_api_count`",
+                path.display()
+            )
+        })? as usize;
+        let modern_count = raw["modern_api_count"].as_u64().with_context(|| {
+            format!(
+                "migration snapshot {} is missing an integer `modern_api_count`",
+                path.display()
+            )
+        })? as usize;
+        let target = raw["target_path"].as_str().with_context(|| {
+            format!(
+                "migration snapshot {} is missing a string `target_path`",
+                path.display()
+            )
+        })?;
+        let config_format = raw["config_format"].as_str().with_context(|| {
+            format!(
+                "migration snapshot {} is missing a string `config_format`",
+                path.display()
+            )
+        })?;
+        let version_bracket = raw["version_bracket"].as_str().with_context(|| {
+            format!(
+                "migration snapshot {} is missing a string `version_bracket`",
+                path.display()
+            )
+        })?;
 
         Ok(MigrationHealthSnapshot {
-            target: PathBuf::from(raw["target_path"].as_str().unwrap_or("unknown")),
+            target: PathBuf::from(target),
+            // `label`/`timestamp` are descriptive only and do not affect
+            // regression detection, so a missing value falls back benignly.
             label: raw["label"].as_str().unwrap_or("unknown").to_string(),
             timestamp: raw["timestamp"].as_str().unwrap_or("unknown").to_string(),
-            health_score: raw["health_score"].as_f64().unwrap_or(0.0),
-            deprecated_count: raw["deprecated_api_count"].as_u64().unwrap_or(0) as usize,
-            modern_count: raw["modern_api_count"].as_u64().unwrap_or(0) as usize,
-            config_format: raw["config_format"].as_str().unwrap_or("none").to_string(),
-            version_bracket: raw["version_bracket"]
-                .as_str()
-                .unwrap_or("unknown")
-                .to_string(),
+            health_score,
+            deprecated_count,
+            modern_count,
+            config_format: config_format.to_string(),
+            version_bracket: version_bracket.to_string(),
         })
     }
 }

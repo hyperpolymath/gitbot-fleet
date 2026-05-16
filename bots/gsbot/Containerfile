@@ -1,41 +1,37 @@
-# Garment Sustainability Bot Dockerfile
-FROM python:3.11-slim
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Garment Sustainability Bot — Rust/SPARK build (fleet convention:
+# rust builder + debian-slim runtime, non-root).
 
-# Set working directory
+FROM docker.io/library/rust:latest AS builder
+
+WORKDIR /build
+
+RUN apt-get update && \
+    apt-get install -y pkg-config && \
+    rm -rf /var/lib/apt/lists/*
+
+# migrations/ is embedded at compile time via sqlx::migrate!.
+COPY Cargo.toml Cargo.lock ./
+COPY migrations ./migrations
+COPY src ./src
+
+RUN cargo build --release --bin gsbot
+
+# Runtime image
+FROM docker.io/library/debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
+COPY --from=builder /build/target/release/gsbot /usr/local/bin/gsbot
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN useradd -r -s /bin/false gsbot && \
+    mkdir -p /app/data /app/logs && \
+    chown -R gsbot:gsbot /app
+USER gsbot
 
-# Install system dependencies
-RUN apt-get update && apk add --no-cache -y --no-install-recommends \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
-
-# Copy project files
-COPY . .
-
-# Install the package
-RUN pip install -e .
-
-# Create data directory
-RUN mkdir -p /app/data
-
-# Set up volume for persistent data
 VOLUME ["/app/data"]
 
-# Expose health check port (if implemented)
-EXPOSE 8080
-
-# Run the bot
-CMD ["python", "src/bot/main.py"]
+ENTRYPOINT ["/usr/local/bin/gsbot"]

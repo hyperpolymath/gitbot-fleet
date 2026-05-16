@@ -7,7 +7,6 @@
 
 use anyhow::Result;
 use tracing::{info, error};
-use tracing_subscriber;
 
 mod control;
 mod hardware;
@@ -40,7 +39,7 @@ async fn main() -> Result<()> {
     let mut safety_monitor = SafetyMonitor::new(&config.safety)?;
 
     // Initialize hardware controller
-    let controller = DispenseController::new(config.clone()).await?;
+    let mut controller = DispenseController::new(config.clone()).await?;
 
     // Pre-flight safety checks
     if !safety_monitor.run_preflight_checks(&controller).await? {

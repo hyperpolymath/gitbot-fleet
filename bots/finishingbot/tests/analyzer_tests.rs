@@ -42,7 +42,7 @@ mod license_analyzer {
         )
         .unwrap();
 
-        let analyzer = LicenseAnalyzer::default();
+        let analyzer = LicenseAnalyzer;
         let mut config = default_config();
         config.licenses.require_spdx_headers = false;
         let result = analyzer.analyze(&path, &config).unwrap();
@@ -63,7 +63,7 @@ mod license_analyzer {
         let (_temp, path) = setup_test_repo();
         fs::write(path.join("main.rs"), "fn main() {}\n").unwrap();
 
-        let analyzer = LicenseAnalyzer::default();
+        let analyzer = LicenseAnalyzer;
         let mut config = default_config();
         config.licenses.require_spdx_headers = false;
         let result = analyzer.analyze(&path, &config).unwrap();
@@ -94,11 +94,14 @@ mod license_analyzer {
         )
         .unwrap();
 
-        let analyzer = LicenseAnalyzer::default();
+        let analyzer = LicenseAnalyzer;
         let mut config = default_config();
         config.licenses.strict = true;
         config.licenses.require_spdx_headers = false;
-        // AGPL is not in allowed list (we use PMPL now)
+        // AGPL is not in this project's allowed list (we use PMPL now); the
+        // default allowed list permits AGPL for co-developed repos, so the
+        // test must scope the allowed set to its own stated premise.
+        config.licenses.allowed = vec!["PMPL-1.0-or-later".to_string()];
         let result = analyzer.analyze(&path, &config).unwrap();
 
         // In strict mode, AGPL should be flagged as disallowed
@@ -126,7 +129,7 @@ mod license_analyzer {
         let mut config = default_config();
         config.licenses.require_spdx_headers = true;
 
-        let analyzer = LicenseAnalyzer::default();
+        let analyzer = LicenseAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         let spdx_findings: Vec<_> = result
@@ -158,7 +161,7 @@ mod license_analyzer {
         let mut config = default_config();
         config.licenses.require_spdx_headers = true;
 
-        let analyzer = LicenseAnalyzer::default();
+        let analyzer = LicenseAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         let spdx_findings: Vec<_> = result
@@ -166,7 +169,7 @@ mod license_analyzer {
             .iter()
             .filter(|f| {
                 f.id.starts_with("LIC-002")
-                    && f.file.as_ref().map_or(false, |p| p.ends_with("main.rs"))
+                    && f.file.as_ref().is_some_and(|p| p.ends_with("main.rs"))
             })
             .collect();
         assert!(
@@ -191,7 +194,7 @@ mod placeholder_analyzer {
         )
         .unwrap();
 
-        let analyzer = PlaceholderAnalyzer::default();
+        let analyzer = PlaceholderAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -218,7 +221,7 @@ mod placeholder_analyzer {
         )
         .unwrap();
 
-        let analyzer = PlaceholderAnalyzer::default();
+        let analyzer = PlaceholderAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -228,7 +231,7 @@ mod placeholder_analyzer {
             .filter(|f| {
                 f.file
                     .as_ref()
-                    .map_or(false, |p| p.ends_with("clean.rs"))
+                    .is_some_and(|p| p.ends_with("clean.rs"))
             })
             .collect();
         assert!(
@@ -248,24 +251,24 @@ mod placeholder_analyzer {
         )
         .unwrap();
 
-        let analyzer = PlaceholderAnalyzer::default();
+        let analyzer = PlaceholderAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
         let rs_findings = result.findings.iter().filter(|f| {
             f.file
                 .as_ref()
-                .map_or(false, |p| p.ends_with("code.rs"))
+                .is_some_and(|p| p.ends_with("code.rs"))
         });
         let md_findings = result.findings.iter().filter(|f| {
             f.file
                 .as_ref()
-                .map_or(false, |p| p.ends_with("notes.md"))
+                .is_some_and(|p| p.ends_with("notes.md"))
         });
         let toml_findings = result.findings.iter().filter(|f| {
             f.file
                 .as_ref()
-                .map_or(false, |p| p.ends_with("Cargo.toml"))
+                .is_some_and(|p| p.ends_with("Cargo.toml"))
         });
 
         assert!(rs_findings.count() > 0, "Should detect in .rs files");
@@ -278,7 +281,7 @@ mod placeholder_analyzer {
         let (_temp, path) = setup_test_repo();
         fs::write(path.join("code.rs"), "// TODO: something\n").unwrap();
 
-        let analyzer = PlaceholderAnalyzer::default();
+        let analyzer = PlaceholderAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -304,7 +307,7 @@ mod placeholder_analyzer {
         let mut config = default_config();
         config.placeholders.max_allowed = 5;
 
-        let analyzer = PlaceholderAnalyzer::default();
+        let analyzer = PlaceholderAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         // With max_allowed=5, 2 TODOs should not trigger the "too many" error
@@ -334,7 +337,7 @@ mod claims_analyzer {
         let mut config = default_config();
         config.claims.require_readme = true;
 
-        let analyzer = ClaimsAnalyzer::default();
+        let analyzer = ClaimsAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         assert!(
@@ -365,7 +368,7 @@ mod claims_analyzer {
         let mut config = default_config();
         config.claims.require_readme = true;
 
-        let analyzer = ClaimsAnalyzer::default();
+        let analyzer = ClaimsAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         let readme_errors: Vec<_> = result
@@ -405,7 +408,7 @@ mod claims_analyzer {
         let mut config = default_config();
         config.claims.verify_docs = true;
 
-        let analyzer = ClaimsAnalyzer::default();
+        let analyzer = ClaimsAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         assert!(
@@ -422,7 +425,7 @@ mod claims_analyzer {
         let mut config = default_config();
         config.claims.require_changelog = true;
 
-        let analyzer = ClaimsAnalyzer::default();
+        let analyzer = ClaimsAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         assert!(
@@ -459,7 +462,7 @@ mod claims_analyzer {
         config.claims.require_readme = true;
         config.claims.require_changelog = true;
 
-        let analyzer = ClaimsAnalyzer::default();
+        let analyzer = ClaimsAnalyzer;
         let result = analyzer.analyze(&path, &config).unwrap();
 
         // No critical errors for a well-structured repo
@@ -491,7 +494,7 @@ mod release_analyzer {
         // Empty repo with no security file
         fs::write(path.join("main.rs"), "fn main() {}\n").unwrap();
 
-        let analyzer = ReleaseAnalyzer::default();
+        let analyzer = ReleaseAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -511,7 +514,7 @@ mod release_analyzer {
         .unwrap();
         fs::write(path.join("VERSION"), "0.2.0\n").unwrap();
 
-        let analyzer = ReleaseAnalyzer::default();
+        let analyzer = ReleaseAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -537,7 +540,7 @@ mod release_analyzer {
         )
         .unwrap();
 
-        let analyzer = ReleaseAnalyzer::default();
+        let analyzer = ReleaseAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -559,7 +562,7 @@ mod release_analyzer {
         )
         .unwrap();
 
-        let analyzer = ReleaseAnalyzer::default();
+        let analyzer = ReleaseAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -599,7 +602,7 @@ mod release_analyzer {
         )
         .unwrap();
 
-        let analyzer = ReleaseAnalyzer::default();
+        let analyzer = ReleaseAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -630,7 +633,7 @@ mod scm_files_analyzer {
         let (_temp, path) = setup_test_repo();
         // No .machine_readable/ directory at all
 
-        let analyzer = ScmFilesAnalyzer::default();
+        let analyzer = ScmFilesAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -661,7 +664,7 @@ mod scm_files_analyzer {
         )
         .unwrap();
 
-        let analyzer = ScmFilesAnalyzer::default();
+        let analyzer = ScmFilesAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -700,7 +703,7 @@ mod scm_files_analyzer {
             fs::write(mr_dir.join(name), content).unwrap();
         }
 
-        let analyzer = ScmFilesAnalyzer::default();
+        let analyzer = ScmFilesAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -739,7 +742,7 @@ mod scm_files_analyzer {
         )
         .unwrap();
 
-        let analyzer = ScmFilesAnalyzer::default();
+        let analyzer = ScmFilesAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -770,7 +773,7 @@ mod testing_analyzer {
         fs::create_dir_all(path.join("src")).unwrap();
         fs::write(path.join("src/main.rs"), "fn main() {}\n").unwrap();
 
-        let analyzer = TestingAnalyzer::default();
+        let analyzer = TestingAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -801,7 +804,7 @@ mod testing_analyzer {
         )
         .unwrap();
 
-        let analyzer = TestingAnalyzer::default();
+        let analyzer = TestingAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -835,7 +838,7 @@ mod testing_analyzer {
         )
         .unwrap();
 
-        let analyzer = TestingAnalyzer::default();
+        let analyzer = TestingAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -872,7 +875,7 @@ mod tooling_analyzer {
         let (_temp, path) = setup_test_repo();
         // No .editorconfig
 
-        let analyzer = ToolingAnalyzer::default();
+        let analyzer = ToolingAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -894,7 +897,7 @@ mod tooling_analyzer {
         let (_temp, path) = setup_test_repo();
         // No .github/workflows/
 
-        let analyzer = ToolingAnalyzer::default();
+        let analyzer = ToolingAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -931,7 +934,7 @@ mod tooling_analyzer {
             .unwrap();
         }
 
-        let analyzer = ToolingAnalyzer::default();
+        let analyzer = ToolingAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -954,7 +957,7 @@ mod tooling_analyzer {
     fn test_missing_tool_versions() {
         let (_temp, path) = setup_test_repo();
 
-        let analyzer = ToolingAnalyzer::default();
+        let analyzer = ToolingAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -993,7 +996,7 @@ mod v1_readiness_analyzer {
         )
         .unwrap();
 
-        let analyzer = V1ReadinessAnalyzer::default();
+        let analyzer = V1ReadinessAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -1033,7 +1036,7 @@ mod v1_readiness_analyzer {
         let (_temp, path) = setup_test_repo();
         // Empty repo -- missing everything
 
-        let analyzer = V1ReadinessAnalyzer::default();
+        let analyzer = V1ReadinessAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -1067,7 +1070,7 @@ mod v1_readiness_analyzer {
         fs::create_dir_all(path.join("src")).unwrap();
         fs::write(path.join("src/main.rs"), "fn main() {}\n").unwrap();
 
-        let analyzer = V1ReadinessAnalyzer::default();
+        let analyzer = V1ReadinessAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
@@ -1124,24 +1127,26 @@ mod integration {
 
         let config = default_config();
 
-        let license = LicenseAnalyzer::default()
+        let license = LicenseAnalyzer
             .analyze(&path, &config)
             .unwrap();
-        let placeholder = PlaceholderAnalyzer::default()
+        let placeholder = PlaceholderAnalyzer
             .analyze(&path, &config)
             .unwrap();
-        let claims = ClaimsAnalyzer::default()
+        let claims = ClaimsAnalyzer
             .analyze(&path, &config)
             .unwrap();
-        let release = ReleaseAnalyzer::default()
+        let release = ReleaseAnalyzer
             .analyze(&path, &config)
             .unwrap();
 
-        let mut result = AuditResult::default();
-        result.license = license;
-        result.placeholder = placeholder;
-        result.claims = claims;
-        result.release = release;
+        let result = AuditResult {
+            license,
+            placeholder,
+            claims,
+            release,
+            ..Default::default()
+        };
 
         // A well-structured repo should have no license or placeholder errors
         assert!(

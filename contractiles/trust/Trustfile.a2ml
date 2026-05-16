@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: PMPL-1.0-or-later
 # Trustfile (A2ML Canonical)
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath)
+name = "trustfile"
+
 
 @abstract:
 Trust and provenance verification for Gitbot Fleet.

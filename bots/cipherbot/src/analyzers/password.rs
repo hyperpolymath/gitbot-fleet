@@ -27,7 +27,7 @@ static PASSWORD_PATTERNS: LazyLock<Vec<PasswordPattern>> = LazyLock::new(|| {
     vec![
         // MD5 for passwords — REJECT
         PasswordPattern {
-            regex: Regex::new(r#"(?i)\b(?:md5[_-]?(?:hash|password|pass|pwd|crypt)\w*|password[_-]?md5)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:md5[_-]?(?:hash|password|pass|pwd|crypt)\w*|password[_-]?md5)\b"#).expect("static regex is valid"),
             algorithm: "MD5-password",
             status: CryptoStatus::Reject,
             message: "MD5 for password hashing is catastrophic — no stretching, trivially reversible with rainbow tables.",
@@ -35,7 +35,7 @@ static PASSWORD_PATTERNS: LazyLock<Vec<PasswordPattern>> = LazyLock::new(|| {
         },
         // SHA-1/SHA-256 unsalted passwords — REJECT
         PasswordPattern {
-            regex: Regex::new(r#"(?i)\b(?:sha[_-]?(?:1|256)[_-]?(?:hash|password|pass|pwd|crypt)|password[_-]?sha)"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:sha[_-]?(?:1|256)[_-]?(?:hash|password|pass|pwd|crypt)|password[_-]?sha)"#).expect("static regex is valid"),
             algorithm: "SHA-password",
             status: CryptoStatus::Reject,
             message: "SHA-1/SHA-256 for password hashing is insecure — no key stretching, vulnerable to rainbow tables.",
@@ -43,7 +43,7 @@ static PASSWORD_PATTERNS: LazyLock<Vec<PasswordPattern>> = LazyLock::new(|| {
         },
         // bcrypt — WARN
         PasswordPattern {
-            regex: Regex::new(r#"(?i)\b(?:bcrypt(?:::|\.|_|\s*\()|BCrypt|password_hash.*bcrypt)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:bcrypt(?:::|\.|_|\s*\()|BCrypt|password_hash.*bcrypt)\b"#).expect("static regex is valid"),
             algorithm: "bcrypt",
             status: CryptoStatus::Warn,
             message: "bcrypt is limited to 72 bytes input — truncates longer passwords. GPU-crackable at 4GB scale.",
@@ -51,7 +51,7 @@ static PASSWORD_PATTERNS: LazyLock<Vec<PasswordPattern>> = LazyLock::new(|| {
         },
         // scrypt — WARN
         PasswordPattern {
-            regex: Regex::new(r#"(?i)\b(?:scrypt(?:::|\.|_|\s*\()|Scrypt)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:scrypt(?:::|\.|_|\s*\()|Scrypt)\b"#).expect("static regex is valid"),
             algorithm: "scrypt",
             status: CryptoStatus::Warn,
             message: "scrypt is acceptable but Argon2id is preferred — better GPU/ASIC resistance with tunable parameters.",
@@ -59,7 +59,7 @@ static PASSWORD_PATTERNS: LazyLock<Vec<PasswordPattern>> = LazyLock::new(|| {
         },
         // Argon2id — ACCEPT/PREFER
         PasswordPattern {
-            regex: Regex::new(r#"(?i)\b(?:argon2id|Argon2id|argon2[_-]id)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:argon2id|Argon2id|argon2[_-]id)\b"#).expect("static regex is valid"),
             algorithm: "Argon2id",
             status: CryptoStatus::Accept,
             message: "Argon2id detected — verify parameters: 512 MiB memory, 8 iterations, 4 lanes for ideal security.",
@@ -69,7 +69,7 @@ static PASSWORD_PATTERNS: LazyLock<Vec<PasswordPattern>> = LazyLock::new(|| {
         // Note: we cannot use negative lookahead in the regex crate,
         // so we match argon2i and filter in analyze_content if argon2id is also present.
         PasswordPattern {
-            regex: Regex::new(r#"(?i)\bargon2i\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bargon2i\b"#).expect("static regex is valid"),
             algorithm: "Argon2i",
             status: CryptoStatus::Accept,
             message: "Argon2i is data-independent — use Argon2id instead for combined side-channel and GPU resistance.",
@@ -77,7 +77,7 @@ static PASSWORD_PATTERNS: LazyLock<Vec<PasswordPattern>> = LazyLock::new(|| {
         },
         // PBKDF2 — WARN
         PasswordPattern {
-            regex: Regex::new(r#"(?i)\b(?:pbkdf2|PBKDF2)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:pbkdf2|PBKDF2)\b"#).expect("static regex is valid"),
             algorithm: "PBKDF2",
             status: CryptoStatus::Warn,
             message: "PBKDF2 is outdated for password hashing — GPU-parallelizable, no memory-hardness.",

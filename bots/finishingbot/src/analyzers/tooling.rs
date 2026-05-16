@@ -82,7 +82,7 @@ impl Analyzer for ToolingAnalyzer {
             if let Ok(entries) = std::fs::read_dir(&workflows_dir) {
                 let workflow_count = entries
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().map_or(false, |ext| ext == "yml" || ext == "yaml"))
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "yml" || ext == "yaml"))
                     .count();
 
                 if workflow_count < 10 {
@@ -124,7 +124,7 @@ impl ToolingAnalyzer {
     ) {
         let is_rust = file_path
             .parent()
-            .and_then(|p| Some(p.join("Cargo.toml").exists()))
+            .map(|p| p.join("Cargo.toml").exists())
             .unwrap_or(false);
 
         // Check for rust version if Rust project

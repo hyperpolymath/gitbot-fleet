@@ -286,7 +286,7 @@ pub fn run_in_context(ctx: &mut Context, config: &Config) -> AuditResult {
     let mut files_checked = 0;
 
     // Run license analyzer
-    let license = LicenseAnalyzer::default();
+    let license = LicenseAnalyzer;
     match license.analyze(&ctx.repo_path, config) {
         Ok(analysis) => {
             files_checked += analysis.files_checked;
@@ -306,7 +306,7 @@ pub fn run_in_context(ctx: &mut Context, config: &Config) -> AuditResult {
     }
 
     // Run placeholder analyzer
-    let placeholder = PlaceholderAnalyzer::default();
+    let placeholder = PlaceholderAnalyzer;
     match placeholder.analyze(&ctx.repo_path, config) {
         Ok(analysis) => {
             files_checked += analysis.files_checked;
@@ -326,7 +326,7 @@ pub fn run_in_context(ctx: &mut Context, config: &Config) -> AuditResult {
     }
 
     // Run claims analyzer
-    let claims = ClaimsAnalyzer::default();
+    let claims = ClaimsAnalyzer;
     match claims.analyze(&ctx.repo_path, config) {
         Ok(analysis) => {
             files_checked += analysis.files_checked;
@@ -346,7 +346,7 @@ pub fn run_in_context(ctx: &mut Context, config: &Config) -> AuditResult {
     }
 
     // Run release analyzer
-    let release = ReleaseAnalyzer::default();
+    let release = ReleaseAnalyzer;
     match release.analyze(&ctx.repo_path, config) {
         Ok(analysis) => {
             files_checked += analysis.files_checked;

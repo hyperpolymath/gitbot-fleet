@@ -1,211 +1,156 @@
-# CLAUDE.md - Garment Sustainability Bot
+# CLAUDE.md — Garment Sustainability Bot (gsbot)
+
+> **This bot is Rust/SPARK.** The hyperpolymath estate bans Python, and the
+> Hypatia security scanner self-scans this repository — any banned-language
+> file is a CRITICAL finding. **Never introduce Python or any banned-language
+> file.** The estate Rust/SPARK standard governs over any generic template,
+> including any older content that may once have lived in this file.
 
 ## Project Overview
 
-The Garment Sustainability Bot (gsbot) is a project focused on promoting sustainability in the garment and fashion industry. This bot aims to provide insights, tracking, and actionable information about garment sustainability practices.
+`gsbot` is a Discord bot promoting sustainability in the garment and fashion
+industry. It answers material/garment/brand sustainability queries, gives care
+advice and alternatives, and gamifies engagement with points, levels and a
+leaderboard.
 
-## Current State
+It was ported from a now-deleted Python prototype to **Rust** (with a
+designed-in SPARK seam). Behaviour is preserved; the implementation is Rust.
 
-This project is in early development stage with:
-- Basic repository structure
-- Mozilla Public License 2.0
-- GitHub Actions CI/CD workflow configured
-- Jekyll theme (Cayman) for documentation/GitHub Pages
+- Crate: `gsbot` v0.2.0
+- License: `PMPL-1.0-or-later` (SPDX header on every source file)
+- Edition: 2021
 
-## Project Purpose
+## Technology Stack (real, not aspirational)
 
-The bot should help users:
-- Track sustainability metrics for garments
-- Provide information about sustainable fashion practices
-- Analyze environmental impact of clothing choices
-- Offer recommendations for sustainable alternatives
-- Educate users about garment lifecycle and care
+- **Discord framework:** `poise` 0.6 over `serenity` 0.12 (prefix commands)
+- **Persistence:** `sqlx` 0.8 + **SQLite only** (no Postgres)
+- **Migrations:** `migrations/0001_init.sql`, applied at startup via
+  `sqlx::migrate!`
+- **Async runtime:** `tokio`
+- **Config / env:** `dotenvy` (`.env` loaded at startup)
+- **Logging:** `tracing` + `tracing-subscriber` + `tracing-appender`
+- **Errors:** `anyhow` (application) + `thiserror` (typed)
+- **Misc:** `chrono`, `rand`, `serde` / `serde_json`
 
-## Architecture
-
-### Technology Stack (To Be Determined)
-
-Consider the following options based on requirements:
-- **Backend**: Python (recommended for ML/data processing), Node.js, or Go
-- **Bot Framework**: Discord.py, Slack SDK, Telegram Bot API, or multi-platform framework
-- **Data Storage**: SQLite (simple), PostgreSQL (robust), or MongoDB (flexible schema)
-- **APIs**: Integration with sustainability databases, fashion APIs, LCA (Life Cycle Assessment) data
-
-### Recommended Project Structure
+## Crate Layout
 
 ```
-gsbot/
-├── src/                    # Source code
-│   ├── bot/               # Bot implementation
-│   ├── models/            # Data models
-│   ├── services/          # Business logic
-│   ├── utils/             # Utility functions
-│   └── config/            # Configuration
-├── tests/                 # Test files
-├── docs/                  # Documentation
-├── data/                  # Data files, datasets
-├── scripts/               # Utility scripts
-├── .github/               # GitHub workflows
-├── requirements.txt       # Python dependencies (if using Python)
-├── package.json           # Node dependencies (if using Node.js)
-├── .env.example           # Environment variables template
-├── LICENSE                # Mozilla Public License 2.0
-└── README.md              # Project readme
+src/
+├── main.rs              # gsbot binary entry point
+├── bot.rs               # poise/serenity wiring, intents, error mapping
+├── lib.rs               # library root: Data, Context, Error type aliases
+├── config.rs            # Config::from_env() — env vars + defaults
+├── db.rs                # SQLite pool + sqlx::migrate!
+├── domain.rs            # PURE scoring kernel — the SPARK seam (see below)
+├── models.rs            # row structs
+├── services.rs          # query/service layer
+├── sustainability.rs    # analyzer helpers (tips, categories)
+├── cache.rs             # in-process cache
+├── fixtures.rs          # sample-data loader
+├── logging.rs           # tracing init
+├── commands/            # one module per former cog
+│   ├── mod.rs           # command registry (all()), colours, is_admin gate
+│   ├── sustainability.rs# sustainability, alternatives, care, tips
+│   ├── materials.rs     # impact, compare, search
+│   ├── brands.rs        # brands
+│   ├── user_commands.rs # profile, leaderboard, setpreference
+│   └── admin.rs         # loaddata, stats, announce (admin-gated)
+└── bin/                 # gsbot-load-fixtures, gsbot-export-data, gsbot-backup-db
+migrations/0001_init.sql # materials, garments, brands, users, garment_materials
 ```
+
+Binaries: `gsbot` (the bot), `gsbot-load-fixtures`, `gsbot-export-data`,
+`gsbot-backup-db`. Plus the `gsbot` library crate.
+
+## The SPARK Seam — `src/domain.rs`
+
+`src/domain.rs` is the **correctness-critical, pure** scoring kernel: no I/O,
+no allocation in the numeric core, total over its documented domain. It
+exposes a stable **C ABI** in `mod ffi` with `#[no_mangle] extern "C"`
+functions:
+
+- `gsbot_material_overall_score`
+- `gsbot_lifespan_multiplier`
+- `gsbot_level_for_points`
+
+This is the architecture's **verification seam**: a formally-verified
+SPARK/Ada module can later export the same symbols and be linked in place of
+the Rust bodies via the hyperpolymath Zig-FFI / Idris2-ABI pattern, with **no
+caller changes**. Callers go through the safe Rust wrappers, so substitution
+is transparent. Keep this module pure and total; do not add I/O here.
+
+## Build / Test / Lint (via `Justfile` or cargo directly)
+
+```bash
+just build          # cargo build
+just release        # cargo build --release
+just test           # cargo test --all-targets
+just run            # cargo run --bin gsbot
+just load-data      # cargo run --bin gsbot-load-fixtures
+just export-data    # cargo run --bin gsbot-export-data
+just backup         # cargo run --bin gsbot-backup-db
+just lint           # cargo clippy --all-targets -- -D warnings
+just fmt            # cargo fmt --all -- --check
+just format         # cargo fmt --all
+just clean          # cargo clean
+just docker-build   # docker build -t gsbot:latest -f Containerfile .
+just docker-up      # docker compose up -d
+```
+
+Tests are `cargo test --all-targets` (there is no pytest). Lint must pass
+clippy with warnings denied. Format with `cargo fmt`.
+
+## Environment Variables (`src/config.rs`)
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DISCORD_TOKEN` | — | **Required** |
+| `DISCORD_PREFIX` | `!` | Command prefix |
+| `DISCORD_ADMIN_IDS` | empty | Comma-separated Discord user IDs |
+| `DATABASE_URL` | `sqlite:///<base>/data/gsbot.db` | SQLite only |
+| `DATABASE_ECHO` | `false` | |
+| `CACHE_TTL` | `3600` | seconds |
+| `CACHE_MAXSIZE` | `1000` | |
+| `LOG_LEVEL` | `INFO` | |
+| `LOG_FILE` | unset | optional log file path |
+| `API_TIMEOUT` | `30` | seconds |
+| `API_RETRY_COUNT` | `3` | |
+| `ENABLE_CACHING` | `true` | |
+| `ENABLE_ANALYTICS` | `false` | |
+
+## Command Surface (prefix commands; default prefix `!`)
+
+- `sustainability <garment>` (aliases `sus`, `score`)
+- `alternatives <garment>` (alias `alt`)
+- `care <garment>`
+- `tips`
+- `impact <material>` (alias `material`)
+- `compare <material1> <material2>`
+- `search <query>`
+- `brands [name]` (alias `brand`)
+- `profile` (aliases `stats`, `me`)
+- `leaderboard` (aliases `lb`, `top`)
+- `setpreference <materials|budget|priority> <value>` (alias `pref`)
+- `loaddata` — **admin**
+- `stats` — **admin**
+- `announce <message>` — **admin**
+
+Admin gate (`commands::is_admin`): author ID is in `DISCORD_ADMIN_IDS`, or the
+invoking guild member has the Administrator permission.
 
 ## Development Guidelines
 
-### Code Quality
-
-- Write clean, readable, and well-documented code
-- Follow language-specific style guides:
-  - Python: PEP 8
-  - JavaScript/Node.js: Airbnb Style Guide or StandardJS
-- Use meaningful variable and function names
-- Add docstrings/JSDoc comments for functions and classes
-- Keep functions focused and single-purpose
-
-### Git Workflow
-
-- Use descriptive commit messages
-- Follow conventional commits format: `type(scope): description`
-  - Types: feat, fix, docs, style, refactor, test, chore
-- Create feature branches from main
-- Keep commits atomic and focused
-
-### Testing
-
-- Write unit tests for core functionality
-- Aim for good test coverage (target: >80%)
-- Include integration tests for bot commands
-- Test edge cases and error handling
-- Use pytest (Python) or Jest (Node.js)
-
-### Environment Variables
-
-Never commit sensitive information. Use environment variables for:
-- API keys and tokens
-- Database credentials
-- Bot tokens
-- Third-party service credentials
-
-### Dependencies
-
-- Keep dependencies up to date
-- Document why each dependency is needed
-- Minimize dependency bloat
-- Regular security audits
-
-## Bot Features (Planned)
-
-### Core Commands
-
-- `/sustainability [garment]` - Get sustainability score for a garment type
-- `/alternatives [item]` - Find sustainable alternatives
-- `/care [garment]` - Get care instructions to extend garment life
-- `/impact [material]` - Environmental impact of materials
-- `/brands [query]` - Search sustainable brands
-- `/tips` - Daily sustainability tips
-
-### Data Sources
-
-Consider integrating:
-- Higg Index for sustainability metrics
-- Good On You for brand ratings
-- Fashion Revolution data
-- Open LCA databases
-- Custom curated datasets
-
-## Security Considerations
-
-- Validate all user inputs
-- Implement rate limiting
-- Secure API endpoints
-- Use HTTPS for all external communications
-- Regular dependency vulnerability scans
-- Follow OWASP guidelines
-
-## Performance
-
-- Implement caching for frequent queries
-- Optimize database queries
-- Use async/await for I/O operations
-- Monitor bot response times
-- Set up logging and monitoring
-
-## Documentation
-
-- Keep README.md updated with setup instructions
-- Document all API endpoints
-- Maintain a CHANGELOG.md
-- Add inline code comments for complex logic
-- Create user guides for bot commands
-
-## CI/CD
-
-Current GitHub Actions workflow:
-- Located at `.github/workflows/main.yml`
-- Runs on push and PR to main branch
-- Should be extended to include:
-  - Automated testing
-  - Linting and code style checks
-  - Security scanning
-  - Build verification
-  - Deployment automation
-
-## Getting Started (For Developers)
-
-1. Clone the repository
-2. Install dependencies
-3. Copy `.env.example` to `.env` and configure
-4. Set up local database
-5. Run tests to verify setup
-6. Start development server
-7. Make changes and submit PRs
-
-## Sustainability Focus Areas
-
-- **Material Impact**: Cotton, polyester, wool, synthetic alternatives
-- **Production**: Water usage, energy consumption, chemical usage
-- **Transportation**: Carbon footprint of shipping
-- **Longevity**: Quality, repairability, care instructions
-- **End of Life**: Recycling, upcycling, biodegradability
-- **Social Impact**: Fair labor, working conditions, fair wages
-
-## Future Enhancements
-
-- Machine learning for personalized recommendations
-- Image recognition for garment identification
-- Integration with e-commerce platforms
-- Community features for sharing sustainable practices
-- Gamification for sustainable choices
-- Carbon footprint calculator
-- Wardrobe tracking
-
-## Resources
-
-- [Fashion Revolution](https://www.fashionrevolution.org/)
-- [Good On You](https://goodonyou.eco/)
-- [Sustainable Apparel Coalition](https://apparelcoalition.org/)
-- [Ellen MacArthur Foundation - Circular Economy](https://ellenmacarthurfoundation.org/)
+- **No Python, ever.** No `pip`, no pytest, no virtualenv, no `requirements.txt`.
+  Docs may only use `rust`, `bash`, `sh`, `sql`, `toml`, `json`, `dockerfile`,
+  or `text` code fences.
+- Keep `domain.rs` pure/total; it is the SPARK substitution boundary.
+- Preserve observable behaviour when porting/refactoring (point awards, embed
+  fields, command names and aliases mirror the original cogs).
+- Every source file carries the `SPDX-License-Identifier: PMPL-1.0-or-later`
+  header.
+- Conventional, atomic commits; feature branches off `main`.
+- Run `just lint` and `just test` before opening a PR.
 
 ## License
 
-This project is licensed under the Mozilla Public License 2.0. See LICENSE file for details.
-
-## Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Ensure all tests pass
-5. Submit a pull request with clear description
-
-## Contact & Support
-
-For questions, issues, or suggestions, please use GitHub Issues.
-
----
-
-**Note for Claude Code**: When implementing features, prioritize sustainability data accuracy, user education, and actionable insights. Always verify sustainability claims with reputable sources.
+`PMPL-1.0-or-later`. See `LICENSE`.

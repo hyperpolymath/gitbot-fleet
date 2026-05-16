@@ -5,6 +5,11 @@
 ;; Generated: 2026-01-05 from cicd-hyper-a audit session
 ;; Updated: 2026-01-09 with RSR policy contradiction fixes
 
+;; A2ML identity (TOML-shaped manifest header for the a2ml validator)
+project = "gitbot-fleet"
+name = "gitbot-fleet-cicd-patterns"
+version = "1.0"
+
 (cicd-patterns
   (version "1.0")
   (project "gitbot-fleet")

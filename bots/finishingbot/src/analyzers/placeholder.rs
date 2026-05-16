@@ -42,8 +42,8 @@ impl Analyzer for PlaceholderAnalyzer {
         let pattern_set = RegexSet::new(&patterns)?;
         let patterns_with_context: Vec<Regex> = patterns
             .iter()
-            .map(|p| Regex::new(p).unwrap())
-            .collect();
+            .map(|p| Regex::new(p))
+            .collect::<std::result::Result<Vec<Regex>, regex::Error>>()?;
 
         // Scan files
         for entry in WalkDir::new(path)
@@ -74,7 +74,6 @@ impl Analyzer for PlaceholderAnalyzer {
                     &content,
                     &pattern_set,
                     &patterns_with_context,
-                    &config.placeholders.patterns,
                     config,
                     &mut result,
                 );
@@ -147,10 +146,10 @@ impl PlaceholderAnalyzer {
         content: &str,
         pattern_set: &RegexSet,
         patterns: &[Regex],
-        pattern_names: &[String],
         config: &Config,
         result: &mut AnalysisResult,
     ) {
+        let pattern_names = &config.placeholders.patterns;
         for (line_num, line) in content.lines().enumerate() {
             let matches: Vec<usize> = pattern_set.matches(line).into_iter().collect();
 
@@ -181,14 +180,17 @@ impl PlaceholderAnalyzer {
                             )
                             .with_file(path.to_path_buf())
                             .with_location(line_num + 1, m.start() + 1)
-                            .with_suggestion(&format!(
-                                "{}",
-                                match config.placeholders.action {
-                                    PlaceholderAction::Remove => "Remove or address this placeholder before release",
-                                    PlaceholderAction::Comment => "This will be converted to a release note",
-                                    PlaceholderAction::Flag => "Address this placeholder or mark as intentional",
+                            .with_suggestion(match config.placeholders.action {
+                                PlaceholderAction::Remove => {
+                                    "Remove or address this placeholder before release"
                                 }
-                            ))
+                                PlaceholderAction::Comment => {
+                                    "This will be converted to a release note"
+                                }
+                                PlaceholderAction::Flag => {
+                                    "Address this placeholder or mark as intentional"
+                                }
+                            })
                             .fixable(),
                         );
                     }

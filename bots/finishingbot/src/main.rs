@@ -9,7 +9,7 @@ mod error;
 mod fleet;
 
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{fmt, EnvFilter};
@@ -272,11 +272,11 @@ fn init_logging(level: &str) {
         .init();
 }
 
-fn handle_init(config_path: &PathBuf, format: &str) -> ExitCode {
+fn handle_init(config_path: &Path, format: &str) -> ExitCode {
     let path = if format == "toml" {
         config_path.with_extension("toml")
     } else {
-        config_path.clone()
+        config_path.to_path_buf()
     };
 
     match config::write_default_config(&path) {
@@ -327,7 +327,7 @@ fn handle_show(config: &config::Config) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &str) -> ExitCode {
+fn handle_audit(path: &Path, config: &config::Config, strict: bool, format: &str) -> ExitCode {
     use crate::analyzers::{
         claims::ClaimsAnalyzer, license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer,
         release::ReleaseAnalyzer, scm_files::ScmFilesAnalyzer, testing::TestingAnalyzer,
@@ -337,7 +337,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
     let mut result = AuditResult::default();
 
     // Run all analyzers
-    let license = LicenseAnalyzer::default();
+    let license = LicenseAnalyzer;
     result.license = match license.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -346,7 +346,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
         }
     };
 
-    let placeholder = PlaceholderAnalyzer::default();
+    let placeholder = PlaceholderAnalyzer;
     result.placeholder = match placeholder.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -355,7 +355,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
         }
     };
 
-    let claims = ClaimsAnalyzer::default();
+    let claims = ClaimsAnalyzer;
     result.claims = match claims.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -364,7 +364,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
         }
     };
 
-    let release = ReleaseAnalyzer::default();
+    let release = ReleaseAnalyzer;
     result.release = match release.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -374,7 +374,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
     };
 
     // V1 preparation analyzers
-    let scm_files = ScmFilesAnalyzer::default();
+    let scm_files = ScmFilesAnalyzer;
     result.scm_files = match scm_files.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -383,7 +383,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
         }
     };
 
-    let testing = TestingAnalyzer::default();
+    let testing = TestingAnalyzer;
     result.testing = match testing.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -392,7 +392,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
         }
     };
 
-    let tooling = ToolingAnalyzer::default();
+    let tooling = ToolingAnalyzer;
     result.tooling = match tooling.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -401,7 +401,7 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
         }
     };
 
-    let v1_readiness = V1ReadinessAnalyzer::default();
+    let v1_readiness = V1ReadinessAnalyzer;
     result.v1_readiness = match v1_readiness.analyze(path, config) {
         Ok(r) => r,
         Err(e) => {
@@ -430,13 +430,13 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
     }
 }
 
-fn handle_fix(path: &PathBuf, config: &config::Config, only: Option<&str>) -> ExitCode {
+fn handle_fix(path: &Path, config: &config::Config, only: Option<&str>) -> ExitCode {
     use crate::analyzers::{
         license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer, Analyzer,
     };
 
     if only.is_none() || only == Some("license") {
-        let license = LicenseAnalyzer::default();
+        let license = LicenseAnalyzer;
         if let Ok(result) = license.analyze(path, config) {
             let fixed = license.fix(path, config, &result.findings);
             match fixed {
@@ -451,7 +451,7 @@ fn handle_fix(path: &PathBuf, config: &config::Config, only: Option<&str>) -> Ex
     }
 
     if only.is_none() || only == Some("placeholder") {
-        let placeholder = PlaceholderAnalyzer::default();
+        let placeholder = PlaceholderAnalyzer;
         if let Ok(result) = placeholder.analyze(path, config) {
             let fixed = placeholder.fix(path, config, &result.findings);
             match fixed {
@@ -468,7 +468,7 @@ fn handle_fix(path: &PathBuf, config: &config::Config, only: Option<&str>) -> Ex
     ExitCode::SUCCESS
 }
 
-fn handle_license(path: &PathBuf, config: &config::Config, list_allowed: bool) -> ExitCode {
+fn handle_license(path: &Path, config: &config::Config, list_allowed: bool) -> ExitCode {
     if list_allowed {
         println!("Allowed licenses:");
         for license in &config.licenses.allowed {
@@ -479,7 +479,7 @@ fn handle_license(path: &PathBuf, config: &config::Config, list_allowed: bool) -
 
     use crate::analyzers::{license::LicenseAnalyzer, Analyzer};
 
-    let analyzer = LicenseAnalyzer::default();
+    let analyzer = LicenseAnalyzer;
     match analyzer.analyze(path, config) {
         Ok(result) => {
             print_analysis_result("LICENSE", &result);
@@ -496,7 +496,7 @@ fn handle_license(path: &PathBuf, config: &config::Config, list_allowed: bool) -
     }
 }
 
-fn handle_placeholders(path: &PathBuf, config: &config::Config, action: &str) -> ExitCode {
+fn handle_placeholders(path: &Path, config: &config::Config, action: &str) -> ExitCode {
     use crate::analyzers::{placeholder::PlaceholderAnalyzer, Analyzer};
     use crate::config::PlaceholderAction;
 
@@ -507,7 +507,7 @@ fn handle_placeholders(path: &PathBuf, config: &config::Config, action: &str) ->
         _ => PlaceholderAction::Flag,
     };
 
-    let analyzer = PlaceholderAnalyzer::default();
+    let analyzer = PlaceholderAnalyzer;
     match analyzer.analyze(path, &config) {
         Ok(result) => {
             print_analysis_result("PLACEHOLDERS", &result);
@@ -524,10 +524,10 @@ fn handle_placeholders(path: &PathBuf, config: &config::Config, action: &str) ->
     }
 }
 
-fn handle_claims(path: &PathBuf, config: &config::Config) -> ExitCode {
+fn handle_claims(path: &Path, config: &config::Config) -> ExitCode {
     use crate::analyzers::{claims::ClaimsAnalyzer, Analyzer};
 
-    let analyzer = ClaimsAnalyzer::default();
+    let analyzer = ClaimsAnalyzer;
     match analyzer.analyze(path, config) {
         Ok(result) => {
             print_analysis_result("CLAIMS", &result);
@@ -544,10 +544,10 @@ fn handle_claims(path: &PathBuf, config: &config::Config) -> ExitCode {
     }
 }
 
-fn handle_release(path: &PathBuf, config: &config::Config) -> ExitCode {
+fn handle_release(path: &Path, config: &config::Config) -> ExitCode {
     use crate::analyzers::{release::ReleaseAnalyzer, Analyzer};
 
-    let analyzer = ReleaseAnalyzer::default();
+    let analyzer = ReleaseAnalyzer;
     match analyzer.analyze(path, config) {
         Ok(result) => {
             print_analysis_result("RELEASE", &result);

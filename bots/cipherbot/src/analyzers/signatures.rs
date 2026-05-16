@@ -28,7 +28,7 @@ static SIG_PATTERNS: LazyLock<Vec<SignaturePattern>> = LazyLock::new(|| {
     vec![
         // RSA-SHA1 — REJECT
         SignaturePattern {
-            regex: Regex::new(r#"(?i)\b(?:rsa[_-]?sha1|sha1[_-]?rsa|sha1WithRSA)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:rsa[_-]?sha1|sha1[_-]?rsa|sha1WithRSA)\b"#).expect("static regex is valid"),
             algorithm: "RSA-SHA1",
             status: CryptoStatus::Reject,
             message: "RSA-SHA1 signatures use broken SHA-1 — completely insecure.",
@@ -36,7 +36,7 @@ static SIG_PATTERNS: LazyLock<Vec<SignaturePattern>> = LazyLock::new(|| {
         },
         // DSA — REJECT
         SignaturePattern {
-            regex: Regex::new(r#"(?i)\b(?:dsa(?:::|\.|_|[_-]sign)|DSA[_-]?(?:sign|verify|key))\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:dsa(?:::|\.|_|[_-]sign)|DSA[_-]?(?:sign|verify|key))\b"#).expect("static regex is valid"),
             algorithm: "DSA",
             status: CryptoStatus::Reject,
             message: "DSA is deprecated (NIST SP 800-131A Rev.2) — do not use for new applications.",
@@ -44,7 +44,7 @@ static SIG_PATTERNS: LazyLock<Vec<SignaturePattern>> = LazyLock::new(|| {
         },
         // RSA-2048 signatures — WARN
         SignaturePattern {
-            regex: Regex::new(r#"(?i)\b(?:rsa[_-]?2048[_-]?(?:sign|verify|pss)|RSA2048)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:rsa[_-]?2048[_-]?(?:sign|verify|pss)|RSA2048)\b"#).expect("static regex is valid"),
             algorithm: "RSA-2048-sig",
             status: CryptoStatus::Warn,
             message: "RSA-2048 signatures are not post-quantum safe — vulnerable to Shor's algorithm.",
@@ -52,7 +52,7 @@ static SIG_PATTERNS: LazyLock<Vec<SignaturePattern>> = LazyLock::new(|| {
         },
         // Ed25519 — WARN
         SignaturePattern {
-            regex: Regex::new(r#"(?i)\b(?:ed25519|Ed25519)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:ed25519|Ed25519)\b"#).expect("static regex is valid"),
             algorithm: "Ed25519",
             status: CryptoStatus::Warn,
             message: "Ed25519 is classical-only — not post-quantum safe. Prefer Ed448 for classical use.",
@@ -60,7 +60,7 @@ static SIG_PATTERNS: LazyLock<Vec<SignaturePattern>> = LazyLock::new(|| {
         },
         // Ed448 — ACCEPT
         SignaturePattern {
-            regex: Regex::new(r#"(?i)\b(?:ed448|Ed448)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:ed448|Ed448)\b"#).expect("static regex is valid"),
             algorithm: "Ed448",
             status: CryptoStatus::Accept,
             message: "Ed448 is strong for classical signatures — 224-bit security level.",
@@ -68,7 +68,7 @@ static SIG_PATTERNS: LazyLock<Vec<SignaturePattern>> = LazyLock::new(|| {
         },
         // Dilithium / ML-DSA — PREFER
         SignaturePattern {
-            regex: Regex::new(r#"(?i)\b(?:dilithium[_-]?5|ml[_-]?dsa[_-]?87|ML-DSA-87)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:dilithium[_-]?5|ml[_-]?dsa[_-]?87|ML-DSA-87)\b"#).expect("static regex is valid"),
             algorithm: "Dilithium5",
             status: CryptoStatus::Prefer,
             message: "Dilithium5 (ML-DSA-87, FIPS 204) — ideal post-quantum signature algorithm.",
@@ -76,7 +76,7 @@ static SIG_PATTERNS: LazyLock<Vec<SignaturePattern>> = LazyLock::new(|| {
         },
         // SPHINCS+ — FALLBACK
         SignaturePattern {
-            regex: Regex::new(r#"(?i)\b(?:sphincs\+?|SPHINCS|slh[_-]?dsa)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:sphincs\+?|SPHINCS|slh[_-]?dsa)\b"#).expect("static regex is valid"),
             algorithm: "SPHINCS+",
             status: CryptoStatus::Fallback,
             message: "SPHINCS+ (SLH-DSA) — conservative hash-based PQ backup signature scheme.",

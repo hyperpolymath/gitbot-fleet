@@ -5,7 +5,8 @@
 //! Measures the hot paths in proof confidence assessment and prover kind
 //! lookups — both are called per-file during proof scanning and must be fast.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use std::hint::black_box;
 use echidnabot::dispatcher::{ProofStatus, ProverKind};
 use echidnabot::trust::confidence::assess_confidence;
 

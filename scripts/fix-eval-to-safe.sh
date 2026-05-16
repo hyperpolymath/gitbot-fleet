@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: PMPL-1.0-or-later
+# hypatia: allow code_safety/shell_download_then_run -- remediation tool: it searches for and annotates curl|bash / eval patterns, so it necessarily contains those pattern strings; it does not itself download-then-run
 #
 # fix-eval-to-safe.sh — Annotate dangerous eval/exec and pipe-to-shell patterns
 #

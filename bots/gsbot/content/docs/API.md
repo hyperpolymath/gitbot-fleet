@@ -5,9 +5,13 @@ weight = 1
 
 # API Documentation
 
+> Implementation: **Rust** — `poise` 0.6 over `serenity` 0.12, persistence
+> via `sqlx` 0.8 + SQLite. Prefix commands. (Ported from a now-deleted
+> Python prototype; behaviour preserved.)
+
 ## Discord Bot Commands
 
-All commands use the prefix `!` (configurable in `.env`)
+All commands use the prefix `!` (configurable via `DISCORD_PREFIX` in `.env`)
 
 ### Sustainability Commands
 
@@ -342,9 +346,15 @@ Based on level achieved:
 
 ## Data Models
 
+Rows live in SQLite (schema: `migrations/0001_init.sql`) and are mapped to
+Rust structs in `src/models.rs`; the query/service layer is in
+`src/services.rs`. All correctness-critical scoring lives in the pure
+`src/domain.rs` kernel (the SPARK seam — see ARCHITECTURE.md).
+
 ### Material
 
 Represents fabric materials with environmental metrics.
+Table: `materials`.
 
 **Fields:**
 - `name`: Material name
@@ -358,15 +368,17 @@ Represents fabric materials with environmental metrics.
 - Production metrics (water, CO2, energy per kg)
 - Properties (biodegradable, recyclable, durable)
 
-**Methods:**
-- `calculate_overall_score()`: Returns average of all scores
-- `get_grade()`: Returns letter grade A+ to F
+**Kernel functions (`domain.rs`):**
+- `material_overall_score([f64; 5]) -> f64`: mean of the five sub-scores
+- `grade(f64) -> &str`: letter grade A+ … F
+- C-ABI export: `gsbot_material_overall_score`
 
 ---
 
 ### Garment
 
 Represents clothing items with sustainability information.
+Table: `garments` (linked to materials via `garment_materials`).
 
 **Fields:**
 - `name`: Garment name
@@ -379,15 +391,20 @@ Represents clothing items with sustainability information.
 - `care_instructions`: Care text
 - `sustainability_score`: 0-100
 
-**Methods:**
-- `calculate_sustainability_score()`: Based on materials and lifespan
-- `get_environmental_impact()`: Returns water, carbon, energy metrics
+**Kernel functions (`domain.rs`):**
+- `garment_sustainability_score(&[f64], Option<f64>) -> f64`: mean material
+  score × lifespan multiplier, capped at 100 (50.0 if no materials)
+- `lifespan_multiplier(Option<f64>) -> f64`: ≥5y→1.2, ≥3y→1.1, <1y→0.8, else 1.0
+- `environmental_impact(&[MaterialImpactInputs], Option<f64>)`: water/carbon/
+  energy strings (or "Unknown")
+- C-ABI export: `gsbot_lifespan_multiplier`
 
 ---
 
 ### Brand
 
 Represents fashion brands with sustainability ratings.
+Table: `brands`.
 
 **Fields:**
 - `name`: Brand name
@@ -402,15 +419,15 @@ Represents fashion brands with sustainability ratings.
 - `price_range`: $, $$, $$$, $$$$
 - `good_on_you_rating`: Rating string
 
-**Methods:**
-- `get_certification_badges()`: List of certifications
-- `get_rating_summary()`: Human-readable summary
+**Kernel functions (`domain.rs`):**
+- `brand_rating_summary(f64) -> &str`: human-readable rating summary
 
 ---
 
 ### User
 
 Tracks Discord users for gamification.
+Table: `users`.
 
 **Fields:**
 - `discord_id`: Unique Discord ID
@@ -422,9 +439,11 @@ Tracks Discord users for gamification.
 - `budget_range`: $-$$$$
 - `sustainability_priority`: environmental, social, etc.
 
-**Methods:**
-- `add_points(points)`: Add points and handle level-up
-- `get_rank()`: Get current rank string
+**Kernel functions (`domain.rs`):**
+- `add_points(Leveling, i64) -> Leveling`: accumulate points, increment query
+  count, ratchet level (`points / 100 + 1`, never decreasing)
+- `rank(i64) -> &str`: rank string from level
+- C-ABI export: `gsbot_level_for_points`
 
 ---
 
@@ -450,11 +469,13 @@ Performance optimization through caching:
 - **Query Cache**: Database query results
 
 Configurable via environment variables:
-```env
-ENABLE_CACHING=True
+```text
+ENABLE_CACHING=true
 CACHE_TTL=3600
 CACHE_MAXSIZE=1000
 ```
+
+In-process cache lives in `src/cache.rs`.
 
 ---
 
@@ -462,28 +483,20 @@ CACHE_MAXSIZE=1000
 
 ### Connection
 
-SQLite by default, configurable to PostgreSQL:
+**SQLite only** (no Postgres). `DATABASE_URL` uses the `sqlite:///` form;
+internally it is normalised to a `sqlx` URL (`src/config.rs`).
 
-```env
-DATABASE_URL=sqlite:///data/gsbot.db
-# or
-DATABASE_URL=postgresql://user:pass@localhost/dbname
+```text
+DATABASE_URL=sqlite:///<base>/data/gsbot.db
 ```
 
 ### Migrations
 
-Use Alembic for database migrations:
-
-```bash
-# Create migration
-alembic revision --autogenerate -m "description"
-
-# Run migrations
-alembic upgrade head
-
-# Rollback
-alembic downgrade -1
-```
+The schema is `migrations/0001_init.sql` and is applied automatically at
+startup (and by `gsbot-load-fixtures`) via `sqlx::migrate!`. To add a
+migration, add a new timestamped `.sql` file under `migrations/`; it is
+embedded at compile time and applied on next startup. No external migration
+tool is used.
 
 ---
 
@@ -491,35 +504,33 @@ alembic downgrade -1
 
 ### Adding a New Command
 
-1. **Create command in appropriate cog:**
+1. **Add a `#[poise::command]` function** in the appropriate module under
+   `src/commands/` (e.g. `materials.rs`):
 
-```python
-@commands.command(name="mycommand")
-async def my_command(self, ctx: commands.Context, arg: str):
-    """Command description."""
-    async with ctx.typing():
-        db = next(get_db())
-        try:
-            # Your logic
-            user = UserService.get_or_create(db, ctx.author.id, ctx.author.name)
-            user.add_points(5)
-            UserService.update(db, user)
-
-            await ctx.send("Response")
-        finally:
-            db.close()
+```rust
+/// Command description.
+#[poise::command(prefix_command, aliases("mc"))]
+pub async fn mycommand(
+    ctx: Context<'_>,
+    #[description = "An argument"] arg: String,
+) -> Result<(), Error> {
+    gsbot::typing(&ctx).await;
+    let db = &ctx.data().db;
+    // ... your logic; award points via the domain kernel ...
+    crate::commands::say(&ctx, format!("Response: {arg}")).await
+}
 ```
 
-2. **Add tests**
-3. **Update documentation**
+2. **Register it** in `commands::all()` in `src/commands/mod.rs`.
+3. **Add tests** (`#[cfg(test)]`) and update documentation.
 
 ### Adding a New Model
 
-1. **Define model** in `src/models/`
-2. **Add service methods** in `src/services/`
-3. **Create migration** with Alembic
-4. **Add fixtures** in `scripts/load_fixtures.py`
-5. **Write tests**
+1. **Add a table** to a new migration under `migrations/`.
+2. **Define the row struct** in `src/models.rs`.
+3. **Add query/service methods** in `src/services.rs`.
+4. **Add fixtures** in `src/fixtures.rs`.
+5. **Write tests** (`cargo test --all-targets`).
 
 ---
 
@@ -538,13 +549,13 @@ async def my_command(self, ctx: commands.Context, arg: str):
 
 - Use caching for expensive operations
 - Batch database queries when possible
-- Use async/await properly
-- Close database sessions
+- Use `async`/`.await` properly (tokio); the shared `SqlitePool` is cloneable
+- Keep the `domain.rs` kernel pure and total
 
 ### Security
 
 - Validate all user inputs
-- Use parameterized queries (SQLAlchemy handles this)
-- Check permissions for admin commands
-- Never expose internal errors to users
+- Use parameterised queries (`sqlx` bind parameters)
+- Check permissions for admin commands (`commands::is_admin`)
+- Never expose internal errors to users (see the `on_error` mapping)
 - Keep secrets in environment variables

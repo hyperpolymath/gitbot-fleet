@@ -118,7 +118,7 @@ impl V1ReadinessAnalyzer {
                 })
                 .filter_map(|e| e.ok())
             {
-                if entry.path().extension().map_or(false, |e| e == ext) {
+                if entry.path().extension().is_some_and(|e| e == ext) {
                     found_files.push(entry.path().to_path_buf());
                     if found_files.len() >= 5 {
                         break; // Stop after finding 5 examples

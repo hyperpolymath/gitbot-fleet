@@ -5,6 +5,10 @@
 use thiserror::Error;
 
 /// Main error type for finishing-bot
+///
+/// Several variants form the public error API and are constructed by
+/// downstream consumers / feature-gated paths rather than the default bin.
+#[allow(dead_code)]
 #[derive(Error, Debug)]
 pub enum FinishingError {
     #[error("IO error: {0}")]

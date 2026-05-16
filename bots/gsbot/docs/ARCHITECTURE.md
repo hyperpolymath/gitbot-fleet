@@ -2,50 +2,59 @@
 
 ## Overview
 
-The Garment Sustainability Bot is built with a modular architecture that separates concerns and enables easy maintenance and extension.
+The Garment Sustainability Bot is a **Rust** application (ported from a
+now-deleted Python prototype, behaviour preserved). It is built with a
+modular architecture that separates Discord wiring, the command surface, a
+service/persistence layer, and a pure correctness-critical scoring kernel.
+
+Stack: `poise` 0.6 over `serenity` 0.12 (Discord), `sqlx` 0.8 + SQLite
+(persistence), `tokio` (async), `tracing` (logging), `dotenvy` (config),
+`anyhow`/`thiserror` (errors).
 
 ## System Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                       Discord Platform                       │
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     Bot Layer (Discord.py)                   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │Sustain-  │  │Materials │  │  Brands  │  │   User   │   │
-│  │ability   │  │   Cog    │  │   Cog    │  │   Cog    │   │
-│  │  Cog     │  └──────────┘  └──────────┘  └──────────┘   │
-│  └──────────┘  ┌──────────┐                                 │
-│                │  Admin   │                                 │
-│                │   Cog    │                                 │
-│                └──────────┘                                 │
+│              Bot Layer (poise 0.6 / serenity 0.12)           │
+│  src/bot.rs (intents, presence, on_error mapping)            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │sustain-  │  │materials │  │  brands  │  │  user_   │      │
+│  │ability.rs│  │   .rs    │  │   .rs    │  │commands  │      │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘      │
+│                ┌──────────┐  commands/ (one module per cog)  │
+│                │ admin.rs │  + mod.rs (registry, is_admin)   │
+│                └──────────┘                                  │
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    Service Layer                             │
-│  ┌──────────────────┐  ┌─────────────────────────────┐     │
-│  │ Database Service │  │ Sustainability Analyzer     │     │
-│  │ - CRUD ops       │  │ - Scoring algorithms        │     │
-│  │ - Queries        │  │ - Impact calculations       │     │
-│  └──────────────────┘  └─────────────────────────────┘     │
+│   domain.rs — PURE scoring kernel (the SPARK seam)           │
+│   no I/O · total · stable C ABI in `mod ffi`                 │
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     Data Layer (SQLAlchemy)                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │Material  │  │ Garment  │  │  Brand   │  │   User   │   │
-│  │  Model   │  │  Model   │  │  Model   │  │  Model   │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+│        Service Layer (src/services.rs, sustainability.rs)    │
+│  query/service logic over sqlx · analyzer helpers            │
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   SQLite Database                            │
+│        Data Layer (sqlx 0.8, src/models.rs, src/db.rs)       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │materials │  │ garments │  │  brands  │  │  users   │      │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘      │
+│  migrations/0001_init.sql applied via sqlx::migrate!         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   SQLite Database (only)                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,331 +62,317 @@ The Garment Sustainability Bot is built with a modular architecture that separat
 
 ### Bot Layer
 
-**Location**: `src/bot/`
+**Location**: `src/bot.rs`, `src/commands/`
 
-The bot layer handles Discord interactions:
+Handles Discord interactions via poise/serenity:
 
-- **Main Bot** (`bot.py`): Core bot initialization and event handling
-- **Cogs** (`cogs/`): Modular command groups
-  - Sustainability Cog: Core sustainability commands
-  - Materials Cog: Material analysis commands
-  - Brands Cog: Brand search and rating commands
-  - User Cog: User profile and gamification
-  - Admin Cog: Administrative commands
+- **`bot.rs`**: builds the `poise::Framework`, sets gateway intents
+  (GUILDS, GUILD_MESSAGES, MESSAGE_CONTENT, GUILD_MEMBERS), presence, and
+  maps framework errors to user-facing messages (`on_error`).
+- **`commands/`**: one module per former discord.py cog —
+  `sustainability.rs`, `materials.rs`, `brands.rs`, `user_commands.rs`,
+  `admin.rs`. `commands/mod.rs` holds the command registry (`all()`),
+  embed colour helpers, and the `is_admin` gate.
 
-**Key Features**:
-- Async/await pattern for Discord interactions
-- Error handling and logging
-- User permission checks
-- Message formatting with embeds
+**Key features**:
+- `async`/`.await` (tokio) for Discord interactions
+- Error handling and `tracing` logging
+- Admin permission checks (`is_admin`: ID in `DISCORD_ADMIN_IDS` or guild
+  Administrator permission)
+- Message formatting with serenity embeds
+
+### Domain Kernel — the SPARK Seam
+
+**Location**: `src/domain.rs`
+
+A **pure, total, correctness-critical** scoring kernel: no I/O, no
+allocation in the numeric core, total over its documented domain. It holds
+all the scoring formulas (`material_overall_score`, `grade`,
+`lifespan_multiplier`, `garment_sustainability_score`,
+`environmental_impact`, `add_points`, `rank`, `brand_rating_summary`,
+`impact_category`, `material_recommendation`).
+
+`mod ffi` exposes the numeric core under a **stable C ABI**:
+`gsbot_material_overall_score`, `gsbot_lifespan_multiplier`,
+`gsbot_level_for_points` (`#[no_mangle] extern "C"`). This is the
+architecture's **verification seam**: a formally-verified SPARK/Ada module
+can export the same symbols and be linked in place of the Rust bodies via
+the hyperpolymath Zig-FFI / Idris2-ABI pattern, with no caller changes —
+callers go through the safe Rust wrappers, so substitution is transparent.
 
 ### Service Layer
 
-**Location**: `src/services/`
+**Location**: `src/services.rs`, `src/sustainability.rs`
 
-Business logic and data processing:
+Business logic and data access:
 
-- **Database Service** (`database.py`): CRUD operations, queries, search
-- **Sustainability Analyzer** (`sustainability.py`): Scoring algorithms, recommendations
-
-**Responsibilities**:
-- Data validation
-- Business rule enforcement
-- Complex calculations
-- External API integration (future)
+- **`services.rs`**: typed `sqlx` queries — get-by-name, search,
+  alternatives, top-rated, leaderboard, user get-or-create/update.
+- **`sustainability.rs`**: analyzer helpers (tips, impact category text).
 
 ### Data Layer
 
-**Location**: `src/models/`
+**Location**: `src/models.rs`, `src/db.rs`, `migrations/`
 
-Database models using SQLAlchemy ORM:
-
-- **Base Model**: Common fields (id, timestamps)
-- **Material**: Fabric materials with environmental metrics
-- **Garment**: Clothing items with sustainability scores
-- **Brand**: Fashion brands with ratings
-- **User**: Discord users with tracking
-
-**Features**:
-- Relationships between models
-- Calculated properties
-- Data serialization
-- Migration support (Alembic)
+- **`models.rs`**: row structs for materials, garments, brands, users.
+- **`db.rs`**: opens the SQLite pool (`SqlitePoolOptions`, max 5
+  connections) and applies migrations via `sqlx::migrate!`.
+- **`migrations/0001_init.sql`**: schema, embedded at compile time and
+  applied automatically at startup. **SQLite only — no Postgres.**
 
 ### Configuration
 
-**Location**: `src/config/`
+**Location**: `src/config.rs`
 
-- Environment variable loading
-- Settings validation
-- Default values
-- Feature flags
+- `.env` loaded via `dotenvy`
+- Environment variable loading with defaults and validation
+- Feature flags (`ENABLE_CACHING`, `ENABLE_ANALYTICS`)
+- `validate()` fails fast if `DISCORD_TOKEN` is missing
 
 ### Utilities
 
-**Location**: `src/utils/`
-
-- **Logger**: Colored console and file logging
-- **Cache**: TTL and LRU caching for performance
+- **`src/logging.rs`**: `tracing` console output + optional file logging
+  (`tracing-appender`)
+- **`src/cache.rs`**: in-process cache for performance
+- **`src/fixtures.rs`**: sample-data loader
+- **`src/bin/`**: `gsbot-load-fixtures`, `gsbot-export-data`,
+  `gsbot-backup-db`
 
 ## Data Flow
 
 ### Command Execution Flow
 
-```
+```text
 1. User sends Discord command
    ↓
-2. Discord.py receives message
+2. serenity gateway receives message
    ↓
-3. Bot routes to appropriate cog
+3. poise routes to the matching command (src/commands/*.rs)
    ↓
-4. Cog validates input
+4. Command parses/validates arguments
    ↓
-5. Service layer processes request
+5. Service layer (services.rs) queries via sqlx
    ↓
-6. Database query executed
+6. domain.rs computes scores (pure kernel)
    ↓
-7. Results processed and formatted
+7. Results formatted into a serenity embed
    ↓
-8. Response sent via Discord embed
+8. User points updated (add_points kernel + users table)
    ↓
-9. User points updated
-   ↓
-10. Response displayed to user
+9. Response sent via poise reply
 ```
 
 ### Database Query Flow
 
-```
-Command → Service → SQLAlchemy → SQLite
-                ↓
-              Cache (if enabled)
-                ↓
-              Result
+```text
+Command → services.rs → sqlx → SQLite
+                 ↓
+               cache.rs (if ENABLE_CACHING)
+                 ↓
+               Result
 ```
 
 ## Design Patterns
 
 ### Separation of Concerns
 
-- **Presentation**: Discord embeds and formatting
-- **Business Logic**: Services and analyzers
-- **Data Access**: Models and database operations
+- **Presentation**: serenity embeds and formatting (`commands/`)
+- **Correctness core**: pure kernel (`domain.rs`)
+- **Business/data access**: `services.rs`, `models.rs`, `db.rs`
 
-### Dependency Injection
+### Shared State
 
-Database sessions are injected using generators:
+A `Data { db: SqlitePool, config: Config }` is constructed once in
+`Framework::setup` and handed to every command via `Context`:
 
-```python
-db = next(get_db())
-try:
-    # Use db
-finally:
-    db.close()
+```rust
+let db = &ctx.data().db;
+let prefix = &ctx.data().config.discord_prefix;
 ```
 
-### Service Pattern
+### Service Functions
 
-Business logic is centralized in service classes:
+Data access is centralised in service types:
 
-```python
-MaterialService.get_by_name(db, "cotton")
-GarmentService.get_alternatives(db, garment)
+```rust
+MaterialService::get_by_name(db, "cotton").await?;
+GarmentService::get_alternatives(db, &garment).await?;
 ```
 
-### Decorator Pattern
+### Command Attributes
 
-Caching and command registration use decorators:
+Commands and their aliases are declared with the poise attribute macro:
 
-```python
-@commands.command()
-@cached(ttl=300)
-async def my_command(ctx, arg):
-    ...
+```rust
+#[poise::command(prefix_command, aliases("sus", "score"))]
+pub async fn sustainability(ctx: Context<'_>, garment: String)
+    -> Result<(), Error> { /* ... */ }
 ```
 
 ## Database Schema
 
 ### Entity Relationships
 
-```
-Material ◄─────────┐
-    │              │
-    │              │ Many-to-Many
-    │              │
-    │              │
-    └─────────► Garment
+```text
+materials ◄────────┐
+    │              │ Many-to-Many (garment_materials)
+    └────────► garments
 
-Brand (standalone)
-
-User (standalone, tracks Discord users)
+brands  (standalone)
+users   (standalone — tracks Discord users)
 ```
 
 ### Key Tables
 
-- `materials`: Material definitions and metrics
-- `garments`: Garment types and properties
-- `garment_materials`: Association table
-- `brands`: Brand information and ratings
-- `users`: User profiles and gamification
+- `materials`: material definitions and metrics
+- `garments`: garment types and properties
+- `garment_materials`: association table (garment_id, material_id, percentage)
+- `brands`: brand information and ratings
+- `users`: user profiles and gamification
+
+(See `migrations/0001_init.sql` for the exact columns and indexes.)
 
 ## Scalability Considerations
 
 ### Current Architecture (Small Scale)
 
-- SQLite database
-- In-memory caching
+- SQLite database (the only supported backend)
+- In-process caching
 - Single bot instance
 
-### Future Enhancements (Medium/Large Scale)
+### Future Enhancements
 
-- PostgreSQL database
 - Redis caching
-- Multiple bot instances with load balancing
-- Message queue for async tasks
-- Web dashboard with REST API
+- Multiple bot instances with sharding
+- Web dashboard with read API
 - Metrics and monitoring
+- Formal verification of the `domain.rs` kernel in SPARK/Ada, linked
+  through the existing C-ABI seam
 
 ## Testing Strategy
 
 ### Unit Tests
 
-Test individual components in isolation:
-- Model calculations
-- Service methods
-- Utility functions
+In-crate `#[cfg(test)]` tests in isolation — notably the `domain.rs`
+kernel tests that pin the scoring formulas (SPARK-ready).
 
-### Integration Tests
+### Integration / All Targets
 
-Test component interactions:
-- Bot commands
-- Database operations
-- Service workflows
-
-### Test Database
-
-In-memory SQLite for fast, isolated testing
+`cargo test --all-targets` exercises binaries and library; tests use
+`tempfile` / in-memory SQLite for fast, isolated runs.
 
 ## Configuration Management
 
 ### Environment Variables
 
-- `DISCORD_TOKEN`: Bot authentication
-- `DATABASE_URL`: Database connection
-- `CACHE_TTL`: Cache lifetime
-- Feature flags
+`DISCORD_TOKEN` (required), `DISCORD_PREFIX`, `DISCORD_ADMIN_IDS`,
+`DATABASE_URL` (SQLite only), `DATABASE_ECHO`, `CACHE_TTL`,
+`CACHE_MAXSIZE`, `LOG_LEVEL`, `LOG_FILE`, `API_TIMEOUT`,
+`API_RETRY_COUNT`, `ENABLE_CACHING`, `ENABLE_ANALYTICS`. See
+`src/config.rs`.
 
 ### Validation
 
-Settings are validated on startup to fail fast
+`Config::validate()` runs on startup to fail fast (missing token, data
+directories).
 
 ## Error Handling
 
 ### Levels
 
-1. **Command Level**: User-friendly error messages
-2. **Service Level**: Log errors, raise exceptions
-3. **Database Level**: Transaction rollback
+1. **Command level**: user-friendly messages (the `on_error` mapping in
+   `bot.rs`)
+2. **Application level**: `anyhow::Error` (aliased as `Error`); typed
+   errors via `thiserror`
+3. **Database level**: `sqlx` result propagation
 
 ### Logging
 
-- Console output (colored)
-- File output (optional)
-- Different levels per component
+- `tracing` console output
+- Optional file output via `tracing-appender` (`LOG_FILE`)
+- Level via `LOG_LEVEL`
 
 ## Security
 
 ### Input Validation
 
-- All user inputs are validated
-- SQL injection prevention (SQLAlchemy)
-- Command permission checks
+- User inputs validated by command argument parsing
+- SQL injection prevented via `sqlx` bind parameters
+- Admin command permission checks (`commands::is_admin`)
 
 ### Secrets Management
 
-- Environment variables for secrets
+- Secrets via environment variables / `.env` (git-excluded)
 - No hardcoded credentials
-- .env file excluded from git
 
 ## Performance
 
 ### Caching
 
-- TTL cache for expensive operations
-- LRU cache for frequent queries
-- Configurable cache size
+- In-process cache (`src/cache.rs`), TTL/size configurable
 
 ### Database
 
-- Indexes on frequently queried fields
-- Connection pooling
-- Query optimization
+- Indexes on frequently queried fields (see migration)
+- `sqlx` connection pool (max 5 connections)
 
 ## Extension Points
 
 ### Adding New Commands
 
-1. Create/modify cog in `src/bot/cogs/`
-2. Add service methods if needed
-3. Update documentation
-4. Add tests
+1. Add a `#[poise::command]` fn in `src/commands/`
+2. Register it in `commands::all()` (`src/commands/mod.rs`)
+3. Add service methods if needed; update docs and tests
 
 ### Adding New Models
 
-1. Define model in `src/models/`
-2. Add service methods
-3. Create migration (Alembic)
-4. Add tests and fixtures
+1. Add a migration under `migrations/`
+2. Define the row struct in `src/models.rs`
+3. Add service methods in `src/services.rs`
+4. Add fixtures in `src/fixtures.rs`; add tests
 
 ### Adding External APIs
 
-1. Create service in `src/services/`
-2. Add configuration settings
-3. Implement caching
-4. Handle rate limiting
+1. Add a service in `src/services.rs`
+2. Add configuration settings in `src/config.rs`
+3. Implement caching and rate limiting
 
 ## Deployment
 
-### Docker
+### Container
 
-- Dockerfile for containerization
-- docker-compose for orchestration
-- Volume mounts for data persistence
+- Multi-stage `Containerfile` (rust builder → debian-bookworm-slim
+  runtime), non-root `gsbot` user, `ENTRYPOINT ["/usr/local/bin/gsbot"]`
+- `docker-compose.yml` builds with `dockerfile: Containerfile`; SQLite
+  only
 
 ### CI/CD
 
-- GitHub Actions for automation
-- Testing on multiple Python versions
-- Code quality checks
-- Security scanning
+- Fleet-level GitHub Actions, including the Hypatia security scan that
+  self-scans this repository
+- `cargo test --all-targets`, `cargo clippy --all-targets -- -D warnings`,
+  `cargo fmt --all -- --check`
 
 ## Monitoring
 
 ### Logging
 
-- Structured logging
-- Log levels per component
-- File rotation
+- Structured `tracing` logging, level per `LOG_LEVEL`, optional file
+  rotation via `tracing-appender`
 
 ### Metrics (Future)
 
-- Command usage statistics
-- Response times
-- Error rates
-- User engagement
+- Command usage statistics, response times, error rates
 
 ## Documentation
 
-- Code docstrings
-- Architecture documentation
-- API documentation
-- User guides
+- Rustdoc comments, this architecture doc, the API reference, deployment
+  guide, and `CLAUDE.md` for AI agents
 
 ## Future Considerations
 
-1. **Microservices**: Split into separate services
-2. **API Gateway**: RESTful API for web/mobile
-3. **Event Sourcing**: Track all state changes
-4. **CQRS**: Separate read/write models
-5. **GraphQL**: Flexible data queries
-6. **WebSockets**: Real-time updates
+1. **Formal verification**: prove the `domain.rs` numeric core in SPARK/Ada
+   and link it through the existing C-ABI seam (no caller changes)
+2. **Sharding**: scale across multiple gateway shards
+3. **Read API**: optional web/JSON read surface
+4. **Richer analytics**: opt-in usage metrics

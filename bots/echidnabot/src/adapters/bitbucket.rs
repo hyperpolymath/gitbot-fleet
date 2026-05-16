@@ -45,12 +45,15 @@ impl PlatformAdapter for BitbucketAdapter {
     async fn clone_repo(&self, repo: &RepoId, commit: &str) -> Result<PathBuf> {
         let temp_dir = tempfile::tempdir().map_err(Error::Io)?;
         let clone_path = temp_dir.keep();
+        let clone_path_str = clone_path.to_str().ok_or_else(|| {
+            Error::Unsupported("Temporary clone path is not valid UTF-8".to_string())
+        })?;
 
         let url = self.repo_url(repo);
 
         let status = if commit == "HEAD" {
             tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path.to_str().unwrap()])
+                .args(["clone", "--depth", "1", &url, clone_path_str])
                 .status()
                 .await
                 .map_err(Error::Io)?
@@ -63,7 +66,7 @@ impl PlatformAdapter for BitbucketAdapter {
                     "--branch",
                     commit,
                     &url,
-                    clone_path.to_str().unwrap(),
+                    clone_path_str,
                 ])
                 .status()
                 .await
@@ -72,7 +75,7 @@ impl PlatformAdapter for BitbucketAdapter {
 
         if !status.success() && commit != "HEAD" {
             let status = tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path.to_str().unwrap()])
+                .args(["clone", "--depth", "1", &url, clone_path_str])
                 .status()
                 .await
                 .map_err(Error::Io)?;
@@ -152,7 +155,7 @@ impl PlatformAdapter for BitbucketAdapter {
         Ok(CheckRunId(
             data["uuid"]
                 .as_str()
-                .unwrap_or("0")
+                .ok_or_else(|| Error::GitHub("Missing uuid in response".to_string()))?
                 .to_string(),
         ))
     }

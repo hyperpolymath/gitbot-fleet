@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 //! Benchmarks for finishingbot analyzers
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use finishingbot::analyzers::{
+use criterion::{criterion_group, criterion_main, Criterion};
+use finishing_bot::analyzers::{
     license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer, scm_files::ScmFilesAnalyzer,
     testing::TestingAnalyzer, tooling::ToolingAnalyzer, v1_readiness::V1ReadinessAnalyzer,
     Analyzer,
 };
-use finishingbot::config::Config;
+use finishing_bot::config::Config;
+use std::hint::black_box;
 use std::path::Path;
 
 fn bench_license_analyzer(c: &mut Criterion) {
-    let analyzer = LicenseAnalyzer::default();
+    let analyzer = LicenseAnalyzer;
     let config = Config::default();
     let path = Path::new(".");
 
@@ -21,7 +22,7 @@ fn bench_license_analyzer(c: &mut Criterion) {
 }
 
 fn bench_scm_files_analyzer(c: &mut Criterion) {
-    let analyzer = ScmFilesAnalyzer::default();
+    let analyzer = ScmFilesAnalyzer;
     let config = Config::default();
     let path = Path::new(".");
 
@@ -31,7 +32,7 @@ fn bench_scm_files_analyzer(c: &mut Criterion) {
 }
 
 fn bench_testing_analyzer(c: &mut Criterion) {
-    let analyzer = TestingAnalyzer::default();
+    let analyzer = TestingAnalyzer;
     let config = Config::default();
     let path = Path::new(".");
 
@@ -41,7 +42,7 @@ fn bench_testing_analyzer(c: &mut Criterion) {
 }
 
 fn bench_tooling_analyzer(c: &mut Criterion) {
-    let analyzer = ToolingAnalyzer::default();
+    let analyzer = ToolingAnalyzer;
     let config = Config::default();
     let path = Path::new(".");
 
@@ -51,7 +52,7 @@ fn bench_tooling_analyzer(c: &mut Criterion) {
 }
 
 fn bench_v1_readiness_analyzer(c: &mut Criterion) {
-    let analyzer = V1ReadinessAnalyzer::default();
+    let analyzer = V1ReadinessAnalyzer;
     let config = Config::default();
     let path = Path::new(".");
 
@@ -66,12 +67,12 @@ fn bench_full_audit(c: &mut Criterion) {
 
     c.bench_function("full_audit", |b| {
         b.iter(|| {
-            let _license = LicenseAnalyzer::default().analyze(path, &config);
-            let _placeholder = PlaceholderAnalyzer::default().analyze(path, &config);
-            let _scm = ScmFilesAnalyzer::default().analyze(path, &config);
-            let _testing = TestingAnalyzer::default().analyze(path, &config);
-            let _tooling = ToolingAnalyzer::default().analyze(path, &config);
-            let _v1 = V1ReadinessAnalyzer::default().analyze(path, &config);
+            let _license = LicenseAnalyzer.analyze(path, &config);
+            let _placeholder = PlaceholderAnalyzer.analyze(path, &config);
+            let _scm = ScmFilesAnalyzer.analyze(path, &config);
+            let _testing = TestingAnalyzer.analyze(path, &config);
+            let _tooling = ToolingAnalyzer.analyze(path, &config);
+            let _v1 = V1ReadinessAnalyzer.analyze(path, &config);
         })
     });
 }

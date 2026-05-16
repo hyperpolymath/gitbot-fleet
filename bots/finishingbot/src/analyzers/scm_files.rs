@@ -136,47 +136,49 @@ impl ScmFilesAnalyzer {
 
         // Check for specific required sections based on file type
         match filename {
-            "STATE.scm" => {
-                if !content.contains("metadata") || !content.contains("current-position") {
-                    result.add(
-                        Finding::new(
-                            "SCM-004-STATE",
-                            "STATE.scm missing required sections",
-                            Severity::Warning,
-                            "STATE.scm should contain 'metadata' and 'current-position' sections.",
-                        )
-                        .with_file(file_path.to_path_buf())
-                        .with_suggestion("Add required sections following hyperpolymath STATE.scm format"),
-                    );
-                }
+            "STATE.scm"
+                if !content.contains("metadata") || !content.contains("current-position") =>
+            {
+                result.add(
+                    Finding::new(
+                        "SCM-004-STATE",
+                        "STATE.scm missing required sections",
+                        Severity::Warning,
+                        "STATE.scm should contain 'metadata' and 'current-position' sections.",
+                    )
+                    .with_file(file_path.to_path_buf())
+                    .with_suggestion("Add required sections following hyperpolymath STATE.scm format"),
+                );
             }
-            "META.scm" => {
-                if !content.contains("architecture-decisions") || !content.contains("development-practices") {
-                    result.add(
-                        Finding::new(
-                            "SCM-004-META",
-                            "META.scm missing required sections",
-                            Severity::Warning,
-                            "META.scm should contain 'architecture-decisions' and 'development-practices'.",
-                        )
-                        .with_file(file_path.to_path_buf())
-                        .with_suggestion("Add ADRs and development practices following hyperpolymath META.scm spec"),
-                    );
-                }
+            "META.scm"
+                if !content.contains("architecture-decisions")
+                    || !content.contains("development-practices") =>
+            {
+                result.add(
+                    Finding::new(
+                        "SCM-004-META",
+                        "META.scm missing required sections",
+                        Severity::Warning,
+                        "META.scm should contain 'architecture-decisions' and 'development-practices'.",
+                    )
+                    .with_file(file_path.to_path_buf())
+                    .with_suggestion("Add ADRs and development practices following hyperpolymath META.scm spec"),
+                );
             }
-            "ECOSYSTEM.scm" => {
-                if !content.contains("position-in-ecosystem") || !content.contains("related-projects") {
-                    result.add(
-                        Finding::new(
-                            "SCM-004-ECOSYSTEM",
-                            "ECOSYSTEM.scm missing required sections",
-                            Severity::Warning,
-                            "ECOSYSTEM.scm should contain 'position-in-ecosystem' and 'related-projects'.",
-                        )
-                        .with_file(file_path.to_path_buf())
-                        .with_suggestion("Define ecosystem position and relationships"),
-                    );
-                }
+            "ECOSYSTEM.scm"
+                if !content.contains("position-in-ecosystem")
+                    || !content.contains("related-projects") =>
+            {
+                result.add(
+                    Finding::new(
+                        "SCM-004-ECOSYSTEM",
+                        "ECOSYSTEM.scm missing required sections",
+                        Severity::Warning,
+                        "ECOSYSTEM.scm should contain 'position-in-ecosystem' and 'related-projects'.",
+                    )
+                    .with_file(file_path.to_path_buf())
+                    .with_suggestion("Define ecosystem position and relationships"),
+                );
             }
             _ => {}
         }

@@ -43,7 +43,7 @@ use echidnabot::dispatcher::ProverKind;
 use echidnabot::scheduler::JobScheduler;
 use echidnabot::store::models::Repository;
 use echidnabot::store::{SqliteStore, Store};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::sync::Arc;
 use wiremock::matchers::{method, path};
@@ -118,7 +118,7 @@ async fn build_test_server(
     };
 
     let router = webhook_router().with_state(app_state);
-    let server = TestServer::new(router).expect("TestServer::new should succeed");
+    let server = TestServer::new(router);
 
     (server, store, scheduler)
 }
