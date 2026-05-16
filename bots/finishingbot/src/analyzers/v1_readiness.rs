@@ -101,8 +101,8 @@ impl V1ReadinessAnalyzer {
 
         // Check for banned language files
         let banned_patterns = [
-            ("*.ts", "TypeScript files found (use ReScript instead)"),
-            ("*.py", "Python files found (use Julia/Rust/ReScript instead)"),
+            ("*.ts", "TypeScript files found (use AffineScript instead)"),
+            ("*.py", "Python files found (use Julia/Rust/AffineScript instead)"),
             ("*.go", "Go files found (use Rust instead)"),
         ];
 
