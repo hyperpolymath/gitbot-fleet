@@ -7,13 +7,13 @@
 
 use anyhow::Result;
 use axum::{
+    Json, Router,
     extract::State,
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
 };
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -46,6 +46,31 @@ struct Cli {
     /// Webhook secret for verification
     #[arg(long, env = "GITHUB_WEBHOOK_SECRET")]
     webhook_secret: Option<String>,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Run a one-shot RSR compliance check against a remote repository and exit.
+    ///
+    /// Uses the GitHub REST API (honours the `GITHUB_TOKEN` env var for rate
+    /// limits / private repos; works unauthenticated on public repos). Exits
+    /// non-zero when required checks fail, so it can gate CI directly.
+    Check {
+        /// Repository owner (user or org), e.g. `hyperpolymath`
+        #[arg(long)]
+        owner: String,
+
+        /// Repository name, e.g. `ubicity`
+        #[arg(long)]
+        repo: String,
+
+        /// Output format
+        #[arg(long, default_value = "pretty", value_parser = ["pretty", "json"])]
+        format: String,
+    },
 }
 
 /// Application state shared across handlers
@@ -70,14 +95,25 @@ async fn main() -> Result<()> {
     // Parse CLI arguments
     let cli = Cli::parse();
 
-    info!("Starting Rhodibot v{}", env!("CARGO_PKG_VERSION"));
-
     // Build configuration
     let config = Config::new(
         cli.app_id,
         cli.private_key_path.as_deref(),
         cli.webhook_secret.clone(),
     )?;
+
+    // One-shot CLI mode: run a compliance check and exit with a CI-usable code.
+    if let Some(Command::Check {
+        owner,
+        repo,
+        format,
+    }) = &cli.command
+    {
+        return run_check(&config, owner, repo, format).await;
+    }
+
+    info!("Starting Rhodibot v{}", env!("CARGO_PKG_VERSION"));
+
     let state = AppState {
         config: Arc::new(config),
     };
@@ -98,6 +134,55 @@ async fn main() -> Result<()> {
 
     axum::serve(listener, app).await?;
 
+    Ok(())
+}
+
+/// One-shot RSR compliance check for CI. Prints a report and exits non-zero
+/// when required checks fail (so the caller's job fails too).
+async fn run_check(config: &Config, owner: &str, repo: &str, format: &str) -> Result<()> {
+    rhodibot::sanitize::validate_owner_repo(owner, repo)?;
+
+    let report = rsr::check_compliance(config, owner, repo).await?;
+
+    if format == "json" {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!(
+            "RSR compliance — {}/{} (policy: {})",
+            report.owner, report.repo, report.policy
+        );
+        println!("{}", rsr::policy_summary(report.policy));
+        println!(
+            "Score: {}/{} ({:.0}%)",
+            report.score, report.max_score, report.percentage
+        );
+        println!();
+        for check in &report.checks {
+            println!(
+                "  [{:?}] {} ({:?}, {}/{}) — {}",
+                check.status,
+                check.name,
+                check.severity,
+                check.points,
+                check.max_points,
+                check.message
+            );
+        }
+        println!();
+        println!("{}", report.summary);
+        println!(
+            "Required checks: {}",
+            if report.required_passed {
+                "PASSED"
+            } else {
+                "FAILED"
+            }
+        );
+    }
+
+    if !report.required_passed {
+        std::process::exit(1);
+    }
     Ok(())
 }
 
