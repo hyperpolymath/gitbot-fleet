@@ -28,7 +28,7 @@ static DNS_PATTERNS: LazyLock<Vec<DnsPattern>> = LazyLock::new(|| {
     vec![
         // SPF +all — REJECT (too permissive)
         DnsPattern {
-            regex: Regex::new(r#"(?i)\bv=spf1\b.*\+all\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bv=spf1\b.*\+all\b"#).expect("static regex is valid"),
             algorithm: "SPF-permissive",
             status: CryptoStatus::Reject,
             message: "SPF record uses +all — allows anyone to send email as this domain.",
@@ -36,7 +36,7 @@ static DNS_PATTERNS: LazyLock<Vec<DnsPattern>> = LazyLock::new(|| {
         },
         // DMARC none — WARN
         DnsPattern {
-            regex: Regex::new(r#"(?i)\bv=DMARC1\b.*\bp=none\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bv=DMARC1\b.*\bp=none\b"#).expect("static regex is valid"),
             algorithm: "DMARC-none",
             status: CryptoStatus::Warn,
             message: "DMARC policy is 'none' — provides monitoring only, no protection.",
@@ -44,7 +44,7 @@ static DNS_PATTERNS: LazyLock<Vec<DnsPattern>> = LazyLock::new(|| {
         },
         // DMARC quarantine — WARN
         DnsPattern {
-            regex: Regex::new(r#"(?i)\bv=DMARC1\b.*\bp=quarantine\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bv=DMARC1\b.*\bp=quarantine\b"#).expect("static regex is valid"),
             algorithm: "DMARC-quarantine",
             status: CryptoStatus::Warn,
             message: "DMARC policy is 'quarantine' — prefer 'reject' for stronger protection.",
@@ -52,7 +52,7 @@ static DNS_PATTERNS: LazyLock<Vec<DnsPattern>> = LazyLock::new(|| {
         },
         // SSHFP with SHA-1 (type 1) — WARN
         DnsPattern {
-            regex: Regex::new(r#"(?i)\bSSHFP\s+\d+\s+1\s+"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bSSHFP\s+\d+\s+1\s+"#).expect("static regex is valid"),
             algorithm: "SSHFP-SHA1",
             status: CryptoStatus::Warn,
             message: "SSHFP record uses SHA-1 hash type (type 1) — deprecated.",
@@ -60,7 +60,7 @@ static DNS_PATTERNS: LazyLock<Vec<DnsPattern>> = LazyLock::new(|| {
         },
         // TLSA with SHA-1 — WARN
         DnsPattern {
-            regex: Regex::new(r#"(?i)\bTLSA\s+\d+\s+\d+\s+1\s+"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bTLSA\s+\d+\s+\d+\s+1\s+"#).expect("static regex is valid"),
             algorithm: "TLSA-SHA1",
             status: CryptoStatus::Warn,
             message: "TLSA record uses SHA-1 matching type — deprecated.",
@@ -68,7 +68,7 @@ static DNS_PATTERNS: LazyLock<Vec<DnsPattern>> = LazyLock::new(|| {
         },
         // Internal IPs in public DNS — REJECT
         DnsPattern {
-            regex: Regex::new(r#"(?i)\b(?:A|AAAA)\s+(?:10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:A|AAAA)\s+(?:10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+)\b"#).expect("static regex is valid"),
             algorithm: "internal-ip-exposed",
             status: CryptoStatus::Reject,
             message: "Internal/private IP address exposed in public DNS record.",
@@ -76,7 +76,7 @@ static DNS_PATTERNS: LazyLock<Vec<DnsPattern>> = LazyLock::new(|| {
         },
         // MTA-STS mode testing — WARN
         DnsPattern {
-            regex: Regex::new(r#"(?i)\bmode\s*[:=]\s*['"]?testing['"]?"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bmode\s*[:=]\s*['"]?testing['"]?"#).expect("static regex is valid"),
             algorithm: "MTA-STS-testing",
             status: CryptoStatus::Warn,
             message: "MTA-STS policy in testing mode — does not enforce TLS for email.",

@@ -110,7 +110,7 @@ mod tests {
             }}"#, seam_type);
 
             let result: serde_json::Value = serde_json::from_str(&json)
-                .expect(&format!("Should parse seam with type '{}'", seam_type));
+                .unwrap_or_else(|e| panic!("Should parse seam with type '{}': {}", seam_type, e));
 
             assert_eq!(result["seam_type"], seam_type);
         }
@@ -129,7 +129,7 @@ mod tests {
             }}"#, severity);
 
             let result: serde_json::Value = serde_json::from_str(&json)
-                .expect(&format!("Should parse invariant with severity '{}'", severity));
+                .unwrap_or_else(|e| panic!("Should parse invariant with severity '{}': {}", severity, e));
 
             assert_eq!(result["severity"], severity);
         }
@@ -155,7 +155,7 @@ mod tests {
             }}"#, ring);
 
             let result: serde_json::Value = serde_json::from_str(&json)
-                .expect(&format!("Should parse seam with ring {}", ring));
+                .unwrap_or_else(|e| panic!("Should parse seam with ring {}: {}", ring, e));
 
             assert_eq!(result["ring"], ring);
         }

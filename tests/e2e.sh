@@ -99,7 +99,7 @@ check_exists "AI manifest present"               "$PROJECT_DIR/0-AI-MANIFEST.a2m
 check_exists "fleet-coordinator.sh present"      "$PROJECT_DIR/fleet-coordinator.sh"
 check_exists "learning-monitor.sh present"       "$PROJECT_DIR/learning-monitor.sh"
 check_exists "Justfile present"                  "$PROJECT_DIR/Justfile"
-check_exists "docker-compose.yml present"        "$PROJECT_DIR/docker-compose.yml"
+check_exists "compose.yml present"               "$PROJECT_DIR/compose.yml"
 
 echo ""
 

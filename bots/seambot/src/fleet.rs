@@ -183,7 +183,7 @@ mod tests {
 
         let findings = ctx.findings_from(BotId::Seambot);
         // 1 hidden channel finding + 1 incomplete register finding (0% complete)
-        assert!(findings.len() >= 1);
+        assert!(!findings.is_empty());
         assert!(findings.iter().any(|f| f.rule_id.contains("SEAM-HIDDEN")));
     }
 
@@ -195,7 +195,7 @@ mod tests {
         publish_findings(&mut ctx, &register, &[], 3, 0).unwrap();
 
         let findings = ctx.findings_from(BotId::Seambot);
-        assert!(findings.len() >= 1);
+        assert!(!findings.is_empty());
         assert!(findings.iter().any(|f| f.rule_id.contains("SEAM-DRIFT")));
     }
 
@@ -207,7 +207,7 @@ mod tests {
         publish_findings(&mut ctx, &register, &[], 0, 2).unwrap();
 
         let findings = ctx.findings_from(BotId::Seambot);
-        assert!(findings.len() >= 1);
+        assert!(!findings.is_empty());
         assert!(findings.iter().any(|f| f.rule_id.contains("SEAM-CONFORMANCE")));
     }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: PMPL-1.0-or-later
+# hypatia: allow security_errors/secret_detected -- remediation tool: the credential-shaped strings here are the before/after illustration patterns it rewrites, not real secrets
 #
 # fix-secret-to-env.sh — Replace hardcoded secrets with environment variable lookups
 #

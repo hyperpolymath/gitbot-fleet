@@ -143,8 +143,10 @@ fn bench_bot_execution(c: &mut Criterion) {
         b.iter(|| {
             let mut ctx = Context::new("test-repo", PathBuf::from("/tmp/test"));
             ctx.register_bot(BotId::Rhodibot);
-            ctx.start_bot(BotId::Rhodibot).unwrap();
-            ctx.complete_bot(BotId::Rhodibot, 10, 2, 50).unwrap();
+            ctx.start_bot(BotId::Rhodibot)
+                .expect("bench setup: start_bot on freshly registered Rhodibot must succeed");
+            ctx.complete_bot(BotId::Rhodibot, 10, 2, 50)
+                .expect("bench setup: complete_bot on started Rhodibot must succeed");
             black_box(ctx);
         });
     });
@@ -153,8 +155,10 @@ fn bench_bot_execution(c: &mut Criterion) {
         let mut ctx = Context::new("test-repo", PathBuf::from("/tmp/test"));
         ctx.register_all_bots();
         // Complete some bots
-        ctx.start_bot(BotId::Rhodibot).unwrap();
-        ctx.complete_bot(BotId::Rhodibot, 5, 0, 20).unwrap();
+        ctx.start_bot(BotId::Rhodibot)
+            .expect("bench setup: start_bot on registered Rhodibot must succeed");
+        ctx.complete_bot(BotId::Rhodibot, 5, 0, 20)
+            .expect("bench setup: complete_bot on started Rhodibot must succeed");
 
         b.iter(|| {
             let ready = ctx.ready_bots();
@@ -172,10 +176,14 @@ fn bench_health_check(c: &mut Criterion) {
     // Setup context with execution data
     let mut ctx = Context::new("test-repo", PathBuf::from("/tmp/test"));
     ctx.register_all_bots();
-    ctx.start_bot(BotId::Rhodibot).unwrap();
-    ctx.complete_bot(BotId::Rhodibot, 10, 2, 50).unwrap();
-    ctx.start_bot(BotId::Echidnabot).unwrap();
-    ctx.complete_bot(BotId::Echidnabot, 5, 0, 30).unwrap();
+    ctx.start_bot(BotId::Rhodibot)
+        .expect("bench setup: start_bot on registered Rhodibot must succeed");
+    ctx.complete_bot(BotId::Rhodibot, 10, 2, 50)
+        .expect("bench setup: complete_bot on started Rhodibot must succeed");
+    ctx.start_bot(BotId::Echidnabot)
+        .expect("bench setup: start_bot on registered Echidnabot must succeed");
+    ctx.complete_bot(BotId::Echidnabot, 5, 0, 30)
+        .expect("bench setup: complete_bot on started Echidnabot must succeed");
 
     // Add some findings
     for i in 0..50 {
@@ -208,8 +216,10 @@ fn bench_report_generation(c: &mut Criterion) {
     ctx.register_all_bots();
 
     for bot in [BotId::Rhodibot, BotId::Echidnabot, BotId::Sustainabot] {
-        ctx.start_bot(bot).unwrap();
-        ctx.complete_bot(bot, 20, 3, 100).unwrap();
+        ctx.start_bot(bot)
+            .expect("bench setup: start_bot on registered bot must succeed");
+        ctx.complete_bot(bot, 20, 3, 100)
+            .expect("bench setup: complete_bot on started bot must succeed");
     }
 
     for i in 0..100 {
@@ -251,8 +261,10 @@ fn bench_summary(c: &mut Criterion) {
     ctx.register_all_bots();
 
     for bot in BotId::all() {
-        ctx.start_bot(bot).unwrap();
-        ctx.complete_bot(bot, 15, 2, 75).unwrap();
+        ctx.start_bot(bot)
+            .expect("bench setup: start_bot on registered bot must succeed");
+        ctx.complete_bot(bot, 15, 2, 75)
+            .expect("bench setup: complete_bot on started bot must succeed");
     }
 
     c.bench_function("generate_summary", |b| {
@@ -281,15 +293,18 @@ fn bench_serialization(c: &mut Criterion) {
 
     group.bench_function("serialize_context", |b| {
         b.iter(|| {
-            let json = serde_json::to_string(&ctx).unwrap();
+            let json = serde_json::to_string(&ctx)
+                .expect("bench: Context serialization to JSON must succeed");
             black_box(json);
         });
     });
 
-    let json = serde_json::to_string(&ctx).unwrap();
+    let json = serde_json::to_string(&ctx)
+        .expect("bench setup: Context serialization to JSON must succeed");
     group.bench_function("deserialize_context", |b| {
         b.iter(|| {
-            let ctx: Context = serde_json::from_str(&json).unwrap();
+            let ctx: Context = serde_json::from_str(&json)
+                .expect("bench: deserializing bench-produced JSON must succeed");
             black_box(ctx);
         });
     });

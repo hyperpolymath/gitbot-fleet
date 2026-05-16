@@ -3,6 +3,12 @@
 //! Provides trait-based interfaces for hardware components to enable
 //! testing without physical hardware and future platform portability.
 
+// The HAL is an intentional, deliberately-complete public API: it exposes the
+// full device contract (status LED, emergency-stop callbacks, cursor control,
+// pump telemetry) for education, portability and the test suite, even though
+// the current demo binary exercises only a subset.
+#![allow(dead_code)]
+
 pub mod pump;
 pub mod sensor;
 pub mod display;

@@ -3,6 +3,7 @@ title: API Reference
 date: 2025-01-01
 template: default
 ---
+<!-- hypatia: allow security_errors/secret_detected -- documentation placeholders ("<your-token>", "optional-secret"), not real credentials -->
 
 # GraphQL API Reference
 

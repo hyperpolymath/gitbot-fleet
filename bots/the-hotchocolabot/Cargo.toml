@@ -56,4 +56,4 @@ name = "hotchocolabot"
 path = "src/main.rs"
 
 [workspace]
-members = ["crates/*"]
+members = []

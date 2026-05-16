@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
+// hypatia: allow security_errors/secret_detected -- this analyzer's job is to DETECT secrets; the credential-shaped string literals here are detection regexes/patterns, not real credentials
 //! Configuration File Analyzer — scans configuration files for crypto issues.
 //!
 //! Scans `*.toml`, `*.yaml`, `*.yml`, `*.json`, `*.env` for:
@@ -24,7 +25,7 @@ static CONFIG_PATTERNS: LazyLock<Vec<ConfigPattern>> = LazyLock::new(|| {
     vec![
         // Hardcoded secrets — REJECT
         ConfigPattern {
-            regex: Regex::new(r#"(?i)(?:password|secret|api_key|apikey|token|private_key)\s*[:=]\s*["'][^"']{8,}["']"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:password|secret|api_key|apikey|token|private_key)\s*[:=]\s*["'][^"']{8,}["']"#).expect("static regex is valid"),
             algorithm: "hardcoded-secret",
             status: CryptoStatus::Reject,
             message: "Potential hardcoded secret detected — secrets should never be in configuration files.",
@@ -32,7 +33,7 @@ static CONFIG_PATTERNS: LazyLock<Vec<ConfigPattern>> = LazyLock::new(|| {
         },
         // Weak algorithm in config — REJECT
         ConfigPattern {
-            regex: Regex::new(r#"(?i)(?:algorithm|cipher|encryption)\s*[:=]\s*['"]?(?:des|3des|rc4|blowfish)['"]?"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:algorithm|cipher|encryption)\s*[:=]\s*['"]?(?:des|3des|rc4|blowfish)['"]?"#).expect("static regex is valid"),
             algorithm: "weak-config-cipher",
             status: CryptoStatus::Reject,
             message: "Weak cipher specified in configuration — DES/3DES/RC4/Blowfish are broken.",
@@ -40,7 +41,7 @@ static CONFIG_PATTERNS: LazyLock<Vec<ConfigPattern>> = LazyLock::new(|| {
         },
         // Weak hash in config — REJECT
         ConfigPattern {
-            regex: Regex::new(r#"(?i)(?:hash|digest|hash_algorithm)\s*[:=]\s*['"]?(?:md5|sha1)['"]?"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:hash|digest|hash_algorithm)\s*[:=]\s*['"]?(?:md5|sha1)['"]?"#).expect("static regex is valid"),
             algorithm: "weak-config-hash",
             status: CryptoStatus::Reject,
             message: "Weak hash algorithm specified in configuration — MD5/SHA-1 are broken.",
@@ -48,7 +49,7 @@ static CONFIG_PATTERNS: LazyLock<Vec<ConfigPattern>> = LazyLock::new(|| {
         },
         // Self-signed cert acceptance — REJECT
         ConfigPattern {
-            regex: Regex::new(r#"(?i)(?:insecure[_-]?skip[_-]?verify|allow[_-]?invalid[_-]?cert|accept[_-]?invalid[_-]?cert)\s*[:=]\s*(?:true|1|yes|on)"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:insecure[_-]?skip[_-]?verify|allow[_-]?invalid[_-]?cert|accept[_-]?invalid[_-]?cert)\s*[:=]\s*(?:true|1|yes|on)"#).expect("static regex is valid"),
             algorithm: "insecure-cert",
             status: CryptoStatus::Reject,
             message: "Invalid certificate acceptance enabled — vulnerable to MITM attacks.",
@@ -56,7 +57,7 @@ static CONFIG_PATTERNS: LazyLock<Vec<ConfigPattern>> = LazyLock::new(|| {
         },
         // Low key size — WARN
         ConfigPattern {
-            regex: Regex::new(r#"(?i)(?:key_size|key_length|keysize|keylength)\s*[:=]\s*(?:512|768|1024)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:key_size|key_length|keysize|keylength)\s*[:=]\s*(?:512|768|1024)\b"#).expect("static regex is valid"),
             algorithm: "low-keysize",
             status: CryptoStatus::Warn,
             message: "Low key size configured — may be insecure for asymmetric operations.",
@@ -64,7 +65,7 @@ static CONFIG_PATTERNS: LazyLock<Vec<ConfigPattern>> = LazyLock::new(|| {
         },
         // Disabled encryption — REJECT
         ConfigPattern {
-            regex: Regex::new(r#"(?i)(?:encryption|encrypt|tls|ssl)\s*[:=]\s*(?:false|off|no|disabled|none|0)"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:encryption|encrypt|tls|ssl)\s*[:=]\s*(?:false|off|no|disabled|none|0)"#).expect("static regex is valid"),
             algorithm: "encryption-disabled",
             status: CryptoStatus::Reject,
             message: "Encryption explicitly disabled in configuration.",

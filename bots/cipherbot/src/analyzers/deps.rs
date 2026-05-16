@@ -26,7 +26,7 @@ static DEP_PATTERNS: LazyLock<Vec<DepPattern>> = LazyLock::new(|| {
     vec![
         // rust-crypto — unmaintained, REJECT
         DepPattern {
-            regex: Regex::new(r#"(?i)\brust[_-]crypto\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\brust[_-]crypto\b"#).expect("static regex is valid"),
             algorithm: "rust-crypto",
             status: CryptoStatus::Reject,
             message: "rust-crypto is unmaintained and has known vulnerabilities — do not use.",
@@ -35,7 +35,7 @@ static DEP_PATTERNS: LazyLock<Vec<DepPattern>> = LazyLock::new(|| {
         },
         // openssl crate — WARN
         DepPattern {
-            regex: Regex::new(r#"(?m)^\s*openssl\s*="#).unwrap(),
+            regex: Regex::new(r#"(?m)^\s*openssl\s*="#).expect("static regex is valid"),
             algorithm: "openssl-dep",
             status: CryptoStatus::Warn,
             message: "openssl crate links to C OpenSSL — prefer rustls for pure-Rust TLS.",
@@ -44,7 +44,7 @@ static DEP_PATTERNS: LazyLock<Vec<DepPattern>> = LazyLock::new(|| {
         },
         // crypto-js (npm) — WARN
         DepPattern {
-            regex: Regex::new(r#"(?i)["']crypto-js["']"#).unwrap(),
+            regex: Regex::new(r#"(?i)["']crypto-js["']"#).expect("static regex is valid"),
             algorithm: "crypto-js",
             status: CryptoStatus::Warn,
             message: "crypto-js has weak defaults and no constant-time guarantees.",
@@ -53,7 +53,7 @@ static DEP_PATTERNS: LazyLock<Vec<DepPattern>> = LazyLock::new(|| {
         },
         // node-forge (npm) — WARN
         DepPattern {
-            regex: Regex::new(r#"(?i)["']node-forge["']"#).unwrap(),
+            regex: Regex::new(r#"(?i)["']node-forge["']"#).expect("static regex is valid"),
             algorithm: "node-forge",
             status: CryptoStatus::Warn,
             message: "node-forge has historical vulnerabilities — prefer audited alternatives.",
@@ -62,7 +62,7 @@ static DEP_PATTERNS: LazyLock<Vec<DepPattern>> = LazyLock::new(|| {
         },
         // sjcl (npm) — WARN
         DepPattern {
-            regex: Regex::new(r#"(?i)["']sjcl["']"#).unwrap(),
+            regex: Regex::new(r#"(?i)["']sjcl["']"#).expect("static regex is valid"),
             algorithm: "sjcl",
             status: CryptoStatus::Warn,
             message: "sjcl (Stanford JS Crypto Library) is minimally maintained.",
@@ -71,7 +71,7 @@ static DEP_PATTERNS: LazyLock<Vec<DepPattern>> = LazyLock::new(|| {
         },
         // bcrypt.js variants — note (not necessarily bad, but check)
         DepPattern {
-            regex: Regex::new(r#"(?i)["']bcryptjs["']"#).unwrap(),
+            regex: Regex::new(r#"(?i)["']bcryptjs["']"#).expect("static regex is valid"),
             algorithm: "bcryptjs",
             status: CryptoStatus::Warn,
             message: "bcryptjs is JavaScript-only bcrypt — consider Argon2id for new projects.",

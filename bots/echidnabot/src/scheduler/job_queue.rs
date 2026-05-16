@@ -206,10 +206,11 @@ impl JobScheduler {
         {
             let mut queue = self.queue.lock().await;
             if let Some(pos) = queue.iter().position(|j| j.id == job_id) {
-                let mut job = queue.remove(pos).unwrap();
-                job.cancel();
-                tracing::info!("Cancelled queued job {}", job_id);
-                return true;
+                if let Some(mut job) = queue.remove(pos) {
+                    job.cancel();
+                    tracing::info!("Cancelled queued job {}", job_id);
+                    return true;
+                }
             }
         }
 

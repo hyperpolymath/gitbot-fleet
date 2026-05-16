@@ -26,7 +26,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
     vec![
         // Math.random() — REJECT
         RngPattern {
-            regex: Regex::new(r#"(?i)\bMath\.random\s*\(\s*\)"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bMath\.random\s*\(\s*\)"#).expect("static regex is valid"),
             algorithm: "Math.random",
             status: CryptoStatus::Reject,
             message: "Math.random() is not cryptographically secure — predictable output.",
@@ -34,7 +34,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
         },
         // C rand() — REJECT
         RngPattern {
-            regex: Regex::new(r#"\b(?:std::)?rand\s*\(\s*\)"#).unwrap(),
+            regex: Regex::new(r#"\b(?:std::)?rand\s*\(\s*\)"#).expect("static regex is valid"),
             algorithm: "C-rand",
             status: CryptoStatus::Reject,
             message: "C rand() is not cryptographically secure — use a CSPRNG instead.",
@@ -42,7 +42,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
         },
         // srand(time(NULL)) — REJECT
         RngPattern {
-            regex: Regex::new(r#"\bsrand\s*\(\s*time\s*\(\s*NULL\s*\)\s*\)"#).unwrap(),
+            regex: Regex::new(r#"\bsrand\s*\(\s*time\s*\(\s*NULL\s*\)\s*\)"#).expect("static regex is valid"),
             algorithm: "srand-time",
             status: CryptoStatus::Reject,
             message: "srand(time(NULL)) produces predictable seeds — trivially guessable.",
@@ -50,7 +50,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
         },
         // Python random.random() — REJECT
         RngPattern {
-            regex: Regex::new(r#"(?i)\brandom\.(?:random|randint|choice|shuffle)\s*\("#).unwrap(),
+            regex: Regex::new(r#"(?i)\brandom\.(?:random|randint|choice|shuffle)\s*\("#).expect("static regex is valid"),
             algorithm: "Python-random",
             status: CryptoStatus::Reject,
             message: "Python random module is not cryptographically secure — uses Mersenne Twister.",
@@ -58,7 +58,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
         },
         // OsRng — WARN (note, acceptable)
         RngPattern {
-            regex: Regex::new(r#"(?i)\bOsRng\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\bOsRng\b"#).expect("static regex is valid"),
             algorithm: "OsRng",
             status: CryptoStatus::Warn,
             message: "OsRng is cryptographically secure but consider a DRBG for reproducibility in testing.",
@@ -66,7 +66,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
         },
         // /dev/urandom, getrandom — ACCEPT
         RngPattern {
-            regex: Regex::new(r#"(?:/dev/urandom|getrandom\s*\()"#).unwrap(),
+            regex: Regex::new(r#"(?:/dev/urandom|getrandom\s*\()"#).expect("static regex is valid"),
             algorithm: "urandom",
             status: CryptoStatus::Accept,
             message: "/dev/urandom or getrandom() — acceptable for CSPRNG seeding.",
@@ -74,7 +74,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
         },
         // ChaCha20-DRBG — PREFER
         RngPattern {
-            regex: Regex::new(r#"(?i)\b(?:chacha20[_-]?drbg|ChaCha20Rng|chacha_rng)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:chacha20[_-]?drbg|ChaCha20Rng|chacha_rng)\b"#).expect("static regex is valid"),
             algorithm: "ChaCha20-DRBG",
             status: CryptoStatus::Prefer,
             message: "ChaCha20-DRBG (SP 800-90Ar1) — ideal CSPRNG with deterministic output from seed.",
@@ -82,7 +82,7 @@ static RNG_PATTERNS: LazyLock<Vec<RngPattern>> = LazyLock::new(|| {
         },
         // ThreadRng (uses ChaCha internally but worth noting) — ACCEPT
         RngPattern {
-            regex: Regex::new(r#"(?i)\b(?:thread_rng|ThreadRng)\b"#).unwrap(),
+            regex: Regex::new(r#"(?i)\b(?:thread_rng|ThreadRng)\b"#).expect("static regex is valid"),
             algorithm: "ThreadRng",
             status: CryptoStatus::Accept,
             message: "thread_rng() uses ChaCha20 internally — acceptable for most uses.",

@@ -1,5 +1,6 @@
 <!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
 <!-- SPDX-FileCopyrightText: 2024-2025 hyperpolymath -->
+<!-- hypatia: allow security_errors/secret_detected -- setup-guide placeholders (e.g. "your-webhook-secret"), not real credentials -->
 
 # GitHub App Setup Guide
 

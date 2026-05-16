@@ -123,8 +123,10 @@ impl AccessibilityAnalyzer {
     fn check_image_alt_text(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
         use regex::Regex;
 
-        let md_image_re = Regex::new(r"!\[(.*?)\]\((.*?)\)").unwrap();
-        let adoc_image_re = Regex::new(r"image::(.*?)\[(.*?)\]").unwrap();
+        let md_image_re = Regex::new(r"!\[(.*?)\]\((.*?)\)")
+            .expect("static markdown image regex literal is valid");
+        let adoc_image_re = Regex::new(r"image::(.*?)\[(.*?)\]")
+            .expect("static asciidoc image regex literal is valid");
 
         for entry in WalkDir::new(path)
             .into_iter()
@@ -239,7 +241,8 @@ impl AccessibilityAnalyzer {
     fn check_link_text(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
         use regex::Regex;
 
-        let md_link_re = Regex::new(r"\[(.*?)\]\((.*?)\)").unwrap();
+        let md_link_re = Regex::new(r"\[(.*?)\]\((.*?)\)")
+            .expect("static markdown link regex literal is valid");
 
         let non_descriptive = ["click here", "here", "read more", "link", "more"];
 

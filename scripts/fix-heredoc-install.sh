@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: PMPL-1.0-or-later
+# hypatia: allow code_safety/shell_download_then_run -- remediation tool: it searches for and replaces curl|bash / eval / heredoc-eval patterns, so it necessarily contains those pattern strings; it does not itself download-then-run
 #
 # fix-heredoc-install.sh — Replace eval/heredoc patterns with safe alternatives
 #
