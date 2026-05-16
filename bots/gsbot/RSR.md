@@ -6,7 +6,9 @@ The Garment Sustainability Bot strives to comply with the Rhodium Standard Repos
 
 ## RSR Compliance Level: **Bronze**
 
-We currently achieve **Bronze-level** RSR compliance for a Python project.
+We currently achieve **Bronze-level** RSR compliance. The project is
+implemented in **Rust** (with a designed-in SPARK verification seam — see
+`src/domain.rs`); it was ported from a now-deleted Python prototype.
 
 ## Compliance Checklist
 
@@ -28,27 +30,28 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 
 ### ✅ Build System (Complete)
 
-- ✅ Justfile - Just build recipes (20+ commands)
-- ✅ Makefile - Make build recipes (traditional alternative)
-- ✅ setup.py - Python package configuration
-- ✅ requirements.txt - Dependency management
-- ✅ pytest.ini - Test configuration
+- ✅ Justfile - Just build recipes (build/test/run/lint/format/...)
+- ✅ Mustfile - Mandatory checks (invokes `just lint` / `just fmt`)
+- ✅ Cargo.toml - Crate manifest and dependency management
+- ✅ Containerfile + docker-compose.yml - Containerised build
+- ✅ migrations/0001_init.sql - Schema (applied via `sqlx::migrate!`)
 - ✅ .editorconfig - Editor consistency
 
 ### ✅ CI/CD (Complete)
 
-- ✅ GitHub Actions workflow (.github/workflows/main.yml)
-- ✅ Automated testing (4 Python versions)
-- ✅ Code quality checks (Black, Flake8, MyPy, Pylint)
-- ✅ Security scanning (Safety)
+- ✅ Fleet-level GitHub Actions workflows (`.github/workflows/`), including
+  the Hypatia security scan that self-scans this repository
+- ✅ Automated testing (`cargo test --all-targets`)
+- ✅ Code quality checks (`cargo clippy --all-targets -- -D warnings`,
+  `cargo fmt --all -- --check`)
+- ✅ Banned-language enforcement (Hypatia / ts-blocker / npm-bun-blocker)
 - ✅ Build verification
 
 ### ✅ Testing (Complete)
 
-- ✅ Unit tests (tests/unit/)
-- ✅ Integration tests (tests/integration/)
-- ✅ Test coverage tracking (pytest-cov)
-- ✅ 100% test pass rate
+- ✅ Unit tests (in-crate `#[cfg(test)]`, e.g. the `domain.rs` kernel tests)
+- ✅ `cargo test --all-targets` (uses `tempfile` / in-memory SQLite)
+- ✅ Pure-kernel tests pin the scoring formulas (SPARK-ready)
 - ✅ CI/CD integration
 
 ### ✅ TPCF (Complete)
@@ -58,23 +61,24 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 - ✅ Clear contribution model
 - ✅ Transparent governance
 
-### ⚠️ Type Safety (Partial - Python Limitation)
+### ✅ Type Safety (Complete)
 
-- ✅ Type hints in code
-- ✅ MyPy type checking in CI
-- ⚠️ Not compile-time guaranteed (Python limitation)
-- ⚠️ Dynamic typing by language design
+- ✅ Compile-time static typing (Rust)
+- ✅ `cargo clippy` with warnings denied in CI
+- ✅ Typed errors via `thiserror`; `anyhow` at the application boundary
+- ✅ The correctness-critical `domain.rs` kernel is pure and total
 
-**Assessment**: Best effort for Python. Full type safety would require Rust/Ada/ReScript.
+**Assessment**: Full compile-time type safety. The kernel is structured for
+formal verification (SPARK seam).
 
-### ⚠️ Memory Safety (Partial - Python Limitation)
+### ✅ Memory Safety (Complete)
 
-- ✅ Python's automatic memory management
-- ✅ No manual memory management
-- ⚠️ Not zero-copy or ownership-based (Python limitation)
-- ⚠️ Garbage collection instead of compile-time safety
+- ✅ Rust ownership/borrowing — no GC, no manual `free`
+- ✅ No `unsafe` in the application logic; the only `extern "C"` surface is
+  the deliberate, pure C-ABI in `domain::ffi`
+- ✅ Safe Rust wrappers in front of the FFI symbols
 
-**Assessment**: Python is memory-safe by design but not in the Rust sense.
+**Assessment**: Memory-safe by construction.
 
 ### ⚠️ Offline-First (Partial)
 
@@ -87,20 +91,19 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 
 ### ⚠️ Zero Dependencies (Not Applicable)
 
-- ❌ Has many dependencies (Discord.py, SQLAlchemy, etc.)
-- ℹ️ Python ecosystem typically uses dependencies
-- ℹ️ Dependencies are vetted and security-scanned
+- ❌ Has dependencies (poise/serenity, sqlx, tokio, tracing, etc.)
+- ℹ️ Crates are vetted and security-scanned (`cargo audit`)
+- ℹ️ `Cargo.lock` pins the exact dependency graph
 
-**Assessment**: Not zero-dependency. This is acceptable for Bronze level and typical for Python projects.
+**Assessment**: Not zero-dependency. Acceptable for Bronze level.
 
 ### ✅ Reproducible Builds (Partial)
 
-- ✅ requirements.txt with version pinning
-- ✅ Docker for containerized reproducibility
-- ✅ Virtual environments supported
-- ⚠️ No Nix flake (could add if needed)
+- ✅ `Cargo.lock` pins exact crate versions
+- ✅ Multi-stage `Containerfile` for containerised reproducibility
+- ⚠️ No Nix/Guix flake yet (could add if needed)
 
-**Assessment**: Reproducible via Docker and pip. Nix would be gold standard.
+**Assessment**: Reproducible via `Cargo.lock` + the Containerfile.
 
 ## RSR Level Definitions
 
@@ -109,24 +112,27 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 **Required:**
 - ✅ All documentation files
 - ✅ .well-known/ directory
-- ✅ Build system (Justfile or Makefile)
+- ✅ Build system (Justfile + Mustfile + Cargo)
 - ✅ CI/CD pipeline
-- ✅ Test suite with >80% coverage
+- ✅ Test suite (`cargo test --all-targets`)
 - ✅ TPCF declaration
-- ⚠️ Best-effort type safety (for dynamic languages)
+- ✅ Compile-time type safety (Rust)
 
-**Achieved:** Yes (Bronze compliant for Python)
+**Achieved:** Yes (Bronze compliant)
 
 ### Silver Level
 
 **Additional requirements:**
 - Formal verification (SPARK, TLA+, or equivalent)
 - Zero critical dependencies or all dependencies verified
-- Reproducible builds (Nix)
+- Reproducible builds (Nix/Guix)
 - Multi-language verification
 - Security audit
 
-**Status:** Not pursued (Bronze sufficient for this project)
+**Status:** Partially seeded. The *SPARK seam* (`src/domain.rs` — pure,
+total, stable C ABI in `mod ffi`) is in place so a formally-verified
+SPARK/Ada module can be substituted for the numeric core with no caller
+changes. Full verification not yet pursued.
 
 ### Gold Level
 
@@ -144,15 +150,15 @@ We currently achieve **Bronze-level** RSR compliance for a Python project.
 | Category | Status | Notes |
 |----------|--------|-------|
 | Documentation | ✅ Complete | 7 core docs + 3 .well-known |
-| Build System | ✅ Complete | Justfile + Makefile |
-| CI/CD | ✅ Complete | GitHub Actions, 4 Python versions |
-| Testing | ✅ Complete | Unit + integration, >80% coverage |
+| Build System | ✅ Complete | Justfile + Mustfile + Cargo |
+| CI/CD | ✅ Complete | Fleet GitHub Actions + Hypatia self-scan |
+| Testing | ✅ Complete | `cargo test --all-targets` |
 | TPCF | ✅ Complete | Perimeter 3 declared |
-| Type Safety | ⚠️ Partial | Python type hints + MyPy |
-| Memory Safety | ⚠️ N/A | Python is memory-safe by design |
+| Type Safety | ✅ Complete | Compile-time static typing (Rust) |
+| Memory Safety | ✅ Complete | Rust ownership; safe wrappers over FFI |
 | Offline-First | ⚠️ Partial | Core logic offline, Discord needs network |
-| Zero Deps | ❌ No | 25+ dependencies (typical for Python) |
-| Reproducible | ✅ Complete | Docker + pip freeze |
+| Zero Deps | ❌ No | Uses vetted crates; `Cargo.lock` pinned |
+| Reproducible | ✅ Complete | `Cargo.lock` + Containerfile |
 
 ## Verification
 
@@ -166,16 +172,16 @@ Or manually:
 
 ```bash
 # Check documentation
-ls -la *.md .well-known/
+ls -la *.md *.adoc .well-known/
 
 # Check build system
-ls -la Justfile Makefile setup.py
+ls -la Justfile Mustfile Cargo.toml
 
 # Check tests
-pytest tests/ -v
+cargo test --all-targets
 
 # Check CI/CD
-cat .github/workflows/main.yml
+ls -la ../../.github/workflows/
 ```
 
 ## Continuous Improvement
@@ -186,18 +192,16 @@ cat .github/workflows/main.yml
 
 ### Future Enhancements (Optional)
 
-- [ ] Add Nix flake for Nix users
-- [ ] Increase type hint coverage to 100%
+- [ ] Add a Nix/Guix flake for hermetic builds
 - [ ] Add more integration tests
-- [ ] Consider TLA+ specs for distributed logic (CRDTs)
-- [ ] Add security audit
-- [ ] Explore formal verification for critical paths
+- [ ] Add a recurring `cargo audit` security gate
+- [ ] Formally verify the `domain.rs` numeric core in SPARK/Ada and link it
+      through the existing C-ABI seam (Silver level)
 
 ### Not Planned
 
-- Zero dependencies (impractical for Python ecosystem)
-- Full formal verification (not needed for this use case)
-- Memory safety proofs (Python handles this)
+- Zero dependencies (impractical given the Discord/SQL stack)
+- Memory safety proofs (Rust ownership already guarantees this)
 
 ## RSR Benefits
 
@@ -266,14 +270,16 @@ CI/CD pipeline ensures:
 
 ## Exceptions and Adaptations
 
-### Python-Specific Adaptations
+### Rust/SPARK Notes
 
-1. **Type Safety**: Python uses type hints, not compile-time types
-2. **Memory Safety**: Python is garbage-collected, not ownership-based
-3. **Dependencies**: Python ecosystem relies on packages
-4. **Build System**: pip/setuptools instead of Cargo/Cabal
-
-These are acceptable adaptations for Bronze-level compliance in Python.
+1. **Type Safety**: compile-time static typing (Rust)
+2. **Memory Safety**: Rust ownership/borrowing; safe wrappers over the
+   deliberate, pure `domain::ffi` C-ABI
+3. **Dependencies**: vetted crates, `Cargo.lock`-pinned
+4. **Build System**: Cargo + Justfile + Mustfile
+5. **Verification seam**: `src/domain.rs` is pure and total and is
+   substitutable by a formally-verified SPARK/Ada module with no caller
+   changes
 
 ### Discord Bot Specific
 
@@ -284,15 +290,19 @@ These are inherent to the bot's purpose and documented.
 
 ## Compliance History
 
-### Version 0.1.0 (Current)
+### Version 0.2.0 (Current)
 
-- ✅ Bronze-level RSR compliance achieved
-- ✅ All required documentation
-- ✅ .well-known/ directory complete
-- ✅ Build system (Justfile + Makefile)
-- ✅ CI/CD pipeline operational
-- ✅ Test suite with good coverage
+- ✅ Full Rust/SPARK port; Python prototype removed in its entirety
+- ✅ Type Safety and Memory Safety upgraded to Complete (Rust)
+- ✅ SPARK seam (`src/domain.rs`) in place toward Silver-level verification
+- ✅ Build system (Justfile + Mustfile + Cargo)
+- ✅ CI/CD pipeline operational (fleet workflows + Hypatia self-scan)
+- ✅ Test suite (`cargo test --all-targets`)
 - ✅ TPCF Perimeter 3 declared
+
+### Version 0.1.0 (Python era — historical)
+
+- ✅ Bronze-level RSR compliance achieved for the Python prototype
 
 ## Questions?
 
@@ -309,7 +319,7 @@ These are inherent to the bot's purpose and documented.
 
 ---
 
-**RSR Level**: Bronze
+**RSR Level**: Bronze (Silver seam in place via `src/domain.rs`)
 **TPCF Perimeter**: 3 (Community Sandbox)
-**Last Verified**: 2025-11-22
-**Next Review**: 2026-03-01
+**Last Verified**: 2026-05-16
+**Next Review**: 2026-09-01
