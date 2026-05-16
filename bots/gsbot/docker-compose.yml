@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   bot:
-    build: .
+    build:
+      context: .
+      dockerfile: Containerfile
     container_name: gsbot
     restart: unless-stopped
     env_file:
@@ -20,27 +22,5 @@ networks:
   gsbot-network:
     driver: bridge
 
-# Optional: Add PostgreSQL for production use
-# services:
-#   bot:
-#     ...
-#     depends_on:
-#       - db
-#     environment:
-#       - DATABASE_URL=postgresql://gsbot:password@db:5432/gsbot
-#
-#   db:
-#     image: postgres:15-alpine
-#     container_name: gsbot-db
-#     restart: unless-stopped
-#     environment:
-#       - POSTGRES_DB=gsbot
-#       - POSTGRES_USER=gsbot
-#       - POSTGRES_PASSWORD=password
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data
-#     networks:
-#       - gsbot-network
-#
-# volumes:
-#   postgres_data:
+# Optional: PostgreSQL is not supported by this bot (SQLite only), so the
+# previous commented Postgres stanza has been removed.
