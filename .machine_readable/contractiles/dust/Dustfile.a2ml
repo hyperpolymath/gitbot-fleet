@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: PMPL-1.0-or-later
 # Dustfile — Cleanup and Hygiene Contract
+name = "dustfile"
+
 
 [dustfile]
 version = "1.0.0"

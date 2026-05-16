@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: PMPL-1.0-or-later
 # Trustfile — Integrity and provenance verification
 # Author: Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+name = "trustfile"
+
 
 @abstract:
 Integrity invariants for this repository. These verify that the repo
