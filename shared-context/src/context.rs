@@ -2,7 +2,7 @@
 //! Shared context for coordinating bot executions
 
 use crate::bot::{BotExecution, BotId, BotStatus, Tier};
-use crate::finding::{Finding, FindingSet, Severity};
+use crate::finding::{Finding, FindingSet};
 use crate::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -250,7 +250,7 @@ impl Context {
 }
 
 /// Context configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ContextConfig {
     /// Enable dry-run mode (no changes)
     pub dry_run: bool,
@@ -264,19 +264,6 @@ pub struct ContextConfig {
     pub skip_categories: Vec<String>,
     /// Custom bot configuration
     pub bot_config: HashMap<BotId, serde_json::Value>,
-}
-
-impl Default for ContextConfig {
-    fn default() -> Self {
-        Self {
-            dry_run: false,
-            auto_fix: false,
-            strict: false,
-            skip_bots: Vec::new(),
-            skip_categories: Vec::new(),
-            bot_config: HashMap::new(),
-        }
-    }
 }
 
 /// Summary of context execution

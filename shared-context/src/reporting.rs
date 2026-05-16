@@ -4,7 +4,7 @@
 //! Generates reports about fleet execution, findings, and bot performance
 //! across all registered bots. Supports multiple output formats.
 
-use crate::{BotId, Context, Finding, Severity, Tier};
+use crate::{Context, Severity, Tier};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -290,13 +290,13 @@ impl Context {
                     .unwrap_or_else(|| "-".to_string())
             ));
         }
-        md.push_str("\n");
+        md.push('\n');
 
         // Tier Performance
         md.push_str("## Tier Performance\n\n");
         md.push_str("| Tier | Bots | Completed | Findings | Avg Duration (ms) |\n");
         md.push_str("|------|------|-----------|----------|-------------------|\n");
-        for (_, perf) in &report.tier_performance {
+        for perf in report.tier_performance.values() {
             md.push_str(&format!(
                 "| {} | {} | {} | {} | {:.0} |\n",
                 perf.tier, perf.bots_count, perf.completed_count, perf.total_findings, perf.avg_duration_ms
@@ -362,6 +362,7 @@ impl Context {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::BotId;
     use std::path::PathBuf;
 
     #[test]
