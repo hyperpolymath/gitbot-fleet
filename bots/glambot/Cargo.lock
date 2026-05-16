@@ -486,8 +486,8 @@ dependencies = [
  "finl_unicode",
  "fmt2io",
  "jetscii",
- "phf 0.13.1",
- "phf_codegen 0.13.1",
+ "phf",
+ "phf_codegen",
  "rustc-hash",
  "shell-words",
  "smallvec",
@@ -742,7 +742,7 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a4d5d50b0b58df5173d8ff1192b4d1422ceae5d981b30d4b6f8ed1d673a2bc4"
 dependencies = [
- "phf 0.13.1",
+ "phf",
 ]
 
 [[package]]

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: PMPL-1.0-or-later
-# Docker Compose configuration for gitbot-fleet
+# Compose configuration for gitbot-fleet.
+# Podman / podman-compose is highly preferred; Docker Compose also works.
 
 version: '3.8'
 
@@ -8,7 +9,7 @@ services:
   dashboard:
     build:
       context: .
-      dockerfile: dashboard/Dockerfile
+      dockerfile: dashboard/Containerfile
     container_name: fleet-dashboard
     ports:
       - "8080:8080"
@@ -38,7 +39,7 @@ services:
   coordinator:
     build:
       context: .
-      dockerfile: shared-context/fleet-cli/Dockerfile
+      dockerfile: shared-context/fleet-cli/Containerfile
     container_name: fleet-coordinator
     environment:
       FLEET_REPO_PATH: /repo

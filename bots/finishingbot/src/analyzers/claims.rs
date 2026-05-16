@@ -262,9 +262,12 @@ impl ClaimsAnalyzer {
     ) {
         // Look for patterns like "see src/main.rs" or "in `lib.rs`"
         let file_ref_patterns = [
-            Regex::new(r"see\s+`?([a-zA-Z0-9_./\-]+\.[a-z]+)`?").unwrap(),
-            Regex::new(r"in\s+`([a-zA-Z0-9_./\-]+\.[a-z]+)`").unwrap(),
-            Regex::new(r"file\s+`([a-zA-Z0-9_./\-]+\.[a-z]+)`").unwrap(),
+            Regex::new(r"see\s+`?([a-zA-Z0-9_./\-]+\.[a-z]+)`?")
+                .expect("CLM file-ref 'see' regex is a valid constant pattern"),
+            Regex::new(r"in\s+`([a-zA-Z0-9_./\-]+\.[a-z]+)`")
+                .expect("CLM file-ref 'in' regex is a valid constant pattern"),
+            Regex::new(r"file\s+`([a-zA-Z0-9_./\-]+\.[a-z]+)`")
+                .expect("CLM file-ref 'file' regex is a valid constant pattern"),
         ];
 
         for pattern in &file_ref_patterns {
@@ -439,12 +442,15 @@ impl ClaimsAnalyzer {
         if let Ok(content) = std::fs::read_to_string(cargo_path) {
             // Simple check: look for workspace members that don't exist
             if content.contains("[workspace]") {
-                let member_re = Regex::new(r#"members\s*=\s*\[([\s\S]*?)\]"#).unwrap();
+                let member_re = Regex::new(r#"members\s*=\s*\[([\s\S]*?)\]"#)
+                    .expect("Cargo workspace members regex is a valid constant pattern");
                 if let Some(caps) = member_re.captures(&content) {
                     let members_str = &caps[1];
-                    let path_re = Regex::new(r#""([^"]+)""#).unwrap();
+                    let path_re = Regex::new(r#""([^"]+)""#)
+                        .expect("Cargo workspace member-path regex is a valid constant pattern");
+                    let cargo_dir = cargo_path.parent().unwrap_or_else(|| Path::new("."));
                     for cap in path_re.captures_iter(members_str) {
-                        let member_path = cargo_path.parent().unwrap().join(&cap[1]);
+                        let member_path = cargo_dir.join(&cap[1]);
                         if !member_path.exists() {
                             result.add(
                                 Finding::new(

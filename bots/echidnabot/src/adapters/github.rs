@@ -41,13 +41,16 @@ impl PlatformAdapter for GitHubAdapter {
         // Create a temporary directory for the clone
         let temp_dir = tempfile::tempdir().map_err(Error::Io)?;
         let clone_path = temp_dir.keep();
+        let clone_path_str = clone_path.to_str().ok_or_else(|| {
+            Error::GitHub("Temporary clone path is not valid UTF-8".to_string())
+        })?;
 
         // Use git to clone (shallow, specific commit)
         let url = format!("https://github.com/{}/{}.git", repo.owner, repo.name);
 
         let status = if commit == "HEAD" {
             tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path.to_str().unwrap()])
+                .args(["clone", "--depth", "1", &url, clone_path_str])
                 .status()
                 .await
                 .map_err(Error::Io)?
@@ -60,7 +63,7 @@ impl PlatformAdapter for GitHubAdapter {
                     "--branch",
                     commit,
                     &url,
-                    clone_path.to_str().unwrap(),
+                    clone_path_str,
                 ])
                 .status()
                 .await
@@ -70,7 +73,7 @@ impl PlatformAdapter for GitHubAdapter {
         if !status.success() && commit != "HEAD" {
             // Try fetching the specific commit instead
             let status = tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path.to_str().unwrap()])
+                .args(["clone", "--depth", "1", &url, clone_path_str])
                 .status()
                 .await
                 .map_err(Error::Io)?;
@@ -204,6 +207,8 @@ impl PlatformAdapter for GitHubAdapter {
             .await
             .map_err(|e| Error::GitHub(e.to_string()))?;
 
-        Ok(repo_info.default_branch.unwrap_or_else(|| "main".to_string()))
+        repo_info
+            .default_branch
+            .ok_or_else(|| Error::GitHub("Missing default_branch in repository response".to_string()))
     }
 }

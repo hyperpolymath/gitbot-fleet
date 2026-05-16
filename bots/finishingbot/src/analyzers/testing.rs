@@ -79,7 +79,7 @@ impl TestingAnalyzer {
             if let Ok(entries) = std::fs::read_dir(&benches_dir) {
                 let has_benches = entries
                     .filter_map(|e| e.ok())
-                    .any(|e| e.path().extension().map_or(false, |ext| ext == "rs"));
+                    .any(|e| e.path().extension().is_some_and(|ext| ext == "rs"));
 
                 if !has_benches {
                     result.add(
@@ -209,7 +209,7 @@ impl TestingAnalyzer {
                         e.path()
                             .file_name()
                             .and_then(|n| n.to_str())
-                            .map_or(false, |n| n.ends_with("_test.ts") || n.ends_with(".test.ts"))
+                            .is_some_and(|n| n.ends_with("_test.ts") || n.ends_with(".test.ts"))
                     })
             })
             .is_some();

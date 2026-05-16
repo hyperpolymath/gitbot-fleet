@@ -83,6 +83,9 @@ impl Finding {
     }
 
     /// Add just line number
+    ///
+    /// Public library API; exercised by the `fleet` feature integration.
+    #[allow(dead_code)]
     pub fn with_line(mut self, line: usize) -> Self {
         self.line = Some(line);
         self
@@ -145,11 +148,17 @@ impl AnalysisResult {
     }
 
     /// Check if there are any fixable issues
+    ///
+    /// Public library API surface for downstream consumers.
+    #[allow(dead_code)]
     pub fn has_fixable(&self) -> bool {
         self.findings.iter().any(|f| f.fixable)
     }
 
     /// Get fixable findings
+    ///
+    /// Public library API surface for downstream consumers.
+    #[allow(dead_code)]
     pub fn fixable(&self) -> Vec<&Finding> {
         self.findings.iter().filter(|f| f.fixable).collect()
     }
@@ -158,6 +167,9 @@ impl AnalysisResult {
 /// Trait for all analyzers
 pub trait Analyzer {
     /// Get analyzer name
+    ///
+    /// Part of the trait contract; used for diagnostics by library consumers.
+    #[allow(dead_code)]
     fn name(&self) -> &str;
 
     /// Run the analyzer on a path

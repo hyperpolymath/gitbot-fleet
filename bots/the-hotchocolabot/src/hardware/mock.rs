@@ -1,5 +1,11 @@
 //! Mock hardware implementations for testing without physical devices
 
+// These mocks are an intentional public API surface used by the test suite and
+// the non-Linux (host-development) hardware path. On a Linux target the
+// non-test binary build constructs the real hardware drivers instead, so the
+// dead-code lint would otherwise fire on this scaffolding.
+#![allow(dead_code)]
+
 use crate::hardware::{Pump, TemperatureSensor, Display, EmergencyStop, StatusLed};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -36,18 +42,19 @@ impl MockPump {
 #[async_trait]
 impl Pump for MockPump {
     async fn dispense(&mut self, duration_ms: u64) -> Result<()> {
-        let mut state = self.state.lock().unwrap();
+        // Scope the guard so it cannot be held across the `.await` below.
+        {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
 
-        info!("[MOCK] {} pump dispensing for {}ms", self.name, duration_ms);
+            info!("[MOCK] {} pump dispensing for {}ms", self.name, duration_ms);
 
-        state.is_running = true;
-        state.last_start = Some(Instant::now());
-
-        drop(state); // Release lock during sleep
+            state.is_running = true;
+            state.last_start = Some(Instant::now());
+        } // lock released before sleep
 
         tokio::time::sleep(tokio::time::Duration::from_millis(duration_ms)).await;
 
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.is_running = false;
 
         if let Some(start) = state.last_start {
@@ -59,22 +66,22 @@ impl Pump for MockPump {
     }
 
     async fn stop(&mut self) -> Result<()> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         info!("[MOCK] {} pump stopped", self.name);
         state.is_running = false;
         Ok(())
     }
 
     fn is_running(&self) -> bool {
-        self.state.lock().unwrap().is_running
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).is_running
     }
 
     fn total_runtime_ms(&self) -> u64 {
-        self.state.lock().unwrap().total_runtime_ms
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).total_runtime_ms
     }
 
     fn reset_counter(&mut self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         info!("[MOCK] {} pump counter reset", self.name);
         state.total_runtime_ms = 0;
     }
@@ -94,14 +101,14 @@ impl MockTemperatureSensor {
 
     /// Set the mock temperature (for testing)
     pub fn set_temperature(&mut self, temp: f32) {
-        *self.temperature.lock().unwrap() = temp;
+        *self.temperature.lock().unwrap_or_else(|e| e.into_inner()) = temp;
     }
 }
 
 #[async_trait]
 impl TemperatureSensor for MockTemperatureSensor {
     async fn read_temperature(&mut self) -> Result<f32> {
-        let temp = *self.temperature.lock().unwrap();
+        let temp = *self.temperature.lock().unwrap_or_else(|e| e.into_inner());
         info!("[MOCK] Temperature reading: {:.1}°C", temp);
         Ok(temp)
     }
@@ -125,21 +132,21 @@ impl MockDisplay {
 
     /// Get current display buffer (for testing)
     pub fn get_buffer(&self) -> String {
-        self.buffer.lock().unwrap().clone()
+        self.buffer.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }
 
 #[async_trait]
 impl Display for MockDisplay {
     async fn write(&mut self, text: &str) -> Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
+        let mut buffer = self.buffer.lock().unwrap_or_else(|e| e.into_inner());
         buffer.push_str(text);
         info!("[MOCK] Display write: {}", text);
         Ok(())
     }
 
     async fn clear(&mut self) -> Result<()> {
-        let mut buffer = self.buffer.lock().unwrap();
+        let mut buffer = self.buffer.lock().unwrap_or_else(|e| e.into_inner());
         buffer.clear();
         info!("[MOCK] Display cleared");
         Ok(())
@@ -165,13 +172,13 @@ impl MockEmergencyStop {
 
     /// Simulate button press (for testing)
     pub fn press(&mut self) {
-        *self.pressed.lock().unwrap() = true;
+        *self.pressed.lock().unwrap_or_else(|e| e.into_inner()) = true;
         info!("[MOCK] Emergency stop pressed!");
     }
 
     /// Release button (for testing)
     pub fn release(&mut self) {
-        *self.pressed.lock().unwrap() = false;
+        *self.pressed.lock().unwrap_or_else(|e| e.into_inner()) = false;
         info!("[MOCK] Emergency stop released");
     }
 }
@@ -179,7 +186,7 @@ impl MockEmergencyStop {
 #[async_trait]
 impl EmergencyStop for MockEmergencyStop {
     async fn is_pressed(&self) -> bool {
-        *self.pressed.lock().unwrap()
+        *self.pressed.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn on_press<F>(&mut self, _callback: F)
@@ -204,20 +211,20 @@ impl MockStatusLed {
 
     /// Check if LED is on (for testing)
     pub fn is_on(&self) -> bool {
-        *self.state.lock().unwrap()
+        *self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
 #[async_trait]
 impl StatusLed for MockStatusLed {
     async fn on(&mut self) -> Result<()> {
-        *self.state.lock().unwrap() = true;
+        *self.state.lock().unwrap_or_else(|e| e.into_inner()) = true;
         info!("[MOCK] Status LED ON");
         Ok(())
     }
 
     async fn off(&mut self) -> Result<()> {
-        *self.state.lock().unwrap() = false;
+        *self.state.lock().unwrap_or_else(|e| e.into_inner()) = false;
         info!("[MOCK] Status LED OFF");
         Ok(())
     }
@@ -245,7 +252,9 @@ mod tests {
         let mut pump = MockPump::new("test");
         assert!(!pump.is_running());
 
-        pump.dispense(100).await.unwrap();
+        pump.dispense(100)
+            .await
+            .expect("mock pump dispense never fails");
 
         assert!(!pump.is_running());
         assert!(pump.total_runtime_ms() >= 100);
@@ -254,21 +263,33 @@ mod tests {
     #[tokio::test]
     async fn test_mock_temperature_sensor() {
         let mut sensor = MockTemperatureSensor::new(25.0);
-        let temp = sensor.read_temperature().await.unwrap();
+        let temp = sensor
+            .read_temperature()
+            .await
+            .expect("mock temperature read never fails");
         assert_eq!(temp, 25.0);
 
         sensor.set_temperature(30.0);
-        let temp = sensor.read_temperature().await.unwrap();
+        let temp = sensor
+            .read_temperature()
+            .await
+            .expect("mock temperature read never fails");
         assert_eq!(temp, 30.0);
     }
 
     #[tokio::test]
     async fn test_mock_display() {
         let mut display = MockDisplay::new();
-        display.write("Hello").await.unwrap();
+        display
+            .write("Hello")
+            .await
+            .expect("mock display write never fails");
         assert_eq!(display.get_buffer(), "Hello");
 
-        display.clear().await.unwrap();
+        display
+            .clear()
+            .await
+            .expect("mock display clear never fails");
         assert_eq!(display.get_buffer(), "");
     }
 

@@ -222,8 +222,8 @@ impl LicenseAnalyzer {
 
     /// Check for SPDX headers in source files
     fn check_spdx_headers(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
-        let spdx_pattern =
-            Regex::new(r"(?i)SPDX-License-Identifier:\s*[A-Za-z0-9.-]+").unwrap();
+        let spdx_pattern = Regex::new(r"(?i)SPDX-License-Identifier:\s*[A-Za-z0-9.-]+")
+            .expect("SPDX header regex is a valid constant pattern");
 
         for entry in WalkDir::new(path)
             .follow_links(false)
@@ -261,7 +261,12 @@ impl LicenseAnalyzer {
                     let suggested_license = if is_agpl_exception(path) {
                         "AGPL-3.0-or-later".to_string()
                     } else {
-                        config.licenses.allowed.first().unwrap_or(&"<LICENSE>".to_string()).clone()
+                        config
+                            .licenses
+                            .allowed
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| "<LICENSE>".to_string())
                     };
                     result.add(
                         Finding::new(
@@ -287,10 +292,7 @@ impl LicenseAnalyzer {
         let content = std::fs::read_to_string(path)?;
 
         // Use AGPL-3.0-or-later for exception repos, PMPL-1.0-or-later otherwise
-        let default_license = if path
-            .ancestors()
-            .any(|ancestor| is_agpl_exception(ancestor))
-        {
+        let default_license = if path.ancestors().any(is_agpl_exception) {
             "AGPL-3.0-or-later".to_string()
         } else {
             "PMPL-1.0-or-later".to_string()

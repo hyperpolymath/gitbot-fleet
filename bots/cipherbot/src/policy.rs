@@ -105,7 +105,9 @@ enum ScopeField {
 #[serde(untagged)]
 enum AllowField {
     Bool(bool),
-    Scopes(Vec<String>),
+    // The scope list is only used to drive `serde(untagged)` deserialization;
+    // its presence (not its contents) enables the allow — see usage below.
+    Scopes(#[allow(dead_code)] Vec<String>),
 }
 
 impl CipherbotPolicy {
@@ -266,8 +268,10 @@ require-pq = false
 
     #[test]
     fn test_is_exception() {
-        let mut policy = CipherbotPolicy::default();
-        policy.allowed_exceptions = vec!["legacy-compat".to_string()];
+        let policy = CipherbotPolicy {
+            allowed_exceptions: vec!["legacy-compat".to_string()],
+            ..Default::default()
+        };
         assert!(policy.is_exception(Path::new("src/legacy-compat/old.rs")));
         assert!(!policy.is_exception(Path::new("src/main.rs")));
     }

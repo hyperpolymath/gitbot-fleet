@@ -1,4 +1,5 @@
 # echidnabot Configuration Example
+# hypatia: allow security_errors/secret_detected -- example-template placeholders ("ghp_xxx...", "your-webhook-secret"), not real credentials
 # Copy to echidnabot.toml and customize
 
 [server]

@@ -333,7 +333,11 @@ impl ReleaseAnalyzer {
 
         let expected_hash = parts[0];
         let filename = parts[1].trim_start_matches('*');
-        let target_path = hash_path.parent().unwrap().join(filename);
+        let hash_dir = match hash_path.parent() {
+            Some(dir) => dir,
+            None => return,
+        };
+        let target_path = hash_dir.join(filename);
 
         if !target_path.exists() {
             result.add(

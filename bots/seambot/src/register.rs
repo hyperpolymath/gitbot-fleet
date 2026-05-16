@@ -39,7 +39,7 @@ pub async fn init_seam_infrastructure(repo_path: &Path, force: bool) -> Result<(
     if register_path.exists() && !force {
         info!("Seam register already exists, skipping (use --force to overwrite)");
     } else {
-        let register = create_example_register(repo_path);
+        let register = create_example_register(repo_path)?;
         let content = serde_json::to_string_pretty(&register)?;
         fs::write(&register_path, content).await?;
         info!("Created seam register at {}", register_path.display());
@@ -79,14 +79,24 @@ pub async fn init_seam_infrastructure(repo_path: &Path, force: bool) -> Result<(
     Ok(())
 }
 
-fn create_example_register(repo_path: &Path) -> SeamRegister {
+fn create_example_register(repo_path: &Path) -> Result<SeamRegister> {
+    // Derive the repository name from the target path. A missing or non-UTF-8
+    // directory name is a real failure: silently substituting "unknown" would
+    // write a seam register whose `repository` field does not identify the
+    // repo, masking a bad init target. Propagate instead.
     let repo_name = repo_path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("unknown")
+        .with_context(|| {
+            format!(
+                "Cannot determine repository name from init path {} \
+                 (no final component or non-UTF-8); pass an explicit repo directory",
+                repo_path.display()
+            )
+        })?
         .to_string();
 
-    SeamRegister {
+    Ok(SeamRegister {
         version: "1.0".to_string(),
         repository: repo_name,
         seams: vec![
@@ -122,7 +132,7 @@ fn create_example_register(repo_path: &Path) -> SeamRegister {
             updated_by: "seambot init".to_string(),
             commit_hash: None,
         },
-    }
+    })
 }
 
 fn create_register_adoc() -> String {
@@ -249,8 +259,9 @@ let result = module_b::api::process(input)?;
 .Hidden channel via global state
 [source,rust]
 ----
-// WRONG: Bypassing the seam via global state
-GLOBAL_STATE.write().unwrap().set_value(input);
+// WRONG: Bypassing the seam via shared global mutable state
+let mut guard = GLOBAL_STATE.write_lock();
+guard.set_value(input);
 module_b::internal::read_from_global();
 ----
 

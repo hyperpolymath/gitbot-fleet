@@ -50,7 +50,13 @@ pub async fn run_all_checks(repo_path: &Path) -> Result<CheckResult> {
         result.merge(drift_result);
     }
 
-    result.summary.total_seams = count_seams(repo_path).await.unwrap_or(0);
+    // Propagate register read/parse failures instead of silently reporting
+    // zero seams. `unwrap_or(0)` here masked a corrupt or unreadable
+    // seam-register as a clean "0 seams, 0 checked" result, which would let
+    // a broken register pass CI undetected.
+    result.summary.total_seams = count_seams(repo_path)
+        .await
+        .context("Failed to count seams in register")?;
     result.summary.checked_seams = result.summary.total_seams;
 
     Ok(result)

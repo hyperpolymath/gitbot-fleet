@@ -26,7 +26,7 @@ use echidnabot::adapters::Platform;
 use echidnabot::config::Config;
 
 use axum::http::HeaderMap;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::time::Duration;
 use uuid::Uuid;
@@ -149,7 +149,7 @@ fn test_proof_status_variants() {
 fn test_echidna_config_defaults() {
     let config = Config::default();
     assert_eq!(config.echidna.timeout_secs, 300);
-    assert_eq!(config.server.port, 8080);
+    assert_eq!(config.server.port, 9001);
     assert_eq!(config.scheduler.max_concurrent, 5);
     assert_eq!(config.scheduler.queue_size, 100);
 }

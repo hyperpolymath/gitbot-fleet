@@ -37,7 +37,7 @@ pub fn audit(path: &Path, config: &Config) -> Result<AuditResult> {
 
     // Run license analysis
     info!("Running license validation...");
-    let license_analyzer = LicenseAnalyzer::default();
+    let license_analyzer = LicenseAnalyzer;
     result.license = license_analyzer.analyze(path, config)?;
     info!(
         findings = result.license.findings.len(),
@@ -47,7 +47,7 @@ pub fn audit(path: &Path, config: &Config) -> Result<AuditResult> {
 
     // Run placeholder analysis
     info!("Running placeholder detection...");
-    let placeholder_analyzer = PlaceholderAnalyzer::default();
+    let placeholder_analyzer = PlaceholderAnalyzer;
     result.placeholder = placeholder_analyzer.analyze(path, config)?;
     info!(
         findings = result.placeholder.findings.len(),
@@ -57,7 +57,7 @@ pub fn audit(path: &Path, config: &Config) -> Result<AuditResult> {
 
     // Run claims verification
     info!("Running claim verification...");
-    let claims_analyzer = ClaimsAnalyzer::default();
+    let claims_analyzer = ClaimsAnalyzer;
     result.claims = claims_analyzer.analyze(path, config)?;
     info!(
         findings = result.claims.findings.len(),
@@ -67,7 +67,7 @@ pub fn audit(path: &Path, config: &Config) -> Result<AuditResult> {
 
     // Run release readiness checks
     info!("Running release readiness checks...");
-    let release_analyzer = ReleaseAnalyzer::default();
+    let release_analyzer = ReleaseAnalyzer;
     result.release = release_analyzer.analyze(path, config)?;
     info!(
         findings = result.release.findings.len(),
@@ -103,12 +103,12 @@ pub fn fix(path: &Path, config: &Config, audit_result: &AuditResult) -> Result<V
     }
 
     // Fix license issues
-    let license_analyzer = LicenseAnalyzer::default();
+    let license_analyzer = LicenseAnalyzer;
     let fixed = license_analyzer.fix(path, config, &audit_result.license.findings)?;
     all_fixed.extend(fixed);
 
     // Fix placeholder issues
-    let placeholder_analyzer = PlaceholderAnalyzer::default();
+    let placeholder_analyzer = PlaceholderAnalyzer;
     let fixed = placeholder_analyzer.fix(path, config, &audit_result.placeholder.findings)?;
     all_fixed.extend(fixed);
 

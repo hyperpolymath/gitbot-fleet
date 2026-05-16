@@ -141,6 +141,10 @@ impl BotConfig {
     }
 
     /// Save configuration to TOML file
+    ///
+    /// Intentional public config API (round-trips with `load`); not invoked by
+    /// the current demo binary.
+    #[allow(dead_code)]
     pub fn save(&self, path: &str) -> Result<()> {
         let contents = toml::to_string_pretty(self)
             .context("Failed to serialize config")?;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 // SPDX-FileCopyrightText: 2024-2025 hyperpolymath
+<!-- hypatia: allow security_errors/secret_detected -- deployment-doc placeholders and local-dev defaults (e.g. "your-secret", "oikos-dev"), not production credentials -->
 
 # Oikos Bot Deployment Guide
 

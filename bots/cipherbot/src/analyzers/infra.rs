@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
+// hypatia: allow security_errors/secret_detected -- this analyzer's job is to DETECT secrets; the credential-shaped string literals here are detection regexes/patterns, not real credentials
 //! Infrastructure-as-Code Analyzer — scans Terraform, Ansible, Docker/Podman configs
 //! for cryptographic and security issues.
 //!
@@ -26,7 +27,7 @@ static INFRA_PATTERNS: LazyLock<Vec<InfraPattern>> = LazyLock::new(|| {
     vec![
         // Container image using :latest — WARN
         InfraPattern {
-            regex: Regex::new(r#"(?i)(?:image|FROM)\s*[:=]?\s*["']?[a-zA-Z0-9._/-]+:latest["']?"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:image|FROM)\s*[:=]?\s*["']?[a-zA-Z0-9._/-]+:latest["']?"#).expect("static regex is valid"),
             algorithm: "container-latest",
             status: CryptoStatus::Warn,
             message: "Container image uses :latest tag — not reproducible, potential supply-chain risk.",
@@ -34,7 +35,7 @@ static INFRA_PATTERNS: LazyLock<Vec<InfraPattern>> = LazyLock::new(|| {
         },
         // Hardcoded credentials in IaC — REJECT
         InfraPattern {
-            regex: Regex::new(r#"(?i)(?:password|secret_key|access_key|private_key)\s*[:=]\s*["'][^"'$\{]{8,}["']"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:password|secret_key|access_key|private_key)\s*[:=]\s*["'][^"'$\{]{8,}["']"#).expect("static regex is valid"),
             algorithm: "iac-hardcoded-cred",
             status: CryptoStatus::Reject,
             message: "Hardcoded credentials in infrastructure code — severe security risk.",
@@ -42,7 +43,7 @@ static INFRA_PATTERNS: LazyLock<Vec<InfraPattern>> = LazyLock::new(|| {
         },
         // Secrets in env vars (less bad but still) — WARN
         InfraPattern {
-            regex: Regex::new(r#"(?i)(?:env|environment)\s*[:=].*(?:PASSWORD|SECRET|TOKEN|API_KEY)\s*[:=]\s*["'][^"'$\{]+["']"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:env|environment)\s*[:=].*(?:PASSWORD|SECRET|TOKEN|API_KEY)\s*[:=]\s*["'][^"'$\{]+["']"#).expect("static regex is valid"),
             algorithm: "env-var-secret",
             status: CryptoStatus::Warn,
             message: "Secrets passed via environment variables — visible in process listings.",
@@ -50,7 +51,7 @@ static INFRA_PATTERNS: LazyLock<Vec<InfraPattern>> = LazyLock::new(|| {
         },
         // Privileged container — WARN (not crypto but relevant)
         InfraPattern {
-            regex: Regex::new(r#"(?i)(?:privileged|security_context)\s*[:=]\s*(?:true|1)"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:privileged|security_context)\s*[:=]\s*(?:true|1)"#).expect("static regex is valid"),
             algorithm: "privileged-container",
             status: CryptoStatus::Warn,
             message: "Privileged container detected — breaks container isolation.",
@@ -60,7 +61,7 @@ static INFRA_PATTERNS: LazyLock<Vec<InfraPattern>> = LazyLock::new(|| {
         // Note: cannot use negative lookahead in the regex crate; match all
         // http:// endpoints and filter localhost in analyze_content.
         InfraPattern {
-            regex: Regex::new(r#"(?i)(?:endpoint|url|address|host)\s*[:=]\s*["']http://"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:endpoint|url|address|host)\s*[:=]\s*["']http://"#).expect("static regex is valid"),
             algorithm: "iac-http-endpoint",
             status: CryptoStatus::Reject,
             message: "Plaintext HTTP endpoint in infrastructure configuration.",
@@ -68,7 +69,7 @@ static INFRA_PATTERNS: LazyLock<Vec<InfraPattern>> = LazyLock::new(|| {
         },
         // Self-signed cert allowance — REJECT
         InfraPattern {
-            regex: Regex::new(r#"(?i)(?:skip_tls_verify|insecure_skip_tls|allow_self_signed|verify_certificates)\s*[:=]\s*(?:true|false|0|no)"#).unwrap(),
+            regex: Regex::new(r#"(?i)(?:skip_tls_verify|insecure_skip_tls|allow_self_signed|verify_certificates)\s*[:=]\s*(?:true|false|0|no)"#).expect("static regex is valid"),
             algorithm: "iac-tls-skip",
             status: CryptoStatus::Warn,
             message: "TLS verification settings modified in infrastructure code — verify intent.",
