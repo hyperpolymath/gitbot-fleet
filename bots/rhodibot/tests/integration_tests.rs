@@ -535,7 +535,7 @@ mod webhook_tests {
         let payload = r#"{"action":"opened","repository":{"name":"test"}}"#;
 
         // Compute expected signature
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, KeyInit, Mac};
         use sha2::Sha256;
         type HmacSha256 = Hmac<Sha256>;
 
