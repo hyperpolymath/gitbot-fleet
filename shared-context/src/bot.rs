@@ -84,6 +84,8 @@ impl BotId {
     }
 
     /// Parse from string
+    // Returns `Option`, not `Result`, so the std `FromStr` trait does not fit; keep the name as part of the public API.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<BotId> {
         match s.to_lowercase().as_str() {
             "rhodibot" => Some(BotId::Rhodibot),
@@ -429,11 +431,8 @@ impl BotExecution {
     /// Mark as completed
     pub fn complete(&mut self, findings: usize, errors: usize, files: usize) {
         let now = chrono::Utc::now();
-        self.status = if errors > 0 {
-            BotStatus::Completed // Has errors but completed
-        } else {
-            BotStatus::Completed
-        };
+        // Completed regardless of whether errors were reported.
+        self.status = BotStatus::Completed;
         self.completed_at = Some(now);
         self.findings_count = findings;
         self.errors_count = errors;

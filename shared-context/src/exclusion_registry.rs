@@ -30,6 +30,7 @@
 
 use std::env;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use glob::Pattern;
 use serde::Deserialize;
@@ -153,11 +154,15 @@ impl ExclusionRegistry {
                 e
             ))
         })?;
-        Self::from_str(&source)
+        source.parse()
     }
+}
+
+impl FromStr for ExclusionRegistry {
+    type Err = ExclusionError;
 
     /// Parse from an in-memory A2ML string.
-    pub fn from_str(source: &str) -> Result<Self> {
+    fn from_str(source: &str) -> Result<Self> {
         let raw: RawRegistry = toml::from_str(source).map_err(|e| {
             ExclusionError::Parse(format!("failed to parse exclusion registry: {e}"))
         })?;
@@ -215,7 +220,9 @@ impl ExclusionRegistry {
             remote_origin_patterns,
         })
     }
+}
 
+impl ExclusionRegistry {
     /// Load from the location specified by `BOT_EXCLUSION_REGISTRY` env, else
     /// the first of a set of conventional locations that exists.
     ///
@@ -288,7 +295,7 @@ impl ExclusionRegistry {
         }
 
         // Kill-switch check first — cheapest, catches everything.
-        if let Some(kill) = env::var("HYPATIA_AUTOMATION").ok() {
+        if let Ok(kill) = env::var("HYPATIA_AUTOMATION") {
             let k = kill.to_ascii_lowercase();
             if matches!(k.as_str(), "off" | "disabled" | "0" | "false" | "halt") {
                 return Decision::Deny {
@@ -358,10 +365,10 @@ fn normalise_origin(origin: &str) -> String {
     // Strip trailing .git
     let s = s.strip_suffix(".git").unwrap_or(s);
     // git@host:owner/repo → host/owner/repo
-    if let Some(rest) = s.strip_prefix("git@") {
-        if let Some((host, path)) = rest.split_once(':') {
-            return format!("{host}/{path}");
-        }
+    if let Some(rest) = s.strip_prefix("git@")
+        && let Some((host, path)) = rest.split_once(':')
+    {
+        return format!("{host}/{path}");
     }
     // https://host/path or http://host/path or ssh://host/path
     for prefix in ["https://", "http://", "ssh://", "git://"] {
@@ -468,7 +475,7 @@ reason = "upstream homebrew"
 "#;
 
     fn registry() -> ExclusionRegistry {
-        ExclusionRegistry::from_str(FIXTURE).unwrap()
+        FIXTURE.parse().unwrap()
     }
 
     #[test]
