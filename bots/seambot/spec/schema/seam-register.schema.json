@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hyperpolymath.github.io/seambot/seam-register.schema.json",
+  "title": "Seam Register",
+  "description": "Schema for seambot seam register files. A seam register declares all architectural boundaries in a repository.",
+  "type": "object",
+  "required": ["version", "repository", "seams", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version (currently 1.0)",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "examples": ["1.0"]
+    },
+    "repository": {
+      "type": "string",
+      "description": "Name of the repository this register belongs to",
+      "minLength": 1,
+      "examples": ["seambot", "my-service"]
+    },
+    "seams": {
+      "type": "array",
+      "description": "All registered seams in this repository",
+      "items": {
+        "$ref": "#/$defs/Seam"
+      }
+    },
+    "cross_repo_seams": {
+      "type": "array",
+      "description": "References to seams in other repositories (for git-loom integration)",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/CrossRepoSeamRef"
+      }
+    },
+    "metadata": {
+      "$ref": "#/$defs/RegisterMetadata"
+    }
+  },
+  "$defs": {
+    "Seam": {
+      "type": "object",
+      "description": "A seam represents an architectural boundary between components",
+      "required": ["id", "name", "description", "side_a", "side_b", "seam_type", "invariants", "frozen", "ring", "conformance_paths"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the seam (kebab-case recommended)",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "examples": ["api-to-db", "auth-boundary", "module-a-to-module-b"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable name for the seam",
+          "minLength": 1,
+          "examples": ["API to Database", "Authentication Boundary"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of what this seam represents and why it exists"
+        },
+        "side_a": {
+          "type": "array",
+          "description": "Components on one side of the seam",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "examples": [["api-handler", "api-router"]]
+        },
+        "side_b": {
+          "type": "array",
+          "description": "Components on the other side of the seam",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "examples": [["database", "repository"]]
+        },
+        "seam_type": {
+          "$ref": "#/$defs/SeamType"
+        },
+        "invariants": {
+          "type": "array",
+          "description": "Invariants that must hold across this seam",
+          "items": {
+            "$ref": "#/$defs/Invariant"
+          }
+        },
+        "introduced_at": {
+          "type": ["string", "null"],
+          "description": "Stage when this seam was introduced (e.g., 'i1', 'f1')",
+          "pattern": "^[if][0-9]+$",
+          "examples": ["i1", "f2"]
+        },
+        "frozen": {
+          "type": "boolean",
+          "description": "Whether this seam is frozen (no changes allowed without explicit unfreezing)",
+          "default": false
+        },
+        "ring": {
+          "type": "integer",
+          "description": "Ring level: 0=core (most stable), 1=standard, 2=augmented (least stable)",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 1
+        },
+        "checklist_path": {
+          "type": ["string", "null"],
+          "description": "Path to the checklist file for this seam (relative to repo root)",
+          "examples": ["spec/seams/checklists/api-to-db.adoc"]
+        },
+        "conformance_paths": {
+          "type": "array",
+          "description": "Paths to conformance example files (relative to repo root)",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["spec/seams/conformance/api-to-db-conformance.adoc"]]
+        }
+      }
+    },
+    "SeamType": {
+      "type": "string",
+      "description": "The type/category of seam",
+      "enum": ["module", "service", "layer", "data", "api", "build", "cross_repo"],
+      "x-enum-descriptions": {
+        "module": "Boundary between modules within a single repository",
+        "service": "Boundary between services or between repositories",
+        "layer": "Boundary between architectural layers (e.g., domain/infrastructure)",
+        "data": "Boundary for data flow (e.g., input validation, transformation)",
+        "api": "API boundary (REST, GraphQL, gRPC, etc.)",
+        "build": "Build/deployment boundary",
+        "cross_repo": "Seam that spans multiple repositories (managed by git-loom)"
+      }
+    },
+    "Invariant": {
+      "type": "object",
+      "description": "An invariant that must hold across a seam",
+      "required": ["id", "description", "verification", "severity"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the invariant (kebab-case recommended)",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "examples": ["no-hidden-channels", "errors-must-propagate", "auth-required"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the invariant"
+        },
+        "verification": {
+          "$ref": "#/$defs/VerificationType"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        }
+      }
+    },
+    "VerificationType": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "manual",
+          "description": "Requires manual review to verify"
+        },
+        {
+          "type": "string",
+          "const": "type_system",
+          "description": "Enforced by the type system"
+        },
+        {
+          "type": "object",
+          "description": "Verified by an automated test",
+          "required": ["automated"],
+          "additionalProperties": false,
+          "properties": {
+            "automated": {
+              "type": "object",
+              "required": ["test_path"],
+              "additionalProperties": false,
+              "properties": {
+                "test_path": {
+                  "type": "string",
+                  "description": "Path to the test file that verifies this invariant"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Verified by pattern matching in code",
+          "required": ["pattern"],
+          "additionalProperties": false,
+          "properties": {
+            "pattern": {
+              "type": "object",
+              "required": ["regex"],
+              "additionalProperties": false,
+              "properties": {
+                "regex": {
+                  "type": "string",
+                  "description": "Regular expression pattern to match (or not match)"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Verified by a static analysis tool",
+          "required": ["static_analysis"],
+          "additionalProperties": false,
+          "properties": {
+            "static_analysis": {
+              "type": "object",
+              "required": ["tool"],
+              "additionalProperties": false,
+              "properties": {
+                "tool": {
+                  "type": "string",
+                  "description": "Name of the static analysis tool (e.g., 'clippy', 'eslint')"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Severity": {
+      "type": "string",
+      "description": "Severity level if an invariant is violated",
+      "enum": ["info", "warning", "error", "critical"],
+      "x-enum-descriptions": {
+        "info": "Informational finding, no action required",
+        "warning": "Should be addressed but not blocking",
+        "error": "Must be fixed before merge/release",
+        "critical": "Security or stability issue, requires immediate attention"
+      }
+    },
+    "CrossRepoSeamRef": {
+      "type": "object",
+      "description": "Reference to a seam in another repository",
+      "required": ["seam_id", "repository", "local_components"],
+      "additionalProperties": false,
+      "properties": {
+        "seam_id": {
+          "type": "string",
+          "description": "ID of the seam in the remote repository"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Name or URL of the remote repository"
+        },
+        "local_components": {
+          "type": "array",
+          "description": "Components in this repository that touch the remote seam",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "RegisterMetadata": {
+      "type": "object",
+      "description": "Metadata about the seam register",
+      "required": ["updated_at", "updated_by"],
+      "additionalProperties": false,
+      "properties": {
+        "updated_at": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of the last update",
+          "format": "date-time"
+        },
+        "updated_by": {
+          "type": "string",
+          "description": "Who or what updated the register (user, tool, or CI)",
+          "examples": ["seambot init", "developer@example.com", "ci-pipeline"]
+        },
+        "commit_hash": {
+          "type": ["string", "null"],
+          "description": "Git commit hash at the time of the update",
+          "pattern": "^[a-f0-9]{40}$"
+        }
+      }
+    }
+  }
+}

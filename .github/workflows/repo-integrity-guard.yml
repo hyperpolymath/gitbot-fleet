@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Repo Integrity Guard — prevents a stale-base squash-merge (or any push/PR)
+# from silently mass-deleting gitbot-fleet again.
+#
+# History: gitbot-fleet's main was once reduced from 1777 files to 2 by a
+# squash-merge from a near-empty base. The deletion went unnoticed for
+# months and broke hypatia's Phase-2 learning submission estate-wide
+# (scripts/submit-finding.sh vanished). This guard makes a recurrence loud
+# and blocking.
+#
+# Fails when EITHER:
+#   * the change deletes more than MAX_DELETIONS tracked files vs. its base
+#     (override intentionally with the commit/PR marker [mass-delete-ok]), or
+#   * a critical file is missing from the resulting tree.
+name: Repo Integrity Guard
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MAX_DELETIONS: '50'
+
+jobs:
+  guard:
+    name: Repo Integrity Guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
+        with:
+          fetch-depth: 0
+
+      - name: Critical files must exist
+        run: |
+          set -euo pipefail
+          status=0
+          # scripts/submit-finding.sh is hypatia's Phase-2 learning sink.
+          if [ ! -f scripts/submit-finding.sh ]; then
+            echo "::error::scripts/submit-finding.sh is missing — this is the hypatia Phase-2 learning submission entrypoint."
+            status=1
+          elif [ ! -x scripts/submit-finding.sh ]; then
+            echo "::error::scripts/submit-finding.sh exists but is not executable."
+            status=1
+          fi
+          for f in run-fleet.sh fleet-coordinator.sh README.adoc; do
+            if [ ! -e "$f" ]; then
+              echo "::error::Critical path missing from tree: $f"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Mass-deletion tripwire
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # Resolve the comparison base.
+          base=""
+          if [ "$EVENT" = "pull_request" ] && [ -n "${BASE_SHA:-}" ]; then
+            base="$BASE_SHA"
+          elif [ -n "${BEFORE_SHA:-}" ] && \
+               [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            base="$BEFORE_SHA"
+          fi
+
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "No usable base ($EVENT) — skipping deletion tripwire (critical-files check still ran)."
+            exit 0
+          fi
+
+          deleted=$(git diff --diff-filter=D --name-only "$base" "$HEAD_SHA" | wc -l | tr -d ' ')
+          echo "Deleted tracked files vs $base: $deleted (limit ${MAX_DELETIONS})"
+
+          # Intentional large removals: put [mass-delete-ok] in any commit
+          # message in the range (or the PR title/body).
+          if git log --format='%B' "${base}..${HEAD_SHA}" | grep -qF '[mass-delete-ok]'; then
+            echo "Override marker [mass-delete-ok] present — tripwire bypassed by intent."
+            exit 0
+          fi
+
+          if [ "$deleted" -gt "${MAX_DELETIONS}" ]; then
+            echo "::error::$deleted files deleted vs base (limit ${MAX_DELETIONS}). If intentional, add [mass-delete-ok] to a commit message in this change. Refusing to let main be silently gutted again."
+            git diff --diff-filter=D --name-only "$base" "$HEAD_SHA" | head -40 | sed 's/^/  deleted: /'
+            exit 1
+          fi
+          echo "Deletion count within limit."

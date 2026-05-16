@@ -1,0 +1,23 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.9,
+  "description": "Runtime.exec() in .java-modernised-v1/src/etmaHandler/EtmaHandlerJ.java",
+  "formally_proven": false,
+  "pattern_id": "PA009-runtime-exec-in-java-modernise",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand",
+    "SafeSQL",
+    "SafeGit",
+    "SafeSSH"
+  ],
+  "recipe_id": "proven-substitute-CommandInjection",
+  "repo": "tma-mark2",
+  "severity": "Critical",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.921235Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

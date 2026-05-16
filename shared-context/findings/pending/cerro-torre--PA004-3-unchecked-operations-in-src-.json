@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "3 Unchecked_* operations in src/bindings/liboqs.adb",
+  "formally_proven": false,
+  "pattern_id": "PA004-3-unchecked-operations-in-src-",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "cerro-torre",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.920741Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

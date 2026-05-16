@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+
+[package]
+name = "vext-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.vext-core]
+path = "../vext-core"
+
+[[bin]]
+name = "fuzz_git_operations"
+path = "fuzz_targets/fuzz_git_operations.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_command_parsing"
+path = "fuzz_targets/fuzz_command_parsing.rs"
+test = false
+doc = false
+bench = false

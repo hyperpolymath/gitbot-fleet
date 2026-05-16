@@ -1,0 +1,20 @@
+{
+  "auto_fixable": false,
+  "category": "CommandInjection",
+  "confidence": 0.88,
+  "description": "System/process call in .machine_readable/META.scm",
+  "formally_proven": false,
+  "pattern_id": "PA009-system-process-call-in-machine",
+  "proven_module": "SafeCommand",
+  "proven_modules": [
+    "SafeCommand"
+  ],
+  "recipe_id": "recipe-safe-command",
+  "repo": "BowtieRisk.jl",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.920217Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}

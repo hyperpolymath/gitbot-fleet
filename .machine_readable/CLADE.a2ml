@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# Clade declaration — part of the gv-clade-index registry
+# See: https://github.com/hyperpolymath/gv-clade-index
+
+[identity]
+uuid = "f8cdb015-c230-50f2-b09c-f9e8d37646dd"
+primary-forge = "github"
+primary-owner = "hyperpolymath"
+canonical-name = "gitbot-fleet"
+prefixed-name = "rm-gitbot-fleet"
+
+[clade]
+primary = "rm"
+secondary = ["ax"]
+assigned = "2026-03-16"
+rationale = ""
+
+[forges]
+github = "hyperpolymath/gitbot-fleet"
+gitlab = "hyperpolymath/gitbot-fleet"
+bitbucket = "hyperpolymath/gitbot-fleet"
+
+[lineage]
+type = "standalone"
+parent = "Bot orchestration — rhodibot, echidnabot, sustainabot, glambot, seambot, finishbot"
+born = "2026-03-16"

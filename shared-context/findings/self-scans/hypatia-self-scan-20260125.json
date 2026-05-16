@@ -1,0 +1,70 @@
+[0;34m[INFO][0m Scanning directory: hypatia
+[0;34m[INFO][0m Found 67 source files
+jq: parse error: Invalid numeric literal at line 7, column 22
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 22
+jq: parse error: Invalid numeric literal at line 7, column 22
+[]
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 22
+jq: parse error: Invalid numeric literal at line 7, column 22
+jq: parse error: Invalid numeric literal at line 7, column 22
+[]
+jq: parse error: Invalid numeric literal at line 7, column 22
+jq: parse error: Invalid numeric literal at line 7, column 26
+jq: parse error: Invalid numeric literal at line 7, column 18
+jq: parse error: Invalid numeric literal at line 7, column 45
+jq: parse error: Invalid numeric literal at line 7, column 18
+jq: parse error: Invalid numeric literal at line 7, column 18
+jq: parse error: Invalid numeric literal at line 7, column 34
+[]
+jq: parse error: Invalid numeric literal at line 7, column 14
+[]
+jq: parse error: Invalid numeric literal at line 7, column 14
+jq: parse error: Invalid numeric literal at line 7, column 14
+jq: parse error: Invalid numeric literal at line 7, column 22
+jq: parse error: Invalid numeric literal at line 7, column 22
+[]
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 22
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 45
+jq: parse error: Invalid numeric literal at line 7, column 41
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 36
+jq: parse error: Invalid numeric literal at line 7, column 32
+[]
+[]
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 26
+[]
+jq: parse error: Invalid numeric literal at line 7, column 30
+jq: parse error: Invalid numeric literal at line 7, column 40
+[]
+[]
+jq: parse error: Invalid numeric literal at line 7, column 18
+[0;31m[ERROR][0m Found issues in 27 files

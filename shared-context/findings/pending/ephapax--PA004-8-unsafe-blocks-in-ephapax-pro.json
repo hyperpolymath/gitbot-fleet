@@ -1,0 +1,21 @@
+{
+  "auto_fixable": false,
+  "category": "UnsafeCode",
+  "confidence": 0.8,
+  "description": "8 unsafe blocks in ephapax-proven/src/lru.rs",
+  "formally_proven": false,
+  "pattern_id": "PA004-8-unsafe-blocks-in-ephapax-pro",
+  "proven_module": "SafeBuffer",
+  "proven_modules": [
+    "SafeBuffer",
+    "SafeMath"
+  ],
+  "recipe_id": "proven-substitute-UnsafeCode",
+  "repo": "ephapax",
+  "severity": "High",
+  "strategy": "review",
+  "tier": "substitute",
+  "timestamp": "2026-02-12T22:42:53.920676Z",
+  "dispatch_strategy": "review",
+  "needs_pr": true
+}
