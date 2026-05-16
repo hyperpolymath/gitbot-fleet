@@ -1,5 +1,215 @@
 [
   {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/scripts/backup_db.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/scripts/export_data.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/scripts/load_fixtures.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/setup.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/bot.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/cogs/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/cogs/admin.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/cogs/brands.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/cogs/materials.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/cogs/sustainability.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/cogs/user_commands.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/bot/main.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/config/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/config/settings.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/models/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/models/base.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/models/brand.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/models/garment.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/models/material.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/models/user.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/services/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/services/database.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/services/sustainability.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/utils/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/utils/cache.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/src/utils/logger.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/tests/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/tests/conftest.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/tests/integration/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/tests/integration/test_bot_commands.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/tests/unit/__init__.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/tests/unit/test_models.py"
+  },
+  {
+    "severity": "critical",
+    "rule_module": "cicd_rules",
+    "type": "banned_language_file",
+    "file": "bots/gsbot/tests/unit/test_services.py"
+  },
+  {
     "severity": "high",
     "rule_module": "code_safety",
     "type": "obj_magic",
