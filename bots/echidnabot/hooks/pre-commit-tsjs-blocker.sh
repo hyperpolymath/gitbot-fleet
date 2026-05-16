@@ -13,7 +13,7 @@ JS_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|mjs|cjs)$' | grep -v '\.res
 TS_CONFIGS=$(echo "$STAGED_FILES" | grep -E '(^|/)(tsconfig.*\.json|package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$' || true)
 
 if [ -n "$TS_FILES" ] || [ -n "$JS_FILES" ] || [ -n "$TS_CONFIGS" ]; then
-  echo "❌ TypeScript/JavaScript or Node config detected. Use ReScript instead."
+  echo "❌ TypeScript/JavaScript or Node config detected. Use AffineScript instead."
   [ -n "$TS_FILES" ] && echo "$TS_FILES"
   [ -n "$JS_FILES" ] && echo "$JS_FILES"
   [ -n "$TS_CONFIGS" ] && echo "$TS_CONFIGS"

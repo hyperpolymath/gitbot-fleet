@@ -189,7 +189,7 @@ just enroll-repos
 - ArangoDB + Virtuoso databases (design only)
 - Carbon API integration (ElectricityMaps/WattTime) - placeholder only
 
-**Architecture**: Polyglot by design (Haskell/OCaml/Rust/ReScript) but only Rust is implemented. See `ARCHITECTURE.md` (31KB) for full design.
+**Architecture**: Polyglot by design (Haskell/OCaml/Rust/AffineScript) but only Rust is implemented. See `ARCHITECTURE.md` (31KB) for full design.
 
 **CLI**: `sustainabot analyze <file>` / `sustainabot check <dir>` / `sustainabot self-analyze`
 
