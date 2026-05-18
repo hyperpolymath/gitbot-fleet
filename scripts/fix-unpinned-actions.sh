@@ -34,7 +34,7 @@ declare -A ACTION_PINS=(
     ["actions/upload-pages-artifact@v3"]="56afc609e74202658d3ffba0e8f6dda462b719fa"
     ["actions/deploy-pages@v4"]="d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e"
     ["ruby/setup-ruby@v1"]="09a7688d3b55cf0e976497ff046b70949eeaccfd"
-    ["actions/upload-artifact@v4"]="65c79d7f54e76e4e3c7a8f34db0f4ac8b515c478"
+    ["actions/upload-artifact@v4"]="ea165f8d65b6e75b540449e92b4886f43607fa02"
 )
 
 # Find all workflow files in repo
