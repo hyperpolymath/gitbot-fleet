@@ -1,25 +1,6 @@
 # SPDX-License-Identifier: PMPL-1.0-or-later
 # SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath)
 #
-# CODEOWNERS — gitbot-fleet
-
-# Default owner for all files
-* @hyperpolymath
-
-# Core orchestration (security-critical — taint flow validated)
-/fleet-coordinator.sh @hyperpolymath
-/scripts/ @hyperpolymath
-
-# Rust executors
-/robot-repo-automaton/ @hyperpolymath
-/shared-context/ @hyperpolymath
-
-# Bot implementations
-/bots/ @hyperpolymath
-
-# Security-sensitive
-/.well-known/ @hyperpolymath
-/SECURITY.md @hyperpolymath
-
-# Machine-readable metadata
-/.machine_readable/ @hyperpolymath
+# Solo-maintained hyperpolymath repo: no owner lines by policy.
+# See hyperpolymath/standards CODEOWNERS-POLICY.adoc (Rule 1).
+# Sole-maintainer review is moot; SPDX headers carry attribution.
