@@ -12,6 +12,9 @@
 //! 3. **ScanOrg**: High-concurrency bulk auditing across a GitHub organization.
 //! 4. **Hooks**: Lifecycle management for Git pre-commit and pre-push filters.
 //! 5. **Catalog**: Inspection of the authoritative error database (ERROR-CATALOG.scm).
+//! 6. **Skeleton**: Emit/verify the canonical RSR required-files set; the
+//!    single source of truth `rsr-template-repo` is derived from
+//!    (rsr-template-repo#48).
 
 use clap::{Parser, Subcommand};
 use robot_repo_automaton::prelude::*;
@@ -102,6 +105,28 @@ enum Commands {
         #[arg(short, long)]
         severity: Option<String>,
     },
+
+    /// Generate or verify the canonical RSR skeleton (rsr-template-repo#48)
+    Skeleton {
+        #[command(subcommand)]
+        action: SkeletonAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SkeletonAction {
+    /// Write the canonical RSR required-files set into a directory
+    Emit {
+        /// Target directory (created if absent)
+        #[arg(default_value = ".")]
+        out: PathBuf,
+    },
+    /// Verify a repo's required files match canonical; non-zero exit on drift
+    Check {
+        /// Repository root to verify
+        #[arg(default_value = ".")]
+        repo: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -173,6 +198,48 @@ async fn main() -> anyhow::Result<()> {
         } => cmd_scan_org(config.as_ref(), &org, &format, concurrency, cli.dry_run).await,
         Commands::Hooks { action } => cmd_hooks(config.as_ref(), action).await,
         Commands::Catalog { path, severity } => cmd_catalog(&path, severity.as_deref()),
+        Commands::Skeleton { action } => cmd_skeleton(action),
+    }
+}
+
+/// Emit or verify the canonical RSR skeleton (rsr-template-repo#48).
+///
+/// `Check` exits non-zero on drift so it can gate `rsr-template-repo`'s CI:
+/// the template is *derived* from this generator, never hand-maintained.
+fn cmd_skeleton(action: SkeletonAction) -> anyhow::Result<()> {
+    use robot_repo_automaton::skeleton;
+    match action {
+        SkeletonAction::Emit { out } => {
+            skeleton::emit(&out)?;
+            println!(
+                "wrote {} canonical RSR skeleton file(s) to {}",
+                skeleton::SKELETON.len(),
+                out.display()
+            );
+            Ok(())
+        }
+        SkeletonAction::Check { repo } => {
+            let drift = skeleton::check(&repo)?;
+            if drift.is_empty() {
+                println!(
+                    "OK: all {} required files match the canonical skeleton",
+                    skeleton::SKELETON.len()
+                );
+                Ok(())
+            } else {
+                for d in &drift {
+                    match d {
+                        skeleton::Drift::Missing(f) => error!("MISSING  {f}"),
+                        skeleton::Drift::Differs(f) => error!("DRIFTED  {f}"),
+                    }
+                }
+                anyhow::bail!(
+                    "{} required file(s) drifted from the canonical skeleton \
+                     (regenerate with `robot-repo-automaton skeleton emit`)",
+                    drift.len()
+                )
+            }
+        }
     }
 }
 

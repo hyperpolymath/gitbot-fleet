@@ -62,6 +62,7 @@ pub mod registry_guard;
 pub mod fleet;
 pub mod github;
 pub mod hooks;
+pub mod skeleton;
 
 pub use catalog::ErrorCatalog;
 pub use confidence::{ConfidenceLevel, FixDecision, ProposedFix, ThresholdConfig};
