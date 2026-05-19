@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # Pre-commit hook: block TypeScript/JavaScript and Node configs
 set -euo pipefail
 

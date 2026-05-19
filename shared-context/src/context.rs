@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0
+// SPDX-License-Identifier: PMPL-1.0-or-later
 //! Shared context for coordinating bot executions
 
 use crate::bot::{BotExecution, BotId, BotStatus, Tier};

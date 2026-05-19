@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0
+// SPDX-License-Identifier: PMPL-1.0-or-later
 //! Safety Triangle types for the gitbot-fleet remediation pipeline.
 //!
 //! The Safety Triangle prioritizes remediation actions:
