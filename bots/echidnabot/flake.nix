@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0
+# SPDX-License-Identifier: PMPL-1.0-or-later
 # SPDX-FileCopyrightText: 2025 hyperpolymath
 {
   description = "ECHIDNABOT - Proof-aware CI bot for theorem verification";

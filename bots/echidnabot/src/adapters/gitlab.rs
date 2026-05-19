@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0
+// SPDX-License-Identifier: PMPL-1.0-or-later
 //! GitLab platform adapter (minimal clone support)
 
 use async_trait::async_trait;
