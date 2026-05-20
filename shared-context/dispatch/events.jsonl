@@ -1,0 +1,136 @@
+{
+  "received_at": "2026-05-16T23:07:08Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "8f83b90dce56abd7da9b83df0baffadd6b59f721",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260516-230708-25975378743-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-16T23:07:30Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "343015ca8782cb7a304fb5bf5f7bd300d58df4c3",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260516-230730-25975379258-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-16T23:20:09Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "ba7c32427adad0929b19404efe5f2aed3bf066a8",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260516-232009-25975453573-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-16T23:21:01Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "81fda0ff75eda71db7f59c3ba3c5968f0ae7ad98",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260516-232101-25975454205-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T00:39:06Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "6bd5b2fd513d3c58fd92d0f04d8f43db551366f4",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-003906-25977075188-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T00:40:20Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "2ca0eedbb4c39b9dfab06ae7b5e062cfd5ee8479",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-004020-25977084623-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T02:03:11Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "ee9143d00442a512949ec525ba8c62d92af2bed5",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-020311-25978420018-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T02:04:00Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "51c13df9d0fe70250267e020f0c73325829439ba",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-020400-25978420612-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T02:08:14Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "7cd6664b45fdf25aac7305a38591968995754788",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-020814-25978424497-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T02:10:48Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "6e0b68904f427a5894fdb3c25bb60bd8ff721a46",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-021048-25978425422-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T12:05:47Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "2067a7fba31ab21a5b4807cce3c4f98689c0525a",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-120547-25979189559-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T23:01:57Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "66cbb638fb07b88d71f966bcdbd35bdb6e2d457d",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-230157-25979835438-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-17T23:16:08Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "2067a7fba31ab21a5b4807cce3c4f98689c0525a",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260517-231608-25979837889-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-18T00:11:30Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "bc25e908e0143ad4abe6e6f52dbac85ca79137a9",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260518-001130-25979855811-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-18T19:46:56Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "87035b4fa610f141748e5c11c28732308d546c08",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260518-194656-26025079840-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-18T23:30:20Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "739b005968c0e3d91bd2835a0af3e00eaf924254",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260518-233020-26026301420-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-19T12:25:37Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "da632d368c19a1661671575eedca13091de4862c",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260519-122537-26067947361-hypatia-secret-alert.json"
+}
