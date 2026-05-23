@@ -310,3 +310,11 @@
   "findings_count": "n/a",
   "event_file": "shared-context/dispatch/events/20260523-062809-26319919634-secret-scanner-alert.json"
 }
+{
+  "received_at": "2026-05-23T06:28:12Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "6a56790a2aa2d242094f8a1c5a47d96baa88299f",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-062812-26320480499-secret-scanner-alert.json"
+}
