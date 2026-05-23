@@ -150,3 +150,11 @@
   "findings_count": "11",
   "event_file": "shared-context/dispatch/events/20260523-004537-26307290626-hypatia-secret-alert.json"
 }
+{
+  "received_at": "2026-05-23T01:34:29Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "eace980c28b23ca52e051ad788de219f53dbff68",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-013429-26309575850-hypatia-secret-alert.json"
+}
