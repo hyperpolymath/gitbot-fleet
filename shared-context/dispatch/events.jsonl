@@ -142,3 +142,211 @@
   "findings_count": "11",
   "event_file": "shared-context/dispatch/events/20260522-184127-26292870042-hypatia-secret-alert.json"
 }
+{
+  "received_at": "2026-05-23T00:45:37Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "e6d8ce7eeb301215a59e5eabac632c9185dcac7a",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-004537-26307290626-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:34:29Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "eace980c28b23ca52e051ad788de219f53dbff68",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-013429-26309575850-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:36:49Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "ed2cb647fc61b4dd6ed71500efa076df4517bb41",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-013649-26309612693-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:40:07Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "873fc5669bfc035862acb68eb47114b006535813",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-014007-26309631962-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:43:44Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "40398313dc379fe7b61ac96250150ecd9681c3b5",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-014344-26309650326-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:44:40Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "2438e2f16d54f6234dc57e92427111f522e425fe",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-014440-26309652315-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:46:55Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "4a4cef695e44eed3a1ada2d3f36cfe847e2aa572",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-014655-26309689298-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:48:40Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "89bc63e5167363ec1ac0448945152f85b6016fb1",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-014840-26309709071-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:49:36Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "9ecb5c90b77b56e56251d2171208285a6a615331",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-014936-26309711318-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:50:30Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "cf77d0cb63aa48fa3c4ccb5b81d925acb1b584b0",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-015029-26309730187-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:51:49Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "51183ff10d0161b731efa0ca1107e60617df974c",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-015149-26309769549-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:52:14Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "0a04f6e452751867557e9e91abd6d8540bf77d27",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-015214-26309771543-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:54:26Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "4c09557d45874b1e06f525195ae7384c1a3e42fe",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-015426-26309790895-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T01:56:13Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "299cc6d96d902b28c65d4a983eb72beb5ffaffd2",
+  "findings_count": "11",
+  "event_file": "shared-context/dispatch/events/20260523-015613-26309792022-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T02:01:50Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "28e18c4e629e209f256653acef9793a3d7cc7b68",
+  "findings_count": "2",
+  "event_file": "shared-context/dispatch/events/20260523-020150-26309852214-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T02:02:15Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "5be2ce5bb40f4d08b2037106422b1b0926212e6a",
+  "findings_count": "2",
+  "event_file": "shared-context/dispatch/events/20260523-020215-26309875302-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T02:11:46Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "d26c2b31cd6d845b92eb2f32036b9ffd59086e3d",
+  "findings_count": "2",
+  "event_file": "shared-context/dispatch/events/20260523-021146-26310038285-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T02:20:17Z",
+  "event_type": "hypatia-secret-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "fc8b39ed66d8019243722c0d809325d8e58b0918",
+  "findings_count": "2",
+  "event_file": "shared-context/dispatch/events/20260523-022017-26310380844-hypatia-secret-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:26:28Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "fd7f3388146ba41aeead3a7eb7fe92034206d32a",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-062628-26319608153-secret-scanner-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:27:35Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "878159b1faddd2dfd47885f02d0790cb8691dbef",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-062735-26319799236-secret-scanner-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:28:09Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "40398313dc379fe7b61ac96250150ecd9681c3b5",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-062809-26319919634-secret-scanner-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:28:12Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "6a56790a2aa2d242094f8a1c5a47d96baa88299f",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-062812-26320480499-secret-scanner-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:28:22Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "2cdc0e390359e3e8e39381da37fcdca38479b0df",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-062822-26320436160-secret-scanner-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:29:15Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "49240d8e51e9ff8cb645a1574ab4538a92148f2b",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-062915-26320707416-secret-scanner-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:31:24Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "d2c12bea40d6dd1e9b8eb0805a0d8830ea1578a5",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-063124-26320971121-secret-scanner-alert.json"
+}
+{
+  "received_at": "2026-05-23T06:32:01Z",
+  "event_type": "secret-scanner-alert",
+  "source_repo": "hyperpolymath/ambientops",
+  "source_sha": "ad33e7441f1ce2deded78ecdb4f302be720f7e5e",
+  "findings_count": "n/a",
+  "event_file": "shared-context/dispatch/events/20260523-063201-26320986995-secret-scanner-alert.json"
+}
