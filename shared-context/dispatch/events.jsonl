@@ -390,3 +390,11 @@
   "findings_count": "17",
   "event_file": "shared-context/dispatch/events/20260524-043101-26351917025-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-24T06:48:00Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/rrecord-verity",
+  "source_sha": "unknown",
+  "findings_count": "2",
+  "event_file": "shared-context/dispatch/events/20260524-064800-26354377579-hypatia-security-alert.json"
+}
