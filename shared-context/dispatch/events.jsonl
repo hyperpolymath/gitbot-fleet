@@ -350,3 +350,11 @@
   "findings_count": "n/a",
   "event_file": "shared-context/dispatch/events/20260523-063201-26320986995-secret-scanner-alert.json"
 }
+{
+  "received_at": "2026-05-24T04:30:45Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/civic-connect",
+  "source_sha": "unknown",
+  "findings_count": "8",
+  "event_file": "shared-context/dispatch/events/20260524-043045-26351915930-hypatia-security-alert.json"
+}
