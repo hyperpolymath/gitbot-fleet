@@ -1,0 +1,132 @@
+// face: affinescript
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2024-2026 hyperpolymath
+//
+// MIGRATED FROM Analysis.res by hand-port per issue #148 (policy override 2026-05-24).
+// Uses Http.fetch (affinescript#160 ✅ closed 2026-05-19). Json calls
+// reference the still-OPEN affinescript#161 primitive — type names are
+// placeholders pending that landing.
+
+open Types
+
+// Originally ReScript `try { ... } catch { Js.Exn.Error(e) => ... }`; the
+// translation lifts the failure mode into Exn[HttpError] / Exn[JsonError]
+// per the effect-row model from affinescript#59 (closed 2026-05-18).
+
+fn analyze_repository(
+  endpoint: ref String,
+  repo_url: ref String,
+  reference: ref String,
+) -{IO + Http + Exn[HttpError]}-> Result[AnalysisResult, String] {
+  let body = Json.object_of([
+    ("url", Json.string(repo_url)),
+    ("ref", Json.string(reference)),
+  ]);
+
+  try {
+    let response = Http.fetch(
+      endpoint ++ "/repository",
+      #{
+        method: "POST",
+        headers: Dict.of([("Content-Type", "application/json")]),
+        body: Some(Json.stringify(body)),
+      },
+    );
+
+    if Http.Response.ok(response) {
+      let json = Http.Response.json(response);
+      Ok(Json.coerce(json))
+    } else {
+      Err("Analysis failed: " ++ Http.Response.status_text(response))
+    }
+  } catch {
+    err => Err("Analysis request failed: " ++ Exn.message(err)),
+  }
+}
+
+fn analyze_diff(
+  endpoint: ref String,
+  repo_url: ref String,
+  base: ref String,
+  head: ref String,
+) -{IO + Http + Exn[HttpError]}-> Result[AnalysisResult, String] {
+  let body = Json.object_of([
+    ("url", Json.string(repo_url)),
+    ("base", Json.string(base)),
+    ("head", Json.string(head)),
+  ]);
+
+  try {
+    let response = Http.fetch(
+      endpoint ++ "/diff",
+      #{
+        method: "POST",
+        headers: Dict.of([("Content-Type", "application/json")]),
+        body: Some(Json.stringify(body)),
+      },
+    );
+
+    if Http.Response.ok(response) {
+      let json = Http.Response.json(response);
+      Ok(Json.coerce(json))
+    } else {
+      Err("Diff analysis failed: " ++ Http.Response.status_text(response))
+    }
+  } catch {
+    err => Err("Analysis request failed: " ++ Exn.message(err)),
+  }
+}
+
+fn mock_analysis() -> AnalysisResult {
+  AnalysisResult #{
+    eco: EcoMetrics #{
+      carbonScore: 72.0,
+      energyScore: 68.0,
+      resourceScore: 75.0,
+      score: 71.5,
+    },
+    econ: EconMetrics #{
+      paretoDistance: 0.15,
+      allocationScore: 80.0,
+      debtScore: 65.0,
+      score: 72.0,
+      paretoStatus: Some(ParetoStatus #{
+        isOptimal: false,
+        distance: 0.15,
+        improvements: Some([
+          "Reduce complexity in src/utils.rs",
+          "Add memoization to hot path",
+        ]),
+      }),
+    },
+    quality: QualityMetrics #{
+      complexityScore: 70.0,
+      couplingScore: 75.0,
+      coverageScore: 82.0,
+      score: 75.5,
+    },
+    health: HealthIndex #{
+      eco: 0.4,
+      econ: 0.3,
+      quality: 0.3,
+      total: 72.8,
+      grade: "C",
+    },
+    violations: [],
+    recommendations: [
+      Recommendation #{
+        entityId: "src/processing.rs",
+        action: "optimize_loop",
+        reason: "Hot loop could benefit from vectorization",
+        priority: PriorityMedium,
+        confidence: 0.78,
+        expectedImprovement: Dict.of([
+          ("carbonScore", 5.0),
+          ("energyScore", 8.0),
+        ]),
+      },
+    ],
+    timestamp: "2024-12-08T10:00:00Z",
+    commitSha: Some("abc123"),
+  }
+}

@@ -1,0 +1,182 @@
+// face: affinescript
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell
+//
+// MIGRATED FROM Router.res by hand-port per issue #148 (policy override 2026-05-24).
+// HTTP router for Oikos Bot.
+
+type Method =
+  | GET
+  | POST
+  | PUT
+  | DELETE
+  | PATCH
+  | OPTIONS
+  | HEAD
+
+// Handler / middleware as effect-row function aliases. The actual effect
+// row is supplied at each call site; this alias is shape-only.
+type Handler = fn(Http.Request) -{IO + Http}-> Http.Response
+
+type Middleware =
+  fn(Http.Request, fn() -{IO + Http}-> Http.Response) -{IO + Http}-> Http.Response
+
+type Route = {
+  method: Method,
+  path: String,
+  handler: Handler,
+}
+
+type Router = {
+  routes: Array[Route],
+  middlewares: Array[Middleware],
+  notFoundHandler: Option[Handler],
+}
+
+fn make() -> Router {
+  Router #{
+    routes: [],
+    middlewares: [],
+    notFoundHandler: None,
+  }
+}
+
+fn method_to_string(method: ref Method) -> String {
+  match method {
+    GET => "GET",
+    POST => "POST",
+    PUT => "PUT",
+    DELETE => "DELETE",
+    PATCH => "PATCH",
+    OPTIONS => "OPTIONS",
+    HEAD => "HEAD",
+  }
+}
+
+fn method_from_string(s: ref String) -> Option[Method] {
+  match s {
+    "GET" => Some(GET),
+    "POST" => Some(POST),
+    "PUT" => Some(PUT),
+    "DELETE" => Some(DELETE),
+    "PATCH" => Some(PATCH),
+    "OPTIONS" => Some(OPTIONS),
+    "HEAD" => Some(HEAD),
+    _ => None,
+  }
+}
+
+// Path matching with named parameters (":id" style).
+fn match_path(pattern: ref String, path: ref String) -> Option[Dict[String, String]] {
+  let pattern_parts = String.split(pattern, "/") |> Array.filter(fn(p) -> Bool { p != "" });
+  let path_parts = String.split(path, "/") |> Array.filter(fn(p) -> Bool { p != "" });
+
+  if Array.length(pattern_parts) != Array.length(path_parts) {
+    None
+  } else {
+    let params: mut Dict[String, String] = Dict.empty();
+    let matches: mut Bool = true;
+
+    Array.iter_indexed(pattern_parts, fn(i, pattern_part) -{Mut}-> () {
+      let path_part = Array.get(path_parts, i);
+      if String.starts_with(pattern_part, ":") {
+        let param_name = String.slice_from(pattern_part, 1);
+        Dict.set(params, param_name, path_part);
+      } else if pattern_part != path_part {
+        matches := false;
+      }
+    });
+
+    if matches {
+      Some(params)
+    } else {
+      None
+    }
+  }
+}
+
+fn add_route(router: Router, method: Method, path: String, handler: Handler) -> Router {
+  let new_route = Route #{ method: method, path: path, handler: handler };
+  Router #{ ..router, routes: Array.append(router.routes, [new_route]) }
+}
+
+fn get(router: Router, path: String, handler: Handler) -> Router {
+  add_route(router, GET, path, handler)
+}
+
+fn post(router: Router, path: String, handler: Handler) -> Router {
+  add_route(router, POST, path, handler)
+}
+
+fn put(router: Router, path: String, handler: Handler) -> Router {
+  add_route(router, PUT, path, handler)
+}
+
+fn delete(router: Router, path: String, handler: Handler) -> Router {
+  add_route(router, DELETE, path, handler)
+}
+
+fn patch(router: Router, path: String, handler: Handler) -> Router {
+  add_route(router, PATCH, path, handler)
+}
+
+fn options(router: Router, path: String, handler: Handler) -> Router {
+  add_route(router, OPTIONS, path, handler)
+}
+
+fn use_middleware(router: Router, middleware: Middleware) -> Router {
+  Router #{ ..router, middlewares: Array.append(router.middlewares, [middleware]) }
+}
+
+fn not_found(router: Router, handler: Handler) -> Router {
+  Router #{ ..router, notFoundHandler: Some(handler) }
+}
+
+fn handle(router: ref Router, req: Http.Request) -{IO + Http}-> Http.Response {
+  let method_str = Http.Request.method(req);
+  let url = Http.Request.url(req);
+  let path = Http.Url.pathname(Http.Url.parse(url));
+
+  let method_enum = method_from_string(method_str);
+
+  match method_enum {
+    None => Http.Response.make("Method not allowed", #{ status: 405 }),
+    Some(m) => {
+      let matching_route: mut Option[Route] = None;
+
+      Array.iter(router.routes, fn(route) -{Mut}-> () {
+        if route.method == m {
+          match match_path(route.path, path) {
+            Some(_params) => { matching_route := Some(route) },
+            None => (),
+          }
+        }
+      });
+
+      match matching_route {
+        None => match router.notFoundHandler {
+          Some(handler) => handler(req),
+          None => Http.Response.make("Not Found", #{ status: 404 }),
+        },
+        Some(route) => {
+          let final_handler = fn() -{IO + Http}-> Http.Response { route.handler(req) };
+          let wrapped = Array.fold_right(
+            router.middlewares,
+            final_handler,
+            fn(middleware, next) -> fn() -{IO + Http}-> Http.Response {
+              fn() -{IO + Http}-> Http.Response { middleware(req, next) }
+            },
+          );
+          wrapped()
+        },
+      }
+    },
+  }
+}
+
+fn serve(router: Router, port: Int) -{IO + Http}-> () {
+  Http.serve(
+    #{ port: port },
+    fn(req) -{IO + Http}-> Http.Response { handle(router, req) },
+  )
+}
