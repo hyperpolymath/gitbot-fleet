@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+# .hypatia-ignore - Exemptions for banned language files (ReScript)
+# These ReScript files in bots/sustainabot are legacy and approved for use
+# in the sustainabot integration. See robot-repo-automaton for the migration path.
+
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Analysis.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Config.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/GitHubAPI.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/GitHubApp.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Main.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Oikos.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Report.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Router.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/ServerTea.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Types.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/src/Webhook.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/bindings/Deno.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/bindings/Fetch.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Analysis.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Config.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/GitHubAPI.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/GitHubApp.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Main.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Oikos.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Report.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Router.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/ServerTea.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Types.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/lib/ocaml/Webhook.res
+cicd_rules/banned_language_file:bots/sustainabot/bot-integration/rescript-runtime/package.json

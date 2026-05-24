@@ -390,3 +390,43 @@
   "findings_count": "17",
   "event_file": "shared-context/dispatch/events/20260524-043101-26351917025-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-24T06:48:00Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/rrecord-verity",
+  "source_sha": "unknown",
+  "findings_count": "2",
+  "event_file": "shared-context/dispatch/events/20260524-064800-26354377579-hypatia-security-alert.json"
+}
+{
+  "received_at": "2026-05-24T06:48:04Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/git-reticulator",
+  "source_sha": "unknown",
+  "findings_count": "16",
+  "event_file": "shared-context/dispatch/events/20260524-064804-26354378924-hypatia-security-alert.json"
+}
+{
+  "received_at": "2026-05-24T06:48:08Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/social-media-polygraph",
+  "source_sha": "unknown",
+  "findings_count": "4",
+  "event_file": "shared-context/dispatch/events/20260524-064808-26354379123-hypatia-security-alert.json"
+}
+{
+  "received_at": "2026-05-24T20:04:14Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/hypatia",
+  "source_sha": "4258322a55338e8423a7454b648db4d2fe8c58ec",
+  "findings_count": "44",
+  "event_file": "shared-context/dispatch/events/20260524-200414-26371413359-hypatia-security-alert.json"
+}
+{
+  "received_at": "2026-05-24T20:07:20Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/hypatia",
+  "source_sha": "128e0fa59714487ffc8348e9fdfe1ce2c8066880",
+  "findings_count": "43",
+  "event_file": "shared-context/dispatch/events/20260524-200720-26371481384-hypatia-security-alert.json"
+}
