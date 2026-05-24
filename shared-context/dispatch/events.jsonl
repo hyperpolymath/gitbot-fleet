@@ -398,3 +398,11 @@
   "findings_count": "2",
   "event_file": "shared-context/dispatch/events/20260524-064800-26354377579-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-24T06:48:04Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/git-reticulator",
+  "source_sha": "unknown",
+  "findings_count": "16",
+  "event_file": "shared-context/dispatch/events/20260524-064804-26354378924-hypatia-security-alert.json"
+}
