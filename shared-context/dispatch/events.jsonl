@@ -406,3 +406,11 @@
   "findings_count": "16",
   "event_file": "shared-context/dispatch/events/20260524-064804-26354378924-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-24T06:48:08Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/social-media-polygraph",
+  "source_sha": "unknown",
+  "findings_count": "4",
+  "event_file": "shared-context/dispatch/events/20260524-064808-26354379123-hypatia-security-alert.json"
+}
