@@ -358,3 +358,11 @@
   "findings_count": "8",
   "event_file": "shared-context/dispatch/events/20260524-043045-26351915930-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-24T04:30:50Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/misinformation-defence-platform",
+  "source_sha": "unknown",
+  "findings_count": "5",
+  "event_file": "shared-context/dispatch/events/20260524-043050-26351915966-hypatia-security-alert.json"
+}
