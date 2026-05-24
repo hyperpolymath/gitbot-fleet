@@ -1,0 +1,144 @@
+// face: affinescript
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2024-2026 hyperpolymath
+//
+// MIGRATED FROM Webhook.res by hand-port per issue #148 (policy override 2026-05-24).
+// HMAC verification uses the IO effect once #103 (Async-extern ABI) lowers
+// Web Crypto into the standard handler set.
+
+open Types
+
+// GitHub uses HMAC-SHA256 over the raw request body.
+fn verify_github_signature(
+  payload: ref String,
+  signature: ref String,
+  secret: ref String,
+) -{IO + Exn[CryptoError]}-> Bool {
+  let key_data = Bytes.from_utf8(secret);
+  let data = Bytes.from_utf8(payload);
+
+  let key = Crypto.import_key(
+    "raw",
+    key_data,
+    #{ name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"],
+  );
+
+  let signature_bytes = Bytes.from_utf8(String.replace(signature, "sha256=", ""));
+  Crypto.verify("HMAC", key, signature_bytes, data)
+}
+
+fn verify_gitlab_token(token: ref String, secret: ref String) -> Bool {
+  token == secret
+}
+
+// affinescript#161: Json placeholder until portable Json primitive lands.
+fn parse_github_event(
+  headers: ref Dict[String, String],
+  payload: ref Json,
+) -> Option[WebhookEvent] {
+  let event_type = Dict.get(headers, "x-github-event");
+  let action = match Json.decode_object(payload) {
+    Some(obj) => match Dict.get(obj, "action") {
+      Some(a) => Json.decode_string(a),
+      None => None,
+    },
+    None => None,
+  };
+
+  match event_type {
+    Some(et) => {
+      let repo = match Json.decode_object(payload) {
+        Some(obj) => match Dict.get(obj, "repository") {
+          Some(r) => match Json.decode_object(r) {
+            Some(repo_obj) => {
+              let owner = match Dict.get(repo_obj, "owner") {
+                Some(o) => match Json.decode_object(o) {
+                  Some(owner_obj) => match Dict.get(owner_obj, "login") {
+                    Some(l) => Option.unwrap_or(Json.decode_string(l), ""),
+                    None => "",
+                  },
+                  None => "",
+                },
+                None => "",
+              };
+              let name = match Dict.get(repo_obj, "name") {
+                Some(n) => Option.unwrap_or(Json.decode_string(n), ""),
+                None => "",
+              };
+              let url = match Dict.get(repo_obj, "html_url") {
+                Some(u) => Option.unwrap_or(Json.decode_string(u), ""),
+                None => "",
+              };
+              Some(RepositoryInfo #{ owner: owner, name: name, url: url })
+            },
+            None => None,
+          },
+          None => None,
+        },
+        None => None,
+      };
+
+      match repo {
+        Some(r) => Some(WebhookEvent #{
+          platform: GitHub,
+          eventType: et,
+          action: action,
+          repository: r,
+          payload: payload,
+        }),
+        None => None,
+      }
+    },
+    None => None,
+  }
+}
+
+fn parse_gitlab_event(
+  headers: ref Dict[String, String],
+  payload: ref Json,
+) -> Option[WebhookEvent] {
+  let event_type = Dict.get(headers, "x-gitlab-event");
+
+  match event_type {
+    Some(et) => {
+      let repo = match Json.decode_object(payload) {
+        Some(obj) => match Dict.get(obj, "project") {
+          Some(p) => match Json.decode_object(p) {
+            Some(proj_obj) => {
+              let namespace = match Dict.get(proj_obj, "namespace") {
+                Some(n) => Option.unwrap_or(Json.decode_string(n), ""),
+                None => "",
+              };
+              let name = match Dict.get(proj_obj, "name") {
+                Some(n) => Option.unwrap_or(Json.decode_string(n), ""),
+                None => "",
+              };
+              let url = match Dict.get(proj_obj, "web_url") {
+                Some(u) => Option.unwrap_or(Json.decode_string(u), ""),
+                None => "",
+              };
+              Some(RepositoryInfo #{ owner: namespace, name: name, url: url })
+            },
+            None => None,
+          },
+          None => None,
+        },
+        None => None,
+      };
+
+      match repo {
+        Some(r) => Some(WebhookEvent #{
+          platform: GitLab,
+          eventType: et,
+          action: None,
+          repository: r,
+          payload: payload,
+        }),
+        None => None,
+      }
+    },
+    None => None,
+  }
+}

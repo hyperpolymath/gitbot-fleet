@@ -1,0 +1,244 @@
+// face: affinescript
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell
+//
+// MIGRATED FROM Oikos.res by hand-port per issue #148 (policy override 2026-05-24).
+// οἶκος: Greek root of both "ecology" and "economy".
+// TEA Architecture — Model-Update-Subscriptions pattern.
+
+open ServerTea
+
+type BotMode =
+  | Advisor
+  | Consultant
+  | Regulator
+
+type WebhookSource =
+  | GitHub
+  | GitLab
+
+type AnalysisStatus =
+  | Pending
+  | InProgress
+  | Completed(Types.AnalysisResult)
+  | Failed(String)
+
+type PendingAnalysis = {
+  id: String,
+  repo: String,
+  prNumber: Int,
+  status: AnalysisStatus,
+  createdAt: Float,
+}
+
+type Model = {
+  mode: BotMode,
+  port: Int,
+  webhookSecret: Option[String],
+  appId: Option[String],
+  privateKeyPath: Option[String],
+  pendingAnalyses: Array[PendingAnalysis],
+  totalProcessed: Int,
+  startTime: Float,
+  healthy: Bool,
+}
+
+type Msg =
+  | WebhookReceived(WebhookSource, Json)
+  | WebhookVerified(WebhookSource, Json)
+  | WebhookRejected(String)
+  | AnalysisRequested(String, String, Int)
+  | AnalysisStarted(String)
+  | AnalysisCompleted(String, Types.AnalysisResult)
+  | AnalysisFailed(String, String)
+  | CommentPosted(String, Int)
+  | CommentFailed(String, String)
+  | HealthCheck
+  | Tick
+  | Shutdown
+
+type Flags = {
+  port: Int,
+  mode: String,
+  webhookSecret: Option[String],
+  appId: Option[String],
+  privateKeyPath: Option[String],
+}
+
+fn mode_from_string(s: ref String) -> BotMode {
+  match s {
+    "consultant" => Consultant,
+    "regulator" => Regulator,
+    _ => Advisor,
+  }
+}
+
+fn init(flags: Flags) -{IO}-> (Model, Cmd.T[Msg]) {
+  let model = Model #{
+    mode: mode_from_string(flags.mode),
+    port: flags.port,
+    webhookSecret: flags.webhookSecret,
+    appId: flags.appId,
+    privateKeyPath: flags.privateKeyPath,
+    pendingAnalyses: [],
+    totalProcessed: 0,
+    startTime: Time.now_millis(),
+    healthy: true,
+  };
+
+  Console.log("🏛️ Oikos Bot starting...");
+  Console.log("   Mode: " ++ flags.mode);
+  Console.log("   Port: " ++ Int.to_string(flags.port));
+
+  (model, Cmd.none())
+}
+
+fn update(msg: Msg, model: Model) -{IO}-> (Model, Cmd.T[Msg]) {
+  match msg {
+    WebhookReceived(source, payload) => {
+      let source_str = match source {
+        GitHub => "GitHub",
+        GitLab => "GitLab",
+      };
+      Console.log("📨 Webhook received from " ++ source_str);
+      // TODO: Verify signature, then dispatch WebhookVerified
+      (model, Cmd.perform(
+        fn() -{IO}-> Json { payload },
+        fn(p) -> Msg { WebhookVerified(source, p) },
+      ))
+    },
+
+    WebhookVerified(source, payload) => {
+      Console.log("✓ Webhook verified");
+      let _ = source;
+      let _ = payload;
+      // TODO: Parse event type, extract PR info, start analysis
+      (Model #{ ..model, totalProcessed: model.totalProcessed + 1 }, Cmd.none())
+    },
+
+    WebhookRejected(reason) => {
+      Console.error("✗ Webhook rejected: " ++ reason);
+      (model, Cmd.none())
+    },
+
+    AnalysisRequested(id, repo, pr_number) => {
+      Console.log("🔍 Analysis requested: " ++ repo ++ "#" ++ Int.to_string(pr_number));
+      let analysis = PendingAnalysis #{
+        id: id,
+        repo: repo,
+        prNumber: pr_number,
+        status: Pending,
+        createdAt: Time.now_millis(),
+      };
+      (
+        Model #{ ..model, pendingAnalyses: Array.append(model.pendingAnalyses, [analysis]) },
+        Cmd.none(),
+      )
+    },
+
+    AnalysisStarted(id) => {
+      let pending = model.pendingAnalyses
+        |> Array.map(fn(a) -> PendingAnalysis {
+             if a.id == id {
+               PendingAnalysis #{ ..a, status: InProgress }
+             } else {
+               a
+             }
+           });
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+    },
+
+    AnalysisCompleted(id, result) => {
+      Console.log("✓ Analysis completed: " ++ id);
+      let pending = model.pendingAnalyses
+        |> Array.map(fn(a) -> PendingAnalysis {
+             if a.id == id {
+               PendingAnalysis #{ ..a, status: Completed(result) }
+             } else {
+               a
+             }
+           });
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+    },
+
+    AnalysisFailed(id, error) => {
+      Console.error("✗ Analysis failed: " ++ id ++ " - " ++ error);
+      let pending = model.pendingAnalyses
+        |> Array.map(fn(a) -> PendingAnalysis {
+             if a.id == id {
+               PendingAnalysis #{ ..a, status: Failed(error) }
+             } else {
+               a
+             }
+           });
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+    },
+
+    CommentPosted(repo, pr_number) => {
+      Console.log("💬 Comment posted to " ++ repo ++ "#" ++ Int.to_string(pr_number));
+      (model, Cmd.none())
+    },
+
+    CommentFailed(repo, error) => {
+      Console.error("✗ Failed to post comment to " ++ repo ++ ": " ++ error);
+      (model, Cmd.none())
+    },
+
+    HealthCheck => {
+      Console.log("💚 Health check - processed: " ++ Int.to_string(model.totalProcessed));
+      (model, Cmd.none())
+    },
+
+    Tick => {
+      let now = Time.now_millis();
+      let one_hour = 60.0 *. 60.0 *. 1000.0;
+      let pending = Array.filter(model.pendingAnalyses, fn(a) -> Bool {
+        now -. a.createdAt < one_hour
+      });
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+    },
+
+    Shutdown => {
+      Console.log("👋 Shutting down...");
+      (Model #{ ..model, healthy: false }, Cmd.none())
+    },
+  }
+}
+
+fn subscriptions(model: Model) -> Sub.T[Msg] {
+  if model.healthy {
+    Sub.batch([
+      Sub.http_server(model.port, fn(json) -> Option[Msg] {
+        Some(WebhookReceived(GitHub, json))
+      }),
+      Sub.every(60000, fn() -> Msg { Tick }),
+    ])
+  } else {
+    Sub.none()
+  }
+}
+
+fn run() -{IO + Http}-> () {
+  let port = match Env.get("PORT") {
+    Some(p) => Option.unwrap_or(Int.from_string(p), 3000),
+    None => 3000,
+  };
+  let mode = Option.unwrap_or(Env.get("BOT_MODE"), "advisor");
+  let webhook_secret = Env.get("GITHUB_WEBHOOK_SECRET");
+  let app_id = Env.get("GITHUB_APP_ID");
+  let private_key_path = Env.get("GITHUB_PRIVATE_KEY_PATH");
+
+  let flags = Flags #{
+    port: port,
+    mode: mode,
+    webhookSecret: webhook_secret,
+    appId: app_id,
+    privateKeyPath: private_key_path,
+  };
+
+  let _ = Runtime.make(init, update, subscriptions, flags);
+  ()
+}
+
+// Auto-run when imported as main module.
+let _ = run()
