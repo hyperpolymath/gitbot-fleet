@@ -1,0 +1,405 @@
+// face: affinescript
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2024-2026 hyperpolymath
+//
+// MIGRATED FROM Main.res by hand-port per issue #148 (policy override 2026-05-24).
+// Oikos Bot — webhook intake and dispatch to the analysis service.
+
+open Types
+
+fn log(level: ref String, msg: ref String, data: Option[Json]) -{IO}-> () {
+  let timestamp = Time.iso_now();
+  let log_obj = match data {
+    Some(d) => Json.object_of([
+      ("timestamp", Json.string(timestamp)),
+      ("level", Json.string(level)),
+      ("message", Json.string(msg)),
+      ("data", d),
+    ]),
+    None => Json.object_of([
+      ("timestamp", Json.string(timestamp)),
+      ("level", Json.string(level)),
+      ("message", Json.string(msg)),
+    ]),
+  };
+  Console.log(Json.stringify(log_obj))
+}
+
+fn info(msg: ref String, data: Option[Json]) -{IO}-> () {
+  log("info", msg, data)
+}
+
+fn error(msg: ref String, data: Option[Json]) -{IO}-> () {
+  log("error", msg, data)
+}
+
+fn extract_pr_info(payload: ref Json) -> (Int, String, String) {
+  match Json.decode_object(payload) {
+    Some(obj) => {
+      let pr_number = match Dict.get(obj, "number") {
+        Some(n) => match Json.decode_number(n) {
+          Some(num) => Float.to_int(num),
+          None => 0,
+        },
+        None => 0,
+      };
+      let (base_sha, head_sha) = match Dict.get(obj, "pull_request") {
+        Some(pr) => match Json.decode_object(pr) {
+          Some(pr_obj) => {
+            let base = match Dict.get(pr_obj, "base") {
+              Some(b) => match Json.decode_object(b) {
+                Some(base_obj) => match Dict.get(base_obj, "sha") {
+                  Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
+                  None => "",
+                },
+                None => "",
+              },
+              None => "",
+            };
+            let head = match Dict.get(pr_obj, "head") {
+              Some(h) => match Json.decode_object(h) {
+                Some(head_obj) => match Dict.get(head_obj, "sha") {
+                  Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
+                  None => "",
+                },
+                None => "",
+              },
+              None => "",
+            };
+            (base, head)
+          },
+          None => ("", ""),
+        },
+        None => ("", ""),
+      };
+      (pr_number, base_sha, head_sha)
+    },
+    None => (0, "", ""),
+  }
+}
+
+fn extract_mr_info(payload: ref Json) -> (Int, String, String) {
+  match Json.decode_object(payload) {
+    Some(obj) => match Dict.get(obj, "object_attributes") {
+      Some(attrs) => match Json.decode_object(attrs) {
+        Some(attrs_obj) => {
+          let mr_iid = match Dict.get(attrs_obj, "iid") {
+            Some(n) => match Json.decode_number(n) {
+              Some(num) => Float.to_int(num),
+              None => 0,
+            },
+            None => 0,
+          };
+          let base_sha = match Dict.get(attrs_obj, "diff_refs") {
+            Some(refs) => match Json.decode_object(refs) {
+              Some(refs_obj) => match Dict.get(refs_obj, "base_sha") {
+                Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
+                None => "",
+              },
+              None => "",
+            },
+            None => "",
+          };
+          let head_sha = match Dict.get(attrs_obj, "last_commit") {
+            Some(commit) => match Json.decode_object(commit) {
+              Some(commit_obj) => match Dict.get(commit_obj, "id") {
+                Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
+                None => "",
+              },
+              None => "",
+            },
+            None => "",
+          };
+          (mr_iid, base_sha, head_sha)
+        },
+        None => (0, "", ""),
+      },
+      None => (0, "", ""),
+    },
+    None => (0, "", ""),
+  }
+}
+
+fn json_response(data: Json, status: Int) -> Http.Response {
+  Http.Response.make_json(
+    Json.stringify(data),
+    #{
+      status: status,
+      headers: Dict.of([("Content-Type", "application/json")]),
+    },
+  )
+}
+
+fn validate_github_signature(
+  config: ref Config,
+  headers: ref Dict[String, String],
+  body: ref String,
+) -{IO + Crypto + Exn[CryptoError]}-> Option[Http.Response] {
+  match config.githubWebhookSecret {
+    Some(secret) => {
+      let signature = Option.unwrap_or(Dict.get(headers, "x-hub-signature-256"), "");
+      let valid = Webhook.verify_github_signature(body, signature, secret);
+      if !valid {
+        error("Invalid GitHub webhook signature", None);
+        Some(Http.Response.make("{\"error\": \"Invalid signature\"}", #{ status: 401 }))
+      } else {
+        None
+      }
+    },
+    None => None,
+  }
+}
+
+fn handle_github_webhook(
+  config: ref Config,
+  headers: ref Dict[String, String],
+  body: ref String,
+) -{IO + Http + Crypto + Exn[HttpError]}-> Http.Response {
+  let signature_error = validate_github_signature(config, headers, body);
+  match signature_error {
+    Some(err_response) => err_response,
+    None => {
+      let parse_result = try {
+        Some(Json.parse(body))
+      } catch {
+        _ => None,
+      };
+
+      match parse_result {
+        None => Http.Response.make("{\"error\": \"Invalid JSON\"}", #{ status: 400 }),
+        Some(payload) => {
+          let event = Webhook.parse_github_event(headers, payload);
+          match event {
+            Some(e) => {
+              info(
+                "GitHub event: " ++ e.eventType,
+                Some(Json.object_of([
+                  ("repo", Json.string(e.repository.owner ++ "/" ++ e.repository.name)),
+                  ("action", Json.string(Option.unwrap_or(e.action, ""))),
+                ])),
+              );
+
+              if e.eventType == "pull_request" {
+                let action = Option.unwrap_or(e.action, "");
+                if action == "opened" || action == "synchronize" {
+                  let (pr_number, base_sha, head_sha) = extract_pr_info(payload);
+
+                  let analysis_result = Analysis.analyze_diff(
+                    config.analysisEndpoint,
+                    e.repository.url,
+                    base_sha,
+                    head_sha,
+                  );
+
+                  let comment = match analysis_result {
+                    Ok(analysis) => Report.generate_pr_comment(analysis, config.mode),
+                    Err(err) => {
+                      error("Analysis failed: " ++ err, None);
+                      let analysis = Analysis.mock_analysis();
+                      Report.generate_pr_comment(analysis, config.mode)
+                    },
+                  };
+
+                  let auth_result = GitHubApp.get_auth_token(config, payload);
+                  match auth_result {
+                    Ok(token) => {
+                      let post_result = GitHubAPI.post_pr_comment(
+                        token,
+                        e.repository.owner,
+                        e.repository.name,
+                        pr_number,
+                        comment,
+                      );
+                      match post_result {
+                        Ok(comment_id) => info(
+                          "Posted PR comment",
+                          Some(Json.object_of([
+                            ("pr", Json.number(Int.to_float(pr_number))),
+                            ("commentId", Json.number(Int.to_float(comment_id))),
+                          ])),
+                        ),
+                        Err(err) => error("Failed to post PR comment: " ++ err, None),
+                      }
+                    },
+                    Err(err) => info(
+                      "GitHub App not configured, comment not posted: " ++ err,
+                      Some(Json.string(comment)),
+                    ),
+                  };
+                  ()
+                };
+                ()
+              };
+
+              json_response(
+                Json.object_of([("status", Json.string("processed"))]),
+                200,
+              )
+            },
+            None => {
+              error("Failed to parse GitHub event", None);
+              Http.Response.make("{\"error\": \"Invalid event\"}", #{ status: 400 })
+            },
+          }
+        },
+      }
+    },
+  }
+}
+
+fn validate_gitlab_token(
+  config: ref Config,
+  headers: ref Dict[String, String],
+) -{IO}-> Option[Http.Response] {
+  match config.gitlabWebhookSecret {
+    Some(secret) => {
+      let token = Option.unwrap_or(Dict.get(headers, "x-gitlab-token"), "");
+      if !Webhook.verify_gitlab_token(token, secret) {
+        error("Invalid GitLab webhook token", None);
+        Some(Http.Response.make("{\"error\": \"Invalid token\"}", #{ status: 401 }))
+      } else {
+        None
+      }
+    },
+    None => None,
+  }
+}
+
+fn handle_gitlab_webhook(
+  config: ref Config,
+  headers: ref Dict[String, String],
+  body: ref String,
+) -{IO + Http + Exn[HttpError]}-> Http.Response {
+  let token_error = validate_gitlab_token(config, headers);
+  match token_error {
+    Some(err_response) => err_response,
+    None => {
+      let parse_result = try {
+        Some(Json.parse(body))
+      } catch {
+        _ => None,
+      };
+
+      match parse_result {
+        None => Http.Response.make("{\"error\": \"Invalid JSON\"}", #{ status: 400 }),
+        Some(payload) => {
+          let event = Webhook.parse_gitlab_event(headers, payload);
+          match event {
+            Some(e) => {
+              info(
+                "GitLab event: " ++ e.eventType,
+                Some(Json.object_of([
+                  ("repo", Json.string(e.repository.owner ++ "/" ++ e.repository.name)),
+                ])),
+              );
+
+              if e.eventType == "Merge Request Hook" {
+                let (mr_iid, base_sha, head_sha) = extract_mr_info(payload);
+
+                let analysis_result = Analysis.analyze_diff(
+                  config.analysisEndpoint,
+                  e.repository.url,
+                  base_sha,
+                  head_sha,
+                );
+
+                match analysis_result {
+                  Ok(analysis) => {
+                    let comment = Report.generate_pr_comment(analysis, config.mode);
+                    info(
+                      "Generated MR comment for MR !" ++ Int.to_string(mr_iid),
+                      Some(Json.string(comment)),
+                    )
+                  },
+                  Err(err) => {
+                    error("Analysis failed: " ++ err, None);
+                    let analysis = Analysis.mock_analysis();
+                    let comment = Report.generate_pr_comment(analysis, config.mode);
+                    info("Generated fallback MR comment", Some(Json.string(comment)))
+                  },
+                };
+                ()
+              };
+
+              json_response(
+                Json.object_of([("status", Json.string("processed"))]),
+                200,
+              )
+            },
+            None => {
+              error("Failed to parse GitLab event", None);
+              Http.Response.make("{\"error\": \"Invalid event\"}", #{ status: 400 })
+            },
+          }
+        },
+      }
+    },
+  }
+}
+
+fn handler(config: Config) -> fn(Http.Request, Http.ConnInfo) -{IO + Http + Crypto + Exn[HttpError]}-> Http.Response {
+  fn(req, _conn_info) -{IO + Http + Crypto + Exn[HttpError]}-> Http.Response {
+    let url = Http.Request.url(req);
+    let method = Http.Request.method(req);
+    let path = String.replace_regex(url, "^https?://[^/]+", "");
+
+    match (method, path) {
+      ("GET", "/health") => json_response(
+        Json.object_of([
+          ("status", Json.string("healthy")),
+          ("mode", Json.string(Config.mode_to_string(config.mode))),
+        ]),
+        200,
+      ),
+
+      ("POST", "/webhooks/github") => {
+        let body = Http.Request.text(req);
+        let headers = Http.Request.headers(req);
+        handle_github_webhook(config, headers, body)
+      },
+
+      ("POST", "/webhooks/gitlab") => {
+        let body = Http.Request.text(req);
+        let headers = Http.Request.headers(req);
+        handle_gitlab_webhook(config, headers, body)
+      },
+
+      ("GET", "/metrics") => json_response(
+        Json.object_of([
+          ("oikos_bot_requests_total", Json.number(0.0)),
+          ("oikos_bot_analyses_total", Json.number(0.0)),
+        ]),
+        200,
+      ),
+
+      _ => Http.Response.make("Not Found", #{ status: 404 }),
+    }
+  }
+}
+
+fn main() -{IO + Http + Crypto + Exn[HttpError]}-> () {
+  match Config.load() {
+    Ok(config) => {
+      info(
+        "Starting Oikos Bot",
+        Some(Json.object_of([
+          ("port", Json.number(Int.to_float(config.port))),
+          ("mode", Json.string(Config.mode_to_string(config.mode))),
+        ])),
+      );
+
+      Http.serve(
+        #{
+          port: config.port,
+          on_listen: fn(addr) -{IO}-> () {
+            info("Server listening on " ++ addr.hostname ++ ":" ++ Int.to_string(addr.port), None)
+          },
+        },
+        handler(config),
+      )
+    },
+    Err(e) => error("Failed to load config: " ++ e, None),
+  }
+}
+
+let _ = main()

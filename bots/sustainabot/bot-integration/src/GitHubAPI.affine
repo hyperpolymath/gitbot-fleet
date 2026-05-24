@@ -1,0 +1,159 @@
+// face: affinescript
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2024-2026 hyperpolymath
+//
+// MIGRATED FROM GitHubAPI.res by hand-port per issue #148 (policy override 2026-05-24).
+// Uses Http.fetch (affinescript#160 ✅). Json calls reference affinescript#161
+// (still OPEN) — types are placeholders pending that primitive.
+
+open Types
+
+let user_agent: String = "oikos-bot/0.1.0-beta"
+let api_version: String = "2022-11-28"
+
+fn api_request(
+  token: ref String,
+  method: ref String,
+  endpoint: ref String,
+  body: Option[Json],
+) -{IO + Http + Exn[HttpError]}-> Result[Json, String] {
+  let url = "https://api.github.com" ++ endpoint;
+
+  let headers = Dict.of([
+    ("Authorization", "Bearer " ++ token),
+    ("Accept", "application/vnd.github+json"),
+    ("X-GitHub-Api-Version", api_version),
+    ("User-Agent", user_agent),
+    ("Content-Type", "application/json"),
+  ]);
+
+  try {
+    let response = match body {
+      Some(b) => Http.fetch(url, #{
+        method: method,
+        headers: headers,
+        body: Some(Json.stringify(b)),
+      }),
+      None => Http.fetch(url, #{
+        method: method,
+        headers: headers,
+        body: None,
+      }),
+    };
+
+    if !Http.Response.ok(response) {
+      let status = Http.Response.status(response);
+      let error_body = Http.Response.text(response);
+      Err("GitHub API error " ++ Int.to_string(status) ++ ": " ++ error_body)
+    } else {
+      let json = Http.Response.json(response);
+      Ok(json)
+    }
+  } catch {
+    err => Err("API request failed: " ++ Exn.message(err)),
+  }
+}
+
+fn post_pr_comment(
+  token: ref String,
+  owner: ref String,
+  repo: ref String,
+  pr_number: Int,
+  body: ref String,
+) -{IO + Http + Exn[HttpError]}-> Result[Int, String] {
+  let endpoint = "/repos/" ++ owner ++ "/" ++ repo ++ "/issues/" ++ Int.to_string(pr_number) ++ "/comments";
+  let payload = Json.object_of([("body", Json.string(body))]);
+
+  let result = api_request(token, "POST", endpoint, Some(payload));
+
+  match result {
+    Ok(json) => match Json.decode_object(json) {
+      Some(obj) => match Dict.get(obj, "id") {
+        Some(id) => match Json.decode_number(id) {
+          Some(num) => Ok(Float.to_int(num)),
+          None => Err("Invalid comment ID in response"),
+        },
+        None => Err("No comment ID in response"),
+      },
+      None => Err("Invalid JSON response"),
+    },
+    Err(e) => Err(e),
+  }
+}
+
+fn update_comment(
+  token: ref String,
+  owner: ref String,
+  repo: ref String,
+  comment_id: Int,
+  body: ref String,
+) -{IO + Http + Exn[HttpError]}-> Result[(), String] {
+  let endpoint = "/repos/" ++ owner ++ "/" ++ repo ++ "/issues/comments/" ++ Int.to_string(comment_id);
+  let payload = Json.object_of([("body", Json.string(body))]);
+
+  let result = api_request(token, "PATCH", endpoint, Some(payload));
+
+  match result {
+    Ok(_) => Ok(()),
+    Err(e) => Err(e),
+  }
+}
+
+// conclusion: "success" | "failure" | "neutral" | "cancelled" | "skipped" | "timed_out" | "action_required"
+fn create_check_run(
+  token: ref String,
+  owner: ref String,
+  repo: ref String,
+  head_sha: ref String,
+  name: ref String,
+  conclusion: ref String,
+  title: ref String,
+  summary: ref String,
+) -{IO + Http + Exn[HttpError]}-> Result[Int, String] {
+  let endpoint = "/repos/" ++ owner ++ "/" ++ repo ++ "/check-runs";
+  let payload = Json.object_of([
+    ("name", Json.string(name)),
+    ("head_sha", Json.string(head_sha)),
+    ("status", Json.string("completed")),
+    ("conclusion", Json.string(conclusion)),
+    ("output", Json.object_of([
+      ("title", Json.string(title)),
+      ("summary", Json.string(summary)),
+    ])),
+  ]);
+
+  let result = api_request(token, "POST", endpoint, Some(payload));
+
+  match result {
+    Ok(json) => match Json.decode_object(json) {
+      Some(obj) => match Dict.get(obj, "id") {
+        Some(id) => match Json.decode_number(id) {
+          Some(num) => Ok(Float.to_int(num)),
+          None => Err("Invalid check run ID in response"),
+        },
+        None => Err("No check run ID in response"),
+      },
+      None => Err("Invalid JSON response"),
+    },
+    Err(e) => Err(e),
+  }
+}
+
+fn get_pull_request(
+  token: ref String,
+  owner: ref String,
+  repo: ref String,
+  pr_number: Int,
+) -{IO + Http + Exn[HttpError]}-> Result[Json, String] {
+  let endpoint = "/repos/" ++ owner ++ "/" ++ repo ++ "/pulls/" ++ Int.to_string(pr_number);
+  api_request(token, "GET", endpoint, None)
+}
+
+fn get_repository(
+  token: ref String,
+  owner: ref String,
+  repo: ref String,
+) -{IO + Http + Exn[HttpError]}-> Result[Json, String] {
+  let endpoint = "/repos/" ++ owner ++ "/" ++ repo;
+  api_request(token, "GET", endpoint, None)
+}

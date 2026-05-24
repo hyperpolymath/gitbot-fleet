@@ -1,0 +1,196 @@
+// face: affinescript
+// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-FileCopyrightText: 2024-2026 hyperpolymath
+//
+// MIGRATED FROM GitHubApp.res by hand-port per issue #148 (policy override 2026-05-24).
+// RS256 JWT signing + installation-token caching.
+// Crypto / Base64 / TextEncoder paths assume the Web Crypto-derived stdlib
+// surface; will need re-validation against the canonical AffineScript
+// stdlib once #103 (Async-extern ABI) is fully wired through handlers.
+
+open Types
+
+// Module-level token cache. The `mut` here is the closest hand-port match
+// for a process-local Dict; affinescript#162 (Dict) is still OPEN so this
+// is a placeholder shape.
+let token_cache: mut Dict[String, InstallationToken] = Dict.empty()
+
+fn pem_to_array_buffer(pem: ref String) -> Bytes {
+  let stripped = pem
+    |> String.replace_regex("-----BEGIN (?:RSA )?PRIVATE KEY-----", "")
+    |> String.replace_regex("-----END (?:RSA )?PRIVATE KEY-----", "")
+    |> String.replace_regex("\\s", "");
+
+  let binary = Base64.decode(stripped);
+  Bytes.from_string(binary)
+}
+
+fn base64_url_encode(data: ref Bytes) -> String {
+  Base64.encode(data)
+    |> String.replace_all("+", "-")
+    |> String.replace_all("/", "_")
+    |> String.replace_regex("=+$", "")
+}
+
+fn base64_url_encode_string(s: ref String) -> String {
+  Base64.encode(Bytes.from_utf8(s))
+    |> String.replace_all("+", "-")
+    |> String.replace_all("/", "_")
+    |> String.replace_regex("=+$", "")
+}
+
+// JWT valid for 10 minutes (GitHub requirement). `iat` is set 60 s in the
+// past to account for clock drift.
+fn generate_jwt(
+  app_id: ref String,
+  private_key_pem: ref String,
+) -{IO + Crypto + Exn[CryptoError]}-> Result[String, String] {
+  let now_seconds = Time.now_millis() /. 1000.0;
+
+  let header = Json.object_of([
+    ("alg", Json.string("RS256")),
+    ("typ", Json.string("JWT")),
+  ]);
+  let header_b64 = base64_url_encode_string(Json.stringify(header));
+
+  let payload = Json.object_of([
+    ("iss", Json.string(app_id)),
+    ("iat", Json.number(now_seconds -. 60.0)),
+    ("exp", Json.number(now_seconds +. 600.0)),
+  ]);
+  let payload_b64 = base64_url_encode_string(Json.stringify(payload));
+
+  let message = header_b64 ++ "." ++ payload_b64;
+
+  try {
+    let key_buffer = pem_to_array_buffer(private_key_pem);
+
+    let key = Crypto.import_key_pkcs8(
+      key_buffer,
+      #{ name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+
+    let message_bytes = Bytes.from_utf8(message);
+    let signature_buffer = Crypto.sign_with_algorithm(
+      #{ name: "RSASSA-PKCS1-v1_5" },
+      key,
+      message_bytes,
+    );
+
+    let signature_b64 = base64_url_encode(signature_buffer);
+    Ok(message ++ "." ++ signature_b64)
+  } catch {
+    err => Err("Failed to generate JWT: " ++ Exn.message(err)),
+  }
+}
+
+// GitHub installation tokens are valid for 1 hour.
+fn get_installation_token(
+  jwt: ref String,
+  installation_id: Int,
+) -{IO + Http + Exn[HttpError]}-> Result[InstallationToken, String] {
+  let cache_key = Int.to_string(installation_id);
+
+  match Dict.get(token_cache, cache_key) {
+    // Return cached token if it has at least 1 minute remaining.
+    Some(cached) if cached.expiresAt > Time.now_millis() +. 60000.0 => Ok(cached),
+    _ => {
+      try {
+        let response = Http.fetch(
+          "https://api.github.com/app/installations/" ++ cache_key ++ "/access_tokens",
+          #{
+            method: "POST",
+            headers: Dict.of([
+              ("Authorization", "Bearer " ++ jwt),
+              ("Accept", "application/vnd.github+json"),
+              ("X-GitHub-Api-Version", "2022-11-28"),
+              ("User-Agent", "oikos-bot"),
+            ]),
+            body: None,
+          },
+        );
+
+        if !Http.Response.ok(response) {
+          let status = Http.Response.status(response);
+          let body = Http.Response.text(response);
+          Err("GitHub API error " ++ Int.to_string(status) ++ ": " ++ body)
+        } else {
+          let json = Http.Response.json(response);
+          match Json.decode_object(json) {
+            Some(obj) => {
+              let token = match Dict.get(obj, "token") {
+                Some(t) => Option.unwrap_or(Json.decode_string(t), ""),
+                None => "",
+              };
+              let expires_at_str = match Dict.get(obj, "expires_at") {
+                Some(e) => Option.unwrap_or(Json.decode_string(e), ""),
+                None => "",
+              };
+
+              if token == "" {
+                Err("No token in response")
+              } else {
+                let expires_at = Time.parse_iso8601(expires_at_str);
+                let install_token = InstallationToken #{
+                  token: token,
+                  expiresAt: expires_at,
+                };
+                Dict.set(token_cache, cache_key, install_token);
+                Ok(install_token)
+              }
+            },
+            None => Err("Invalid JSON response"),
+          }
+        }
+      } catch {
+        err => Err("Failed to get installation token: " ++ Exn.message(err)),
+      }
+    },
+  }
+}
+
+fn extract_installation_id(payload: ref Json) -> Option[Int] {
+  match Json.decode_object(payload) {
+    Some(obj) => match Dict.get(obj, "installation") {
+      Some(inst) => match Json.decode_object(inst) {
+        Some(inst_obj) => match Dict.get(inst_obj, "id") {
+          Some(id) => match Json.decode_number(id) {
+            Some(num) => Some(Float.to_int(num)),
+            None => None,
+          },
+          None => None,
+        },
+        None => None,
+      },
+      None => None,
+    },
+    None => None,
+  }
+}
+
+fn get_auth_token(
+  config: ref Config,
+  payload: ref Json,
+) -{IO + Http + Crypto + Exn[HttpError]}-> Result[String, String] {
+  match (config.githubAppId, config.githubPrivateKey) {
+    (Some(app_id), Some(private_key)) => match extract_installation_id(payload) {
+      Some(installation_id) => {
+        let jwt_result = generate_jwt(app_id, private_key);
+        match jwt_result {
+          Ok(jwt) => {
+            let token_result = get_installation_token(jwt, installation_id);
+            match token_result {
+              Ok(install_token) => Ok(install_token.token),
+              Err(e) => Err(e),
+            }
+          },
+          Err(e) => Err(e),
+        }
+      },
+      None => Err("No installation ID in payload"),
+    },
+    _ => Err("GitHub App credentials not configured"),
+  }
+}
