@@ -366,3 +366,11 @@
   "findings_count": "5",
   "event_file": "shared-context/dispatch/events/20260524-043050-26351915966-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-24T04:30:53Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/hesiod-dns-map",
+  "source_sha": "unknown",
+  "findings_count": "4",
+  "event_file": "shared-context/dispatch/events/20260524-043053-26351916138-hypatia-security-alert.json"
+}
