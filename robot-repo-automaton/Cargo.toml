@@ -46,7 +46,7 @@ toml = "1.1"
 
 # Git operations
 # Using vendored-openssl to avoid system OpenSSL dependency (libssl-dev)
-git2 = { version = "0.20", features = ["vendored-openssl"], default-features = false }
+git2 = { version = "0.21", features = ["vendored-openssl"], default-features = false }
 gix = { version = "0.83", features = ["blocking-http-transport-reqwest-rust-tls"] }
 
 # S-expression parsing (for ERROR-CATALOG.scm)
