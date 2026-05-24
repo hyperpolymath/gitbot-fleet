@@ -414,3 +414,11 @@
   "findings_count": "4",
   "event_file": "shared-context/dispatch/events/20260524-064808-26354379123-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-24T20:04:14Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/hypatia",
+  "source_sha": "4258322a55338e8423a7454b648db4d2fe8c58ec",
+  "findings_count": "44",
+  "event_file": "shared-context/dispatch/events/20260524-200414-26371413359-hypatia-security-alert.json"
+}
