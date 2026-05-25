@@ -203,7 +203,7 @@ for bot in rhodibot echidnabot panicbot cipherbot; do
     if [ -f "$CARGO" ]; then
         OUTPUT=$(cat "$CARGO")
         check "$bot Cargo.toml has package name" "name.*$bot\|name.*\"$bot\"" "$OUTPUT"
-        check "$bot Cargo.toml has PMPL license" "PMPL\|pmpl" "$OUTPUT"
+        check "$bot Cargo.toml has MPL-2.0 license" "MPL-2\.0\|MPL 2\.0\|mpl-2\.0" "$OUTPUT"
     else
         skip_test "$bot Cargo.toml" "file not found"
     fi
