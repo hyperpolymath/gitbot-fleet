@@ -4,61 +4,67 @@
 //
 // MIGRATED FROM Config.res by hand-port per issue #148 (policy override 2026-05-24).
 
-open Types
+module Config;
 
-// Env access uses the `IO` effect (replaces ReScript's implicit env reads).
-fn get_env(key: ref String, default: Option[String]) -{IO}-> Option[String] {
-  match Env.get(key) {
+use prelude::{Option, Some, None, Result, Ok, Err};
+use Types::{Config, BotMode, Consultant, Advisor, Regulator};
+
+// Env / String / Int module surfaces below are listed in MISSING-EXTERNS.md
+// — the mechanical migrator must re-bind them against the canonical stdlib
+// names.
+
+fn get_env(key: ref String, default: Option<String>) -{IO}-> Option<String> {
+  match Env::get(key) {
     Some(v) => Some(v),
-    None => default,
+    None => default
   }
 }
 
-fn get_env_required(key: ref String) -{IO}-> Result[String, String] {
-  match Env.get(key) {
+fn get_env_required(key: ref String) -{IO}-> Result<String, String> {
+  match Env::get(key) {
     Some(v) => Ok(v),
-    None => Err("Missing required environment variable: " ++ key),
+    None => Err("Missing required environment variable: " ++ key)
   }
 }
 
 fn get_env_int(key: ref String, default: Int) -{IO}-> Int {
-  match Env.get(key) {
-    Some(v) => match Int.from_string(v) {
+  match Env::get(key) {
+    Some(v) => match Int::from_string(v) {
       Some(i) => i,
-      None => default,
+      None => default
     },
-    None => default,
+    None => default
   }
 }
 
 fn parse_mode(s: ref String) -> BotMode {
-  match String.to_lower(s) {
+  match String::to_lower(s) {
     "consultant" => Consultant,
     "regulator" => Regulator,
-    _ => Advisor,
+    _ => Advisor
   }
 }
 
 // If GITHUB_PRIVATE_KEY_FILE is set the key should be loaded at startup;
 // async file loading is deferred until affinescript#103 (Async-extern ABI)
 // is wired through the IO effect handlers.
-fn load_private_key() -{IO}-> Option[String] {
-  match Env.get("GITHUB_PRIVATE_KEY_FILE") {
+fn load_private_key() -{IO}-> Option<String> {
+  match Env::get("GITHUB_PRIVATE_KEY_FILE") {
     Some(_path) => get_env("GITHUB_PRIVATE_KEY", None),
-    None => get_env("GITHUB_PRIVATE_KEY", None),
+    None => get_env("GITHUB_PRIVATE_KEY", None)
   }
 }
 
-fn load() -{IO}-> Result[Config, String] {
+pub fn load() -{IO}-> Result<Config, String> {
   let mode_str = match get_env("BOT_MODE", None) {
     Some(m) => m,
-    None => "advisor",
+    None => "advisor"
   };
   let mode = parse_mode(mode_str);
 
   let analysis_endpoint = match get_env("ANALYSIS_ENDPOINT", None) {
     Some(e) => e,
-    None => "http://localhost:8080/analyze",
+    None => "http://localhost:8080/analyze"
   };
 
   Ok(Config #{
@@ -68,14 +74,14 @@ fn load() -{IO}-> Result[Config, String] {
     githubWebhookSecret: get_env("GITHUB_WEBHOOK_SECRET", None),
     gitlabWebhookSecret: get_env("GITLAB_WEBHOOK_SECRET", None),
     githubAppId: get_env("GITHUB_APP_ID", None),
-    githubPrivateKey: load_private_key(),
+    githubPrivateKey: load_private_key()
   })
 }
 
-fn mode_to_string(mode: ref BotMode) -> String {
+pub fn mode_to_string(mode: ref BotMode) -> String {
   match mode {
     Consultant => "consultant",
     Advisor => "advisor",
-    Regulator => "regulator",
+    Regulator => "regulator"
   }
 }

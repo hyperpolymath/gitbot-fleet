@@ -3,44 +3,50 @@
 // SPDX-FileCopyrightText: 2024-2026 hyperpolymath
 //
 // MIGRATED FROM Types.res by hand-port per issue #148 (policy override 2026-05-24).
-// Upstream blockers affinescript#161 (portable Json) and #162 (Dict/Map) remain OPEN;
-// `Json` and `Dict[K, V]` here are placeholder names pending those primitives landing.
+// Json/Dict references resolved against the canonical stdlib (json.affine
+// and dict.affine — both landed 2026-05). See MIGRATION-NOTES.md for the
+// list of structural items the mechanical migrator still needs to redo.
 
-type CodeLocation = {
+module Types;
+
+use prelude::{Option, Some, None};
+use json::{Json};
+
+pub type CodeLocation = {
   file: String,
   line: Int,
-  column: Option[Int],
+  column: Option<Int>,
 }
 
-type EcoMetrics = {
+pub type EcoMetrics = {
   carbonScore: Float,
   energyScore: Float,
   resourceScore: Float,
   score: Float,
 }
 
-type ParetoStatus = {
+pub type ParetoStatus = {
   isOptimal: Bool,
   distance: Float,
-  improvements: Option[Array[String]],
+  improvements: Option<[String]>,
 }
 
-type EconMetrics = {
+pub type EconMetrics = {
   paretoDistance: Float,
   allocationScore: Float,
   debtScore: Float,
   score: Float,
-  paretoStatus: Option[ParetoStatus],
+  paretoStatus: Option<ParetoStatus>,
 }
 
-type QualityMetrics = {
+pub type QualityMetrics = {
   complexityScore: Float,
   couplingScore: Float,
   coverageScore: Float,
   score: Float,
 }
 
-type HealthIndex = {
+pub type HealthIndex = {
   eco: Float,
   econ: Float,
   quality: Float,
@@ -48,89 +54,88 @@ type HealthIndex = {
   grade: String,
 }
 
-type Severity =
-  | Blocking
+pub type Severity =
+    Blocking
   | High
   | Medium
   | Low
   | Info
 
-type PolicyViolation = {
+pub type PolicyViolation = {
   entityId: String,
   policy: String,
   severity: Severity,
   message: String,
-  location: Option[CodeLocation],
-  suggestions: Array[String],
+  location: Option<CodeLocation>,
+  suggestions: [String],
 }
 
-type Priority =
-  | PriorityHigh
+pub type Priority =
+    PriorityHigh
   | PriorityMedium
   | PriorityLow
 
-type Recommendation = {
+pub type Recommendation = {
   entityId: String,
   action: String,
   reason: String,
   priority: Priority,
   confidence: Float,
-  // affinescript#162: Dict[String, Float] is a placeholder until Dict lands.
-  expectedImprovement: Dict[String, Float],
+  // Dict shape per stdlib/dict.affine: an assoc list `[(String, V)]`.
+  expectedImprovement: [(String, Float)],
 }
 
-type AnalysisResult = {
+pub type AnalysisResult = {
   eco: EcoMetrics,
   econ: EconMetrics,
   quality: QualityMetrics,
   health: HealthIndex,
-  violations: Array[PolicyViolation],
-  recommendations: Array[Recommendation],
+  violations: [PolicyViolation],
+  recommendations: [Recommendation],
   timestamp: String,
-  commitSha: Option[String],
+  commitSha: Option<String>,
 }
 
-type BotMode =
-  | Consultant
+pub type BotMode =
+    Consultant
   | Advisor
   | Regulator
 
-type Platform =
-  | GitHub
+pub type Platform =
+    GitHub
   | GitLab
 
-type RepositoryInfo = {
+pub type RepositoryInfo = {
   owner: String,
   name: String,
   url: String,
 }
 
-type WebhookEvent = {
+pub type WebhookEvent = {
   platform: Platform,
   eventType: String,
-  action: Option[String],
+  action: Option<String>,
   repository: RepositoryInfo,
-  // affinescript#161: Json is a placeholder until the portable Json primitive lands.
   payload: Json,
 }
 
-type InstallationToken = {
+pub type InstallationToken = {
   token: String,
   expiresAt: Float,
 }
 
-type JwtClaims = {
+pub type JwtClaims = {
   iss: String,
   iat: Float,
   exp: Float,
 }
 
-type Config = {
+pub type Config = {
   port: Int,
   mode: BotMode,
   analysisEndpoint: String,
-  githubWebhookSecret: Option[String],
-  gitlabWebhookSecret: Option[String],
-  githubAppId: Option[String],
-  githubPrivateKey: Option[String],
+  githubWebhookSecret: Option<String>,
+  gitlabWebhookSecret: Option<String>,
+  githubAppId: Option<String>,
+  githubPrivateKey: Option<String>,
 }

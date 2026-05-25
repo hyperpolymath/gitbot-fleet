@@ -5,401 +5,248 @@
 // MIGRATED FROM Main.res by hand-port per issue #148 (policy override 2026-05-24).
 // Oikos Bot — webhook intake and dispatch to the analysis service.
 
-open Types
+module Main;
 
-fn log(level: ref String, msg: ref String, data: Option[Json]) -{IO}-> () {
-  let timestamp = Time.iso_now();
+use prelude::{Option, Some, None, Result, Ok, Err};
+use json::{Json};
+use option::{unwrap_or};
+use Types::{Config, WebhookEvent};
+use Webhook;
+use Analysis;
+use Report;
+use GitHubAPI;
+use GitHubApp;
+use Config as ConfigModule;
+
+fn log(level: ref String, msg: ref String, data: Option<Json>) -{IO}-> () {
+  let timestamp = Time::iso_now();
   let log_obj = match data {
-    Some(d) => Json.object_of([
-      ("timestamp", Json.string(timestamp)),
-      ("level", Json.string(level)),
-      ("message", Json.string(msg)),
-      ("data", d),
+    Some(d) => json::encode_object([
+      ("timestamp", json::encode_string(timestamp)),
+      ("level", json::encode_string(level)),
+      ("message", json::encode_string(msg)),
+      ("data", d)
     ]),
-    None => Json.object_of([
-      ("timestamp", Json.string(timestamp)),
-      ("level", Json.string(level)),
-      ("message", Json.string(msg)),
-    ]),
+    None => json::encode_object([
+      ("timestamp", json::encode_string(timestamp)),
+      ("level", json::encode_string(level)),
+      ("message", json::encode_string(msg))
+    ])
   };
-  Console.log(Json.stringify(log_obj))
+  Console::log(json::stringify(log_obj))
 }
 
-fn info(msg: ref String, data: Option[Json]) -{IO}-> () {
+fn info(msg: ref String, data: Option<Json>) -{IO}-> () {
   log("info", msg, data)
 }
 
-fn error(msg: ref String, data: Option[Json]) -{IO}-> () {
+fn error(msg: ref String, data: Option<Json>) -{IO}-> () {
   log("error", msg, data)
 }
 
 fn extract_pr_info(payload: ref Json) -> (Int, String, String) {
-  match Json.decode_object(payload) {
+  match json::decode_object(payload) {
     Some(obj) => {
-      let pr_number = match Dict.get(obj, "number") {
-        Some(n) => match Json.decode_number(n) {
-          Some(num) => Float.to_int(num),
-          None => 0,
-        },
-        None => 0,
+      let pr_number = match dict::get(obj, "number") {
+        Some(n) => unwrap_or(json::decode_int(n), 0),
+        None => 0
       };
-      let (base_sha, head_sha) = match Dict.get(obj, "pull_request") {
-        Some(pr) => match Json.decode_object(pr) {
+      let (base_sha, head_sha) = match dict::get(obj, "pull_request") {
+        Some(pr) => match json::decode_object(pr) {
           Some(pr_obj) => {
-            let base = match Dict.get(pr_obj, "base") {
-              Some(b) => match Json.decode_object(b) {
-                Some(base_obj) => match Dict.get(base_obj, "sha") {
-                  Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
-                  None => "",
+            let base = match dict::get(pr_obj, "base") {
+              Some(b) => match json::decode_object(b) {
+                Some(base_obj) => match dict::get(base_obj, "sha") {
+                  Some(s) => unwrap_or(json::decode_string(s), ""),
+                  None => ""
                 },
-                None => "",
+                None => ""
               },
-              None => "",
+              None => ""
             };
-            let head = match Dict.get(pr_obj, "head") {
-              Some(h) => match Json.decode_object(h) {
-                Some(head_obj) => match Dict.get(head_obj, "sha") {
-                  Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
-                  None => "",
+            let head = match dict::get(pr_obj, "head") {
+              Some(h) => match json::decode_object(h) {
+                Some(head_obj) => match dict::get(head_obj, "sha") {
+                  Some(s) => unwrap_or(json::decode_string(s), ""),
+                  None => ""
                 },
-                None => "",
+                None => ""
               },
-              None => "",
+              None => ""
             };
             (base, head)
           },
-          None => ("", ""),
+          None => ("", "")
         },
-        None => ("", ""),
+        None => ("", "")
       };
       (pr_number, base_sha, head_sha)
     },
-    None => (0, "", ""),
+    None => (0, "", "")
   }
 }
 
 fn extract_mr_info(payload: ref Json) -> (Int, String, String) {
-  match Json.decode_object(payload) {
-    Some(obj) => match Dict.get(obj, "object_attributes") {
-      Some(attrs) => match Json.decode_object(attrs) {
+  match json::decode_object(payload) {
+    Some(obj) => match dict::get(obj, "object_attributes") {
+      Some(attrs) => match json::decode_object(attrs) {
         Some(attrs_obj) => {
-          let mr_iid = match Dict.get(attrs_obj, "iid") {
-            Some(n) => match Json.decode_number(n) {
-              Some(num) => Float.to_int(num),
-              None => 0,
-            },
-            None => 0,
+          let mr_iid = match dict::get(attrs_obj, "iid") {
+            Some(n) => unwrap_or(json::decode_int(n), 0),
+            None => 0
           };
-          let base_sha = match Dict.get(attrs_obj, "diff_refs") {
-            Some(refs) => match Json.decode_object(refs) {
-              Some(refs_obj) => match Dict.get(refs_obj, "base_sha") {
-                Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
-                None => "",
+          let base_sha = match dict::get(attrs_obj, "diff_refs") {
+            Some(refs) => match json::decode_object(refs) {
+              Some(refs_obj) => match dict::get(refs_obj, "base_sha") {
+                Some(s) => unwrap_or(json::decode_string(s), ""),
+                None => ""
               },
-              None => "",
+              None => ""
             },
-            None => "",
+            None => ""
           };
-          let head_sha = match Dict.get(attrs_obj, "last_commit") {
-            Some(commit) => match Json.decode_object(commit) {
-              Some(commit_obj) => match Dict.get(commit_obj, "id") {
-                Some(s) => Option.unwrap_or(Json.decode_string(s), ""),
-                None => "",
+          let head_sha = match dict::get(attrs_obj, "last_commit") {
+            Some(commit) => match json::decode_object(commit) {
+              Some(commit_obj) => match dict::get(commit_obj, "id") {
+                Some(s) => unwrap_or(json::decode_string(s), ""),
+                None => ""
               },
-              None => "",
+              None => ""
             },
-            None => "",
+            None => ""
           };
           (mr_iid, base_sha, head_sha)
         },
-        None => (0, "", ""),
+        None => (0, "", "")
       },
-      None => (0, "", ""),
+      None => (0, "", "")
     },
-    None => (0, "", ""),
+    None => (0, "", "")
   }
 }
 
-fn json_response(data: Json, status: Int) -> Http.Response {
-  Http.Response.make_json(
-    Json.stringify(data),
-    #{
-      status: status,
-      headers: Dict.of([("Content-Type", "application/json")]),
-    },
-  )
-}
+// The HTTP request/response shapes (`Http::Request`, `Http::Response`,
+// route dispatch, signature validation) all depend on canonical externs
+// that have not yet landed in stdlib — see MISSING-EXTERNS.md. The
+// per-route handlers below are kept in shape-form so the mechanical
+// migrator has a 1:1 template to re-bind once the externs exist.
 
-fn validate_github_signature(
+pub fn handle_github_webhook(
   config: ref Config,
-  headers: ref Dict[String, String],
+  headers: ref [(String, String)],
   body: ref String,
-) -{IO + Crypto + Exn[CryptoError]}-> Option[Http.Response] {
-  match config.githubWebhookSecret {
-    Some(secret) => {
-      let signature = Option.unwrap_or(Dict.get(headers, "x-hub-signature-256"), "");
-      let valid = Webhook.verify_github_signature(body, signature, secret);
-      if !valid {
-        error("Invalid GitHub webhook signature", None);
-        Some(Http.Response.make("{\"error\": \"Invalid signature\"}", #{ status: 401 }))
-      } else {
-        None
-      }
-    },
-    None => None,
-  }
-}
+) -{IO}-> String {
+  // TODO(mechanical-migrator): port the original signature-validation
+  // and dispatch flow once Http::Response and Crypto::verify externs
+  // are bound. The original logic shape is preserved in the git history
+  // of d946daf for reference.
+  let parse_result = try { Some(json::parse(body)) } catch { _ => None };
 
-fn handle_github_webhook(
-  config: ref Config,
-  headers: ref Dict[String, String],
-  body: ref String,
-) -{IO + Http + Crypto + Exn[HttpError]}-> Http.Response {
-  let signature_error = validate_github_signature(config, headers, body);
-  match signature_error {
-    Some(err_response) => err_response,
-    None => {
-      let parse_result = try {
-        Some(Json.parse(body))
-      } catch {
-        _ => None,
-      };
-
-      match parse_result {
-        None => Http.Response.make("{\"error\": \"Invalid JSON\"}", #{ status: 400 }),
-        Some(payload) => {
-          let event = Webhook.parse_github_event(headers, payload);
-          match event {
-            Some(e) => {
-              info(
-                "GitHub event: " ++ e.eventType,
-                Some(Json.object_of([
-                  ("repo", Json.string(e.repository.owner ++ "/" ++ e.repository.name)),
-                  ("action", Json.string(Option.unwrap_or(e.action, ""))),
-                ])),
-              );
-
-              if e.eventType == "pull_request" {
-                let action = Option.unwrap_or(e.action, "");
-                if action == "opened" || action == "synchronize" {
-                  let (pr_number, base_sha, head_sha) = extract_pr_info(payload);
-
-                  let analysis_result = Analysis.analyze_diff(
-                    config.analysisEndpoint,
-                    e.repository.url,
-                    base_sha,
-                    head_sha,
-                  );
-
-                  let comment = match analysis_result {
-                    Ok(analysis) => Report.generate_pr_comment(analysis, config.mode),
-                    Err(err) => {
-                      error("Analysis failed: " ++ err, None);
-                      let analysis = Analysis.mock_analysis();
-                      Report.generate_pr_comment(analysis, config.mode)
-                    },
-                  };
-
-                  let auth_result = GitHubApp.get_auth_token(config, payload);
-                  match auth_result {
-                    Ok(token) => {
-                      let post_result = GitHubAPI.post_pr_comment(
-                        token,
-                        e.repository.owner,
-                        e.repository.name,
-                        pr_number,
-                        comment,
-                      );
-                      match post_result {
-                        Ok(comment_id) => info(
-                          "Posted PR comment",
-                          Some(Json.object_of([
-                            ("pr", Json.number(Int.to_float(pr_number))),
-                            ("commentId", Json.number(Int.to_float(comment_id))),
-                          ])),
-                        ),
-                        Err(err) => error("Failed to post PR comment: " ++ err, None),
-                      }
-                    },
-                    Err(err) => info(
-                      "GitHub App not configured, comment not posted: " ++ err,
-                      Some(Json.string(comment)),
-                    ),
-                  };
-                  ()
-                };
-                ()
-              };
-
-              json_response(
-                Json.object_of([("status", Json.string("processed"))]),
-                200,
-              )
-            },
-            None => {
-              error("Failed to parse GitHub event", None);
-              Http.Response.make("{\"error\": \"Invalid event\"}", #{ status: 400 })
-            },
-          }
-        },
-      }
-    },
-  }
-}
-
-fn validate_gitlab_token(
-  config: ref Config,
-  headers: ref Dict[String, String],
-) -{IO}-> Option[Http.Response] {
-  match config.gitlabWebhookSecret {
-    Some(secret) => {
-      let token = Option.unwrap_or(Dict.get(headers, "x-gitlab-token"), "");
-      if !Webhook.verify_gitlab_token(token, secret) {
-        error("Invalid GitLab webhook token", None);
-        Some(Http.Response.make("{\"error\": \"Invalid token\"}", #{ status: 401 }))
-      } else {
-        None
-      }
-    },
-    None => None,
-  }
-}
-
-fn handle_gitlab_webhook(
-  config: ref Config,
-  headers: ref Dict[String, String],
-  body: ref String,
-) -{IO + Http + Exn[HttpError]}-> Http.Response {
-  let token_error = validate_gitlab_token(config, headers);
-  match token_error {
-    Some(err_response) => err_response,
-    None => {
-      let parse_result = try {
-        Some(Json.parse(body))
-      } catch {
-        _ => None,
-      };
-
-      match parse_result {
-        None => Http.Response.make("{\"error\": \"Invalid JSON\"}", #{ status: 400 }),
-        Some(payload) => {
-          let event = Webhook.parse_gitlab_event(headers, payload);
-          match event {
-            Some(e) => {
-              info(
-                "GitLab event: " ++ e.eventType,
-                Some(Json.object_of([
-                  ("repo", Json.string(e.repository.owner ++ "/" ++ e.repository.name)),
-                ])),
-              );
-
-              if e.eventType == "Merge Request Hook" {
-                let (mr_iid, base_sha, head_sha) = extract_mr_info(payload);
-
-                let analysis_result = Analysis.analyze_diff(
-                  config.analysisEndpoint,
-                  e.repository.url,
-                  base_sha,
-                  head_sha,
+  match parse_result {
+    None => "{\"error\": \"Invalid JSON\"}",
+    Some(payload) => match Webhook::parse_github_event(headers, payload) {
+      Some(e) => {
+        info("GitHub event: " ++ e.eventType, None);
+        if e.eventType == "pull_request" {
+          let action = unwrap_or(e.action, "");
+          if action == "opened" || action == "synchronize" {
+            let (pr_number, base_sha, head_sha) = extract_pr_info(payload);
+            let analysis_result = Analysis::analyze_diff(
+              config.analysisEndpoint,
+              e.repository.url,
+              base_sha,
+              head_sha,
+            );
+            let comment = match analysis_result {
+              Ok(analysis) => Report::generate_pr_comment(analysis, config.mode),
+              Err(err) => {
+                error("Analysis failed: " ++ err, None);
+                Report::generate_pr_comment(Analysis::mock_analysis(), config.mode)
+              }
+            };
+            let auth_result = GitHubApp::get_auth_token(config, payload);
+            match auth_result {
+              Ok(token) => {
+                let post_result = GitHubAPI::post_pr_comment(
+                  token,
+                  e.repository.owner,
+                  e.repository.name,
+                  pr_number,
+                  comment,
                 );
-
-                match analysis_result {
-                  Ok(analysis) => {
-                    let comment = Report.generate_pr_comment(analysis, config.mode);
-                    info(
-                      "Generated MR comment for MR !" ++ Int.to_string(mr_iid),
-                      Some(Json.string(comment)),
-                    )
-                  },
-                  Err(err) => {
-                    error("Analysis failed: " ++ err, None);
-                    let analysis = Analysis.mock_analysis();
-                    let comment = Report.generate_pr_comment(analysis, config.mode);
-                    info("Generated fallback MR comment", Some(Json.string(comment)))
-                  },
-                };
-                ()
-              };
-
-              json_response(
-                Json.object_of([("status", Json.string("processed"))]),
-                200,
-              )
-            },
-            None => {
-              error("Failed to parse GitLab event", None);
-              Http.Response.make("{\"error\": \"Invalid event\"}", #{ status: 400 })
-            },
-          }
-        },
+                match post_result {
+                  Ok(_comment_id) => info("Posted PR comment", None),
+                  Err(err) => error("Failed to post PR comment: " ++ err, None)
+                }
+              },
+              Err(err) => info("GitHub App not configured: " ++ err, None)
+            };
+            ()
+          };
+          ()
+        };
+        "{\"status\": \"processed\"}"
+      },
+      None => {
+        error("Failed to parse GitHub event", None);
+        "{\"error\": \"Invalid event\"}"
       }
-    },
-  }
-}
-
-fn handler(config: Config) -> fn(Http.Request, Http.ConnInfo) -{IO + Http + Crypto + Exn[HttpError]}-> Http.Response {
-  fn(req, _conn_info) -{IO + Http + Crypto + Exn[HttpError]}-> Http.Response {
-    let url = Http.Request.url(req);
-    let method = Http.Request.method(req);
-    let path = String.replace_regex(url, "^https?://[^/]+", "");
-
-    match (method, path) {
-      ("GET", "/health") => json_response(
-        Json.object_of([
-          ("status", Json.string("healthy")),
-          ("mode", Json.string(Config.mode_to_string(config.mode))),
-        ]),
-        200,
-      ),
-
-      ("POST", "/webhooks/github") => {
-        let body = Http.Request.text(req);
-        let headers = Http.Request.headers(req);
-        handle_github_webhook(config, headers, body)
-      },
-
-      ("POST", "/webhooks/gitlab") => {
-        let body = Http.Request.text(req);
-        let headers = Http.Request.headers(req);
-        handle_gitlab_webhook(config, headers, body)
-      },
-
-      ("GET", "/metrics") => json_response(
-        Json.object_of([
-          ("oikos_bot_requests_total", Json.number(0.0)),
-          ("oikos_bot_analyses_total", Json.number(0.0)),
-        ]),
-        200,
-      ),
-
-      _ => Http.Response.make("Not Found", #{ status: 404 }),
     }
   }
 }
 
-fn main() -{IO + Http + Crypto + Exn[HttpError]}-> () {
-  match Config.load() {
-    Ok(config) => {
-      info(
-        "Starting Oikos Bot",
-        Some(Json.object_of([
-          ("port", Json.number(Int.to_float(config.port))),
-          ("mode", Json.string(Config.mode_to_string(config.mode))),
-        ])),
-      );
+pub fn handle_gitlab_webhook(
+  config: ref Config,
+  headers: ref [(String, String)],
+  body: ref String,
+) -{IO}-> String {
+  let parse_result = try { Some(json::parse(body)) } catch { _ => None };
 
-      Http.serve(
-        #{
-          port: config.port,
-          on_listen: fn(addr) -{IO}-> () {
-            info("Server listening on " ++ addr.hostname ++ ":" ++ Int.to_string(addr.port), None)
-          },
-        },
-        handler(config),
-      )
-    },
-    Err(e) => error("Failed to load config: " ++ e, None),
+  match parse_result {
+    None => "{\"error\": \"Invalid JSON\"}",
+    Some(payload) => match Webhook::parse_gitlab_event(headers, payload) {
+      Some(e) => {
+        info("GitLab event: " ++ e.eventType, None);
+        if e.eventType == "Merge Request Hook" {
+          let (mr_iid, base_sha, head_sha) = extract_mr_info(payload);
+          let analysis_result = Analysis::analyze_diff(
+            config.analysisEndpoint,
+            e.repository.url,
+            base_sha,
+            head_sha,
+          );
+          match analysis_result {
+            Ok(analysis) => {
+              let _comment = Report::generate_pr_comment(analysis, config.mode);
+              info("Generated MR comment for MR !" ++ Int::to_string(mr_iid), None)
+            },
+            Err(err) => {
+              error("Analysis failed: " ++ err, None);
+              let _comment = Report::generate_pr_comment(Analysis::mock_analysis(), config.mode);
+              info("Generated fallback MR comment", None)
+            }
+          };
+          ()
+        };
+        "{\"status\": \"processed\"}"
+      },
+      None => {
+        error("Failed to parse GitLab event", None);
+        "{\"error\": \"Invalid event\"}"
+      }
+    }
   }
 }
 
-let _ = main()
+pub fn main() -{IO}-> () {
+  match ConfigModule::load() {
+    Ok(config) => {
+      info("Starting Oikos Bot", None);
+      // TODO(mechanical-migrator): Http::serve loop awaits canonical
+      // server extern; for now this just logs the load.
+      let _ = config;
+      ()
+    },
+    Err(e) => error("Failed to load config: " ++ e, None)
+  }
+}
