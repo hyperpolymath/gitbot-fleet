@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: PMPL-1.0-or-later
+#
+# Patch for hyperpolymath/standards/.github/workflows/governance-reusable.yml
+#
+# Adds a "Apply Hypatia baseline" step before each language/package
+# anti-pattern gate, and a "Validate baseline schema" job that fails fast
+# if the per-repo .hypatia-baseline.json is malformed.
+#
+# This patch is descriptive — the existing workflow may not have all the
+# anchor lines verbatim. Apply by hand, matching the intent.
+#
+# ============================================================================
+# 1. Add a new top-level reusable job: validate-baseline
+# ============================================================================
+#
+# Insert before the existing `language-policy` job:
+
+  validate-baseline:
+    name: Validate Hypatia baseline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check for baseline file
+        id: detect
+        run: |
+          if [[ -f .hypatia-baseline.json ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No .hypatia-baseline.json — gate will treat all findings as new."
+          fi
+
+      - name: Install ajv-cli
+        if: steps.detect.outputs.present == 'true'
+        run: npm install -g ajv-cli@5
+
+      - name: Fetch schema
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          curl -sSfL \
+            https://raw.githubusercontent.com/hyperpolymath/standards/main/.machine_readable/hypatia-baseline.schema.json \
+            -o /tmp/hypatia-baseline.schema.json
+
+      - name: Validate baseline against schema
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          ajv validate \
+            --spec=draft2020 \
+            -s /tmp/hypatia-baseline.schema.json \
+            -d .hypatia-baseline.json
+
+      - name: Check for stale entries
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          STALE_COUNT=0
+          while IFS= read -r file; do
+            if [[ -n "$file" && ! -e "$file" ]]; then
+              echo "::warning file=.hypatia-baseline.json::Stale baseline entry: $file does not exist in the working tree."
+              STALE_COUNT=$((STALE_COUNT + 1))
+            fi
+          done < <(jq -r '.[].file // empty' .hypatia-baseline.json)
+          echo "Stale entries: $STALE_COUNT"
+          # Soft-fail: warning only. Promote to error after grace period.
+
+# ============================================================================
+# 2. Modify the existing `language-policy` job to consume the baseline
+# ============================================================================
+#
+# In the existing job that runs `Language / package anti-pattern policy`,
+# replace the section that emits findings + gates on them with this:
+
+      - name: Run Hypatia language scan
+        id: scan
+        run: |
+          # ... existing scan invocation ...
+          # Ensure the scan emits findings as JSON to a known path:
+          ./run-language-scan > /tmp/findings.json
+
+      - name: Apply baseline filter
+        id: baseline
+        env:
+          # Advisory for one week; flip to "blocking" once the estate
+          # has converged on the .hypatia-baseline.json convention.
+          MODE: ${{ vars.HYPATIA_BASELINE_MODE || 'advisory' }}
+          BLOCKING_THRESHOLD: high
+        run: |
+          BASELINE_FILE=".hypatia-baseline.json"
+          [[ -f "$BASELINE_FILE" ]] || BASELINE_FILE=/dev/null
+
+          # apply-baseline.sh emits filtered JSON to stdout, summary to
+          # $GITHUB_STEP_SUMMARY, and exits non-zero in blocking mode if
+          # unfiltered findings >= threshold remain.
+          set +e
+          bash "$GITHUB_ACTION_PATH/scripts/apply-baseline.sh" \
+            /tmp/findings.json \
+            "$BASELINE_FILE" \
+            "$MODE" \
+            > /tmp/filtered.json
+          EXIT=$?
+          set -e
+
+          # Always upload the annotated findings as an artifact for triage.
+          cp /tmp/filtered.json "$RUNNER_TEMP/hypatia-filtered-findings.json"
+          echo "exit=$EXIT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload filtered findings
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hypatia-filtered-findings
+          path: /tmp/filtered.json
+          retention-days: 30
+
+      - name: Enforce gate
+        # In blocking mode, fail the job if the filter rejected the run.
+        if: steps.baseline.outputs.exit != '0'
+        run: |
+          echo "::error::Language/package anti-pattern gate failed. See run summary for the unfiltered findings list."
+          exit 1
+
+# ============================================================================
+# 3. Add a workflow-level variable for rollout control
+# ============================================================================
+#
+# Document at the top of the file (in a comment or in the README):
+#
+#   To control the baseline-consumer rollout per repo, set:
+#     vars.HYPATIA_BASELINE_MODE = "advisory" | "blocking"
+#   Default is "advisory" — gate never fails on baseline-filterable findings,
+#   only logs the filtered count to the summary. Flip to "blocking" once the
+#   repo's .hypatia-baseline.json has been audited.
