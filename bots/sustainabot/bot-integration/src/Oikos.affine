@@ -6,24 +6,32 @@
 // οἶκος: Greek root of both "ecology" and "economy".
 // TEA Architecture — Model-Update-Subscriptions pattern.
 
-open ServerTea
+module Oikos;
 
-type BotMode =
-  | Advisor
+use prelude::{Option, Some, None, map, filter};
+use json::{Json};
+use option::{unwrap_or};
+use Types;
+use Cmd;
+use Sub;
+use Runtime;
+
+pub type BotMode =
+    Advisor
   | Consultant
   | Regulator
 
-type WebhookSource =
-  | GitHub
+pub type WebhookSource =
+    GitHub
   | GitLab
 
-type AnalysisStatus =
-  | Pending
+pub type AnalysisStatus =
+    Pending
   | InProgress
-  | Completed(Types.AnalysisResult)
+  | Completed(Types::AnalysisResult)
   | Failed(String)
 
-type PendingAnalysis = {
+pub type PendingAnalysis = {
   id: String,
   repo: String,
   prNumber: Int,
@@ -31,25 +39,25 @@ type PendingAnalysis = {
   createdAt: Float,
 }
 
-type Model = {
+pub type Model = {
   mode: BotMode,
   port: Int,
-  webhookSecret: Option[String],
-  appId: Option[String],
-  privateKeyPath: Option[String],
-  pendingAnalyses: Array[PendingAnalysis],
+  webhookSecret: Option<String>,
+  appId: Option<String>,
+  privateKeyPath: Option<String>,
+  pendingAnalyses: [PendingAnalysis],
   totalProcessed: Int,
   startTime: Float,
   healthy: Bool,
 }
 
-type Msg =
-  | WebhookReceived(WebhookSource, Json)
+pub type Msg =
+    WebhookReceived(WebhookSource, Json)
   | WebhookVerified(WebhookSource, Json)
   | WebhookRejected(String)
   | AnalysisRequested(String, String, Int)
   | AnalysisStarted(String)
-  | AnalysisCompleted(String, Types.AnalysisResult)
+  | AnalysisCompleted(String, Types::AnalysisResult)
   | AnalysisFailed(String, String)
   | CommentPosted(String, Int)
   | CommentFailed(String, String)
@@ -57,23 +65,23 @@ type Msg =
   | Tick
   | Shutdown
 
-type Flags = {
+pub type Flags = {
   port: Int,
   mode: String,
-  webhookSecret: Option[String],
-  appId: Option[String],
-  privateKeyPath: Option[String],
+  webhookSecret: Option<String>,
+  appId: Option<String>,
+  privateKeyPath: Option<String>,
 }
 
-fn mode_from_string(s: ref String) -> BotMode {
+pub fn mode_from_string(s: ref String) -> BotMode {
   match s {
     "consultant" => Consultant,
     "regulator" => Regulator,
-    _ => Advisor,
+    _ => Advisor
   }
 }
 
-fn init(flags: Flags) -{IO}-> (Model, Cmd.T[Msg]) {
+pub fn init(flags: Flags) -{IO}-> (Model, Cmd::T<Msg>) {
   let model = Model #{
     mode: mode_from_string(flags.mode),
     port: flags.port,
@@ -82,163 +90,155 @@ fn init(flags: Flags) -{IO}-> (Model, Cmd.T[Msg]) {
     privateKeyPath: flags.privateKeyPath,
     pendingAnalyses: [],
     totalProcessed: 0,
-    startTime: Time.now_millis(),
-    healthy: true,
+    startTime: Time::now_millis(),
+    healthy: true
   };
 
-  Console.log("🏛️ Oikos Bot starting...");
-  Console.log("   Mode: " ++ flags.mode);
-  Console.log("   Port: " ++ Int.to_string(flags.port));
+  Console::log("🏛️ Oikos Bot starting...");
+  Console::log("   Mode: " ++ flags.mode);
+  Console::log("   Port: " ++ Int::to_string(flags.port));
 
-  (model, Cmd.none())
+  (model, Cmd::none())
 }
 
-fn update(msg: Msg, model: Model) -{IO}-> (Model, Cmd.T[Msg]) {
+pub fn update(msg: Msg, model: Model) -{IO}-> (Model, Cmd::T<Msg>) {
   match msg {
     WebhookReceived(source, payload) => {
       let source_str = match source {
         GitHub => "GitHub",
-        GitLab => "GitLab",
+        GitLab => "GitLab"
       };
-      Console.log("📨 Webhook received from " ++ source_str);
-      // TODO: Verify signature, then dispatch WebhookVerified
-      (model, Cmd.perform(
+      Console::log("📨 Webhook received from " ++ source_str);
+      (model, Cmd::perform(
         fn() -{IO}-> Json { payload },
-        fn(p) -> Msg { WebhookVerified(source, p) },
+        fn(p) -> Msg { WebhookVerified(source, p) }
       ))
     },
 
     WebhookVerified(source, payload) => {
-      Console.log("✓ Webhook verified");
+      Console::log("✓ Webhook verified");
       let _ = source;
       let _ = payload;
-      // TODO: Parse event type, extract PR info, start analysis
-      (Model #{ ..model, totalProcessed: model.totalProcessed + 1 }, Cmd.none())
+      (Model #{ ..model, totalProcessed: model.totalProcessed + 1 }, Cmd::none())
     },
 
     WebhookRejected(reason) => {
-      Console.error("✗ Webhook rejected: " ++ reason);
-      (model, Cmd.none())
+      Console::error("✗ Webhook rejected: " ++ reason);
+      (model, Cmd::none())
     },
 
     AnalysisRequested(id, repo, pr_number) => {
-      Console.log("🔍 Analysis requested: " ++ repo ++ "#" ++ Int.to_string(pr_number));
+      Console::log("🔍 Analysis requested: " ++ repo ++ "#" ++ Int::to_string(pr_number));
       let analysis = PendingAnalysis #{
         id: id,
         repo: repo,
         prNumber: pr_number,
         status: Pending,
-        createdAt: Time.now_millis(),
+        createdAt: Time::now_millis()
       };
       (
-        Model #{ ..model, pendingAnalyses: Array.append(model.pendingAnalyses, [analysis]) },
-        Cmd.none(),
+        Model #{ ..model, pendingAnalyses: model.pendingAnalyses ++ [analysis] },
+        Cmd::none()
       )
     },
 
     AnalysisStarted(id) => {
-      let pending = model.pendingAnalyses
-        |> Array.map(fn(a) -> PendingAnalysis {
-             if a.id == id {
-               PendingAnalysis #{ ..a, status: InProgress }
-             } else {
-               a
-             }
-           });
-      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+      let pending = map(model.pendingAnalyses, fn(a) -> PendingAnalysis {
+        if a.id == id {
+          PendingAnalysis #{ ..a, status: InProgress }
+        } else {
+          a
+        }
+      });
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd::none())
     },
 
     AnalysisCompleted(id, result) => {
-      Console.log("✓ Analysis completed: " ++ id);
-      let pending = model.pendingAnalyses
-        |> Array.map(fn(a) -> PendingAnalysis {
-             if a.id == id {
-               PendingAnalysis #{ ..a, status: Completed(result) }
-             } else {
-               a
-             }
-           });
-      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+      Console::log("✓ Analysis completed: " ++ id);
+      let pending = map(model.pendingAnalyses, fn(a) -> PendingAnalysis {
+        if a.id == id {
+          PendingAnalysis #{ ..a, status: Completed(result) }
+        } else {
+          a
+        }
+      });
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd::none())
     },
 
-    AnalysisFailed(id, error) => {
-      Console.error("✗ Analysis failed: " ++ id ++ " - " ++ error);
-      let pending = model.pendingAnalyses
-        |> Array.map(fn(a) -> PendingAnalysis {
-             if a.id == id {
-               PendingAnalysis #{ ..a, status: Failed(error) }
-             } else {
-               a
-             }
-           });
-      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+    AnalysisFailed(id, error_msg) => {
+      Console::error("✗ Analysis failed: " ++ id ++ " - " ++ error_msg);
+      let pending = map(model.pendingAnalyses, fn(a) -> PendingAnalysis {
+        if a.id == id {
+          PendingAnalysis #{ ..a, status: Failed(error_msg) }
+        } else {
+          a
+        }
+      });
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd::none())
     },
 
     CommentPosted(repo, pr_number) => {
-      Console.log("💬 Comment posted to " ++ repo ++ "#" ++ Int.to_string(pr_number));
-      (model, Cmd.none())
+      Console::log("💬 Comment posted to " ++ repo ++ "#" ++ Int::to_string(pr_number));
+      (model, Cmd::none())
     },
 
-    CommentFailed(repo, error) => {
-      Console.error("✗ Failed to post comment to " ++ repo ++ ": " ++ error);
-      (model, Cmd.none())
+    CommentFailed(repo, error_msg) => {
+      Console::error("✗ Failed to post comment to " ++ repo ++ ": " ++ error_msg);
+      (model, Cmd::none())
     },
 
     HealthCheck => {
-      Console.log("💚 Health check - processed: " ++ Int.to_string(model.totalProcessed));
-      (model, Cmd.none())
+      Console::log("💚 Health check - processed: " ++ Int::to_string(model.totalProcessed));
+      (model, Cmd::none())
     },
 
     Tick => {
-      let now = Time.now_millis();
+      let now = Time::now_millis();
       let one_hour = 60.0 *. 60.0 *. 1000.0;
-      let pending = Array.filter(model.pendingAnalyses, fn(a) -> Bool {
+      let pending = filter(model.pendingAnalyses, fn(a) -> Bool {
         now -. a.createdAt < one_hour
       });
-      (Model #{ ..model, pendingAnalyses: pending }, Cmd.none())
+      (Model #{ ..model, pendingAnalyses: pending }, Cmd::none())
     },
 
     Shutdown => {
-      Console.log("👋 Shutting down...");
-      (Model #{ ..model, healthy: false }, Cmd.none())
-    },
+      Console::log("👋 Shutting down...");
+      (Model #{ ..model, healthy: false }, Cmd::none())
+    }
   }
 }
 
-fn subscriptions(model: Model) -> Sub.T[Msg] {
+pub fn subscriptions(model: Model) -> Sub::T<Msg> {
   if model.healthy {
-    Sub.batch([
-      Sub.http_server(model.port, fn(json) -> Option[Msg] {
-        Some(WebhookReceived(GitHub, json))
+    Sub::batch([
+      Sub::http_server(model.port, fn(j) -> Option<Msg> {
+        Some(WebhookReceived(GitHub, j))
       }),
-      Sub.every(60000, fn() -> Msg { Tick }),
+      Sub::every(60000, fn() -> Msg { Tick })
     ])
   } else {
-    Sub.none()
+    Sub::none()
   }
 }
 
-fn run() -{IO + Http}-> () {
-  let port = match Env.get("PORT") {
-    Some(p) => Option.unwrap_or(Int.from_string(p), 3000),
-    None => 3000,
+pub fn run() -{IO}-> () {
+  let port = match Env::get("PORT") {
+    Some(p) => unwrap_or(Int::from_string(p), 3000),
+    None => 3000
   };
-  let mode = Option.unwrap_or(Env.get("BOT_MODE"), "advisor");
-  let webhook_secret = Env.get("GITHUB_WEBHOOK_SECRET");
-  let app_id = Env.get("GITHUB_APP_ID");
-  let private_key_path = Env.get("GITHUB_PRIVATE_KEY_PATH");
+  let mode = unwrap_or(Env::get("BOT_MODE"), "advisor");
+  let webhook_secret = Env::get("GITHUB_WEBHOOK_SECRET");
+  let app_id = Env::get("GITHUB_APP_ID");
+  let private_key_path = Env::get("GITHUB_PRIVATE_KEY_PATH");
 
   let flags = Flags #{
     port: port,
     mode: mode,
     webhookSecret: webhook_secret,
     appId: app_id,
-    privateKeyPath: private_key_path,
+    privateKeyPath: private_key_path
   };
 
-  let _ = Runtime.make(init, update, subscriptions, flags);
+  let _ = Runtime::make(init, update, subscriptions, flags);
   ()
 }
-
-// Auto-run when imported as main module.
-let _ = run()

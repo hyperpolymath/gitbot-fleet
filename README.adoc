@@ -1,37 +1,46 @@
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
-
 // SPDX-License-Identifier: MPL-2.0
-// SPDX-FileCopyrightText: 2025 hyperpolymath
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell
+
+image:https://img.shields.io/badge/License-MPL--2.0-blue.svg[License: MPL-2.0,link="https://www.mozilla.org/en-US/MPL/2.0/"]
 
 = Gitbot Fleet
-
-
-
-:toc: auto
+:toc: macro
 :toclevels: 2
+:icons: font
 
-Bot fleet for repository quality enforcement across the Hyperpolymath ecosystem.
+Bot orchestration hub for automated repository quality enforcement across the Hyperpolymath ecosystem (~500 repos).
+
+toc::[]
 
 == Overview
 
-Gitbot Fleet is the central orchestration repository for all quality-enforcement bots in the Hyperpolymath ecosystem. Each bot specializes in a specific aspect of repository health and compliance.
+Gitbot Fleet coordinates 11 specialised bots through a shared-context layer. The
+`fleet-coordinator` dispatches Hypatia scanner findings to bots based on
+the **safety triangle**:
 
-== Maintenance Gate Operations
+* **Eliminate** (`auto_execute >= 0.95`) — direct fix, no review
+* **Substitute** (`review >= 0.85`) — proven module replacement, needs review
+* **Control** (`report < 0.85`) — human review required
 
-Use these commands to run maintenance gating across repos:
+== Architecture
 
-[source,bash]
+[source]
 ----
-just maintenance-hard-pass /absolute/path/to/repo
-just enroll-repos
-just scan-supervised
+hypatia (scanner)  →  findings JSONL  →  fleet-coordinator.sh  →  dispatch-runner.sh
+                                              │
+              ┌───────────────────────────────┼───────────────────────────────┐
+              ▼                               ▼                               ▼
+        rhodibot                       echidnabot                       sustainabot
+        (git ops, RSR)                 (quality, proofs)                (deps, eco/econ)
+              │                               │                               │
+              └─────────► shared-context layer ◄────────┐                     │
+                                                        ▼                     ▼
+                                                  robot-repo-automaton  (scan → fix → PR)
 ----
 
-`maintenance-hard-pass` enforces fail-on-warn release gating using the target repo maintenance script.
-
-`enroll-repos` refreshes repository coverage metadata for gitbot-fleet and hypatia. Use `just enroll-repos /var$REPOS_DIR true` to also write enrollment directives into repos that already have `.machine_readable/`.
-
-`scan-supervised` runs Hypatia across the supervised inventory (`~/.git-private-farm.scm`, `~/.git-private-repos`, or enrollment registry) and then processes findings for fleet dispatch.
+A full architecture map with completion state lives in
+link:docs/ARCHITECTURE.md[docs/ARCHITECTURE.md] (single source of truth).
+The historical `TOPOLOGY.md` dashboard is at the repo root.
 
 == Bot Roster
 
@@ -86,56 +95,75 @@ just scan-supervised
 
 *Status legend:* `Active` = Tier 1 Verifier or Specialist bot running on every push. `Complete` = Tier 2 Finisher bot that runs after verifiers to validate final release readiness.
 
-== Architecture
+The component-readiness assessment (CRG grades, evidence) lives in
+link:READINESS.md[READINESS.md].
 
-[source]
+== Build & Run
+
+Maintenance gating commands:
+
+[source,bash]
 ----
-                     GITBOT FLEET
-   ┌──────────────────────────────────────────┐
-   │                                          │
-   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
-   │  │ rhodibot│  │echidna  │  │  sustainabot  │  │
-   │  │(RSR     │  │(verify) │  │(eco/    │  │
-   │  │ struct) │  │         │  │ econ)   │  │
-   │  └────┬────┘  └────┬────┘  └────┬────┘  │
-   │       │            │            │        │
-   │       ▼            ▼            ▼        │
-   │  ┌─────────────────────────────────────┐ │
-   │  │        SHARED CONTEXT LAYER         │ │
-   │  └─────────────────────────────────────┘ │
-   │       │            │            │        │
-   │       ▼            ▼            ▼        │
-   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  │
-   │  │ glambot │  │ seambot │  │finishing│  │
-   │  │(present │  │(integr) │  │  -bot   │  │
-   │  │ ation)  │  │         │  │(release)│  │
-   │  └─────────┘  └─────────┘  └─────────┘  │
-   │                                          │
-   └──────────────────────────────────────────┘
+just maintenance-hard-pass /absolute/path/to/repo
+just enroll-repos
+just scan-supervised
 ----
 
-== Relationship to git-dispatcher
+`maintenance-hard-pass` enforces fail-on-warn release gating using the
+target repo's maintenance script. `enroll-repos` refreshes repository
+coverage metadata; pass `/var$REPOS_DIR true` to also write enrollment
+directives into repos that already have `.machine_readable/`.
+`scan-supervised` runs Hypatia across the supervised inventory
+(`~/.git-private-farm.scm`, `~/.git-private-repos`, or the enrollment
+registry) and processes findings for fleet dispatch.
 
-This repository is a **satellite** of `git-dispatcher`, the central coordination hub for all Git automation in the Hyperpolymath ecosystem.
+Other useful `just` recipes: `setup`, `build`, `test`, `doctor`, `heal`,
+`hypatia-scan`, `panic-scan`, `crg-grade`.
 
-== License
+For the Rust executor:
 
-MPL-2.0 - See LICENSE file.
+[source,bash]
+----
+cd robot-repo-automaton
+OPENSSL_NO_VENDOR=1 cargo build --release
+./target/release/robot-repo-automaton scan /path/to/repo
+./target/release/robot-repo-automaton fix /path/to/repo --create-pr
+----
 
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+== Documentation
 
-== OPSM Link
+Authoritative documents:
+
+* link:EXPLAINME.adoc[EXPLAINME.adoc] — long-form architecture and rationale
+* link:ROADMAP.adoc[ROADMAP.adoc] — forward plan, all 11 bots
+* link:READINESS.md[READINESS.md] — Component Readiness Grades (CRG) assessment
+* link:docs/[docs/] — operational guides, performance notes, branch protection
+* link:docs/archive/[docs/archive/] — historical session reports kept for audit
+* link:docs/wiki-source/[docs/wiki-source/] — repo source for the GitHub wiki
+
+Quickstart guides:
+
+* link:QUICKSTART-DEV.adoc[For developers]
+* link:QUICKSTART-USER.adoc[For users]
+* link:QUICKSTART-MAINTAINER.adoc[For maintainers]
+
+== Relationship to git-dispatcher and OPSM
+
+This repository is a **satellite** of `git-dispatcher`, the central
+coordination hub for all Git automation in the Hyperpolymath ecosystem.
+Within OPSM (Operational Process State Management), gitbot-fleet is the
+execution fleet for batch operations:
 
 [source]
 ----
 OPSM Core
-  |
-  v
+  │
+  ▼
 gitbot-fleet (execution fleet for OPSM batch operations)
-
 ----
 
+== License
 
-== Architecture
+MPL-2.0 — see link:LICENSE[LICENSE] and link:NOTICE[NOTICE].
 
-See link:TOPOLOGY.md[TOPOLOGY.md] for a visual architecture map and completion dashboard.
+image:https://img.shields.io/badge/License-MPL--2.0-blue.svg[License: MPL-2.0,link="https://www.mozilla.org/en-US/MPL/2.0/"]
