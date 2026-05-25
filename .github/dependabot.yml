@@ -65,9 +65,3 @@ updates:
     directory: "/bots/panicbot"
     schedule:
       interval: "weekly"
-
-  # Python dependencies for gsbot
-  - package-ecosystem: "pip"
-    directory: "/bots/gsbot"
-    schedule:
-      interval: "weekly"
