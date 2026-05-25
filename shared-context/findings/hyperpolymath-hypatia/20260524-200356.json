@@ -1,0 +1,362 @@
+{
+  "findings": [
+    {
+      "reason": "Js.Dict deprecated -- use Dict (2 occurrences)",
+      "type": "deprecated_api",
+      "file": "/home/runner/work/hypatia/hypatia/test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "module_replace",
+      "rule_module": "migration_rules",
+      "severity": "high"
+    },
+    {
+      "reason": "Repository has 2 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/hypatia-scan.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "adapters/src/main.rs",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/shell_download_then_run.sh",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/hypatia-scan.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "adapters/src/main.rs",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/docs.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-auto-merge.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "cli/src/commands/batch.rs",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "no file associated with this alert",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/shell_download_then_run.sh",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/hypatia-scan.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "adapters/src/main.rs",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/docs.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-auto-merge.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "cli/src/commands/batch.rs",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "no file associated with this alert",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "no file associated with this alert",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/shell_download_then_run.sh",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Scorecard): PinnedDependenciesID -- Pinned-Dependencies -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/shell_download_then_run.sh",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA003 -- Hypatia code_scanning_alerts: CSA003 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA002 -- Hypatia code_scanning_alerts: CSA002 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/hypatia-scan.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/migration_rules/deprecated_api -- Hypatia migration_rules: deprecated_api -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Scorecard): TokenPermissionsID -- Token-Permissions -- 6 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/hypatia-scan.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Scorecard): TokenPermissionsID -- Token-Permissions -- 32 day(s) old [STALE]",
+      "type": "CSA001",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "escalate",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "62 total open code-scanning alert(s) -- security hygiene review",
+      "type": "CSA002",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code-scanning alert TokenPermissionsID (high) at .github/workflows/dependabot-automerge.yml is 32 days old (threshold: 7 days) -- overdue for remediation",
+      "type": "CSA003",
+      "file": ".github/workflows/dependabot-automerge.yml",
+      "action": "escalate",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "4258322a55338e8423a7454b648db4d2fe8c58ec",
+    "submitted_at": "2026-05-24T20:03:58Z",
+    "scanner_version": "hypatia-v2"
+  }
+}
