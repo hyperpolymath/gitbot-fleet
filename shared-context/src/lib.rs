@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Gitbot Fleet Shared Context Layer
 //!
 //! This crate provides the coordination infrastructure for the gitbot-fleet,

@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = Robot Repo Automaton
 
-image:https://img.shields.io/badge/license-PMPL--1.0--or--later-blue.svg[License: PMPL-1.0-or-later,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/license-PMPL--1.0--or--later-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
 :toc: macro
 :toclevels: 3
@@ -38,7 +38,7 @@ It operates by:
 * *Modify operations*: replace-line, insert-before, insert-after, replace-pattern,
   prepend, append -- with safety checks and rollback on failure
 * *File creation*: template-based with variable expansion (`gitbot-fleet`, `hyperpolymath`,
-  `PMPL-1.0-or-later`, `{{YEAR}}`, `Jonathan D.A. Jewell`, `{{EMAIL}}`)
+  `MPL-2.0`, `{{YEAR}}`, `Jonathan D.A. Jewell`, `{{EMAIL}}`)
 * *Confidence thresholds*: per-repo configuration via `.bot_directives/`, with
   auto-apply, propose, and skip decisions
 * *Safety*: binary file detection, gitignore checking, in-memory rollback
@@ -350,6 +350,6 @@ cargo test --test detector_tests
 
 == License
 
-PMPL-1.0-or-later -- See link:LICENSE[LICENSE] file.
+MPL-2.0 -- See link:LICENSE[LICENSE] file.
 
 Copyright (C) 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>

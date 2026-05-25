@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Key Exchange Analyzer — detects weak or non-PQ-safe key exchange algorithms.
 //!
 //! | Status  | Algorithm                  | Action                        |

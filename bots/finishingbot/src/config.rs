@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Configuration handling for finishing-bot
 
@@ -97,11 +97,11 @@ impl Default for LicenseConfig {
 
 fn default_allowed_licenses() -> Vec<String> {
     vec![
-        "PMPL-1.0-or-later".to_string(),
+        "MPL-2.0".to_string(),
         "MIT".to_string(),
         "Apache-2.0".to_string(),
         "BSD-3-Clause".to_string(),
-        "PMPL-1.0".to_string(),
+        "MPL-2.0".to_string(),
         // AGPL-3.0-or-later is used by co-developed repos (idaptik,
         // airborne-submarine-squadron, game-server-admin)
         "AGPL-3.0-or-later".to_string(),
@@ -356,7 +356,7 @@ mod tests {
         let config = Config::default();
         assert!(!config.auto_fix);
         assert!(!config.dry_run);
-        assert!(config.licenses.allowed.contains(&"PMPL-1.0-or-later".to_string()));
+        assert!(config.licenses.allowed.contains(&"MPL-2.0".to_string()));
     }
 
     #[test]

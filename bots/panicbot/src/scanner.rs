@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Scanner — subprocess wrapper for the `panic-attack` binary.
 //!
 //! Panicbot does NOT link against panic-attack as a Rust crate. Instead, it

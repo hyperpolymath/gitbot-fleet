@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Auto-fix: Replace CORS wildcard (*) with environment-based origin whitelist
 
 set -euo pipefail
@@ -48,9 +48,9 @@ elif [[ "$FILE" == *.py ]]; then
 elif [[ "$FILE" == *.go ]]; then
     # Go pattern
     sed -i "${LINE}s|\"\\*\"|os.Getenv(\\\"ALLOWED_ORIGINS\\\")|g" "$FILE"
-elif [[ "$FILE" == *.res ]]; then
-    # ReScript pattern - use Node.js.Process.env
-    sed -i "${LINE}s|\"\\*\"|Node.process->Node.Process.env->Js.Dict.get(\\\"ALLOWED_ORIGINS\\\")->Belt.Option.getWithDefault(\\\"http://localhost:3000\\\")|g" "$FILE"
+elif [[ "$FILE" == *.affine ]]; then
+    # AffineScript pattern - use IO effect
+    sed -i "${LINE}s|\"\\*\"|IO.env_var(\\\"ALLOWED_ORIGINS\\\")->Option.get_with_default(\\\"http://localhost:3000\\\")|g" "$FILE"
 else
     # JavaScript/Node.js default
     sed -i "${LINE}s|\"\\*\"|process.env.ALLOWED_ORIGINS \|\| \\\"http://localhost:3000\\\"|g" "$FILE"

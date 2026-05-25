@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! `gsbot-load-fixtures` — port of `scripts/load_fixtures.py` __main__.
 
 use gsbot::{config::Config, db, fixtures, logging};

@@ -3,7 +3,7 @@
     {
       "reason": "Js.Dict deprecated -- use Dict (2 occurrences)",
       "type": "deprecated_api",
-      "file": "/home/runner/work/hypatia/hypatia/test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "file": "/home/runner/work/hypatia/hypatia/test/soundness/fixtures/code_safety/getexn_on_external.affine",
       "action": "module_replace",
       "rule_module": "migration_rules",
       "severity": "high"
@@ -27,7 +27,7 @@
     {
       "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
       "type": "CSA001",
-      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.affine",
       "action": "update",
       "rule_module": "code_scanning_alerts",
       "severity": "high"
@@ -91,7 +91,7 @@
     {
       "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
       "type": "CSA001",
-      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.affine",
       "action": "update",
       "rule_module": "code_scanning_alerts",
       "severity": "high"
@@ -179,7 +179,7 @@
     {
       "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
       "type": "CSA001",
-      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.affine",
       "action": "update",
       "rule_module": "code_scanning_alerts",
       "severity": "high"
@@ -307,7 +307,7 @@
     {
       "reason": "Code scanning (Hypatia): hypatia/migration_rules/deprecated_api -- Hypatia migration_rules: deprecated_api -- 0 day(s) old",
       "type": "CSA001",
-      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.affine",
       "action": "update",
       "rule_module": "code_scanning_alerts",
       "severity": "high"

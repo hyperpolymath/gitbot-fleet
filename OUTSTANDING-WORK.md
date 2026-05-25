@@ -55,7 +55,7 @@
 
 ### Completed This Week (2026-02-07)
 - ✅ echidnabot: Bot modes (Verifier/Advisor/Consultant/Regulator) - 553 lines
-- ✅ robot-repo-automaton: License migration PMPL-1.0-or-later
+- ✅ robot-repo-automaton: License migration MPL-2.0
 - ✅ robot-repo-automaton: hypatia module renaming
 - ✅ gitbot-fleet: Health monitoring (660 lines)
 - ✅ gitbot-fleet: Dashboard (999 lines)
@@ -91,4 +91,4 @@ vim /var$REPOS_DIR/OUTSTANDING-WORK.md
 ```
 
 ## License
-SPDX-License-Identifier: PMPL-1.0-or-later
+SPDX-License-Identifier: MPL-2.0

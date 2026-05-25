@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # fix-proven-substitute.sh — Generic proven module substitution script
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json> <proven-module> <language>}"
 FINDING_JSON="${2:?Missing finding JSON file}"
 PROVEN_MODULE="${3:?Missing proven module name (e.g., SafeCommand)}"
-LANGUAGE="${4:?Missing language (e.g., rust, elixir, rescript)}"
+LANGUAGE="${4:?Missing language (e.g., rust, elixir, affinescript)}"
 
 # Validate inputs: prevent directory traversal and injection
 # PROVEN_MODULE must be a valid identifier (alphanumeric + underscores)
@@ -82,10 +82,10 @@ case "$LANGUAGE" in
         echo "  {:proven, path: \"/var$REPOS_DIR/proven/bindings/elixir\"}"
         ;;
 
-    rescript)
+    affinescript)
         echo ""
         echo "SUGGESTED IMPORT:"
-        echo "  @module(\"proven/${PROVEN_MODULE}\") external ${PROVEN_MODULE}: 'a = \"default\""
+        echo "  use Proven.${PROVEN_MODULE}"
         echo ""
         echo "Or via Deno:"
         echo "  import { ${PROVEN_MODULE} } from \"proven/${PROVEN_MODULE}\""

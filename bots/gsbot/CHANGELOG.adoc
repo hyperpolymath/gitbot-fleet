@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 = Changelog
 
 All notable changes to this project will be documented in this file.
@@ -51,5 +51,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discord.py cog-based bot, SQLAlchemy ORM over SQLite, sustainability
   scoring, material/garment/brand data models, gamification, sample-data
   fixtures, and the documentation set.
-- Mozilla Public License 2.0 (subsequently relicensed to PMPL-1.0-or-later).
+- Mozilla Public License 2.0 (subsequently relicensed to MPL-2.0).
 - Jekyll theme configuration.

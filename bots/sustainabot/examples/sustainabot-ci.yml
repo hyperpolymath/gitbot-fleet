@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Example GitHub Actions workflow for sustainabot SARIF integration
 #
 # This workflow runs sustainabot on your codebase and uploads the SARIF

@@ -73,7 +73,7 @@ Currently only "delete" fix type works. "Modify" is a stub.
 
 ### 3.1 Implement file creation
 - Create new files as specified by fix patterns
-- Support template expansion (variables like `gitbot-fleet`, `hyperpolymath`, `PMPL-1.0-or-later`)
+- Support template expansion (variables like `gitbot-fleet`, `hyperpolymath`, `MPL-2.0`)
 - Common creation targets:
   - Missing LICENSE files
   - Missing .editorconfig
@@ -127,7 +127,7 @@ Robot-repo-automaton should NOT blindly apply every fix. It needs confidence thr
 ## Task 5: Fix Metadata
 
 ### 5.1 Cargo.toml
-- License: `PMPL-1.0-or-later`
+- License: `MPL-2.0`
 - Author: `"Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"`
 
 ### 5.2 SPDX headers on all `.rs` files

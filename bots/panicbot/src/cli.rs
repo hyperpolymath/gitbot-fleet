@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! CLI Interface — clap-based command-line argument parsing for panicbot.
 //!
 //! Subcommands:

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Bot wiring — poise/serenity equivalent of `bot/bot.py`: prefix, intents,
 //! presence, cog loading, and the command-error message mapping.
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Hypatia integration module
 //!
 //! Provides integration with the Hypatia neurosymbolic rules engine for:
@@ -296,7 +296,7 @@ impl CicdHyperAClient {
                 pattern: RulePattern::FileGlob { glob: "LICENSE*".to_string() },
                 fix: Some(RuleFix::Create {
                     path: "LICENSE".to_string(),
-                    content: "PMPL-1.0-or-later\n\nSee https://github.com/hyperpolymath/palimpsest-license\n".to_string(),
+                    content: "MPL-2.0\n\nSee https://github.com/hyperpolymath/palimpsest-license\n".to_string(),
                 }),
                 metadata: RuleMetadata {
                     author: Some("hypatia".to_string()),

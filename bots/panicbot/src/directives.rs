@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Directives — per-repo configuration parser for `.machine_readable/bot_directives/panicbot.a2ml`.
 //!
 //! Each repository can customise panicbot's behaviour via a TOML-shaped A2ML

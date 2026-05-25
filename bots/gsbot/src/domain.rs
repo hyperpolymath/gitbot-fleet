@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Correctness-critical sustainability kernel.
 //!
 //! This module is the **SPARK seam** (per the hyperpolymath Rust/SPARK

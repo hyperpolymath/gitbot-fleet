@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Color contrast analyzer - WCAG 1.4.6 Contrast Enhanced (Level AAA)
 //!
 //! Parses CSS files for color/background-color pairs and calculates

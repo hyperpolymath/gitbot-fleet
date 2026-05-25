@@ -2,7 +2,7 @@
   "auto_fixable": false,
   "category": "UnsafeDeserialization",
   "confidence": 0.95,
-  "description": "7 JSON.parseExn calls in netstack/modules/poly-secret-mcp/lib/ocaml/Vault.res (use JSON.parse for safe Result)",
+  "description": "7 JSON.parseExn calls in netstack/modules/poly-secret-mcp/lib/ocaml/Vault.affine (use JSON.parse for safe Result)",
   "formally_proven": true,
   "pattern_id": "PA010-7-json-parseexn-calls-in-netst",
   "proven_module": "SafeJson",

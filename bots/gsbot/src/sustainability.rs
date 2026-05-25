@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Sustainability analysis — faithful port of
 //! `services/sustainability.py`. Pure scoring lives in [`crate::domain`];
 //! this module holds the advisory text/lists and comparison shaping.

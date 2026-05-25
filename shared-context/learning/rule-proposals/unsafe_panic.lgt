@@ -1,4 +1,4 @@
-% SPDX-License-Identifier: PMPL-1.0-or-later
+% SPDX-License-Identifier: MPL-2.0
 % Auto-generated rule: Detect unsafe_panic issues
 % Generated: 2026-02-06T21:31:24+00:00
 % Observations: 15

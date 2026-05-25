@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Fleet Dashboard - Web interface for gitbot-fleet monitoring
 //!
 //! Provides real-time monitoring, health status, findings explorer,

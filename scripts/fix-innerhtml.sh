@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # fix-innerhtml.sh — Replace innerHTML with textContent to prevent XSS
 #
@@ -21,7 +21,7 @@ echo "  Repo: $REPO_PATH"
 
 FIXED_COUNT=0
 
-# Find JS/TS/ReScript files with innerHTML
+# Find JS/TS/AffineScript files with innerHTML
 while IFS= read -r -d '' file; do
     rel_path="${file#$REPO_PATH/}"
     changed=false

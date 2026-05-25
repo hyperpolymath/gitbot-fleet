@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Run PCC verification as a gitbot-fleet bot check.
 # Called by fleet-coordinator.sh for repos that have a tools/pcc/ directory.
 #

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! A2ML Writer — generates `.panicbot/PANICBOT-FINDINGS.a2ml` debt registers.
 //!
 //! The A2ML debt register is the canonical record of unfixable findings in a

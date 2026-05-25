@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Command surface — faithful port of the discord.py cogs. Each former
 //! cog is a submodule; command names, aliases, argument shapes, point
 //! awards and embed fields are preserved.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
-# fix-license-file.sh — Auto-create LICENSE with PMPL-1.0-or-later text
+# fix-license-file.sh — Auto-create LICENSE with MPL-2.0 text
 #
 # Category: LicenseCompliance
 # Usage: fix-license-file.sh <repo-path> <finding-json>
@@ -24,7 +24,7 @@ done
 
 # --- Create LICENSE ---
 cat > "${REPO_PATH}/LICENSE" <<'LICENSETEXT'
-Palimpsest License (PMPL-1.0-or-later)
+Palimpsest License (MPL-2.0)
 
 Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 
@@ -50,4 +50,4 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 LICENSETEXT
 
-echo "[fix-license-file] Created LICENSE with PMPL-1.0-or-later text."
+echo "[fix-license-file] Created LICENSE with MPL-2.0 text."

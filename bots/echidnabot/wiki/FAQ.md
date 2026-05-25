@@ -17,7 +17,7 @@ It's the bot interface to [ECHIDNA](https://github.com/hyperpolymath/echidna), t
 
 ### Is echidnabot free?
 
-Yes! echidnabot is open source under PMPL-1.0-or-later. You can:
+Yes! echidnabot is open source under MPL-2.0. You can:
 - Self-host your own instance
 - Use the public instance at echidna.hyperpolymath.dev
 - Modify and distribute under the same license

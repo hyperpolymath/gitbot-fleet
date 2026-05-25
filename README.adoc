@@ -1,6 +1,6 @@
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 hyperpolymath
 
 = Gitbot Fleet
@@ -39,6 +39,14 @@ just scan-supervised
 |===
 |Bot |Purpose |Status
 
+|**accessibilitybot**
+|WCAG 2.3 AAA Accessibility Compliance. Static analysis of HTML and CSS for accessibility violations, ARIA correctness, semantic HTML.
+|Complete
+
+|**cipherbot**
+|Cryptographic Hygiene & Post-Quantum Readiness. Scans for deprecated/weak crypto algorithms, provides migration recommendations.
+|Active
+
 |**rhodibot**
 |RSR (Rhodium Standard Repositories) compliance validation. Structural checks, file presence, directory layout.
 |Active
@@ -57,12 +65,26 @@ just scan-supervised
 
 |**seambot**
 |Integration health testing. Cross-component communication, API contracts, end-to-end flows.
-|Active
+|Complete
 
-|**finishbot**
+|**finishingbot**
 |Release readiness. Placeholder removal, license validation, claim verification, execution testing.
 |Complete
+
+|**gsbot**
+|Discord bot for garment sustainability. Sustainability scores, environmental impact analysis, sustainable brand discovery.
+|Active
+
+|**panicbot**
+|Panic recovery and error handling validation. Ensures graceful degradation and proper error handling patterns.
+|Active
+
+|**the-hotchocolabot**
+|Educational robotics platform for teaching reverse engineering and systems thinking. Over-engineered hot chocolate dispenser.
+|Active
 |===
+
+*Status legend:* `Active` = Tier 1 Verifier or Specialist bot running on every push. `Complete` = Tier 2 Finisher bot that runs after verifiers to validate final release readiness.
 
 == Architecture
 
@@ -98,9 +120,9 @@ This repository is a **satellite** of `git-dispatcher`, the central coordination
 
 == License
 
-PMPL-1.0-or-later - See LICENSE file.
+MPL-2.0 - See LICENSE file.
 
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
 == OPSM Link
 

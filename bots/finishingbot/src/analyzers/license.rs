@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! License validation analyzer
 
@@ -214,7 +214,7 @@ impl LicenseAnalyzer {
         }
 
         if content_lower.contains("palimpsest") {
-            return Some("PMPL-1.0".to_string());
+            return Some("MPL-2.0".to_string());
         }
 
         None
@@ -291,11 +291,11 @@ impl LicenseAnalyzer {
     fn add_spdx_header(&self, path: &Path, allowed_licenses: &[String]) -> Result<()> {
         let content = std::fs::read_to_string(path)?;
 
-        // Use AGPL-3.0-or-later for exception repos, PMPL-1.0-or-later otherwise
+        // Use AGPL-3.0-or-later for exception repos, MPL-2.0 otherwise
         let default_license = if path.ancestors().any(is_agpl_exception) {
             "AGPL-3.0-or-later".to_string()
         } else {
-            "PMPL-1.0-or-later".to_string()
+            "MPL-2.0".to_string()
         };
         let license = allowed_licenses.first().unwrap_or(&default_license);
 

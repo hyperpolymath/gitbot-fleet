@@ -1640,7 +1640,7 @@
       "pattern": "unwrap_without_check",
       "file": "/var$REPOS_DIR/hypatia/integration/tests/ci_simulation_test.rs",
       "line": 952,
-      "code": "        ci.reset().await.unwrap();",
+      "code": "        ci.affineet().await.unwrap();",
       "cwe": "CWE-754",
       "fix": "Replace unwrap() with ? operator or match",
       "auto_fixable": false

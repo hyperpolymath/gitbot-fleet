@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 
 set -euo pipefail
 
@@ -114,7 +114,7 @@ while IFS= read -r repo_path; do
     if [[ "$apply" == true && "$has_machine_readable" == true ]]; then
         mkdir -p "$repo_path/.machine_readable/bot_directives"
         cat > "$repo_path/.machine_readable/bot_directives/FLEET-ENROLLMENT.a2ml" <<DIRECTIVE
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Auto-managed by gitbot-fleet/scripts/enroll-hypatia-fleet.sh
 
 [enrollment]

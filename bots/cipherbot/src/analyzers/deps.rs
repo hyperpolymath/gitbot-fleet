@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Dependency Crypto Audit Analyzer — scans Cargo.toml and package.json
 //! for problematic cryptographic dependencies.
 //!

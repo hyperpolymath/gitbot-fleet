@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Media accessibility analyzer - WCAG 1.2.1 Audio-only/Video-only (Level A), 2.3.1 Three Flashes (Level A)
 //!
 //! Checks media element accessibility:

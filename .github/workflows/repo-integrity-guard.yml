@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Repo Integrity Guard — prevents a stale-base squash-merge (or any push/PR)
 # from silently mass-deleting gitbot-fleet again.
 #

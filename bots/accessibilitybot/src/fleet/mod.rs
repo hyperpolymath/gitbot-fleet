@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Fleet integration types for gitbot-fleet shared-context compatibility.
 //!
 //! These types mirror the gitbot-shared-context crate API so that

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Accessibility analyzers implementing WCAG 2.3 checks.
 //!
 //! Each analyzer module focuses on a specific WCAG criterion or group

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // hypatia: allow security_errors/secret_detected -- this analyzer's job is to DETECT secrets; the credential-shaped string literals here are detection regexes/patterns, not real credentials
 //! Infrastructure-as-Code Analyzer — scans Terraform, Ansible, Docker/Podman configs
 //! for cryptographic and security issues.

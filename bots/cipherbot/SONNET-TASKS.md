@@ -40,7 +40,7 @@ rm -rf .git && git init -b main
 name = "cipherbot"
 version = "0.1.0"
 edition = "2021"
-license = "PMPL-1.0-or-later"
+license = "MPL-2.0"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 description = "Cryptographic Hygiene & Post-Quantum Readiness Bot for gitbot-fleet"
 

@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: PMPL-1.0-or-later -->
+<!-- SPDX-License-Identifier: MPL-2.0 -->
 # ReScript → AffineScript Migration (issue #148)
 
 This subtree was migrated from ReScript to AffineScript on 2026-05-24 by a

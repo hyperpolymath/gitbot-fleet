@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Policy Engine — reads `.machine_readable/bot_directives/cipherbot.a2ml`
 //! for repo-specific crypto policy enforcement.
 //!

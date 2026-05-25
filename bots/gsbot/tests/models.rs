@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Port of tests/unit/test_models.py — model behaviour over the domain
 //! kernel, plus a round-trip through an in-memory database.
 

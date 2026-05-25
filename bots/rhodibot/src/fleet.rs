@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 
 //! Fleet integration module for gitbot-fleet shared context.
 //!
@@ -75,7 +75,7 @@ fn rule_id(check_name: &str) -> String {
 fn suggestion_for(check_name: &str) -> Option<String> {
     match check_name {
         "README.adoc" => Some("Create a README.adoc file with project documentation".to_string()),
-        "LICENSE.txt" => Some("Add a LICENSE.txt file with PMPL-1.0-or-later".to_string()),
+        "LICENSE.txt" => Some("Add a LICENSE.txt file with MPL-2.0".to_string()),
         "SECURITY.md" => Some("Add a SECURITY.md with vulnerability reporting instructions".to_string()),
         "CONTRIBUTING.md" => Some("Add a CONTRIBUTING.md with contribution guidelines".to_string()),
         "CODE_OF_CONDUCT.md" => Some("Add a CODE_OF_CONDUCT.md (Contributor Covenant recommended)".to_string()),
@@ -90,7 +90,7 @@ fn suggestion_for(check_name: &str) -> Option<String> {
         "justfile" => Some("Add a justfile as the primary build system".to_string()),
         ".machine_readable/bot_directives" => Some("Create .machine_readable/bot_directives/ for bot configs".to_string()),
         "no-.bot_directives" => Some("Migrate legacy .bot_directives/ to .machine_readable/bot_directives/".to_string()),
-        "license-type" => Some("Set repository license to an approved type (PMPL-1.0-or-later recommended)".to_string()),
+        "license-type" => Some("Set repository license to an approved type (MPL-2.0 recommended)".to_string()),
         name if name.starts_with("no-") => {
             let banned_file = name.strip_prefix("no-").unwrap_or(name);
             Some(format!("Remove {} - this file violates language policy", banned_file))

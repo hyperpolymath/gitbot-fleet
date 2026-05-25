@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # fix-add-elixir-ci.sh — Add GitHub Actions CI workflow for Elixir/Phoenix projects
 #
@@ -75,7 +75,7 @@ if [[ "${HAS_DIALYXIR}" == "true" ]]; then
 fi
 
 cat > "${WORKFLOWS_DIR}/elixir.yml" << WORKFLOW
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 name: Elixir CI
 
 on:

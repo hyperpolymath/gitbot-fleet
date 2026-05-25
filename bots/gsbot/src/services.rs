@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Database services — faithful port of `services/database.py`. Each
 //! `*Service` is a stateless namespace of queries over the pool, mirroring
 //! the original static-method classes (case-insensitive `ilike` →

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Visual polish analyzer
 
@@ -63,7 +63,7 @@ impl Analyzer for VisualAnalyzer {
                             .and_then(|n| n.to_str())
                             .unwrap_or("project");
                         let template = format!(
-                            "= {}\n\n== Overview\n\nTODO: Add project description.\n\n== Installation\n\nTODO: Add installation instructions.\n\n== Usage\n\nTODO: Add usage examples.\n\n== License\n\nPMPL-1.0-or-later\n",
+                            "= {}\n\n== Overview\n\nTODO: Add project description.\n\n== Installation\n\nTODO: Add installation instructions.\n\n== Usage\n\nTODO: Add usage examples.\n\n== License\n\nMPL-2.0\n",
                             repo_name
                         );
                         std::fs::write(&readme_path, template)?;

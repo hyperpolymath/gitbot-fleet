@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Caching utilities — faithful port of `utils/cache.py` (a TTL cache and
 //! an LRU query cache). Kept for parity; hand-rolled to avoid extra
 //! dependencies.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 
 //! # SustainaBot-Eclexia Integration
@@ -379,7 +379,7 @@ fn placeholder_cost() -> ResourceProfile {
 
 /// Example policy in Eclexia (to be written to policies/ directory)
 pub const EXAMPLE_POLICY: &str = r#"
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Example SustainaBot policy in Eclexia
 
 // This policy runs IN Eclexia, analyzing code's resource usage.

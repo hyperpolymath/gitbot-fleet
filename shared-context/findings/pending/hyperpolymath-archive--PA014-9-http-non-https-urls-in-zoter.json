@@ -3,7 +3,7 @@
   "auto_fixable": true,
   "category": "InsecureProtocol",
   "confidence": 0.93,
-  "description": "9 HTTP (non-HTTPS) URLs in zotero-voyant-export/src/Format.res",
+  "description": "9 HTTP (non-HTTPS) URLs in zotero-voyant-export/src/Format.affine",
   "fix_script": "fix-http-to-https.sh",
   "match": "http:// URL",
   "pattern_id": "PA014-9-http-non-https-urls-in-zoter",

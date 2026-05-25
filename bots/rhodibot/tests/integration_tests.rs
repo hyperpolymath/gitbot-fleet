@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 
 //! Integration tests for rhodibot RSR compliance engine, webhook handling,
 //! GitHub client, and report formatting.

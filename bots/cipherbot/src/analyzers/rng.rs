@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! RNG Analyzer — detects usage of non-cryptographic random number generators.
 //!
 //! | Status  | RNG                          | Action                               |

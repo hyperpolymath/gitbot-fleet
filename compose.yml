@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Compose configuration for gitbot-fleet.
 # Podman / podman-compose is highly preferred; Docker Compose also works.
 

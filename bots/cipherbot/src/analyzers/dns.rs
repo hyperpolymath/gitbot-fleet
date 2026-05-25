@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! DNS Zone File Analyzer — scans DNS zone files and infrastructure definitions
 //! for cryptographic and security issues.
 //!

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Write-action guard — single place to call before any fs/GitHub write.
 //!
 //! Wraps `exclusion_registry::ExclusionRegistry` with a process-wide cache

@@ -1,11 +1,11 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # finishing-bot configuration example
 # Place this file at .finishing-bot/config.yml in your repository
 
 # License validation settings
 licenses:
   allowed:
-    - PMPL-1.0-or-later
+    - MPL-2.0
     - MIT
     - Apache-2.0
     - BSD-3-Clause

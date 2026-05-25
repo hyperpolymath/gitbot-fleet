@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # fix-missing-vexometer-hooks.sh — Add vexometer integration if missing
 #
@@ -31,7 +31,7 @@ mkdir -p "$TARGET_DIR"
 
 # Write template content
 cat > "$TARGET_FILE" <<'VEXOMETER'
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Vexometer Integration — Irritation Surface Analysis
 
 [integration]

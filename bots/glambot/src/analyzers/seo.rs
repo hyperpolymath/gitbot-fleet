@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! SEO analyzer
 
@@ -328,7 +328,7 @@ mod tests {
             ## Installation\n\nRun `cargo install awesome`.\n\n\
             ## Usage\n\nCheck the examples directory.\n\n\
             ## Documentation\n\nFull docs at https://example.com.\n\n\
-            ## License\n\nPMPL-1.0-or-later\n";
+            ## License\n\nMPL-2.0\n";
         std::fs::write(dir.path().join("README.md"), content).unwrap();
 
         let analyzer = SeoAnalyzer::default();

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Sample data fixtures — faithful port of `scripts/load_fixtures.py`.
 //! Insert-if-absent by exact name; garment sustainability scores are
 //! computed from associated materials exactly as the original did.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Configuration — attack selection, thresholds, and timeouts for panicbot.
 //!
 //! All confidence values are configurable to allow tuning based on real scan

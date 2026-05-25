@@ -333,4 +333,4 @@ Priority areas for contribution:
 
 == License
 
-PMPL-1.0-or-later - see `LICENSE.txt`
+MPL-2.0 - see `LICENSE.txt`

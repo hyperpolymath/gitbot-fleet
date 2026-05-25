@@ -401,8 +401,8 @@ For large repositories with many findings, consider:
 
 - Issues: https://github.com/hyperpolymath/gitbot-fleet/issues
 - Docs: https://github.com/hyperpolymath/gitbot-fleet
-- License: PMPL-1.0-or-later
+- License: MPL-2.0
 
 ## License
 
-SPDX-License-Identifier: PMPL-1.0-or-later
+SPDX-License-Identifier: MPL-2.0

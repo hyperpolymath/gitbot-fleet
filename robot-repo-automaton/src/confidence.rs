@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Confidence threshold system for fix application
 //!
 //! Controls which fixes are automatically applied vs. proposed for review.
@@ -482,7 +482,7 @@ mod tests {
             action: FixAction::Modify,
             target: "src/main.rs".to_string(),
             reason: None,
-            modification: Some("prepend:// SPDX-License-Identifier: PMPL-1.0-or-later".to_string()),
+            modification: Some("prepend:// SPDX-License-Identifier: MPL-2.0".to_string()),
             fallback: None,
         };
 

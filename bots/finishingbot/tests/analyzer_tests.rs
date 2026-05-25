@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Comprehensive tests for finishing-bot analyzers
 
@@ -101,7 +101,7 @@ mod license_analyzer {
         // AGPL is not in this project's allowed list (we use PMPL now); the
         // default allowed list permits AGPL for co-developed repos, so the
         // test must scope the allowed set to its own stated premise.
-        config.licenses.allowed = vec!["PMPL-1.0-or-later".to_string()];
+        config.licenses.allowed = vec!["MPL-2.0".to_string()];
         let result = analyzer.analyze(&path, &config).unwrap();
 
         // In strict mode, AGPL should be flagged as disallowed
@@ -154,7 +154,7 @@ mod license_analyzer {
         fs::create_dir_all(path.join("src")).unwrap();
         fs::write(
             path.join("src/main.rs"),
-            "// SPDX-License-Identifier: PMPL-1.0-or-later\nfn main() {}\n",
+            "// SPDX-License-Identifier: MPL-2.0\nfn main() {}\n",
         )
         .unwrap();
 
@@ -359,7 +359,7 @@ mod claims_analyzer {
         let readme_content = "# My Project\n\nA great project that does many things.\n\n\
             ## Installation\n\nRun `cargo install my-project`\n\n\
             ## Usage\n\nUse it wisely with care and diligence.\n\n\
-            ## License\n\nPMPL-1.0-or-later\n\n\
+            ## License\n\nMPL-2.0\n\n\
             Additional text to make this README substantial enough.\n\
             More words to reach the minimum threshold for a good README.\n\
             Even more content here describing what the project does.\n";
@@ -655,7 +655,7 @@ mod scm_files_analyzer {
         let (_temp, path) = setup_test_repo();
         fs::write(
             path.join("STATE.scm"),
-            ";; SPDX-License-Identifier: PMPL-1.0-or-later\n\
+            ";; SPDX-License-Identifier: MPL-2.0\n\
              (define state\n  '((metadata (version . \"0.1.0\"))\n\
              (current-position (phase . \"mvp\"))))\n\
              ;; padding content to meet minimum size requirement\n\
@@ -691,12 +691,12 @@ mod scm_files_analyzer {
         fs::create_dir_all(&mr_dir).unwrap();
 
         let scm_files = [
-            ("STATE.scm", ";; SPDX-License-Identifier: PMPL-1.0-or-later\n(define state '((metadata (version . \"0.1.0\"))(current-position (phase . \"mvp\"))))\n;; padding\n;; more padding to meet minimum content\n;; and more\n;; and more\n;; and more\n;; and more\n"),
-            ("META.scm", ";; SPDX-License-Identifier: PMPL-1.0-or-later\n(define meta '((architecture-decisions ())(development-practices ())))\n;; padding\n;; more padding\n;; and more\n;; and more\n;; and more\n"),
-            ("ECOSYSTEM.scm", ";; SPDX-License-Identifier: PMPL-1.0-or-later\n(define ecosystem '((position-in-ecosystem \"tools\")(related-projects ())))\n;; padding\n;; more padding\n;; and more\n;; and more\n"),
-            ("PLAYBOOK.scm", ";; SPDX-License-Identifier: PMPL-1.0-or-later\n(define playbook '((operations ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
-            ("AGENTIC.scm", ";; SPDX-License-Identifier: PMPL-1.0-or-later\n(define agentic '((ai-integration ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
-            ("NEUROSYM.scm", ";; SPDX-License-Identifier: PMPL-1.0-or-later\n(define neurosym '((neurosymbolic ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
+            ("STATE.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define state '((metadata (version . \"0.1.0\"))(current-position (phase . \"mvp\"))))\n;; padding\n;; more padding to meet minimum content\n;; and more\n;; and more\n;; and more\n;; and more\n"),
+            ("META.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define meta '((architecture-decisions ())(development-practices ())))\n;; padding\n;; more padding\n;; and more\n;; and more\n;; and more\n"),
+            ("ECOSYSTEM.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define ecosystem '((position-in-ecosystem \"tools\")(related-projects ())))\n;; padding\n;; more padding\n;; and more\n;; and more\n"),
+            ("PLAYBOOK.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define playbook '((operations ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
+            ("AGENTIC.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define agentic '((ai-integration ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
+            ("NEUROSYM.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define neurosym '((neurosymbolic ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
         ];
 
         for (name, content) in &scm_files {
@@ -979,7 +979,7 @@ mod v1_readiness_analyzer {
         let (_temp, path) = setup_test_repo();
         fs::write(path.join("README.adoc"), "= Project\n\nDescription\n").unwrap();
         fs::write(path.join("ROADMAP.adoc"), "= Roadmap\n\n* Phase 1\n").unwrap();
-        fs::write(path.join("LICENSE"), "PMPL-1.0-or-later\n").unwrap();
+        fs::write(path.join("LICENSE"), "MPL-2.0\n").unwrap();
         fs::write(
             path.join("SECURITY.md"),
             "# Security\n\nReport issues to security@example.com\n",
@@ -1099,14 +1099,14 @@ mod integration {
         // Create a fairly complete repo
         fs::write(
             path.join("LICENSE"),
-            "Palimpsest License\nPMPL-1.0-or-later\n",
+            "Palimpsest License\nMPL-2.0\n",
         )
         .unwrap();
         let readme = "# My Project\n\n\
             Description of the project with enough words.\n\n\
             ## Installation\n\nRun the install command.\n\n\
             ## Usage\n\nUse the tool.\n\n\
-            ## License\n\nPMPL-1.0-or-later\n";
+            ## License\n\nMPL-2.0\n";
         fs::write(path.join("README.md"), readme).unwrap();
         fs::write(
             path.join("CHANGELOG.md"),
@@ -1121,7 +1121,7 @@ mod integration {
         fs::create_dir_all(path.join("src")).unwrap();
         fs::write(
             path.join("src/main.rs"),
-            "// SPDX-License-Identifier: PMPL-1.0-or-later\nfn main() {}\n",
+            "// SPDX-License-Identifier: MPL-2.0\nfn main() {}\n",
         )
         .unwrap();
 

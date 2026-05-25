@@ -2,7 +2,7 @@
 name = "echidnabot"
 version = "0.1.0"
 edition = "2021"
-license = "PMPL-1.0-or-later"
+license = "MPL-2.0"
 description = "Proof-aware CI bot that orchestrates ECHIDNA for theorem proof verification"
 repository = "https://github.com/hyperpolymath/echidnabot"
 keywords = ["theorem-prover", "formal-verification", "ci", "bot", "echidna"]
@@ -23,66 +23,66 @@ path = "src/main.rs"
 gitbot-shared-context = { path = "../../shared-context" }
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.52.3", features = ["full"] }
 
 # HTTP framework
-axum = { version = "0.8", features = ["macros"] }
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "request-id"] }
+axum = { version = "0.8.9", features = ["macros"] }
+tower = "0.5.3"
+tower-http = { version = "0.6.11", features = ["cors", "trace", "request-id"] }
 
 # GraphQL
-async-graphql = { version = "7", features = ["uuid", "chrono"] }
-async-graphql-axum = "7"
+async-graphql = { version = "7.2.1", features = ["uuid", "chrono"] }
+async-graphql-axum = "7.2.1"
 
 # Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-toml = "1.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+toml = "1.1.2+spec-1.1.0"
 
 # Database
-sqlx = { version = "0.8.1", features = ["runtime-tokio-rustls", "sqlite", "postgres", "uuid", "chrono"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite", "postgres", "uuid", "chrono"] }
 
 # GitHub API
-octocrab = "0.51"
+octocrab = "0.51.0"
 
 # HTTP client (for ECHIDNA communication)
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
 
 # Utilities
-async-trait = "0.1"
-uuid = { version = "1", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "2"
-anyhow = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-rand = "0.10"
+async-trait = "0.1.89"
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
+thiserror = "2.0.18"
+anyhow = "1.0.102"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+rand = "0.10.1"
 
 # Crypto for webhook verification
-hmac = "0.13"
-sha2 = "0.11"
-hex = "0.4"
+hmac = "0.13.0"
+sha2 = "0.11.0"
+hex = "0.4.3"
 
 # CLI
-clap = { version = "4", features = ["derive", "env"] }
+clap = { version = "4.6.1", features = ["derive", "env"] }
 
 # Config
-config = "0.15"
+config = "0.15.23"
 
 # Filesystem utilities
-tempfile = "3"
+tempfile = "3.27.0"
 
 # URL encoding for GitLab/Bitbucket APIs
-urlencoding = "2"
+urlencoding = "2.1.3"
 
 [dev-dependencies]
-criterion = { version = "0.8", features = ["html_reports"] }
-tokio-test = "0.4"
-axum-test = "20"
-mockall = "0.14"
-tempfile = "3"
-wiremock = "0.6"
-bytes = "1"
+criterion = { version = "0.8.2", features = ["html_reports"] }
+tokio-test = "0.4.5"
+axum-test = "20.0.0"
+mockall = "0.14.0"
+tempfile = "3.27.0"
+wiremock = "0.6.5"
+bytes = "1.11.1"
 
 [profile.release]
 lto = true
@@ -93,7 +93,7 @@ strip = true
 [package.metadata.deb]
 maintainer = "hyperpolymath <packages@hyperpolymath.dev>"
 copyright = "2025, hyperpolymath"
-license-PMPL--1.0 = ["LICENSE", "0"]
+license-MPL-2.0 = ["LICENSE", "0"]
 extended-description = """
 ECHIDNABOT is a proof-aware CI bot that orchestrates ECHIDNA for theorem
 proof verification. It integrates with GitHub to automatically verify

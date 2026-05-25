@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Form accessibility analyzer - WCAG 1.3.5 Identify Input Purpose (Level AA), 3.3.2 Labels (Level A)
 //!
 //! Checks form element accessibility:

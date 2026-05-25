@@ -61,4 +61,4 @@ GitHub/GitLab/Bitbucket
 
 ## License
 
-PMPL-1.0-or-later OR LicenseRef-Palimpsest-0.5
+MPL-2.0 OR LicenseRef-Palimpsest-0.5

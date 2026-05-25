@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Directory scanner for running accessibility analysis across a project.
 //!
 //! Walks directory trees, identifies applicable files, and runs analyzers.

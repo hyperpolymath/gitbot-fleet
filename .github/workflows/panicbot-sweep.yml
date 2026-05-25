@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Panicbot Sweep — weekly batch scan of all repos via panic-attack.
 #
 # Catches drift in dormant repos that don't get per-PR scans.

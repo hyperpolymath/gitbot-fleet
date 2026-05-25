@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # fix-workflow-hygiene.sh — Remove irrelevant CI workflows detected by Hypatia
 #
 # Accepts a finding JSON file. Reads the pattern ID and file path, then

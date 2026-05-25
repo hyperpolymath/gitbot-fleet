@@ -1,9 +1,9 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 [package]
 name = "gsbot"
 version = "0.2.0"
 edition = "2021"
-license = "PMPL-1.0-or-later"
+license = "MPL-2.0"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
 description = "Garment Sustainability Bot — a Discord bot promoting sustainability in the garment and fashion industry (Rust/SPARK)"
 repository = "https://github.com/hyperpolymath/gitbot-fleet"
@@ -32,32 +32,32 @@ path = "src/lib.rs"
 
 [dependencies]
 # Discord (prefix-command framework over serenity — faithful map of discord.py cogs)
-poise = "0.6"
-serenity = { version = "0.12", default-features = false, features = [
+poise = "0.6.2"
+serenity = { version = "0.12.5", default-features = false, features = [
   "client", "gateway", "rustls_backend", "model", "cache",
 ] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal"] }
 
 # Persistence (SQLAlchemy/Alembic analogue)
-sqlx = { version = "0.8", default-features = false, features = [
+sqlx = { version = "0.8.6", default-features = false, features = [
   "runtime-tokio-rustls", "sqlite", "macros", "chrono", "migrate",
 ] }
 
 # Config / env (.env -> python-dotenv analogue)
-dotenvy = "0.15"
+dotenvy = "0.15.7"
 
 # Logging (colorlog analogue)
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "ansi"] }
-tracing-appender = "0.2"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "ansi"] }
+tracing-appender = "0.2.5"
 
 # Utilities
-anyhow = "1"
-thiserror = "2"
-chrono = { version = "0.4", features = ["clock"] }
-rand = "0.8"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+anyhow = "1.0.102"
+thiserror = "2.0.18"
+chrono = { version = "0.4.44", features = ["clock"] }
+rand = "0.8.6"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = "3.27.0"

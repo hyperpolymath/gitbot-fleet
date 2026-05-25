@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Integration tests for glambot analyzers
 
@@ -22,7 +22,7 @@ fn create_well_formed_repo() -> TempDir {
         ## Usage\n\n```bash\ntest-project --help\n```\n\n\
         ## Examples\n\nSee the examples directory.\n\n\
         ## Documentation\n\nFull docs available online.\n\n\
-        ## License\n\nPMPL-1.0-or-later\n";
+        ## License\n\nMPL-2.0\n";
     std::fs::write(path.join("README.md"), readme).unwrap();
 
     // Valid JSON

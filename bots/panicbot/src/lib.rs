@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Panicbot — Targeted Audit Bot for gitbot-fleet
 //!
 //! Panicbot wraps the `panic-attack` CLI tool as a subprocess, translates its

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # smart-files.sh — Fast file listing for fix scripts
 #
@@ -18,7 +18,7 @@ SKIP_DIRS=(
     .git target node_modules _build .lake deps
     vendor dist build __pycache__ .tox .mypy_cache
     winget-pkgs  # 50k+ YAML manifests
-    compiler-source  # ReScript compiler tests
+    compiler-source  # AffineScript compiler tests
     .elixir_ls .hex .mix
     coverage .cache .parcel-cache
 )

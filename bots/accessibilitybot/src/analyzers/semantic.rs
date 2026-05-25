@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Semantic HTML analyzer - WCAG 1.3.1 Info and Relationships (Level A)
 //!
 //! Checks for proper use of semantic HTML elements:

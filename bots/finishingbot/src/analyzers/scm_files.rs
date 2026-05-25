@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! SCM documentation files analyzer
 
@@ -116,7 +116,7 @@ impl ScmFilesAnalyzer {
                     &format!("{} should start with SPDX license identifier.", filename),
                 )
                 .with_file(file_path.to_path_buf())
-                .with_suggestion("Add ;; SPDX-License-Identifier: PMPL-1.0-or-later at the top"),
+                .with_suggestion("Add ;; SPDX-License-Identifier: MPL-2.0 at the top"),
             );
         }
 

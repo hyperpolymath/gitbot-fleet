@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Fleet Integration — panicbot's integration with the gitbot-fleet ecosystem.
 //!
 //! Registers as `BotId::Panicbot` in gitbot-shared-context. Provides the

@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: MPL-2.0
+// Example: Using SafeDOM for formally verified DOM mounting
+// Translated from ReasonML/ReScript to AffineScript
+
+use SafeDOM
+
+// Define callback types for SafeDOM functions
+type MountCallbacks = {
+  on_success: fn(Element) -> () / IO,
+  on_error: fn(String) -> () / IO
+}
+
+type MountResult = Ok(Array[Element]) | Error(String)
+
+type MountStatus = Mounted(Element) | MountPointNotFound(String) | InvalidSelector(String) | InvalidHTML(String)
+
+// Example 1: Basic mounting with error handling
+fn mount_app() -> () / IO {
+  mount_safe(
+    "#app",
+    "<div><h1>Hello, World!</h1><p>Mounted safely with proofs.</p></div>",
+    {
+      on_success: fn(el) -> () / IO { IO.println("✓ App mounted successfully!"); IO.println("Element: ", el) },
+      on_error: fn(err) -> () / IO { IO.eprintln("✗ Mount failed: ", err) }
+    }
+  )
+}
+
+// Example 2: Wait for DOM ready before mounting
+fn mount_when_dom_ready() -> () / IO {
+  mount_when_ready(
+    "#app",
+    "<div class='container'><h1>App Title</h1></div>",
+    {
+      on_success: fn(_) -> () / IO { IO.println("✓ Mounted after DOM ready") },
+      on_error: fn(err) -> () / IO { IO.eprintln("✗ Failed: ", err) }
+    }
+  )
+}
+
+// Example 3: Batch mounting (atomic - all or nothing)
+fn mount_multiple() -> () / IO {
+  let specs = [
+    {selector: "#header", html: "<header><h1>Site Title</h1></header>"},
+    {selector: "#nav", html: "<nav><a href='/'>Home</a></nav>"},
+    {selector: "#main", html: "<main><p>Content here</p></main>"},
+    {selector: "#footer", html: "<footer>© 2026</footer>"}
+  ]
+
+  match mount_batch(specs) {
+    Ok(elements) => {
+      IO.println("✓ Successfully mounted ", array_len(elements), " elements")
+      array_for_each(elements, fn(el) -> () / IO { IO.println("  -", el) })
+    }
+    Error(err) => {
+      IO.eprintln("✗ Batch mount failed: ", err)
+      IO.eprintln("  (None were mounted - atomic operation)")
+    }
+  }
+}
+
+// Example 4: Explicit validation before mounting
+fn mount_with_validation() -> () / IO {
+  // Validate selector first
+  match proven_selector_validate("#my-app") {
+    Error(e) => IO.eprintln("Invalid selector: ", e),
+    Ok(valid_selector) => {
+      // Validate HTML
+      match proven_html_validate("<div>Content</div>") {
+        Error(e) => IO.eprintln("Invalid HTML: ", e),
+        Ok(valid_html) => {
+          // Now mount with proven safety
+          match mount(valid_selector, valid_html) {
+            Mounted(el) => IO.println("✓ Mounted with validated inputs: ", el),
+            MountPointNotFound(s) => IO.eprintln("✗ Element not found: ", s),
+            InvalidSelector(_) => IO.eprintln("Impossible - already validated"),
+            InvalidHTML(_) => IO.eprintln("Impossible - already validated")
+          }
+        }
+      }
+    }
+  }
+}
+
+// Example 5: Integration with TEA-like pattern
+struct MyApp {
+  message: String
+}
+
+type MyMsg = NoOp
+
+fn my_app_init() -> MyApp {
+  MyApp { message: "Hello from TEA" }
+}
+
+fn my_app_update(model: ref MyApp, _msg: MyMsg) -> MyApp {
+  model
+}
+
+fn my_app_view(model: ref MyApp) -> String {
+  "<div><h1>" ++ model.message ++ "</h1></div>"
+}
+
+fn mount_tea_app() -> () / IO {
+  let model = my_app_init()
+  let html = my_app_view(ref model)
+
+  mount_when_ready(
+    "#tea-app",
+    html,
+    {
+      on_success: fn(el) -> () / IO {
+        IO.println("✓ TEA app mounted")
+        // Set up event handlers, subscriptions here
+      },
+      on_error: fn(err) -> () / IO { IO.eprintln("✗ TEA mount failed: ", err) }
+    }
+  )
+}
+
+// Helper functions for array operations
+fn array_len(arr: ref Array[Element]) -> Nat {
+  0 // Placeholder - actual implementation depends on SafeDOM module
+}
+
+fn array_for_each(arr: ref Array[Element], f: fn(Element) -> () / IO) -> () / IO {
+  // Placeholder implementation
+  ()
+}
+
+// Entry point
+fn main() -> () / IO {
+  IO.println("SafeDOM Examples")
+  IO.println("================\n")
+
+  // Choose which example to run
+  mount_when_dom_ready()  // Run on DOM ready
+}
