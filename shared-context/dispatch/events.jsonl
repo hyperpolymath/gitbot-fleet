@@ -430,3 +430,11 @@
   "findings_count": "43",
   "event_file": "shared-context/dispatch/events/20260524-200720-26371481384-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-25T07:58:46Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/civic-connect",
+  "source_sha": "unknown",
+  "findings_count": "8",
+  "event_file": "shared-context/dispatch/events/20260525-075846-26390047254-hypatia-security-alert.json"
+}
