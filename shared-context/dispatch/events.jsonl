@@ -438,3 +438,11 @@
   "findings_count": "8",
   "event_file": "shared-context/dispatch/events/20260525-075846-26390047254-hypatia-security-alert.json"
 }
+{
+  "received_at": "2026-05-25T07:58:50Z",
+  "event_type": "hypatia-security-alert",
+  "source_repo": "hyperpolymath/vex-tools",
+  "source_sha": "unknown",
+  "findings_count": "2",
+  "event_file": "shared-context/dispatch/events/20260525-075850-26390049177-hypatia-security-alert.json"
+}
