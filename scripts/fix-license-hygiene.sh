@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # fix-license-hygiene.sh — Ensure REUSE-compliant dual-license setup
 #
 # Applies: LICENSE (MPL-2.0), LICENSES/ dir, NOTICE file
@@ -59,7 +59,7 @@ case "$PATTERN" in
     missing_licenses_dir|missing_pmpl_text)
         mkdir -p LICENSES
         [[ -f "$MPL2_SRC" && ! -f LICENSES/MPL-2.0.txt ]] && cp "$MPL2_SRC" LICENSES/MPL-2.0.txt
-        [[ -f "$PMPL_SRC" && ! -f LICENSES/PMPL-1.0-or-later.txt ]] && cp "$PMPL_SRC" LICENSES/PMPL-1.0-or-later.txt
+        [[ -f "$PMPL_SRC" && ! -f LICENSES/MPL-2.0.txt ]] && cp "$PMPL_SRC" LICENSES/MPL-2.0.txt
         git add LICENSES/
         changes=true
         ;;
@@ -70,12 +70,12 @@ Licensing Notice
 ================
 
 This project is authored by Jonathan D.A. Jewell (hyperpolymath) and
-is licensed under the Palimpsest License (PMPL-1.0-or-later).
+is licensed under the Palimpsest License (MPL-2.0).
 
-The PMPL-1.0-or-later is a philosophical extension of the Mozilla Public
+The MPL-2.0 is a philosophical extension of the Mozilla Public
 License 2.0, adding provisions for cryptographic provenance, emotional
 lineage preservation, and quantum-safe signatures. The full PMPL text is
-available in LICENSES/PMPL-1.0-or-later.txt.
+available in LICENSES/MPL-2.0.txt.
 
 For compatibility with automated license detection tools and platforms
 that require OSI-approved licenses, the root LICENSE file contains the
@@ -83,7 +83,7 @@ standard Mozilla Public License 2.0 text. This ensures that package
 registries, CI systems, and other tooling correctly identify the license.
 
 The legally binding terms are:
-  - Source files: governed by PMPL-1.0-or-later (per SPDX headers)
+  - Source files: governed by MPL-2.0 (per SPDX headers)
   - Combined works: compatible with MPL-2.0 (per PMPL Section 6)
 
 For more information about the Palimpsest License:
@@ -104,7 +104,7 @@ if [[ "$changes" == true ]] && ! git diff --cached --quiet; then
 Fix license hygiene: $PATTERN
 
 Applied REUSE-compliant dual-license setup (MPL-2.0 for machine
-detection + PMPL-1.0-or-later as governing license).
+detection + MPL-2.0 as governing license).
 
 Co-Authored-By: Hypatia Scanner <hypatia@reposystem.dev>
 EOF

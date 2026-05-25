@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Machine-readability analyzer
 
@@ -77,7 +77,7 @@ impl Analyzer for MachineAnalyzer {
                     let state_path = mr_dir.join("STATE.scm");
                     if !state_path.exists() {
                         let state_content = format!(
-                            ";; SPDX-License-Identifier: PMPL-1.0-or-later\n\
+                            ";; SPDX-License-Identifier: MPL-2.0\n\
                             ;; STATE.scm - Project state for {name}\n\n\
                             (state\n\
                             \x20 (metadata\n\
@@ -103,7 +103,7 @@ impl Analyzer for MachineAnalyzer {
                     let meta_path = mr_dir.join("META.scm");
                     if !meta_path.exists() {
                         let meta_content = format!(
-                            ";; SPDX-License-Identifier: PMPL-1.0-or-later\n\
+                            ";; SPDX-License-Identifier: MPL-2.0\n\
                             ;; META.scm - Meta information for {name}\n\n\
                             (meta\n\
                             \x20 (architecture-decisions ())\n\
@@ -121,7 +121,7 @@ impl Analyzer for MachineAnalyzer {
                     let ecosystem_path = mr_dir.join("ECOSYSTEM.scm");
                     if !ecosystem_path.exists() {
                         let eco_content = format!(
-                            ";; SPDX-License-Identifier: PMPL-1.0-or-later\n\
+                            ";; SPDX-License-Identifier: MPL-2.0\n\
                             ;; ECOSYSTEM.scm - Ecosystem context for {name}\n\n\
                             (ecosystem\n\
                             \x20 (version \"1.0\")\n\
@@ -150,7 +150,7 @@ impl Analyzer for MachineAnalyzer {
                                     \"@type\": \"SoftwareSourceCode\",\n      \
                                     \"name\": \"TODO: Project Name\",\n      \
                                     \"description\": \"TODO: Project Description\",\n      \
-                                    \"license\": \"https://spdx.org/licenses/PMPL-1.0-or-later\",\n      \
+                                    \"license\": \"https://spdx.org/licenses/MPL-2.0\",\n      \
                                     \"codeRepository\": \"TODO: Repository URL\"\n    }\n    </script>\n";
                                 let updated =
                                     content.replace("</head>", &format!("{}</head>", json_ld));

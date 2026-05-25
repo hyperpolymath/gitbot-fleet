@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = Rhodibot Roadmap
@@ -23,7 +23,7 @@ v0.2.0 release with extended checks.
 * [x] HMAC-SHA256 webhook signature verification (constant-time)
 * [x] 69 tests (21 unit + 48 integration)
 * [x] CI/CD workflows (codeql, scorecard, quality, mirror)
-* [x] PMPL-1.0-or-later license and correct author attribution
+* [x] MPL-2.0 license and correct author attribution
 * [ ] Wire fleet CLI subcommand into main.rs
 
 === v0.2.0 - Extended Checks

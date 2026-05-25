@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = Accessibilitybot
 :author: Jonathan D.A. Jewell
@@ -201,6 +201,6 @@ cargo check
 
 == License
 
-PMPL-1.0-or-later (Palimpsest License)
+MPL-2.0 (Palimpsest License)
 
 See link:LICENSE[LICENSE] for the full text.

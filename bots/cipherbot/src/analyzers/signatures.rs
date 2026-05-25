@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Signature Analyzer — detects weak or non-PQ-safe digital signature algorithms.
 //!
 //! | Status   | Algorithm                       | Action                      |

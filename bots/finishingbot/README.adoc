@@ -1,6 +1,6 @@
-image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: PMPL-1.0,link="https://github.com/hyperpolymath/palimpsest-license"]
+image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
 
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Copyright (c) 2025 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = finishing-bot: Release Readiness Validator
@@ -212,7 +212,7 @@ finishing-bot show
 ----
 licenses:
   allowed:
-    - PMPL-1.0-or-later
+    - MPL-2.0
     - MIT
     - Apache-2.0
     - BSD-3-Clause
@@ -464,7 +464,7 @@ finishing-bot intentionally does NOT:
 
 == License
 
-PMPL-1.0-or-later (Palimpsest License)
+MPL-2.0 (Palimpsest License)
 
 See link:LICENSE[LICENSE] for details.
 

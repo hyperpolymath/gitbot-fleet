@@ -13,7 +13,7 @@ Finishingbot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyz
 **File**: `Cargo.toml`
 
 ### 1.1 Fix license
-- Line 8: Change `license = "PMPL-1.0-or-later"` → `license = "PMPL-1.0-or-later"`
+- Line 8: Change `license = "MPL-2.0"` → `license = "MPL-2.0"`
 
 ### 1.2 Fix author
 - Line 6: Change `authors = ["Hyperpolymath <dev@hyperpolymath.org>"]` → `authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]`
@@ -22,10 +22,10 @@ Finishingbot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyz
 - Audit ALL `.rs` files in `src/` for SPDX headers
 - Every file must have:
   ```rust
-  // SPDX-License-Identifier: PMPL-1.0-or-later
+  // SPDX-License-Identifier: MPL-2.0
   // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
   ```
-- If any file has `PMPL-1.0-or-later`, change to `PMPL-1.0-or-later`
+- If any file has `MPL-2.0`, change to `MPL-2.0`
 
 ### Verification
 - `cargo check` compiles

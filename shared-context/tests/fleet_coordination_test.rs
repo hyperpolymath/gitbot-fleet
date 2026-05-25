@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Fleet coordination integration tests
 
 use gitbot_shared_context::{BotId, Context, Finding, Severity};

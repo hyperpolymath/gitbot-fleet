@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Scheduled/dispatch pipeline for supervised-repo scanning via Hypatia + gitbot-fleet.
 name: Supervised Fleet Scan
 

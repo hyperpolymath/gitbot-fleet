@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! `gsbot-backup-db` — port of `scripts/backup_db.py`. With no args it
 //! backs up the SQLite database (keeping the last 10); `restore <file>`
 //! restores from a backup.

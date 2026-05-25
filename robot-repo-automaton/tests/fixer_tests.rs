@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Tests for fix application - delete, modify, create, rollback
 
 use robot_repo_automaton::catalog::{Fix, FixAction};
@@ -178,7 +178,7 @@ fn test_modify_fix_insert_before() {
         action: FixAction::Modify,
         target: "code.rs".to_string(),
         reason: None,
-        modification: Some("insert-before:1:// SPDX-License-Identifier: PMPL-1.0-or-later".to_string()),
+        modification: Some("insert-before:1:// SPDX-License-Identifier: MPL-2.0".to_string()),
         fallback: None,
     };
 
@@ -186,7 +186,7 @@ fn test_modify_fix_insert_before() {
     assert!(result.success);
 
     let content = std::fs::read_to_string(&file_path).unwrap();
-    assert!(content.starts_with("// SPDX-License-Identifier: PMPL-1.0-or-later"));
+    assert!(content.starts_with("// SPDX-License-Identifier: MPL-2.0"));
     assert!(content.contains("fn main()"));
 }
 

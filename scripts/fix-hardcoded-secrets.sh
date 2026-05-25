@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # hypatia: allow security_errors/secret_detected -- remediation tool: the credential-shaped strings here are the before/after illustration patterns it rewrites, not real secrets
 #
 # fix-hardcoded-secrets.sh — Replace hardcoded secrets with env var lookups
@@ -224,7 +224,7 @@ for file in "${ELIXIR_FILES[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# Phase 3: JavaScript / ReScript-generated JS (.js, .mjs)
+# Phase 3: JavaScript / AffineScript-generated JS (.js, .mjs)
 # ---------------------------------------------------------------------------
 # Pattern: const apiKey = "hardcoded"; let password = "hardcoded"
 JS_FILES=()

@@ -3,7 +3,7 @@
   "version": "0.2.0-beta",
   "private": true,
   "description": "Development dependencies. Runtime uses Deno. Sources are AffineScript (.affine).",
-  "license": "PMPL-1.0-or-later",
+  "license": "MPL-2.0",
   "scripts": {
     "build": "affinescript compile",
     "watch": "affinescript compile --watch",

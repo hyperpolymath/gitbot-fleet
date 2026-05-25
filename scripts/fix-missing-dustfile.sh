@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # fix-missing-dustfile.sh — Add Dustfile.a2ml to repositories that lack one
 #
@@ -30,7 +30,7 @@ mkdir -p "$TARGET_DIR"
 
 # Write template content
 cat > "$TARGET_FILE" <<'DUSTFILE'
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Dustfile — Cleanup and Hygiene Contract
 
 [dustfile]

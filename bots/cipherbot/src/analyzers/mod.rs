@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Cryptographic analyzers for detecting deprecated, weak, and non-PQ-safe algorithms.
 //!
 //! Each analyzer scans source code, configuration files, and dependency manifests

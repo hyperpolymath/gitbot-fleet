@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! `gsbot-export-data` — port of `scripts/export_data.py`. Exports
 //! materials/garments/brands to timestamped JSON plus a combined file.
 

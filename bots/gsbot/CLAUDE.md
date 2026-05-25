@@ -17,7 +17,7 @@ It was ported from a now-deleted Python prototype to **Rust** (with a
 designed-in SPARK seam). Behaviour is preserved; the implementation is Rust.
 
 - Crate: `gsbot` v0.2.0
-- License: `PMPL-1.0-or-later` (SPDX header on every source file)
+- License: `MPL-2.0` (SPDX header on every source file)
 - Edition: 2021
 
 ## Technology Stack (real, not aspirational)
@@ -146,11 +146,11 @@ invoking guild member has the Administrator permission.
 - Keep `domain.rs` pure/total; it is the SPARK substitution boundary.
 - Preserve observable behaviour when porting/refactoring (point awards, embed
   fields, command names and aliases mirror the original cogs).
-- Every source file carries the `SPDX-License-Identifier: PMPL-1.0-or-later`
+- Every source file carries the `SPDX-License-Identifier: MPL-2.0`
   header.
 - Conventional, atomic commits; feature branches off `main`.
 - Run `just lint` and `just test` before opening a PR.
 
 ## License
 
-`PMPL-1.0-or-later`. See `LICENSE`.
+`MPL-2.0`. See `LICENSE`.

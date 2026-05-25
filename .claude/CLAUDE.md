@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 
 # CLAUDE.md - Gitbot Fleet
 
@@ -54,7 +54,7 @@ Control (report < 0.85)          →  Human review required
 
 ## Code Style
 
-- SPDX headers: `PMPL-1.0-or-later`
+- SPDX headers: `MPL-2.0`
 - Author: Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>
 - Shell scripts: bash with `set -euo pipefail`
 - Rust: standard formatting, `anyhow::Result` for error handling

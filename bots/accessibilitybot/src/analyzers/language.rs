@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Language and text analyzer - WCAG 3.1.1 Language of Page (Level A), 3.1.5 Reading Level (Level AAA)
 //!
 //! Checks language and text accessibility:

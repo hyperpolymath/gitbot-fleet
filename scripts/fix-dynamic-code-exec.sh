@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # fix-dynamic-code-exec.sh — Mitigate dynamic code execution patterns
 #

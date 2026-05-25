@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Gitbot Fleet Coordinator - The missing execution layer
 # This is what actually runs the bots and coordinates findings
 
@@ -377,7 +377,7 @@ execute_auto_fixes() {
 
         cat > "$fix_script" << 'EOF'
 #!/bin/bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Auto-generated fix script
 
 set -euo pipefail
@@ -466,7 +466,7 @@ propose_new_rule() {
     case "$type" in
         unpinned_action)
             cat > "$proposal_file" << 'RULE_EOF'
-% SPDX-License-Identifier: PMPL-1.0-or-later
+% SPDX-License-Identifier: MPL-2.0
 % Auto-generated rule: Detect unpinned GitHub Actions
 % Generated: $(date -Iseconds)
 % Observations: $observations across $repos repos
@@ -512,7 +512,7 @@ RULE_EOF
 
         missing_permissions)
             cat > "$proposal_file" << 'RULE_EOF'
-% SPDX-License-Identifier: PMPL-1.0-or-later
+% SPDX-License-Identifier: MPL-2.0
 % Auto-generated rule: Detect missing permissions declarations
 % Generated: $(date -Iseconds)
 % Observations: $observations across $repos repos
@@ -543,7 +543,7 @@ RULE_EOF
 
         missing_spdx)
             cat > "$proposal_file" << 'RULE_EOF'
-% SPDX-License-Identifier: PMPL-1.0-or-later
+% SPDX-License-Identifier: MPL-2.0
 % Auto-generated rule: Detect missing SPDX headers
 % Generated: $(date -Iseconds)
 % Observations: $observations across $repos repos
@@ -581,7 +581,7 @@ RULE_EOF
         *)
             # Generic rule template for unknown types
             cat > "$proposal_file" << EOF
-% SPDX-License-Identifier: PMPL-1.0-or-later
+% SPDX-License-Identifier: MPL-2.0
 % Auto-generated rule: Detect ${type} issues
 % Generated: $(date -Iseconds)
 % Observations: $observations

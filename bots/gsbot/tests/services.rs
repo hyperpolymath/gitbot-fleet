@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Port of tests/unit/test_services.py and the spirit of
 //! tests/integration/test_bot_commands.py — service queries and the
 //! sustainability analyzer over an in-memory database.

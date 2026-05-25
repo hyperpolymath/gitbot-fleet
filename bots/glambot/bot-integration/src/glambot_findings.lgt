@@ -1,4 +1,4 @@
-%% SPDX-License-Identifier: PMPL-1.0-or-later
+%% SPDX-License-Identifier: MPL-2.0
 %% Glambot findings bridge for the Hypatia neurosymbolic learning loop
 %%
 %% Transforms glambot presentation findings into Logtalk facts consumable

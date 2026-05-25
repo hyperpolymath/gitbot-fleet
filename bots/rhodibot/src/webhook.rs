@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 
 //! Webhook handling module
 //!
@@ -197,7 +197,7 @@ Welcome to the hyperpolymath organization! Please ensure your repository follows
 
 ### Required Files
 - [ ] `README.adoc` - Project documentation (AsciiDoc format)
-- [ ] `LICENSE.txt` - License file (PMPL-1.0-or-later, MIT, Apache-2.0, or MPL-2.0)
+- [ ] `LICENSE.txt` - License file (MPL-2.0, MIT, Apache-2.0, or MPL-2.0)
 - [ ] `SECURITY.md` - Security policy
 - [ ] `CONTRIBUTING.md` - Contribution guidelines
 - [ ] `CODE_OF_CONDUCT.md` - Code of conduct

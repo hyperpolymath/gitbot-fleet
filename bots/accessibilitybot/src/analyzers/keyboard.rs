@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Keyboard navigation analyzer - WCAG 2.1.1 Keyboard (Level A), 2.4.7 Focus Visible (Level AA)
 //!
 //! Checks for keyboard accessibility:

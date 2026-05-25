@@ -1,4 +1,4 @@
-% SPDX-License-Identifier: PMPL-1.0-or-later
+% SPDX-License-Identifier: MPL-2.0
 % Auto-generated rule: Detect unsafe blocks without documentation
 % Generated: 2026-02-06T22:00:00+00:00
 % Observations: 19

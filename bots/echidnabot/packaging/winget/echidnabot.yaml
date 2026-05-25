@@ -8,7 +8,7 @@ Publisher: hyperpolymath
 PublisherUrl: https://github.com/hyperpolymath
 PackageName: Echidnabot
 PackageUrl: https://github.com/hyperpolymath/echidnabot
-License: PMPL-1.0-or-later
+License: MPL-2.0
 LicenseUrl: https://github.com/hyperpolymath/echidnabot/blob/main/LICENSE
 ShortDescription: Proof-aware CI bot for theorem proof verification
 Description: |

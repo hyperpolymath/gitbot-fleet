@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Canonical RSR skeleton generator (hyperpolymath/rsr-template-repo#48).
 //!
 //! `robot-repo-automaton` is the single source of truth for the RSR

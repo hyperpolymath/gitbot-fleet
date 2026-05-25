@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Git-SEO integration analyzer
 //!
@@ -96,7 +96,7 @@ impl Analyzer for GitSeoAnalyzer {
         // Optimize .gitattributes for search indexing
         let gitattributes_path = path.join(".gitattributes");
         if !gitattributes_path.exists() {
-            let content = "# SPDX-License-Identifier: PMPL-1.0-or-later\n\
+            let content = "# SPDX-License-Identifier: MPL-2.0\n\
                 # .gitattributes for search indexing\n\n\
                 * text=auto eol=lf\n\n\
                 # Documentation (indexed by search)\n\
@@ -131,7 +131,7 @@ impl Analyzer for GitSeoAnalyzer {
 
         let funding_path = github_dir.join("FUNDING.yml");
         if !funding_path.exists() {
-            let content = "# SPDX-License-Identifier: PMPL-1.0-or-later\n# Funding information\n# github: hyperpolymath\n";
+            let content = "# SPDX-License-Identifier: MPL-2.0\n# Funding information\n# github: hyperpolymath\n";
             std::fs::write(&funding_path, content)?;
             fixes.push(format!(
                 "Created FUNDING.yml at {}",

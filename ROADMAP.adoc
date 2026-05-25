@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell
 :toc: macro
 :toclevels: 2
@@ -63,7 +63,7 @@ based on confidence thresholds (Eliminate >= 0.95, Substitute >= 0.85, Control <
 
 Robot-repo-automaton is currently at ~5% completion. This milestone brings it to production.
 
-* [x] License migration to PMPL-1.0-or-later
+* [x] License migration to MPL-2.0
 * [x] Hypatia module renaming
 * [ ] Hypatia integration (currently ~10% -- HIGH BLOCKER)
 * [ ] Confidence threshold decision logic for auto-fix

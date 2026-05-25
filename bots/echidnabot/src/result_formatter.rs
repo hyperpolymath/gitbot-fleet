@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Result formatting bridge between dispatcher and bot modes
 //!
 //! This module converts ECHIDNA verification results into mode-specific

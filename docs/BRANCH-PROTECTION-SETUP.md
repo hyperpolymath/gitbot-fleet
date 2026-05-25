@@ -1,6 +1,6 @@
 # Branch Protection Setup: Static Analysis Gate
 
-> SPDX-License-Identifier: PMPL-1.0-or-later
+> SPDX-License-Identifier: MPL-2.0
 
 This document explains how to wire the `static-analysis-gate.yml` workflow into
 GitHub branch protection so that every PR must pass panic-attack and hypatia

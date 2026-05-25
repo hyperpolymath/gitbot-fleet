@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Add SPDX license identifier to files missing it
 
 set -euo pipefail
@@ -14,7 +14,7 @@ FILE_PATH=$(jq -r '.location.file' "$FINDING_FILE")
 FULL_PATH="$REPO_PATH/$FILE_PATH"
 
 # Default license for hyperpolymath repos
-DEFAULT_LICENSE="PMPL-1.0-or-later"
+DEFAULT_LICENSE="MPL-2.0"
 
 if [[ ! -f "$FULL_PATH" ]]; then
     echo "ERROR: File not found: $FULL_PATH"

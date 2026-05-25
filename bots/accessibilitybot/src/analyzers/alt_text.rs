@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Image alt text analyzer - WCAG 1.1.1 Non-text Content (Level A)
 //!
 //! Checks that all `<img>` elements have appropriate alt attributes:

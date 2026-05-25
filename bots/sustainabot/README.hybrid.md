@@ -130,7 +130,7 @@ When you run `sustainabot self-analyze`, it shows:
 
 ### Milestone M3: Bot Integration (Target: 2026-03-15)
 
-- [ ] ReScript webhook server on Deno
+- [ ] AffineScript webhook server on Deno
 - [ ] GitHub PR comments with analysis
 - [ ] SARIF output for Code Scanning
 - [ ] Dashboard showing repo health
@@ -213,7 +213,7 @@ By building Sustainabot with explicit resource awareness from the start, we prov
 
 ## License
 
-PMPL-1.0-or-later
+MPL-2.0
 
 ---
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Cipherbot — Cryptographic Hygiene & Post-Quantum Readiness Bot
 //!
 //! Cipherbot is a specialized bot in the gitbot-fleet ecosystem focused on

@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 #
 # fix-missing-groove.sh — Add Groove manifest to repos that serve HTTP but lack one
 #

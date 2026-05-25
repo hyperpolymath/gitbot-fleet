@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # pre-push-gate.sh — Local pre-push hook for static analysis.
 #
 # Runs panic-attack and hypatia locally before allowing a push.

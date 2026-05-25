@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! ARIA validator - WCAG 4.1.2 Name, Role, Value (Level A)
 //!
 //! Validates correct use of ARIA attributes:

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0-or-later
 // SPDX-FileCopyrightText: 2024-2025 hyperpolymath
 <!-- hypatia: allow security_errors/secret_detected -- deployment-doc placeholders and local-dev defaults (e.g. "your-secret", "oikos-dev"), not production credentials -->
 
@@ -265,7 +265,7 @@ Environment=PORT=3000
 Environment=BOT_MODE=advisor
 ExecStart=/usr/local/bin/deno run \
   --allow-net --allow-env --allow-read \
-  /opt/oikos-bot/bot-integration/src/Oikos.res.js
+  /opt/oikos-bot/bot-integration/src/Oikos.affine.js
 Restart=always
 RestartSec=5
 
@@ -334,7 +334,7 @@ Logs are JSON-formatted for easy parsing:
 ### Local Development
 
 ```bash
-# Bot integration (ReScript/Deno)
+# Bot integration (AffineScript/Deno)
 cd bot-integration
 deno task dev
 
@@ -342,9 +342,9 @@ deno task dev
 cd analyzers/code-haskell
 cabal run oikos-analyzer -- --path /path/to/analyze
 
-# Build ReScript
-npm install  # Only for ReScript compiler
-npm run build:rescript
+# Build AffineScript
+# Note: AffineScript uses dune build system, not npm
+# deno task build:affinescript
 ```
 
 ### Running Tests
@@ -365,4 +365,4 @@ python -m pytest
 
 ## License
 
-PMPL-1.0-or-later - See LICENSE file for details.
+MPL-2.0-or-later - See LICENSE file for details.

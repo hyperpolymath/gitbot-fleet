@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Fix application for detected issues
 //!
 //! Provides functionality to apply automated fixes to repositories:
@@ -619,7 +619,7 @@ impl Fixer {
         content
             .replace("gitbot-fleet", repo_name)
             .replace("hyperpolymath", "hyperpolymath")
-            .replace("{{LICENSE}}", "PMPL-1.0-or-later")
+            .replace("{{LICENSE}}", "MPL-2.0")
             .replace("{{YEAR}}", &year)
             .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")
             .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
@@ -864,7 +864,7 @@ mod tests {
             action: FixAction::Modify,
             target: "test.rs".to_string(),
             reason: None,
-            modification: Some("prepend:// SPDX-License-Identifier: PMPL-1.0-or-later".to_string()),
+            modification: Some("prepend:// SPDX-License-Identifier: MPL-2.0".to_string()),
             fallback: None,
         };
 
@@ -872,7 +872,7 @@ mod tests {
         assert!(result.success);
 
         let content = std::fs::read_to_string(&file_path).unwrap();
-        assert!(content.starts_with("// SPDX-License-Identifier: PMPL-1.0-or-later"));
+        assert!(content.starts_with("// SPDX-License-Identifier: MPL-2.0"));
     }
 
     #[test]

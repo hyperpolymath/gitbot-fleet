@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Accessibilitybot - WCAG 2.3 AAA Accessibility Compliance Bot
 //!
 //! Part of the gitbot-fleet ecosystem. Accessibilitybot is a Tier 2 (Finisher)

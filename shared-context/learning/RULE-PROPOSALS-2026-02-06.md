@@ -124,8 +124,8 @@ Dynamic code execution enables arbitrary code injection. Even in tests, normaliz
 
 ### Previously Approved (4 rules)
 1. **unsafe_panic** (1,150 obs) - Rust .unwrap()
-2. **type_safety_bypass** (477 obs) - ReScript Obj.magic
-3. **unsafe_crash** (342 obs) - ReScript .getExn()
+2. **type_safety_bypass** (477 obs) - AffineScript unsafe transmute
+3. **unsafe_crash** (342 obs) - AffineScript .getExn()
 4. **cors_misconfiguration** (3 obs) - Auto-fixed 3 instances in vordr
 
 ### Newly Proposed (3 rules)

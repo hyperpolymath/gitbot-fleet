@@ -3,7 +3,7 @@
   "auto_fixable": true,
   "category": "InsecureProtocol",
   "confidence": 0.93,
-  "description": "1 HTTP (non-HTTPS) URLs in lib/bs/src/engine/FogTrailVisualizer.res",
+  "description": "1 HTTP (non-HTTPS) URLs in lib/bs/src/engine/FogTrailVisualizer.affine",
   "fix_script": "fix-http-to-https.sh",
   "match": "http:// URL",
   "pattern_id": "PA014-1-http-non-https-urls-in-lib-b",

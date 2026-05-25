@@ -148,13 +148,13 @@ The repo has ZERO tests despite importing test libraries.
 ## Task 5: Fix Metadata
 
 ### 5.1 Cargo.toml
-- License: must be `PMPL-1.0-or-later` (not AGPL)
+- License: must be `MPL-2.0` (not AGPL)
 - Author: must be `"Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"`
 
 ### 5.2 SPDX headers
 - Every `.rs` file needs:
   ```rust
-  // SPDX-License-Identifier: PMPL-1.0-or-later
+  // SPDX-License-Identifier: MPL-2.0
   // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
   ```
 

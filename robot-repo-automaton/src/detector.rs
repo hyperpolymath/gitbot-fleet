@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Issue detection in repositories
 
 use std::collections::HashSet;
@@ -94,7 +94,8 @@ impl Detector {
                     "swift" => Some("swift"),
                     "hs" => Some("haskell"),
                     "ml" | "mli" => Some("ocaml"),
-                    "res" | "resi" => Some("rescript"),
+                    "affine" => Some("affinescript"),
+                    "res" | "resi" => Some("legacy_rescript"),
                     "gleam" => Some("gleam"),
                     "ex" | "exs" => Some("elixir"),
                     "erl" | "hrl" => Some("erlang"),

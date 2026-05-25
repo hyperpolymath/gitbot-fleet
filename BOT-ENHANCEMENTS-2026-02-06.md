@@ -110,7 +110,7 @@ name = "sustainabot-fleet"
 version = "0.1.0"
 edition = "2021"
 authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
-license = "PMPL-1.0-or-later"
+license = "MPL-2.0"
 
 [dependencies]
 gitbot-shared-context = { path = "../../../gitbot-fleet/shared-context" }

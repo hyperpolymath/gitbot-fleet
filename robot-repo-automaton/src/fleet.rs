@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Fleet integration for gitbot-fleet coordination
 //!
 //! This module provides the bridge between robot-repo-automaton and the gitbot-fleet

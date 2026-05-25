@@ -7,7 +7,7 @@
   "version": "0.1.0",
   "dateCreated": "2025-12-10",
   "dateModified": "2025-12-10",
-  "license": "PMPL-1.0",
+  "license": "MPL-2.0",
   "codeRepository": "https://github.com/hyperpolymath/echidnabot",
   "issueTracker": "https://github.com/hyperpolymath/echidnabot/issues",
   "programmingLanguage": ["Guile Scheme"],

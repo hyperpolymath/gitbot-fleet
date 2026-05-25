@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Panel checker — invokes the PCC binary and parses results.
 //!
 //! This module bridges the gitbot-fleet coordination layer with the
@@ -350,8 +350,8 @@ mod tests {
             "status": "unsatisfied",
             "failure_class": "root",
             "repairability": "safe",
-            "message": "Not found in PanelRegistry.res",
-            "file": "src/modules/PanelRegistry.res",
+            "message": "Not found in PanelRegistry.affine",
+            "file": "src/modules/PanelRegistry.affine",
             "expected": "id: PanelCloudGuard",
             "depends_on": ["contract:CloudGuard"],
             "blocked_downstream_count": 3
@@ -429,8 +429,8 @@ mod tests {
                     status: "satisfied".to_string(),
                     failure_class: None,
                     repairability: "safe".to_string(),
-                    message: "Found in PanelRegistry.res".to_string(),
-                    file: Some("src/modules/PanelRegistry.res".to_string()),
+                    message: "Found in PanelRegistry.affine".to_string(),
+                    file: Some("src/modules/PanelRegistry.affine".to_string()),
                     expected: None,
                     depends_on: vec![],
                     blocked_downstream_count: 0,
@@ -442,7 +442,7 @@ mod tests {
                     failure_class: None,
                     repairability: "safe".to_string(),
                     message: "Model include found".to_string(),
-                    file: Some("src/Model.res".to_string()),
+                    file: Some("src/Model.affine".to_string()),
                     expected: None,
                     depends_on: vec![],
                     blocked_downstream_count: 0,
@@ -509,8 +509,8 @@ mod tests {
                 status: "unsatisfied".to_string(),
                 failure_class: Some("root".to_string()),
                 repairability: "safe".to_string(),
-                message: "Not found in PanelRegistry.res".to_string(),
-                file: Some("src/modules/PanelRegistry.res".to_string()),
+                message: "Not found in PanelRegistry.affine".to_string(),
+                file: Some("src/modules/PanelRegistry.affine".to_string()),
                 expected: Some("id: PanelBrokenPanel".to_string()),
                 depends_on: vec!["contract:BrokenPanel".to_string()],
                 blocked_downstream_count: 3,

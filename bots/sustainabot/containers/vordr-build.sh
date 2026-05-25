@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 #
 # Oikos Container Build Script
@@ -59,14 +59,14 @@ fi
 
 cd "$PROJECT_ROOT"
 
-# Ensure ReScript is pre-compiled
-if [[ ! -f "bot-integration/src/Oikos.res.js" ]]; then
-    log_warn "ReScript not compiled. Running build..."
+# Ensure AffineScript is pre-compiled
+if [[ ! -f "bot-integration/src/Oikos.affine.js" ]]; then
+    log_warn "AffineScript not compiled. Running build..."
     cd bot-integration
     if command -v deno &> /dev/null; then
-        deno task build:rescript
+        deno task build:affinescript
     else
-        log_error "Deno not found. Please install Deno and run: deno task build:rescript"
+        log_error "Deno not found. Please install Deno and run: deno task build:affinescript"
         exit 1
     fi
     cd "$PROJECT_ROOT"

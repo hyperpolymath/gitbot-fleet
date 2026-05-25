@@ -1,4 +1,4 @@
-% SPDX-License-Identifier: PMPL-1.0-or-later
+% SPDX-License-Identifier: MPL-2.0
 % Auto-generated rule proposal
 % Pattern: getexn_on_external_data
 % Type: unsafe_crash

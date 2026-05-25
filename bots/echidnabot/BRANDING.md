@@ -369,4 +369,4 @@ Keep it VERY simple - almost iconic.
 ---
 
 *This branding guide is part of the echidnabot project.*
-*SPDX-License-Identifier: PMPL-1.0-or-later
+*SPDX-License-Identifier: MPL-2.0

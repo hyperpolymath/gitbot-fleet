@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 = Rhodibot
@@ -326,4 +326,4 @@ Rhodibot is a Tier 1 Verifier in the gitbot-fleet hierarchy:
 
 == License
 
-PMPL-1.0-or-later. See link:LICENSE[LICENSE] for details.
+MPL-2.0. See link:LICENSE[LICENSE] for details.

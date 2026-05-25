@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! Data models — faithful port of the SQLAlchemy models. Behaviour-bearing
 //! methods delegate to the pure [`crate::domain`] kernel.
 

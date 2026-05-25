@@ -1,49 +1,49 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 [package]
 name = "gitbot-shared-context"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["Hyperpolymath <dev@hyperpolymath.org>"]
 description = "Shared context layer for gitbot-fleet coordination"
-license = "PMPL-1.0"
+license = "MPL-2.0"
 repository = "https://github.com/hyperpolymath/gitbot-fleet"
 keywords = ["gitbot-fleet", "coordination", "context", "ci-cd"]
 categories = ["development-tools"]
 
 [dependencies]
 # Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-lexpr = "0.2"  # S-expression support for .scm files
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+lexpr = "0.2.7"  # S-expression support for .scm files
 
 # Date/time
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 
 # Unique IDs
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
 
 # Logging
-tracing = "0.1"
+tracing = "0.1.44"
 
 # Error handling
-thiserror = "2"
+thiserror = "2.0.18"
 
 # Async
-tokio = { version = "1", features = ["sync", "fs"] }
+tokio = { version = "1.52.3", features = ["sync", "fs"] }
 
 # File watching (for context updates)
-notify = "8"
+notify = "8.2.0"
 
 # Bot exclusion registry (exclusion_registry + registry_guard modules)
-toml = "1"
-glob = "0.3"
-git2 = { version = "0.21", default-features = false }
+toml = "1.1.2+spec-1.1.0"
+glob = "0.3.3"
+git2 = { version = "0.21.0", default-features = false }
 
 [dev-dependencies]
-tempfile = "3"
-tokio-test = "0.4"
-tokio = { version = "1", features = ["macros", "rt"] }
-criterion = { version = "0.8", features = ["html_reports"] }
+tempfile = "3.27.0"
+tokio-test = "0.4.5"
+tokio = { version = "1.52.3", features = ["macros", "rt"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
 
 [lib]
 name = "gitbot_shared_context"

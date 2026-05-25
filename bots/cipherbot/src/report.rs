@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 //! SARIF Report Generation — outputs findings in the SARIF 2.1.0 format
 //! for integration with GitHub Code Scanning, VS Code, and other tools.
 

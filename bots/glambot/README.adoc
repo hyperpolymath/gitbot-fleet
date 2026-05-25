@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 = glambot: Repository Presentation Quality Enforcer
 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
@@ -298,9 +298,9 @@ cargo bench
 
 == License
 
-PMPL-1.0-or-later (Palimpsest License)
+MPL-2.0 (Palimpsest License)
 
-See link:licences/PMPL-1.0-or-later.txt[Full license text].
+See link:licences/MPL-2.0.txt[Full license text].
 
 == Author
 
