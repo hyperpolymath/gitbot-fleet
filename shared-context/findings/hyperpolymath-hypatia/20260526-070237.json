@@ -1,0 +1,26 @@
+{
+  "findings": [
+    {
+      "reason": "Repository has 1 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    },
+    {
+      "reason": "94 total open code-scanning alert(s) -- security hygiene review",
+      "type": "CSA002",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "75c3019e6c18ae23da6f983b8ca23cacd2eaf4e3",
+    "submitted_at": "2026-05-26T07:02:38Z",
+    "scanner_version": "hypatia-v2"
+  }
+}
