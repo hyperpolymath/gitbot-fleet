@@ -1,0 +1,18 @@
+{
+  "findings": [
+    {
+      "reason": "Repository has 1 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "35f9f3c11a89bb77cc9a1dcc86279523575e2c33",
+    "submitted_at": "2026-05-26T08:06:24Z",
+    "scanner_version": "hypatia-v2"
+  }
+}
