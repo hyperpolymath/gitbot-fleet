@@ -125,11 +125,11 @@ pub fn not_found(router: Router, handler: Handler) -> Router {
   Router #{ ..router, notFoundHandler: Some(handler) }
 }
 
-// `handle` walks routes to find a method+path match and invokes its
+// `dispatch` walks routes to find a method+path match and invokes its
 // handler under the middleware chain. The mechanical migrator must
 // re-express this once the canonical Http::Request shape and
 // Array::iter / Array::fold_right externs are bound.
-pub fn handle(router: ref Router, req: Http::Request) -{IO}-> Http::Response {
+pub fn dispatch(router: ref Router, req: Http::Request) -{IO}-> Http::Response {
   // TODO(mechanical-migrator): re-implement against canonical Http::Request
   // shape. Stubbed to a 501 so the file parses.
   Http::not_implemented(req)
