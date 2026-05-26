@@ -180,13 +180,94 @@ migrated copy — that's the expected residual, matching the `#148`
 validation oracle. The `SafeDOM` stdlib targeted by the example does
 not yet exist (it is `affinescript#56`).
 
-### Deliberately deferred
+### .res sweep (Phase 5b — added later in the same session)
 
-The 1,267 `SafeDOMExample.res` files are out of scope here. They are
-tracked under [`affinescript#57` Phase 2 — `.res → .affine` migration
-assistant (tree-sitter walker)](https://github.com/hyperpolymath/affinescript/issues/57).
-The 6 load-bearing `.res` fileExists / source = references will
-update in lockstep with the walker as it lands.
+Initially the 1,267 `SafeDOMExample.res` siblings were deferred to
+`affinescript#57` Phase 2. The user then directed an inline sweep —
+"either delete this stuff if stale or if necessary, do the
+AffineScript conversion here." After confirming the `.res` corpus is
+purely stale fixtures (no real implementation logic; the real SafeDOM
+implementation lives at
+`accessibility-everywhere/tools/safe-dom/src/SafeDOM.res` under a
+*different filename*), the decision was mass-delete.
+
+Scope correction during execution: an earlier agent search reported
+"255 distinct top-level repo dirs"; that was a `awk` field-index bug
+(extracted `$7` instead of `$6`). The true scope is **134 distinct
+top-level local dirs, mapping to 129 distinct GitHub remotes**.
+
+**Fan-out execution** (5 parallel general-purpose agents, batches of
+~25 repos each):
+
+| Batch | Repos | PRs filed |
+|---|---|---|
+| pilot ffmpeg-ffi | 1 | 1 |
+| aa | 25 | 23 (2 skipped) |
+| ab | 25 | 23 (2 skipped) |
+| ac | 25 | 25 |
+| ad | 25 | 25 |
+| ae+af | 29 | 28 (1 skipped) |
+| **total** | **130 reachable** | **125** |
+
+All commits GPG-signed with the canonical key
+(`4A03639C1EB1F86C7F0C97A91835A14A2867091E`,
+`6759885+hyperpolymath@users.noreply.github.com`). All PRs ran
+`gh pr merge --auto --squash --delete-branch` immediately after
+creation per the standing automerge policy
+(`feedback_always_enable_automerge.md`). About 10 PRs sit open because
+their repos lack repo-level `enablePullRequestAutoMerge`; everything
+else is in the automerge queue.
+
+### Phase 5c — 4 consumer-reference updates (atomic with deletion)
+
+Five load-bearing references estate-wide pointed at the now-deleted
+`.res` paths. Four needed a follow-up commit to keep the deletion PR
+green; the fifth needed no change (deletion satisfies it).
+
+| Repo | PR (existing branch) | Follow-up commit |
+|---|---|---|
+| `universal-chat-extractor` | #70 | `tests/idris2/SmokeTest.idr:155` — removed dead `fileExists "examples/SafeDOMExample.res"` smoke probe |
+| `thunderbird-template-reloaded` | #77 | `tests/idris2/SmokeTest.idr:71` — removed dead `("examples", "examples/SafeDOMExample.res")` table entry |
+| `panll` | #52 | `panel-clades/eclexiaiser.toml` — removed `[[functions]] mountApp` block whose `source` pointed at deleted .res |
+| `zotero-tools` | #15 | `rescript-templater/eclexiaiser.toml` — removed 2 `[[functions]]` blocks (mountApp + mountWithValidation) |
+| `repos-monorepo` | n/a (remote 404) | `.claude/settings.local.json:130` `! test -f` is a deliberate-absence assertion — deletion satisfies it; nothing to commit |
+
+Pushing the consumer-update commits to the existing deletion branches
+keeps the deletion + assertion-update **atomic per repo** — they
+land together or not at all.
+
+### Unsweepable corpus (672 files behind unreachable remotes)
+
+| Local dir | File count | Reason |
+|---|---|---|
+| `repos-monorepo` | 510 | GitHub remote returns 404 — repo deleted upstream; local clone retains files |
+| `hyperpolymath-archive` | 152 | GitHub remote 404 |
+| `polystack` | 10 | Repo archived on GitHub — read-only |
+| `typed-wasm` | 1 | Already migrated upstream (`f53e693`) |
+
+These 673 files persist as local-only stale fixtures with no upstream
+to PR against. They can be cleaned via local `rm` if the user
+chooses — irrelevant for any remote-driven build.
+
+### Side-anomalies
+
+- **`voyage-enterprise-decision-system`** — the batch_aa agent
+  inadvertently discarded an uncommitted foreign-WIP edit to
+  `.github/workflows/ci.yaml` (a SHA-pin to
+  `DeLaGuardo/setup-clojure`) while staging the deletion PR. Used
+  `git restore --staged --worktree` to keep the deletion commit
+  clean, which also reverted the WIP. The deletion PR itself is
+  clean; the foreign WIP needs to be redone by whichever parallel
+  session authored it. This violates the
+  `feedback_parallel_session_branch_drift` / "leave foreign WIP
+  alone" memory rule. Tightened the fan-out agent prompt template
+  for future sweeps.
+- **`accessibility-everywhere`** — only the `SafeDOMExample.res`
+  fixture was deleted; the real `SafeDOM.res` implementation at
+  `tools/safe-dom/src/SafeDOM.res` was correctly **not** touched
+  (different filename, didn't match the sweep regex). That real
+  implementation's migration is its own track under
+  `affinescript#56`.
 
 ## Full session PR roster
 

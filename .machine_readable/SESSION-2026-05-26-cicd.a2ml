@@ -122,16 +122,97 @@ note = "24 over-propagation copies; standards/ vendors canonical templates, not 
 [phase.5.safedom-sweep.skipped]
 description = "standards-as-port/ local clone redundant — same Git remote as standards/. PR not created."
 
-[phase.5.safedom-sweep.deferred]
-description = "1267 `.res` siblings tracked under affinescript#57 Phase 2 (tree-sitter walker)."
-load-bearing-references = [
-  "universal-chat-extractor/tests/idris2/SmokeTest.idr (fileExists)",
-  "thunderbird-template-reloaded/tests/idris2/SmokeTest.idr (fileExists)",
-  "panll/panel-clades/eclexiaiser.toml (source = ...)",
-  "zotero-tools/rescript-templater/eclexiaiser.toml (source = ...)",
-  "repos-monorepo/.claude/settings.local.json (negative assertion)",
-  "proven/.claude/settings.local.json (curl URL allowlist)"
+[phase.5b.res-sweep]
+description = """Inline sweep of the 1,267 stale SafeDOMExample.res
+fixtures. Added later in the same session per user direction; the
+initial plan was to defer to affinescript#57 Phase 2."""
+strategy = "Mass-delete — purely stale fixtures; ReScript banned in new code (2026-04-30 policy)."
+agent-strategy = "5 parallel general-purpose agents over 6 batches (~25 repos each)."
+total-local-dirs-with-file = 134
+total-reachable-github-remotes = 129
+total-files-on-disk = 1267
+prs-filed = 125
+files-deleted-by-pr = 595   # approximate sum from agent reports
+
+[[phase.5b.res-sweep.batch]]
+id = "pilot"
+repos = 1
+prs-filed = 1
+notes = "Pattern proof on hyperpolymath/ffmpeg-ffi#14 before fan-out."
+
+[[phase.5b.res-sweep.batch]]
+id = "aa"
+repos = 25
+prs-filed = 23
+skipped = ["ffmpeg-ffi (already done)", "hyperpolymath-archive (404 remote, 152 files unreachable)"]
+anomaly = "voyage-enterprise-decision-system: agent discarded uncommitted foreign WIP via git restore. Deletion PR clean, but the foreign WIP needs redoing."
+
+[[phase.5b.res-sweep.batch]]
+id = "ab"
+repos = 25
+prs-filed = 23
+skipped = ["repos-monorepo (404 remote, 510 files — 40% of corpus)", "polystack (archived, read-only, 10 files)"]
+
+[[phase.5b.res-sweep.batch]]
+id = "ac"
+repos = 25
+prs-filed = 25
+notes = "Clean run, no skips."
+
+[[phase.5b.res-sweep.batch]]
+id = "ad"
+repos = 25
+prs-filed = 25
+notes = "ambientops + burble had unrelated untracked files; agent correctly un-staged before commit (good)."
+
+[[phase.5b.res-sweep.batch]]
+id = "ae+af"
+repos = 29
+prs-filed = 28
+skipped = ["typed-wasm (already migrated upstream commit f53e693)"]
+
+[phase.5b.res-sweep.unsweepable]
+description = "Files behind unreachable / read-only remotes — no PR possible."
+total-files = 673
+items = [
+  { dir = "repos-monorepo", files = 510, reason = "GitHub remote 404 (repo deleted)" },
+  { dir = "hyperpolymath-archive", files = 152, reason = "GitHub remote 404" },
+  { dir = "polystack", files = 10, reason = "Repo archived on GitHub (read-only)" },
+  { dir = "typed-wasm", files = 1, reason = "Already migrated upstream" }
 ]
+
+[phase.5c.consumer-ref-updates]
+description = """Pushed as follow-up commits to existing deletion-PR
+branches so each repo's deletion + assertion-update lands atomically."""
+status = "complete"
+commits-pushed = 4
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/universal-chat-extractor"
+pr = 70
+file = "tests/idris2/SmokeTest.idr"
+change = "Removed dead fileExists \"examples/SafeDOMExample.res\" smoke probe"
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/thunderbird-template-reloaded"
+pr = 77
+file = "tests/idris2/SmokeTest.idr"
+change = "Removed dead (\"examples\", \"examples/SafeDOMExample.res\") table entry"
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/panll"
+pr = 52
+file = "panel-clades/eclexiaiser.toml"
+change = "Removed [[functions]] mountApp block sourcing deleted .res"
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/zotero-tools"
+pr = 15
+file = "rescript-templater/eclexiaiser.toml"
+change = "Removed 2 [[functions]] blocks (mountApp + mountWithValidation) sourcing deleted .res"
+
+[phase.5c.consumer-ref-updates.no-change-needed]
+description = "5th reference: repos-monorepo/.claude/settings.local.json `! test -f` deliberate-absence assertion. Deletion satisfies it. (repos-monorepo's GitHub remote is 404'd anyway.)"
 
 [phase.6.documentation]
 status = "complete"
