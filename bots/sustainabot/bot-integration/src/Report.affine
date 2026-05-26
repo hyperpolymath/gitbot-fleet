@@ -91,7 +91,7 @@ pub fn generate_pr_comment(analysis: ref AnalysisResult, mode: ref BotMode) -> S
       let top_recs = Array::slice(analysis.recommendations, 0, max_recs);
 
       let rec_lines = map(top_recs, fn(r) -> String {
-        let confidence = Float::to_int(r.confidence *. 100.0);
+        let confidence = Float::to_int(r.confidence * 100.0);
         "- **" ++ r.action ++ "** (" ++ Int::to_string(confidence)
           ++ "% confidence): " ++ r.reason ++ "\n"
       });

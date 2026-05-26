@@ -61,7 +61,7 @@ pub fn generate_jwt(
   app_id: ref String,
   private_key_pem: ref String,
 ) -{IO}-> Result<String, String> {
-  let now_seconds = Time::now_millis() /. 1000.0;
+  let now_seconds = Time::now_millis() / 1000.0;
 
   let header = json::encode_object([
     ("alg", json::encode_string("RS256")),
@@ -71,8 +71,8 @@ pub fn generate_jwt(
 
   let payload = json::encode_object([
     ("iss", json::encode_string(app_id)),
-    ("iat", json::encode_float(now_seconds -. 60.0)),
-    ("exp", json::encode_float(now_seconds +. 600.0)),
+    ("iat", json::encode_float(now_seconds - 60.0)),
+    ("exp", json::encode_float(now_seconds + 600.0)),
   ]);
   let payload_b64 = base64_url_encode_string(json::stringify(payload));
 
@@ -111,7 +111,7 @@ pub fn get_installation_token(
 
   match cache_get(cache_key) {
     Some(cached) => {
-      if cached.expiresAt > Time::now_millis() +. 60000.0 {
+      if cached.expiresAt > Time::now_millis() + 60000.0 {
         Ok(cached)
       } else {
         fetch_installation_token(jwt, cache_key)
