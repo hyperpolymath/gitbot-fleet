@@ -194,9 +194,9 @@ pub fn update(msg: Msg, model: Model) -{IO}-> (Model, Cmd::T<Msg>) {
 
     Tick => {
       let now = Time::now_millis();
-      let one_hour = 60.0 *. 60.0 *. 1000.0;
+      let one_hour = 60.0 * 60.0 * 1000.0;
       let pending = filter(model.pendingAnalyses, fn(a) -> Bool {
-        now -. a.createdAt < one_hour
+        now - a.createdAt < one_hour
       });
       (Model #{ ..model, pendingAnalyses: pending }, Cmd::none())
     },
