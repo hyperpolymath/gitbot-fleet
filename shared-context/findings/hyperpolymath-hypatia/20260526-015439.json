@@ -1,0 +1,66 @@
+{
+  "findings": [
+    {
+      "reason": "Repository has 1 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/code_scanning_alerts/CSA001 -- Hypatia code_scanning_alerts: CSA001 -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "test/soundness/fixtures/code_safety/getexn_on_external.res",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    },
+    {
+      "reason": "91 total open code-scanning alert(s) -- security hygiene review",
+      "type": "CSA002",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "ead582621c312037ad4ca8d07963ed5291cae3ac",
+    "submitted_at": "2026-05-26T01:54:41Z",
+    "scanner_version": "hypatia-v2"
+  }
+}
