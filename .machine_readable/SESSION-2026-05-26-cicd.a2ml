@@ -1,0 +1,248 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# SESSION-2026-05-26-cicd.a2ml — Turn 2 of the 2026-05-26 session.
+# Companion to docs/archive/SESSION-2026-05-26-cicd-foundational-fixes.md.
+
+[metadata]
+session-id = "2026-05-26-cicd-foundational"
+date = "2026-05-26T10:30:00Z"
+agent = "claude-opus-4-7"
+agent-context = "1M"
+parent-session = "2026-05-26-sustainabot-148"
+duration-hours = 2.5
+
+[goal]
+description = """Four asks from the user, sequenced:
+  (1) set automerge on the seven gitbot-fleet#148 PRs;
+  (2) resolve CI/CD baseline noise foundationally at root/source/upstream;
+  (3) pass any lessons to Hypatia ruleset if not already captured;
+  (4) document everything for humans and machines after merges;
+  (5) search the estate for SafeDOMExample and resolve estate-wide."""
+
+[outcome]
+prs-filed = 7
+prs-merged = 6
+prs-outstanding = 4
+estate-files-touched = 56
+estate-files-deleted = 24
+estate-files-migrated = 5
+hypatia-rules-added = 5
+session-issues-closed = 1  # gitbot-fleet#208
+
+[phase.1.automerge]
+status = "complete"
+notes = """All 7 #148 PRs had automerge enabled. 4 merged automatically as
+their checks turned green; 2 still queued at session-write time pending
+their last failing check resolved (vscode-smoke baseline)."""
+
+[phase.2.cicd-foundational-fixes]
+status = "complete"
+prs-filed = 3
+
+[[phase.2.cicd-foundational-fixes.pr]]
+repo = "hyperpolymath/hypatia"
+number = 332
+status = "MERGED"
+title = "feat(rules): AffineScript hand-port pitfalls — HANDLE-as-fn-name + OCaml float ops"
+purpose = "Adds 5 patterns under language `affine`/`affinescript` so future hand-ports surface the two pitfalls (HANDLE-as-fn-name, OCaml float ops) at PR-review time."
+
+[[phase.2.cicd-foundational-fixes.pr]]
+repo = "hyperpolymath/standards"
+number = 185
+status = "OPEN/BLOCKED"
+title = "fix(governance): TS allowlist regex + introduce `.governance-allowlist` (Layer 2.5)"
+root-cause = "Literal regex `TypeScript [Ee]xemptions` did not match `### TypeScript / JavaScript Exemptions (Approved)` in affinescript's CLAUDE.md — 3 legitimate exemptions silently ignored, check red on every PR."
+fix-layers = [
+  "Regex relaxed to `(?:TypeScript|JavaScript|TS|JS|\\.tsx?)\\b[^#\\n]*[Ee]xemption`",
+  "Multi-table support (no longer breaks on first heading after entering table)",
+  "New optional `.governance-allowlist` plain-text file at repo root (Layer 2.5)",
+  "docs/EXEMPTION-MECHANISMS.adoc updated with the new layer"
+]
+companion-narrow-fix = "affinescript#374 MERGED — renamed CLAUDE.md heading to match the original regex. Either alone resolves the symptom; together belt-and-suspenders."
+
+[[phase.2.cicd-foundational-fixes.pr]]
+repo = "hyperpolymath/affinescript"
+number = 381
+status = "MERGED"
+title = "fix(vscode-smoke): SKIP cleanly when @hyperpolymath/affine-vscode is unpublished"
+root-cause = "WASM module imports `Vscode` / `VscodeLanguageClient`; adapter is `optionalDependency` (issue #104); npm install succeeds (optional) but require() returns null; WebAssembly.instantiate rejects; suite fails."
+fix = "suiteSetup detects missing adapter via require.resolve(); calls this.skip(); CI reports SKIPPED not FAILED. Workflow adds adapter-availability notice."
+companion-fix = "user added continue-on-error: true at job level in parallel — belt-and-suspenders."
+
+[phase.3.hypatia-lessons]
+status = "complete"
+landed-in = "hypatia#332 (above)"
+patterns = [
+  { id = "handle_as_fn_name", severity = "high", cwe = "CWE-1109" },
+  { id = "ocaml_style_float_div", severity = "high", cwe = "CWE-704" },
+  { id = "ocaml_style_float_mul", severity = "high", cwe = "CWE-704" },
+  { id = "ocaml_style_float_add", severity = "high", cwe = "CWE-704" },
+  { id = "ocaml_style_float_sub", severity = "high", cwe = "CWE-704" }
+]
+
+[phase.5.safedom-sweep]
+status = "complete-pending-owner-review"
+prs-filed = 4
+prs-merged = 3
+prs-outstanding = 1
+agent-search-report = "53 .affine files across 5 dialect-distinct hash groups in 138 repos + 1267 .res files (deferred to affinescript#57 Phase 2)"
+strategy = "Mixed (user-decided via AskUserQuestion): delete over-propagated standards/ copies; migrate authoritative gitbot-fleet/burble/claude-gecko copies."
+
+[[phase.5.safedom-sweep.pr]]
+repo = "hyperpolymath/gitbot-fleet"
+number = 210
+status = "MERGED"
+disposition = "migrate"
+files-touched = 3
+closes-issue = 208
+
+[[phase.5.safedom-sweep.pr]]
+repo = "hyperpolymath/burble"
+number = 92
+status = "MERGED"
+disposition = "migrate"
+files-touched = 1
+
+[[phase.5.safedom-sweep.pr]]
+repo = "hyperpolymath/claude-gecko-browser-extension"
+number = 30
+status = "MERGED"
+disposition = "migrate"
+files-touched = 1
+
+[[phase.5.safedom-sweep.pr]]
+repo = "hyperpolymath/standards"
+number = 188
+status = "OPEN/BLOCKED"
+disposition = "delete"
+files-touched = 24
+note = "24 over-propagation copies; standards/ vendors canonical templates, not duplicate consumer examples."
+
+[phase.5.safedom-sweep.skipped]
+description = "standards-as-port/ local clone redundant — same Git remote as standards/. PR not created."
+
+[phase.5b.res-sweep]
+description = """Inline sweep of the 1,267 stale SafeDOMExample.res
+fixtures. Added later in the same session per user direction; the
+initial plan was to defer to affinescript#57 Phase 2."""
+strategy = "Mass-delete — purely stale fixtures; ReScript banned in new code (2026-04-30 policy)."
+agent-strategy = "5 parallel general-purpose agents over 6 batches (~25 repos each)."
+total-local-dirs-with-file = 134
+total-reachable-github-remotes = 129
+total-files-on-disk = 1267
+prs-filed = 125
+files-deleted-by-pr = 595   # approximate sum from agent reports
+
+[[phase.5b.res-sweep.batch]]
+id = "pilot"
+repos = 1
+prs-filed = 1
+notes = "Pattern proof on hyperpolymath/ffmpeg-ffi#14 before fan-out."
+
+[[phase.5b.res-sweep.batch]]
+id = "aa"
+repos = 25
+prs-filed = 23
+skipped = ["ffmpeg-ffi (already done)", "hyperpolymath-archive (404 remote, 152 files unreachable)"]
+anomaly = "voyage-enterprise-decision-system: agent discarded uncommitted foreign WIP via git restore. Deletion PR clean, but the foreign WIP needs redoing."
+
+[[phase.5b.res-sweep.batch]]
+id = "ab"
+repos = 25
+prs-filed = 23
+skipped = ["repos-monorepo (404 remote, 510 files — 40% of corpus)", "polystack (archived, read-only, 10 files)"]
+
+[[phase.5b.res-sweep.batch]]
+id = "ac"
+repos = 25
+prs-filed = 25
+notes = "Clean run, no skips."
+
+[[phase.5b.res-sweep.batch]]
+id = "ad"
+repos = 25
+prs-filed = 25
+notes = "ambientops + burble had unrelated untracked files; agent correctly un-staged before commit (good)."
+
+[[phase.5b.res-sweep.batch]]
+id = "ae+af"
+repos = 29
+prs-filed = 28
+skipped = ["typed-wasm (already migrated upstream commit f53e693)"]
+
+[phase.5b.res-sweep.unsweepable]
+description = "Files behind unreachable / read-only remotes — no PR possible."
+total-files = 673
+items = [
+  { dir = "repos-monorepo", files = 510, reason = "GitHub remote 404 (repo deleted)" },
+  { dir = "hyperpolymath-archive", files = 152, reason = "GitHub remote 404" },
+  { dir = "polystack", files = 10, reason = "Repo archived on GitHub (read-only)" },
+  { dir = "typed-wasm", files = 1, reason = "Already migrated upstream" }
+]
+
+[phase.5c.consumer-ref-updates]
+description = """Pushed as follow-up commits to existing deletion-PR
+branches so each repo's deletion + assertion-update lands atomically."""
+status = "complete"
+commits-pushed = 4
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/universal-chat-extractor"
+pr = 70
+file = "tests/idris2/SmokeTest.idr"
+change = "Removed dead fileExists \"examples/SafeDOMExample.res\" smoke probe"
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/thunderbird-template-reloaded"
+pr = 77
+file = "tests/idris2/SmokeTest.idr"
+change = "Removed dead (\"examples\", \"examples/SafeDOMExample.res\") table entry"
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/panll"
+pr = 52
+file = "panel-clades/eclexiaiser.toml"
+change = "Removed [[functions]] mountApp block sourcing deleted .res"
+
+[[phase.5c.consumer-ref-updates.update]]
+repo = "hyperpolymath/zotero-tools"
+pr = 15
+file = "rescript-templater/eclexiaiser.toml"
+change = "Removed 2 [[functions]] blocks (mountApp + mountWithValidation) sourcing deleted .res"
+
+[phase.5c.consumer-ref-updates.no-change-needed]
+description = "5th reference: repos-monorepo/.claude/settings.local.json `! test -f` deliberate-absence assertion. Deletion satisfies it. (repos-monorepo's GitHub remote is 404'd anyway.)"
+
+[phase.6.documentation]
+status = "complete"
+human-readable = "docs/archive/SESSION-2026-05-26-cicd-foundational-fixes.md"
+machine-readable = "this file"
+agent-memory-updated = [
+  "~/.claude/projects/-home-hyperpolymath/memory/MEMORY.md (3 entries refreshed/added)",
+  "~/.claude/projects/-home-hyperpolymath/memory/project_gitbot_fleet_148_pr_queue.md (status -> MERGED)",
+  "~/.claude/projects/-home-hyperpolymath/memory/project_gitbot_fleet_208_safedom_dialect.md (status -> CLOSED)",
+  "~/.claude/projects/-home-hyperpolymath/memory/project_cicd_foundational_fixes_2026_05_26.md (new)"
+]
+
+[outstanding-at-session-end]
+description = "Awaiting owner review/merge (no further agent action possible)."
+prs = [
+  { repo = "hyperpolymath/affinescript", number = 371, state = "OPEN/CLEAN" },
+  { repo = "hyperpolymath/affinescript", number = 372, state = "OPEN/UNSTABLE" },
+  { repo = "hyperpolymath/standards", number = 185, state = "OPEN/BLOCKED" },
+  { repo = "hyperpolymath/standards", number = 188, state = "OPEN/BLOCKED" }
+]
+
+[lessons-applied]
+description = "Pattern observations promoted to agent memory + CI ruleset."
+lessons = [
+  "When a CI check is documented as 'ignore — baseline noise' for a long time, that's a load-bearing signal that the check needs a root-source foundational fix, not an expanded exclusions table.",
+  "Belt-and-suspenders fixes are valuable across parallel contributors (#185 + affinescript#374; #381 + continue-on-error). Either alone resolves the symptom; together survive future regressions on either side.",
+  "Always verify search-agent reports against the live filesystem before mass-edit. The SafeDOM agent reported standards-as-port/ as a separate repo; it turned out to be a second local clone of the same Git remote — over-counted by 24."
+]
+
+[session.signature]
+agent = "claude-opus-4-7"
+verified-by = "PR queue audit via gh pr list/view at session-write time"
+verified-at = "2026-05-26T10:35:00Z"
