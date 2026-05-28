@@ -179,8 +179,68 @@ Based on code quality: cyclomatic complexity, nesting depth, pattern count.
 - `sustainabot-eclexia`: policy evaluation, decisions_to_results
 - `sustainabot-fleet`: finding conversion, severity mapping, suggestions
 
+## Budget-Resume Sweep Integration (AM010 / BP008)
+
+**TODO** (future Rust integration — Rust implementation deferred, out of scope for this cycle).
+
+When sustainabot's periodic estate scan detects more than 50 open PRs that are stuck
+exclusively on phantom required status-check contexts (BP008 findings), it should trigger
+the `.git-private-farm/dispatch-templates/budget-resume-sweep.yml` workflow via
+`workflow_dispatch` to admin-merge the eligible PRs in bulk.
+
+### Calling pattern
+
+sustainabot triggers the sweep by dispatching to the farm workflow:
+
+```sh
+gh workflow run budget-resume-sweep.yml \
+  --repo hyperpolymath/.git-private-farm \
+  --field target_owner=<OWNER> \
+  --field target_repo=<REPO> \
+  --field max_merges=20
+```
+
+### Eligibility criteria (AM010)
+
+A PR is considered eligible for the sweep when every required status-check context
+configured in branch protection (see GitHub API
+`repos/{owner}/{repo}/branches/main/protection/required_status_checks`) either:
+
+1. **passes** (conclusion `SUCCESS`, `NEUTRAL`, or `SKIPPED` in the PR's rollup), or
+2. **is a phantom** — it is listed as required but has emitted zero check-runs across
+   the last five commits on main (Hypatia rule BP008), AND it has no rollup entry on
+   this specific PR (ALARP type-1 mitigation: a path-filtered workflow that happens to
+   fire on this PR is not treated as phantom even if it was silent on recent main commits).
+
+The `hypatia pr-eligibility --owner X --repo Y --pr N` escript command implements this
+check and emits JSON:
+
+```json
+{"eligible": true, "reason": "AM010", "phantom_contexts": ["spark-theatre-gate / SPARK Theatre Gate"], "required_contexts": [...]}
+```
+
+### Threshold
+
+The dispatch fires when `eligible_pr_count >= 50` (configurable via Hypatia DBA002 rule).
+This was the empirically validated threshold from the 2026-05-27 estate sweep where the
+GitHub Actions billing cliff-hit first occurred.
+
+### Why Rust integration is deferred
+
+The sweep logic is pure GitHub API orchestration (list PRs → query Hypatia → admin-merge).
+This is already fully covered by the shell script inside `budget-resume-sweep.yml` which
+clones and builds the Hypatia escript on-demand. Embedding the same logic in Rust would
+duplicate the Hypatia eligibility engine and create a maintenance surface. The correct
+long-term architecture is for sustainabot to invoke the workflow dispatch (one HTTP call)
+rather than re-implement the BP008/AM010 checks natively.
+
+When the Hypatia escript gains a stable gRPC or HTTP API (planned for a future release),
+sustainabot-fleet can be updated to call that API directly instead of shelling out.
+
 ## References
 
 - [SARIF 2.1.0 Specification](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 - [Software Carbon Intensity (SCI) Specification](https://sci.greensoftware.foundation/)
 - [Green Software Foundation](https://greensoftware.foundation/)
+- [Hypatia BP008/AM010 rules](https://github.com/hyperpolymath/hypatia) — phantom required context detection and admin-merge eligibility
+- [`.git-private-farm/dispatch-templates/budget-resume-sweep.yml`](https://github.com/hyperpolymath/.git-private-farm/blob/main/dispatch-templates/budget-resume-sweep.yml) — the workflow triggered when eligible PR count exceeds 50
