@@ -1,0 +1,26 @@
+{
+  "findings": [
+    {
+      "reason": "Repository has 16 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Scorecard): TokenPermissionsID -- Token-Permissions -- 0 day(s) old",
+      "type": "CSA001",
+      "file": ".github/workflows/hypatia-scan.yml",
+      "action": "update",
+      "rule_module": "code_scanning_alerts",
+      "severity": "high"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "c8d8c3c1e6387747b21b5be73f0f14f7f8236283",
+    "submitted_at": "2026-05-27T08:34:01Z",
+    "scanner_version": "hypatia-v2"
+  }
+}

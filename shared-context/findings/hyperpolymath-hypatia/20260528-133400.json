@@ -1,0 +1,826 @@
+{
+  "findings": [
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "unknown",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in clusterfuzzlite.yml",
+      "type": "unknown",
+      "file": "clusterfuzzlite.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in clusterfuzzlite.yml",
+      "type": "unknown",
+      "file": "clusterfuzzlite.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in codeql.yml",
+      "type": "unknown",
+      "file": "codeql.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dependabot-automerge.yml",
+      "type": "unknown",
+      "file": "dependabot-automerge.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "unknown",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "unknown",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "unknown",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "unknown",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "unknown",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in governance.yml",
+      "type": "unknown",
+      "file": "governance.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in hypatia-scan.yml",
+      "type": "unknown",
+      "file": "hypatia-scan.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in language-blockers.yml",
+      "type": "unknown",
+      "file": "language-blockers.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in language-blockers.yml",
+      "type": "unknown",
+      "file": "language-blockers.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in mirror.yml",
+      "type": "unknown",
+      "file": "mirror.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "unknown",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "unknown",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "unknown",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "unknown",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "unknown",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "unknown",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "unknown",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "unknown",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "unknown",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "unknown",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "unknown",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "unknown",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "unknown",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "unknown",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "unknown",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "unknown",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "unknown",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "unknown",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "unknown",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in scorecard.yml",
+      "type": "unknown",
+      "file": "scorecard.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in secret-scanner.yml",
+      "type": "unknown",
+      "file": "secret-scanner.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "unknown",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "unknown",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "unknown",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "unknown",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "unknown",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "unknown",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "unknown",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Repository has 3 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "secret-scanner.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "scorecard.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unknown -- Hypatia workflow_audit: unknown -- 0 day(s) old",
+      "type": "CSA001",
+      "file": "rust.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "30 total open code-scanning alert(s) -- security hygiene review",
+      "type": "CSA002",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "c9fd28fe450135ee95b4d57da19955b21dc66077",
+    "submitted_at": "2026-05-28T13:34:02Z",
+    "scanner_version": "hypatia-v2"
+  }
+}
