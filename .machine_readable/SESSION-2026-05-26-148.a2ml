@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# SESSION-2026-05-26-148.a2ml — sustainabot ReScript→AffineScript hand-port
+# validation session record. Machine-readable companion to
+# `docs/archive/SESSION-2026-05-26-sustainabot-148-validation.md`.
+
+[metadata]
+session-id = "2026-05-26-sustainabot-148"
+date = "2026-05-26T08:30:00Z"
+agent = "claude-opus-4-7"
+agent-context = "1M"
+issue = "hyperpolymath/gitbot-fleet#148"
+duration-hours = 1.5
+status = "complete-pending-owner-merge"
+
+[goal]
+description = """Reduce every parse error in the 13 sustainabot .affine
+files (4,939 LOC hand-ported from .res) to either type-check or
+Resolve.UndefinedModule. The latter is the acceptable residual (stdlib
+graph not loaded by single-file `check`; INT-02 territory)."""
+
+[scope.in]
+paths = [
+  "bots/sustainabot/bot-integration/src/Analysis.affine",
+  "bots/sustainabot/bot-integration/src/Config.affine",
+  "bots/sustainabot/bot-integration/src/GitHubAPI.affine",
+  "bots/sustainabot/bot-integration/src/GitHubApp.affine",
+  "bots/sustainabot/bot-integration/src/Main.affine",
+  "bots/sustainabot/bot-integration/src/Oikos.affine",
+  "bots/sustainabot/bot-integration/src/Report.affine",
+  "bots/sustainabot/bot-integration/src/Router.affine",
+  "bots/sustainabot/bot-integration/src/Types.affine",
+  "bots/sustainabot/bot-integration/src/Webhook.affine",
+  "bots/sustainabot/bot-integration/src/tea/Cmd.affine",
+  "bots/sustainabot/bot-integration/src/tea/Runtime.affine",
+  "bots/sustainabot/bot-integration/src/tea/Sub.affine"
+]
+file-count = 13
+
+[scope.out]
+note = """SafeDOMExample.affine fixtures in 3 other bots
+(the-hotchocolabot, echidnabot, finishingbot) use a pre-stabilization
+AffineScript dialect (8+ grammar divergences). Tracked separately at
+gitbot-fleet#208; needs single dialect-migration PR, NOT parser
+changes."""
+filed-issue = "hyperpolymath/gitbot-fleet#208"
+
+[validation-oracle]
+command = "affinescript check <path>"
+pass-criteria = "parse layer succeeds — `Type checking passed` OR `Resolution error: (Resolve.UndefinedModule …)`"
+fail-criteria = "any line starting with `<path>:<line>:<col>: parse error: Syntax error`"
+
+[validation-oracle.before-session]
+files-passing = 0
+files-with-resolution-residual = 1   # tea/Sub.affine — only file simple enough to reach Resolution unaided
+files-with-parse-errors = 12
+
+[validation-oracle.after-session]
+files-passing = 0   # full typecheck not in scope — stdlib not loaded
+files-with-resolution-residual = 13
+files-with-parse-errors = 0
+
+[parser-prs]
+repo = "hyperpolymath/affinescript"
+count = 5
+conflict-cost-total = "+0 S/R, +0 R/R (parser builds at 21 S/R + 1 R/R, baseline unchanged)"
+prs = [
+  { number = 370, branch = "claude/parser-trailing-comma-148", scope = "trailing-comma in fn params + expr lists; effect-annotated lambda" },
+  { number = 371, branch = "claude/parser-fn-type-eff-arrow-148", scope = "fn-type with effect arrow `fn(A) -{E}-> B` in type position" },
+  { number = 372, branch = "claude/parser-builtin-qualified-paths-148", scope = "builtin/lowercase qualified paths + TOTAL field name" },
+  { number = 373, branch = "claude/lexer-underscore-idents-148", scope = "underscore-prefix idents `_key`/`_unused`" },
+  { number = 376, branch = "claude/parser-record-spread-148", scope = "record-update spread at start `#{ ..base, f: v }`" }
+]
+
+[handport-prs]
+repo = "hyperpolymath/gitbot-fleet"
+count = 1
+prs = [
+  { number = 206, branch = "claude/sustainabot-parse-fixes-148", scope = "OCaml-style float ops → unified ops; `fn handle` → `fn dispatch` (HANDLE is a keyword)" }
+]
+
+[ci-status]
+all-prs-real-signal = "green"
+known-baseline-noise = [
+  "vscode-smoke (affinescript) — fails on every PR; npm 404 on @hyperpolymath/affine-vscode (affinescript#104)",
+  "governance / Language / package anti-pattern policy (affinescript) — flags approved TypeScript exemptions"
+]
+
+[gotchas-captured]
+description = """Rules surfaced during the session that apply to ALL
+future .affine hand-ports (not just sustainabot). Captured in agent
+persistent memory."""
+rules = [
+  { name = "handle-is-keyword", body = "`handle` is HANDLE token, parse-fails as fn name. Rename to `dispatch`/`handle_request` on hand-port.", scope = "hand-port-rewrite" },
+  { name = "no-ocaml-float-ops", body = "`+. -. *. /.` never accepted. Mechanical hand-port-rewrite to unified `+ - * /`, never parser-fix.", scope = "hand-port-rewrite" }
+]
+
+[next-gate]
+type = "owner-merge"
+description = """All 6 PRs CI-green and merge-ready. Issue #148 is NOT
+auto-closed by any `Refs` keyword (ISSUE-CLOSURE rule). Owner-merge
+of the 6 PRs is the prerequisite to closing #148."""
+
+[downstream-blocked]
+description = "What unblocks after #148 closes (next-gate state):"
+items = [
+  "Resolution → typecheck cross-module loader work (INT-02 in affinescript docs/TECH-DEBT.adoc)",
+  "Bigger .res → .affine sweep via tree-sitter walker (affinescript#57 Phase 2)"
+]
+
+[artefacts]
+human-readable = "docs/archive/SESSION-2026-05-26-sustainabot-148-validation.md"
+issue-thread-comment = "https://github.com/hyperpolymath/gitbot-fleet/issues/148#issuecomment-4542225835"
+
+[session.signature]
+agent = "claude-opus-4-7"
+verified-by = "validation-oracle re-run on integrated branch with all 6 PRs cherry-picked"
+verified-at = "2026-05-26T09:30:00Z"
