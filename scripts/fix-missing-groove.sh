@@ -10,7 +10,7 @@
 #
 # Usage: fix-missing-groove.sh <repo-path> <finding-json>
 #
-# Requires: groove CLI (installed via `cargo install --path standards/groove-protocol/cli`)
+# Requires: groove CLI (installed via `cargo install --git https://github.com/hyperpolymath/groove-protocol --path cli`)
 
 set -euo pipefail
 
