@@ -123,7 +123,7 @@ fn repo_identity(repo_path: &Path) -> (Option<String>, Option<String>) {
     let origin_url = repo
         .find_remote("origin")
         .ok()
-        .and_then(|r| r.url().map(|s| s.to_string()));
+        .and_then(|r| r.url().ok().map(|s| s.to_string()));
     let full_name = origin_url.as_deref().and_then(parse_full_name);
     (full_name, origin_url)
 }
