@@ -13,6 +13,8 @@ image:https://img.shields.io/github/v/release/hyperpolymath/echidnabot?include_p
 
 _Formal verification CI bot that orchestrates ECHIDNA for automatic theorem proof verification on every push._
 
+NOTE: Echidnabot exists in two trees by design — this **fleet copy** (deployed production bot) and the **standalone** repo at `hyperpolymath/echidnabot` (SDK / library / reference implementation). See link:CANONICAL_SOURCE.md[CANONICAL_SOURCE.md] for the file-class canonical map and contributor decision tree.
+
 toc::[]
 
 == Overview
