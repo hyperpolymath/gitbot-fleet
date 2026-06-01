@@ -2,7 +2,7 @@
 [package]
 name = "gitbot-shared-context"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Hyperpolymath <dev@hyperpolymath.org>"]
 description = "Shared context layer for gitbot-fleet coordination"
 license = "MPL-2.0"
