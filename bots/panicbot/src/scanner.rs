@@ -71,6 +71,17 @@ pub struct WeakPoint {
     /// Suppressed items are excluded from fleet counts and CI gates.
     #[serde(default)]
     pub suppressed: bool,
+    /// Test-vs-production classification of the finding's location
+    /// (panic-attack v2.5.5+). `None` means the scanner predates the
+    /// classification field; treat as "Production" for downstream
+    /// routing decisions. `"test_only"` and `"doc"` indicate the
+    /// finding is in test or documentation code respectively — usually
+    /// the panic-attack engine has ALREADY set `suppressed: true` for
+    /// these, but the metadata is preserved so the translator can emit
+    /// audit-trail context (e.g. "PanicPath in tests/foo.rs — accepted
+    /// by test_context rule").
+    #[serde(default)]
+    pub test_context: Option<String>,
 }
 
 /// Report from `panic-attack adjudicate` — cross-report verdict.
