@@ -1,4 +1,4 @@
-; SPDX-License-Identifier: PMPL-1.0-or-later
+; SPDX-License-Identifier: MPL-2.0
 ; Eclexia Policy: Cryptographic Hash Algorithm Enforcement
 ;
 ; This policy defines the minimum acceptable hash algorithms

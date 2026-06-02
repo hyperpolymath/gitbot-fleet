@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PMPL-1.0-or-later
+-- SPDX-License-Identifier: MPL-2.0
 -- Initial schema for the Garment Sustainability Bot.
 -- Mirrors the original SQLAlchemy models (materials, garments, brands,
 -- users, garment_materials M2M). Timestamps are RFC3339 TEXT.
