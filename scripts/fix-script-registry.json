@@ -102,7 +102,8 @@
       "codeql-cron-monthly": "fix-codeql-cron-monthly.sh",
       "chapel-manpath-guard": "fix-chapel-manpath-guard.sh",
       "chapel-chpl-llvm-export": "fix-chapel-chpl-llvm-export.sh",
-      "chapel-replace-chpl-about-with-version": "fix-chapel-replace-chpl-about.sh"
+      "chapel-replace-chpl-about-with-version": "fix-chapel-replace-chpl-about.sh",
+      "reusable_workflow_sha_bump_needs_propagation": "propagate-sha-bump.sh"
     }
   }
 }
