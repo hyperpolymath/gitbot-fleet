@@ -97,7 +97,12 @@
       "recipe-add-feedback-integration": "fix-missing-feedback-integration.sh",
       "recipe-add-vexometer-hooks": "fix-missing-vexometer-hooks.sh",
       "recipe-remove-tracked-package-lock": "fix-tracked-package-lock.sh",
-      "cicd_rules/tracked_npm_lockfile": "fix-tracked-package-lock.sh"
+      "cicd_rules/tracked_npm_lockfile": "fix-tracked-package-lock.sh",
+      "chapel-runs-on-pin-22-04": "fix-chapel-runs-on-pin.sh",
+      "codeql-cron-monthly": "fix-codeql-cron-monthly.sh",
+      "chapel-manpath-guard": "fix-chapel-manpath-guard.sh",
+      "chapel-chpl-llvm-export": "fix-chapel-chpl-llvm-export.sh",
+      "chapel-replace-chpl-about-with-version": "fix-chapel-replace-chpl-about.sh"
     }
   }
 }
