@@ -1,5 +1,5 @@
 K9!
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Gitbot Fleet Deployment
 #
 # This K9 component automates the deployment and configuration of the
@@ -300,7 +300,7 @@ recipes = {
             "echo 'Generating workflow for %{bot_name}...'",
             "mkdir -p .github/workflows",
             "cat > .github/workflows/%{bot_name}.yml <<'WORKFLOW_EOF'\n" ++
-            "# SPDX-License-Identifier: PMPL-1.0-or-later\n" ++
+            "# SPDX-License-Identifier: MPL-2.0\n" ++
             "name: %{bot_config.description}\n\n" ++
             "on:\n" ++
             "  push:\n    branches: [main, develop]\n" ++
