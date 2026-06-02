@@ -34,7 +34,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 # Unique IDs
-uuid = { version = "1.23.1", features = ["v4"] }
+uuid = { version = "1.23.2", features = ["v4"] }
 
 # Date/time
 chrono = { version = "0.4.44", features = ["serde"] }
