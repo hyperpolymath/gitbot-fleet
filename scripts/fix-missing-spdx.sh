@@ -1,8 +1,21 @@
 #!/bin/bash
 # SPDX-License-Identifier: MPL-2.0
 # Add SPDX license identifier to files missing it
+#
+# DISABLED 2026-06-02 per owner directive on licence policy.
+# See `feedback_no_automated_licence_edits.md` and
+# `feedback_estate_license_policy_umbrella.md`. Licence remediation is
+# manual, file-by-file, owner-only. Triggered by neurophone#99 (auto-PR
+# reverting PMPL → MPL-2.0 across ~140 files, closed by owner).
 
 set -euo pipefail
+
+echo "REFUSED: fix-missing-spdx.sh is disabled per estate policy 2026-06-02." >&2
+echo "        Licence/SPDX edits MUST be manual, per-file, owner-approved." >&2
+echo "        SPDX choice depends on the five-way owner classification" >&2
+echo "        (sole-repo / 007 / son-shared / fork / palimpsest carve-out)." >&2
+echo "        See feedback_estate_license_policy_umbrella.md." >&2
+exit 1
 
 REPO_PATH="$1"
 FINDING_FILE="$2"
