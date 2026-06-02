@@ -223,6 +223,36 @@ execute_entry() {
         fi
     done
 
+    # --- License/SPDX auto-fix refusal gate (owner directive 2026-06-02) ---
+    #
+    # Estate policy forbids automated licence/SPDX edits. Licence remediation
+    # is manual, file-by-file, owner-only (see canonical memory
+    # `feedback_no_automated_licence_edits.md` and
+    # `feedback_estate_license_policy_umbrella.md`).
+    #
+    # Triggered by neurophone#99 (auto-PR reverting PMPL → MPL-2.0 across
+    # ~140 files, closed by owner). This gate refuses any auto_execute
+    # dispatch whose recipe_id or category looks license/SPDX-related,
+    # regardless of confidence score.
+    #
+    # Carve-out: the three palimpsest carve-out repos may still receive
+    # licence-related work — but only with manual owner approval, NOT
+    # auto-execute. So even those repos are gated here.
+    local category lower_recipe lower_category
+    category=$(echo "$entry" | jq -r '.category // ""')
+    lower_recipe=$(echo "$recipe_id" | tr '[:upper:]' '[:lower:]')
+    lower_category=$(echo "$category" | tr '[:upper:]' '[:lower:]')
+    case "$lower_recipe$lower_category" in
+        *license*|*spdx*|*pmpl*|*mpl-2*|*agpl*|*palimpsest*)
+            echo "  REFUSED: $pattern_id → $repo (license/SPDX auto-edits forbidden per estate policy 2026-06-02)"
+            echo "           recipe_id=$recipe_id category=$category"
+            echo "           Owner must approve and apply licence changes manually, per-file."
+            ((SKIPPED++)) || true
+            record_outcome "$pattern_id" "$recipe_id" "$repo" "" "refused_license_policy"
+            return
+            ;;
+    esac
+
     # Skip if repo doesn't exist locally
     if [[ ! -d "$repo_path" ]]; then
         echo "  SKIP: $repo (not found at $repo_path)"

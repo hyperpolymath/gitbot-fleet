@@ -3,6 +3,12 @@
 #
 # fix-license-file.sh — Auto-create LICENSE with MPL-2.0 text
 #
+# DISABLED 2026-06-02 per owner directive on licence policy.
+# See `feedback_no_automated_licence_edits.md` and
+# `feedback_estate_license_policy_umbrella.md`. Licence remediation is
+# manual, file-by-file, owner-only. Triggered by neurophone#99 (auto-PR
+# reverting PMPL → MPL-2.0 across ~140 files, closed by owner).
+#
 # Category: LicenseCompliance
 # Usage: fix-license-file.sh <repo-path> <finding-json>
 #
@@ -10,6 +16,11 @@
 # Does NOT commit — dispatch-runner handles that.
 
 set -euo pipefail
+
+echo "REFUSED: fix-license-file.sh is disabled per estate policy 2026-06-02." >&2
+echo "        Licence/SPDX edits MUST be manual, per-file, owner-approved." >&2
+echo "        See feedback_no_automated_licence_edits.md." >&2
+exit 1
 
 REPO_PATH="${1:?Usage: fix-license-file.sh <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Usage: fix-license-file.sh <repo-path> <finding-json>}"
