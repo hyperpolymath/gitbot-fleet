@@ -27,6 +27,7 @@ permissions:
 jobs:
   supervised-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout gitbot-fleet
