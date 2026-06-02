@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 // SustainaBot Policy: Carbon Budget
 //
 // Per-function and per-project carbon budgets.

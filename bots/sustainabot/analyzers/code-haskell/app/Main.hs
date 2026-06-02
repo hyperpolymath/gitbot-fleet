@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Eco-Analyzer CLI and HTTP Server
--- SPDX-License-Identifier: PMPL-1.0-or-later
+-- SPDX-License-Identifier: MPL-2.0
 --
 -- Entry point for the Haskell code analyzer.
 -- Supports both CLI analysis and HTTP server mode.

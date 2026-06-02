@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Energy efficiency pattern analysis
--- SPDX-License-Identifier: PMPL-1.0-or-later
+-- SPDX-License-Identifier: MPL-2.0
 --
 -- Detects energy-inefficient code patterns and suggests improvements
 -- based on software energy consumption research.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PMPL-1.0-or-later
+// SPDX-License-Identifier: MPL-2.0
 = `.hypatia-baseline.json` — per-repo Hypatia finding baseline
 :toc:
 :toclevels: 2

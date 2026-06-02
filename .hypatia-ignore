@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # .hypatia-ignore - Exemptions for banned language files (ReScript)
 # These ReScript files in bots/sustainabot are legacy and approved for use
 # in the sustainabot integration. See robot-repo-automaton for the migration path.

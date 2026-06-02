@@ -1,4 +1,4 @@
-;; SPDX-License-Identifier: PMPL-1.0-or-later
+;; SPDX-License-Identifier: MPL-2.0
 ;; SPDX-FileCopyrightText: 2025-2026 hyperpolymath
 ;; CICD-PATTERNS.a2ml - CI/CD error patterns and fixes for bot learning
 ;; Media-Type: application/cicd-patterns+scheme
@@ -91,7 +91,7 @@ version = "1.0"
       (severity "low")
       (pattern "^name:")
       (description "Workflow file missing SPDX license header")
-      (fix "Add '# SPDX-License-Identifier: PMPL-1.0-or-later' as first line")
+      (fix "Add '# SPDX-License-Identifier: MPL-2.0' as first line")
       (auto-fixable #t))
 
     (workflow-linter-self-detection
@@ -243,7 +243,7 @@ version = "1.0"
     (sha-pin-format
       "Format: uses: action/name@SHA # version")
     (spdx-header
-      "First line: # SPDX-License-Identifier: PMPL-1.0-or-later")
+      "First line: # SPDX-License-Identifier: MPL-2.0")
     (rust-toolchain-fix
       "uses: dtolnay/rust-toolchain@SHA\\n        with:\\n          toolchain: stable"))
 
