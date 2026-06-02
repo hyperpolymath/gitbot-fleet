@@ -400,7 +400,23 @@ pub fn translate_all(
             // Skip weak points suppressed by panic-attack's context-aware FP engine.
             // Suppressed = the logic engine found a defensive pattern (e.g. mutex guard,
             // RAII, schema validation) that makes this finding likely a false positive.
+            //
+            // v2.5.5+ classifications (test_context field):
+            //   * `"test_only"` / `"doc"` → typically also `suppressed: true`
+            //     (set by `apply_v255_context_suppression` in panic-attack
+            //     after the kanren rule pass). Defensive: even if a future
+            //     scanner version preserves `suppressed: false` while
+            //     classifying as TestOnly, drop the finding here so test code
+            //     never reaches the fleet.
+            //   * `"production"` → forwarded normally.
+            //   * `None` → predates v2.5.5; treat as production.
             if wp.suppressed {
+                return None;
+            }
+            if matches!(
+                wp.test_context.as_deref(),
+                Some("test_only") | Some("doc")
+            ) {
                 return None;
             }
 
@@ -498,6 +514,7 @@ mod tests {
             description: "AWS_SECRET_KEY found in source".to_string(),
             recommended_attack: vec![],
             suppressed: false,
+            test_context: None,
         };
         let config = PanicbotConfig::default();
         let finding = translate_weak_point(&wp, &config);
@@ -522,6 +539,7 @@ mod tests {
             description: "Something new".to_string(),
             recommended_attack: vec![],
             suppressed: false,
+            test_context: None,
         };
         let config = PanicbotConfig::default();
         let finding = translate_weak_point(&wp, &config);
@@ -541,6 +559,7 @@ mod tests {
             description: "unsafe block".to_string(),
             recommended_attack: vec![],
             suppressed: false,
+            test_context: None,
         };
         let config = PanicbotConfig {
             confidence_overrides: vec![crate::config::ConfidenceOverride {
@@ -563,6 +582,7 @@ mod tests {
                 description: "low severity".to_string(),
                 recommended_attack: vec![],
             suppressed: false,
+            test_context: None,
             },
             WeakPoint {
                 category: "CommandInjection".to_string(),
@@ -571,6 +591,7 @@ mod tests {
                 description: "critical severity".to_string(),
                 recommended_attack: vec![],
             suppressed: false,
+            test_context: None,
             },
         ];
         let config = PanicbotConfig {
@@ -596,6 +617,7 @@ mod tests {
                     description: "fixable".to_string(),
                     recommended_attack: vec![],
             suppressed: false,
+            test_context: None,
                 },
                 &config,
             ),
@@ -607,6 +629,7 @@ mod tests {
                     description: "not fixable".to_string(),
                     recommended_attack: vec![],
             suppressed: false,
+            test_context: None,
                 },
                 &config,
             ),
@@ -642,5 +665,76 @@ mod tests {
             );
         }
         assert_eq!(rule_ids.len(), 25);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // v2.5.5 test_context tests
+    // ─────────────────────────────────────────────────────────────────────
+
+    fn make_wp(category: &str, test_context: Option<&str>, suppressed: bool) -> WeakPoint {
+        WeakPoint {
+            category: category.to_string(),
+            location: Some("src/foo.rs:1".to_string()),
+            severity: "Critical".to_string(),
+            description: "test".to_string(),
+            recommended_attack: vec![],
+            suppressed,
+            test_context: test_context.map(String::from),
+        }
+    }
+
+    #[test]
+    fn translate_all_drops_test_only_findings_even_if_not_suppressed() {
+        // Defensive: even when `suppressed: false`, a `test_context: test_only`
+        // finding should not reach the fleet.
+        let wps = vec![
+            make_wp("UnsafeCode", Some("test_only"), false),
+            make_wp("UnsafeCode", Some("production"), false),
+        ];
+        let config = PanicbotConfig::default();
+        let findings = translate_all(&wps, &config);
+        assert_eq!(
+            findings.len(),
+            1,
+            "test_only finding must be dropped regardless of suppressed flag"
+        );
+    }
+
+    #[test]
+    fn translate_all_drops_doc_findings_even_if_not_suppressed() {
+        let wps = vec![
+            make_wp("PanicPath", Some("doc"), false),
+            make_wp("PanicPath", Some("production"), false),
+        ];
+        let config = PanicbotConfig::default();
+        let findings = translate_all(&wps, &config);
+        assert_eq!(findings.len(), 1, "doc finding must be dropped");
+    }
+
+    #[test]
+    fn translate_all_keeps_production_test_context() {
+        let wps = vec![make_wp("UnsafeCode", Some("production"), false)];
+        let config = PanicbotConfig::default();
+        let findings = translate_all(&wps, &config);
+        assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn translate_all_treats_none_test_context_as_production() {
+        // Pre-v2.5.5 panic-attack reports don't have the field; they should
+        // still be routed.
+        let wps = vec![make_wp("UnsafeCode", None, false)];
+        let config = PanicbotConfig::default();
+        let findings = translate_all(&wps, &config);
+        assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn translate_all_respects_suppressed_independently() {
+        // `suppressed: true` should drop regardless of test_context.
+        let wps = vec![make_wp("UnsafeCode", Some("production"), true)];
+        let config = PanicbotConfig::default();
+        let findings = translate_all(&wps, &config);
+        assert_eq!(findings.len(), 0);
     }
 }

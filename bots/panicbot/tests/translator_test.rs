@@ -26,6 +26,7 @@ fn weak_point(category: &str, severity: &str) -> WeakPoint {
         description: format!("Test finding for {}", category),
         recommended_attack: vec![],
     suppressed: false,
+            test_context: None,
     }
 }
 
@@ -38,6 +39,7 @@ fn weak_point_at(category: &str, severity: &str, location: &str) -> WeakPoint {
         description: format!("Test finding at {}", location),
         recommended_attack: vec![],
     suppressed: false,
+            test_context: None,
     }
 }
 
@@ -310,6 +312,7 @@ fn test_translate_metadata_includes_panic_attack_category() {
         description: "os.system with user input".to_string(),
         recommended_attack: vec!["Memory".to_string(), "Concurrency".to_string()],
     suppressed: false,
+            test_context: None,
     };
     let finding = translator::translate_weak_point(&wp, &config);
 
