@@ -45,7 +45,8 @@
       "MissingVerisimdbFeed": "fix-missing-verisimdb-feed.sh",
       "MissingFeedbackIntegration": "fix-missing-feedback-integration.sh",
       "MissingVexometerHooks": "fix-missing-vexometer-hooks.sh",
-      "TrackedNpmLockfile": "fix-tracked-package-lock.sh"
+      "TrackedNpmLockfile": "fix-tracked-package-lock.sh",
+      "LicensePMPLDrift": "fix-pmpl-drift.sh"
     },
     "by_recipe": {
       "recipe-heredoc-to-install": "fix-heredoc-install.sh",
@@ -102,7 +103,8 @@
       "codeql-cron-monthly": "fix-codeql-cron-monthly.sh",
       "chapel-manpath-guard": "fix-chapel-manpath-guard.sh",
       "chapel-chpl-llvm-export": "fix-chapel-chpl-llvm-export.sh",
-      "chapel-replace-chpl-about-with-version": "fix-chapel-replace-chpl-about.sh"
+      "chapel-replace-chpl-about-with-version": "fix-chapel-replace-chpl-about.sh",
+      "recipe-fix-pmpl-drift": "fix-pmpl-drift.sh"
     }
   }
 }
