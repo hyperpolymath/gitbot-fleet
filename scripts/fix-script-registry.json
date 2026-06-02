@@ -97,7 +97,8 @@
       "recipe-add-feedback-integration": "fix-missing-feedback-integration.sh",
       "recipe-add-vexometer-hooks": "fix-missing-vexometer-hooks.sh",
       "recipe-remove-tracked-package-lock": "fix-tracked-package-lock.sh",
-      "cicd_rules/tracked_npm_lockfile": "fix-tracked-package-lock.sh"
+      "cicd_rules/tracked_npm_lockfile": "fix-tracked-package-lock.sh",
+      "reusable_workflow_sha_bump_needs_propagation": "propagate-sha-bump.sh"
     }
   }
 }
