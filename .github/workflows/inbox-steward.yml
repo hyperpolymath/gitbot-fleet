@@ -69,10 +69,10 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.FARM_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Find PRs that passed all checks
         id: find_prs
@@ -168,7 +168,7 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@v4
 
       - name: Validate PRs
         id: validate
@@ -291,9 +291,7 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          token: ${{ secrets.FARM_PAT }}
+        uses: actions/checkout@v4
 
       - name: Auto-merge PRs
         id: merge
@@ -380,7 +378,7 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@v4
 
       - name: Send dispatch to Hypatia
         env:
