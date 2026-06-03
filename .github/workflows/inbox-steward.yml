@@ -93,12 +93,12 @@ jobs:
           
           # Filter PRs that:
           # 1. Are not draft
-          # 2. Have mergeable_state == "clean" or "has_hooks"
+          # 2. Have mergeable_state == "clean", "has_hooks", or "blocked"
           # 3. Have all required checks passed
           PROCESSABLE_PRs=$(echo "$PRS_JSON" | jq '[.
             [] | select(
               .draft == false and
-              (.mergeable_state == "clean" or .mergeable_state == "has_hooks")
+              (.mergeable_state == "clean" or .mergeable_state == "has_hooks" or .mergeable_state == "blocked")
             )
           ]')
           
@@ -138,7 +138,9 @@ jobs:
             echo "PR #$PR_NUM: $PASSED/$TOTAL_REQUIRED passed, $FAILED failed"
             
             # PR passes if all required checks passed
-            if [ "$FAILED" -eq 0 ] && [ "$TOTAL_REQUIRED" -gt 0 ]; then
+            # Check if PR mergeable state allows merging
+            PR_MERGEABLE=$(echo "$PR" | jq -r '.mergeable_state // "unknown"')
+            if [ "$FAILED" -eq 0 ] && [ "$TOTAL_REQUIRED" -gt 0 ] && [ "$PR_MERGEABLE" != "dirty" ]; then
               FINAL_PRs=$(echo "$FINAL_PRs" | jq --argjson pr "$PR" '. + [$pr]')
               COUNT=$((COUNT + 1))
             fi
