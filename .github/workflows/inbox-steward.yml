@@ -375,9 +375,9 @@ jobs:
 
       - name: Send dispatch to Hypatia
         env:
-          GH_TOKEN: ${{ secrets.HYPATIA_DISPATCH_PAT }}
+          GH_TOKEN: ${{ secrets.FARM_PAT || secrets.GITHUB_TOKEN }}
           PR_COUNT: ${{ needs.identify-passed-prs.outputs.pr_count }}
-          VALIDATED_JSON: ${{ needs.validate-prs.outputs.validated_prs }}
+          VALIDATED_JSON: ${{ needs.validate-prs.outputs.validated_prs || '[]' }}
           MERGED_COUNT: ${{ needs.auto-merge-prs.outputs.merged_count || '0' }}
         run: |
           set -euo pipefail
@@ -408,12 +408,13 @@ jobs:
           echo "Dispatching to Hypatia: $PAYLOAD"
           
           # Send to hypatia repo
-          if gh api -X POST \
+          if [ -n "$GH_TOKEN" ] && gh api -X POST \
               "/repos/hyperpolymath/hypatia/dispatches" \
               --input - <<<"$PAYLOAD" >/dev/null 2>&1; then
             echo "✅ Successfully dispatched to Hypatia"
           else
-            echo "::warning::Failed to dispatch to Hypatia"
+            echo "::warning::Failed to dispatch to Hypatia (missing token or network error)"
+            echo "Continuing without dispatch..."
           fi
 
   # Job 5: Summary
