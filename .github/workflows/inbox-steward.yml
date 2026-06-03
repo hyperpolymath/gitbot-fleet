@@ -68,16 +68,10 @@ jobs:
       pr_count: ${{ steps.find_prs.outputs.pr_count }}
     
     steps:
-      - name: Checkout gitbot-fleet
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Find PRs that passed all checks
         id: find_prs
         env:
-          GH_TOKEN: ${{ secrets.FARM_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           TARGET_REPO: ${{ inputs.repo }}
         run: |
@@ -167,9 +161,6 @@ jobs:
       auto_merge_candidates: ${{ steps.validate.outputs.auto_merge_candidates }}
     
     steps:
-      - name: Checkout gitbot-fleet
-        uses: actions/checkout@v4
-
       - name: Validate PRs
         id: validate
         env:
@@ -292,11 +283,13 @@ jobs:
     steps:
       - name: Checkout gitbot-fleet
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Auto-merge PRs
         id: merge
         env:
-          GH_TOKEN: ${{ secrets.FARM_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CANDIDATES: ${{ needs.validate-prs.outputs.auto_merge_candidates }}
         run: |
           set -euo pipefail
