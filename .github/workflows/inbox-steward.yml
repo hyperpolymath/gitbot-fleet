@@ -386,10 +386,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HYPATIA_DISPATCH_PAT }}
           PR_COUNT: ${{ needs.identify-passed-prs.outputs.pr_count }}
-          VALIDATED_COUNT: ${{ needs.validate-prs.outputs.validated_prs != '[]' && echo $(echo '${{ needs.validate-prs.outputs.validated_prs }}' | jq length) || echo '0' }}
+          VALIDATED_JSON: ${{ needs.validate-prs.outputs.validated_prs }}
           MERGED_COUNT: ${{ needs.auto-merge-prs.outputs.merged_count || '0' }}
         run: |
           set -euo pipefail
+          
+          # Calculate validated count from JSON
+          VALIDATED_COUNT=$(echo "$VALIDATED_JSON" | jq length 2>/dev/null || echo "0")
           
           # Build payload
           PAYLOAD=$(jq -nc \
@@ -432,22 +435,36 @@ jobs:
     steps:
       - name: Generate summary
         run: |
-          cat <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          # Calculate counts
+          PR_COUNT="${{ needs.identify-passed-prs.outputs.pr_count }}"
+          VALIDATED_COUNT=$(echo "${{ needs.validate-prs.outputs.validated_prs }}" | jq length 2>/dev/null || echo "0")
+          AUTO_MERGE_COUNT=$(echo "${{ needs.validate-prs.outputs.auto_merge_candidates }}" | jq length 2>/dev/null || echo "0")
+          MERGED_COUNT="${{ needs.auto-merge-prs.outputs.merged_count || '0' }}"
+          FAILED_COUNT="${{ needs.auto-merge-prs.outputs.failed_count || '0' }}"
+          MERGE_RESULT="${{ needs.auto-merge-prs.result }}"
+          
+          if [ "$MERGE_RESULT" = "success" ]; then
+            MERGE_STATUS="✅"
+          else
+            MERGE_STATUS="❌"
+          fi
+          
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
           # Inbox Steward Summary
           
           | Metric | Count |
           |--------|-------|
-          | Open PRs checked | ${{ needs.identify-passed-prs.outputs.pr_count }} |
-          | Passed all checks | ${{ needs.validate-prs.outputs.validated_prs != '[]' && echo $(echo '${{ needs.validate-prs.outputs.validated_prs }}' | jq length) || echo '0' }} |
-          | Auto-merge candidates | ${{ needs.validate-prs.outputs.auto_merge_candidates != '[]' && echo $(echo '${{ needs.validate-prs.outputs.auto_merge_candidates }}' | jq length) || echo '0' }} |
-          | Auto-merged | ${{ needs.auto-merge-prs.outputs.merged_count || '0' }} |
-          | Merge failures | ${{ needs.auto-merge-prs.outputs.failed_count || '0' }} |
+          | Open PRs checked | $PR_COUNT |
+          | Passed all checks | $VALIDATED_COUNT |
+          | Auto-merge candidates | $AUTO_MERGE_COUNT |
+          | Auto-merged | $MERGED_COUNT |
+          | Merge failures | $FAILED_COUNT |
           
           ## Actions Taken
           
           1. ✅ Identified PRs that passed CICD
           2. ✅ Validated against merge criteria
-          3. ${{ needs.auto-merge-prs.result == 'success' && echo '✅' || echo '❌' }} Auto-merged qualifying PRs
+          3. $MERGE_STATUS Auto-merged qualifying PRs
           4. ✅ Dispatched results to Hypatia for ruleset updates
           5. ✅ Dispatched merge events to .git-private-farm
           
