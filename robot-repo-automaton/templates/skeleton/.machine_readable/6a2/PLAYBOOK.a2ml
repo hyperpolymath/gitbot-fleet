@@ -63,7 +63,7 @@ enforcement-workflow = ".github/workflows/estate-rules.yml"
 # .github/             CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, workflows/
 # .machine_readable/   AI manifests (0.1-AI-MANIFEST.a2ml), 6a2/ checkpoints,
 #                      contractiles/, configs/, anchors/, policies/, scripts/, svc/
-# build/               contractile.just, flake.nix, guix.scm, Containerfile,
+# build/               contractile.just, guix.scm, Containerfile,
 #                      just/*.just (Justfile section imports)
 # docs/                onboarding/, status/, architecture/, governance/  (all .adoc)
 # session/             dispatch.sh, custom-checks.k9, local-hooks.sh

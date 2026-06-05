@@ -69,12 +69,6 @@ __pycache__/
 /obj/
 /bin/
 
-# Nix
-# flake.lock is ignored in the template repo because each project should
-# generate its own lock file on first use. In derived projects, REMOVE this
-# line and track flake.lock for reproducible builds.
-flake.lock
-
 # Haskell
 /.stack-work/
 /dist-newstyle/
@@ -131,7 +125,7 @@ build/
 dist/
 
 # /build/ is a tracked config directory (build orchestration: contractile.just,
-# flake.nix, just/*.just, etc.) introduced in chore/root-cleanup. Whitelist
+# guix.scm, just/*.just, etc.) introduced in chore/root-cleanup. Whitelist
 # root-level /build/ so its contents are tracked. The blanket `build/` rule
 # above still ignores any nested `build/` directories (e.g. Rust crate
 # target/build/) — only the root-level path is exempt.
