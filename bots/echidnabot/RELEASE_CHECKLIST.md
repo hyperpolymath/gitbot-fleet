@@ -207,7 +207,6 @@ Complete checklist for making echidnabot a perfect release.
 3. **This Month**
    - Achieve MVP release (v0.2)
    - 50% test coverage
-   - flake.nix packaging
 
 4. **Next Quarter**
    - v1.0 production release

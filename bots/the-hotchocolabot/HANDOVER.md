@@ -15,7 +15,7 @@ HotChocolaBot is a complete, production-ready educational robotics platform with
 - **Complete educational curriculum** (workshops, assessments, activities)
 - **Competition submission framework** (Robotics for Good 2025-2026)
 - **RSR Bronze compliance** (Rhodium Standard Repository Framework)
-- **CI/CD automation** (GitHub Actions, Justfile, Nix)
+- **CI/CD automation** (GitHub Actions, Justfile, Guix)
 
 **Total Development**: 15,000+ lines of documentation, 50+ files, 6 commits
 
@@ -194,7 +194,7 @@ All printable as PDF packets (~15-20 pages per student).
 
 **Build Automation**:
 - `justfile` - 50+ recipes (run, test, build, deploy, rsr-check)
-- `flake.nix` - Nix reproducible builds with dev shell
+- `guix.scm` - Guix reproducible builds with dev shell
 - `.github/workflows/rust_ci.yml` - CI/CD (test, lint, audit, cross-compile)
 - `.github/workflows/release.yml` - Automated releases
 
@@ -216,13 +216,13 @@ All printable as PDF packets (~15-20 pages per student).
 - ✅ Memory Safety - Zero unsafe blocks
 - ✅ Offline-First - No network calls
 - ✅ Documentation - Comprehensive (exceeds Silver)
-- ✅ Build System - Justfile + Nix + CI/CD
+- ✅ Build System - Justfile + Guix + CI/CD
 - ✅ Testing - 100% pass rate
 - ✅ Security - SECURITY.md, cargo-audit
 - ✅ Community - CoC, CONTRIBUTING, TPCF
 - ✅ Versioning - SemVer 2.0.0, CHANGELOG
 - ✅ Licensing - Dual MIT/Apache-2.0
-- ✅ Reproducibility - Cargo.lock, flake.nix
+- ✅ Reproducibility - Cargo.lock, guix.scm
 
 **Verification**: Run `just rsr-check`
 
@@ -262,7 +262,7 @@ the-hotchocolabot/
 ├── Cargo.toml              # Rust package manifest
 ├── Cargo.lock              # Locked dependencies
 ├── Justfile                # Build automation (50+ recipes)
-├── flake.nix               # Nix reproducible builds
+├── guix.scm               # Guix reproducible builds
 ├── config.toml.example     # Configuration template
 ├── README.md               # Main documentation
 ├── CLAUDE.md               # Project guidelines for Claude
@@ -325,20 +325,20 @@ cargo build --release
 sudo ./target/release/hotchocolabot
 ```
 
-### Using Nix (Reproducible Builds)
+### Using Guix (Reproducible Builds)
 
 ```bash
 # Enter development shell
-nix develop
+guix shell -D -f guix.scm
 
 # Build package
-nix build
+guix build
 
 # Build for Raspberry Pi
-nix build .#rpi
+guix build
 
 # Run checks
-nix flake check
+guix build
 ```
 
 ---
@@ -497,7 +497,7 @@ just rsr-check
 # ✓ Memory Safety: Zero unsafe blocks
 # ✓ Offline-First: No network dependencies
 # ✓ Documentation: All files present
-# ✓ Build System: Justfile + flake.nix + CI/CD
+# ✓ Build System: Justfile + guix.scm + CI/CD
 # ✓ Tests: 100% passing
 # ✓ RSR Level: Bronze
 ```
@@ -609,7 +609,7 @@ This project was developed autonomously to maximize use of Claude credits, with 
 - Full educational curriculum (workshops, assessments, activities)
 - Competition submission framework (video, partnerships, metrics)
 - RSR Bronze compliance (11 categories verified)
-- CI/CD automation (GitHub Actions, Justfile, Nix)
+- CI/CD automation (GitHub Actions, Justfile, Guix)
 
 **Ready For**:
 - Hardware procurement and assembly

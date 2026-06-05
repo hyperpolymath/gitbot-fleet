@@ -101,7 +101,7 @@ formal verification (SPARK seam).
 
 - ✅ `Cargo.lock` pins exact crate versions
 - ✅ Multi-stage `Containerfile` for containerised reproducibility
-- ⚠️ No Nix/Guix flake yet (could add if needed)
+- ⚠️ No guix.scm yet (Guix is the canonical packager; add if needed)
 
 **Assessment**: Reproducible via `Cargo.lock` + the Containerfile.
 
@@ -125,7 +125,7 @@ formal verification (SPARK seam).
 **Additional requirements:**
 - Formal verification (SPARK, TLA+, or equivalent)
 - Zero critical dependencies or all dependencies verified
-- Reproducible builds (Nix/Guix)
+- Reproducible builds (Guix)
 - Multi-language verification
 - Security audit
 
@@ -192,7 +192,7 @@ ls -la ../../.github/workflows/
 
 ### Future Enhancements (Optional)
 
-- [ ] Add a Nix/Guix flake for hermetic builds
+- [ ] Add a guix.scm for hermetic builds
 - [ ] Add more integration tests
 - [ ] Add a recurring `cargo audit` security gate
 - [ ] Formally verify the `domain.rs` numeric core in SPARK/Ada and link it
