@@ -195,7 +195,7 @@ rsr-check:
     @echo ""
     @echo "=== Build System ==="
     @test -f justfile && echo "✓ justfile" || echo "✗ justfile missing"
-    @test -f flake.nix && echo "✓ flake.nix" || echo "✗ flake.nix missing"
+    @test -f guix.scm && echo "✓ guix.scm" || echo "✗ guix.scm missing"
     @test -f .github/workflows/rust_ci.yml && echo "✓ CI/CD (GitHub Actions)" || echo "✗ CI/CD missing"
     @echo ""
     @echo "=== Test Coverage ==="

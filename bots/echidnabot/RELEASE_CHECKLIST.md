@@ -140,7 +140,6 @@ Complete checklist for making echidnabot a perfect release.
 - [x] Justfile for task automation
 
 ### To Add
-- [ ] flake.nix for Nix users
 - [ ] cargo-deb configuration
 - [ ] cargo-rpm configuration
 - [ ] Homebrew formula (optional)
