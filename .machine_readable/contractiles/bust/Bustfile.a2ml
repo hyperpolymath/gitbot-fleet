@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MPL-2.0
+# Bustfile — Breakage and Rollback Contract
+name = "bustfile"
+
+
+[bustfile]
+version = "1.0.0"
+format = "a2ml"
+
+[scenarios]
+bad-fix-script = "git revert the fix commit; fix scripts are idempotent, so a re-run after the fix is safe"
+dispatch-runner-failure = "halt dispatch-runner; inspect the JSONL manifest; a failed dispatch leaves the target repo untouched (no partial writes)"
+bot-repeated-failure = "auto-quarantine engages at 5+ failures or >30% false-positive rate; clear only after a root-cause fix"
+bad-bot-pr = "close the bot PR; revert any merged commit; confidence reverts via batch-rollback"
+
+[escalation]
+level-1 = "revert the offending commit (reversible, low blast radius)"
+level-2 = "quarantine the misbehaving bot (rate-limiter / quarantine subsystem)"
+level-3 = "batch-rollback the dispatch batch with confidence revert"
+level-4 = "force-push to main — PROHIBITED without explicit user confirmation"
+level-5 = "registry-level (delete/archive a repo) — human-only, never by AI"
+
+[reversibility]
+backup-before-destructive = true
+rollback-mechanism = "git-revert"
+batch-rollback-available = true
