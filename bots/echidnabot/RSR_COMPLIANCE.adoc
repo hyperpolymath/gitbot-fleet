@@ -55,7 +55,7 @@ This document describes the Rhodium Standard Repository (RSR) compliance status 
 |LICENSE.txt (AGPL + Palimpsest) |✓ |MPL-2.0
 |Containerfile present |✓ |Multi-stage build with Chainguard base
 |guix.scm present |✓ |Guix package definition (primary)
-|flake.nix present |✗ |TODO: Add Nix flake (fallback)
+|Nix flake (flake.nix) |N/A |Removed 2026-06-05 — Guix-only policy (guix.scm above)
 |===
 
 == Security Compliance
@@ -80,7 +80,6 @@ None
 == Action Items
 
 * [ ] Add Justfile for task running
-* [ ] Add flake.nix for Nix users (fallback package manager)
 
 == References
 
