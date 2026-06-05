@@ -2,8 +2,8 @@
 git clone https://github.com/hyperpolymath/gitbot-fleet.git
 cd gitbot-fleet
 
-# Using Nix (recommended for reproducibility)
-nix develop
+# Using Guix (recommended for reproducibility)
+guix shell -D -f guix.scm
 
 # Or using toolbox/distrobox
 toolbox create gitbot-fleet-dev
@@ -41,7 +41,7 @@ gitbot-fleet/
 ├── MAINTAINERS.md
 ├── README.adoc
 ├── SECURITY.md
-├── flake.nix            # Nix flake (Perimeter 1)
+├── guix.scm             # Guix manifest (Perimeter 1)
 └── Justfile             # Task runner (Perimeter 1)
 ```
 
