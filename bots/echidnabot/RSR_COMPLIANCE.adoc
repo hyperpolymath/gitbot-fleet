@@ -33,8 +33,7 @@ This document describes the Rhodium Standard Repository (RSR) compliance status 
 === Tier 2 Languages (Acceptable)
 * Nickel (configuration)
 * Racket (scripting)
-* Guile Scheme ✓ (state management - META.scm, STATE.scm, ECOSYSTEM.scm)
-* Nix (derivations)
+* Guile Scheme ✓ (state management - META.scm, STATE.scm, ECOSYSTEM.scm; Guix derivations)
 
 === Restricted Languages
 * Python - Only allowed in salt/ directories for SaltStack
