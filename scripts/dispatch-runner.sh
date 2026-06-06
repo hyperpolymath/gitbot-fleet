@@ -135,6 +135,88 @@ OUTCOME_FILE="${HYPATIA_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
 OUTCOME_FILE_CENTRAL="${VERISIMDB_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
 mkdir -p "$(dirname "$OUTCOME_FILE")"
 
+# --- Hypatia closed-loop contract ---
+#
+# Per hypatia/docs/operations/dispatch-runner-contract.adoc, after each
+# fix the runner MUST invoke `mix hypatia.record_outcome` so Bayesian
+# confidence updating, auto-quarantine, and re-scan verification all see
+# real evidence. Without this call, every recipe stays at
+# :insufficient_data and the closed-loop verification metric (PR #309)
+# never engages. Closes estate-audit blocker C15.
+#
+# Configuration via env:
+#   HYPATIA_HOME             path to the hypatia checkout (defaults to
+#                            $REPOS_BASE/hypatia)
+#   HYPATIA_OUTCOME_REPORT   set to "off" to disable mix calls (e.g. a
+#                            CI runner without Elixir/mix on PATH);
+#                            defaults to "on"
+#   HYPATIA_BATCH_ID         when set, exit-2 hints suggest
+#                            `mix hypatia.rollback_batch $HYPATIA_BATCH_ID`
+#
+# Exit codes from the mix task (consumed below):
+#   0  outcome recorded; re-scan verified clean OR scan_unavailable
+#   2  outcome recorded BUT re-scan still flags the weak point
+#   1  bad arguments / unrecoverable error
+HYPATIA_HOME="${HYPATIA_HOME:-${REPOS_BASE}/hypatia}"
+HYPATIA_OUTCOME_REPORT="${HYPATIA_OUTCOME_REPORT:-on}"
+HYPATIA_BATCH_ID="${HYPATIA_BATCH_ID:-}"
+
+hypatia_record_outcome() {
+    local recipe_id="$1"
+    local repo="$2"
+    local file="$3"
+    local outcome="$4"
+
+    # Opt-out short-circuit.
+    if [[ "$HYPATIA_OUTCOME_REPORT" != "on" ]]; then
+        return 0
+    fi
+    # Precondition: hypatia checkout reachable and mix on PATH.
+    if [[ ! -d "$HYPATIA_HOME" ]]; then
+        echo "        WARN: hypatia outcome skipped — \$HYPATIA_HOME=$HYPATIA_HOME not a directory" >&2
+        return 0
+    fi
+    if ! command -v mix &>/dev/null; then
+        echo "        WARN: hypatia outcome skipped — mix not on PATH" >&2
+        return 0
+    fi
+    # Empty / placeholder recipe_id → skip silently rather than poison
+    # hypatia's recipe-health metric with anonymous entries.
+    if [[ -z "$recipe_id" || "$recipe_id" == "none" || "$recipe_id" == "null" ]]; then
+        return 0
+    fi
+
+    # Repo-grain fixes pass "." for --file (contract permits any
+    # path-inside-repo string; "." is the explicit repo-root marker).
+    local file_arg="${file:-.}"
+    [[ -z "$file_arg" ]] && file_arg="."
+
+    local rc=0
+    (
+        cd "$HYPATIA_HOME"
+        mix hypatia.record_outcome \
+            --recipe   "$recipe_id" \
+            --repo     "$repo" \
+            --file     "$file_arg" \
+            --outcome  "$outcome"
+    ) || rc=$?
+
+    case "$rc" in
+        0)
+            ;;
+        2)
+            echo "        ::warning::Recipe $recipe_id still flags $repo/$file_arg after fix" >&2
+            if [[ -n "$HYPATIA_BATCH_ID" ]]; then
+                echo "        ::warning::consider 'mix hypatia.rollback_batch $HYPATIA_BATCH_ID'" >&2
+            fi
+            ;;
+        *)
+            echo "        ::error::record_outcome failed for $repo/$file_arg: exit $rc" >&2
+            ;;
+    esac
+    return "$rc"
+}
+
 record_outcome() {
     local pattern_id="$1"
     local recipe_id="$2"
@@ -162,6 +244,29 @@ record_outcome() {
     if [[ -d "$(dirname "$OUTCOME_FILE_CENTRAL")" ]] || mkdir -p "$(dirname "$OUTCOME_FILE_CENTRAL")" 2>/dev/null; then
         echo "$json" >> "$OUTCOME_FILE_CENTRAL"
     fi
+
+    # Hypatia closed-loop contract — best-effort, never fails the dispatch
+    # loop. Map shell outcomes to the contract's outcome vocabulary:
+    #   success/failure  → pass through
+    #   refused_*        → false_positive (the recipe is misfiring, not
+    #                      the code; surfaces this to auto-quarantine)
+    #   anything else    → skip (don't poison the metric).
+    local hypatia_outcome
+    case "$outcome" in
+        success)
+            hypatia_outcome="success"
+            ;;
+        failure)
+            hypatia_outcome="failure"
+            ;;
+        refused_license_policy|refused_*)
+            hypatia_outcome="false_positive"
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+    hypatia_record_outcome "$recipe_id" "$repo" "$file" "$hypatia_outcome" || true
 }
 
 # --- Execute a single manifest entry ---

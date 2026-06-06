@@ -14,8 +14,17 @@ permissions:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Presence-gate the FARM_DISPATCH_TOKEN secret. Without this, forks /
+    # PR-from-fork runs reach the dispatch step with an empty token and
+    # fail with an opaque 401 — see hypatia `secret_action_without_presence_gate`.
+    # Hoisted to job-level so the gate covers any future steps that also
+    # consume the secret.
+    env:
+      HAS_TOKEN: ${{ secrets.FARM_DISPATCH_TOKEN != '' }}
     steps:
       - name: Trigger Propagation
+        if: env.HAS_TOKEN == 'true'
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v3
         with:
           token: ${{ secrets.FARM_DISPATCH_TOKEN }}
@@ -30,4 +39,9 @@ jobs:
             }
 
       - name: Confirm
+        if: env.HAS_TOKEN == 'true'
         run: echo "::notice::Propagation triggered for ${{ github.event.repository.name }}"
+
+      - name: Skip-reason notice
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::FARM_DISPATCH_TOKEN unavailable in this context — propagation skipped (expected on forks / PRs from forks)."

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # rhodibot - Justfile Task Runner
 #
 # IMPORTANT: This file MUST be named "Justfile" (capital J) for RSR compliance.
@@ -113,8 +113,8 @@ validate-rsr:
     for f in .well-known/security.txt .well-known/ai.txt .well-known/humans.txt; do
         [ -f "$f" ] || MISSING="$MISSING $f"
     done
-    if [ ! -f "guix.scm" ] && [ ! -f ".guix-channel" ] && [ ! -f "flake.nix" ]; then
-        MISSING="$MISSING guix.scm/flake.nix"
+    if [ ! -f "guix.scm" ] && [ ! -f ".guix-channel" ]; then
+        MISSING="$MISSING guix.scm"
     fi
     if [ -n "$MISSING" ]; then
         echo "MISSING:$MISSING"

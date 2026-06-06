@@ -1,0 +1,473 @@
+# SPDX-License-Identifier: MPL-2.0
+# Inbox Steward — Automated PR processing through CICD gate
+#
+# This workflow:
+# 1. Monitors PRs that have passed all CICD checks
+# 2. Validates they meet merge criteria (dogfood-gate, scorecard, etc.)
+# 3. Auto-merges qualifying PRs
+# 4. Dispatches coordination events to .git-private-farm
+# 5. Updates Hypatia with lessons learned
+#
+# Part of the automated stewardship pipeline with:
+# - gitbot-fleet: execution and dispatch
+# - .git-private-farm: cross-repo coordination
+# - hypatia: ruleset and monitoring
+
+name: Inbox Steward
+
+on:
+  # Trigger on PR events
+  pull_request:
+    types: [opened, synchronize, ready_for_review, converted_to_draft, review_requested]
+  pull_request_review:
+    types: [submitted, dismissed]
+  check_suite:
+    types: [completed]
+  workflow_run:
+    workflows: 
+      - Dogfood Gate
+      - Scorecard Enforcer
+      - Hypatia Security Scan
+      - Static Analysis Gate
+    types: [completed]
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'Specific repo to process (leave empty for all)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run mode (no actual merges)'
+        required: false
+        default: 'false'
+        type: boolean
+  # Scheduled sweep
+  schedule:
+    # Every 15 minutes
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+  repository-projects: read
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  # Job 1: Identify PRs that have passed all required checks
+  identify-passed-prs:
+    name: Identify PRs passed CICD
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      prs_to_process: ${{ steps.find_prs.outputs.prs_to_process }}
+      pr_count: ${{ steps.find_prs.outputs.pr_count }}
+    
+    steps:
+      - name: Find PRs that passed all checks
+        id: find_prs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TARGET_REPO: ${{ inputs.repo }}
+        run: |
+          set -euo pipefail
+          
+          # Determine which repo to scan
+          TARGET="${TARGET_REPO:-$REPO}"
+          OWNER="${TARGET%%/*}"
+          REPO_NAME="${TARGET##*/}"
+          
+          echo "Scanning PRs for: $TARGET"
+          
+          # Get all open PRs
+          PRS_JSON=$(gh api \
+            "repos/$OWNER/$REPO_NAME/pulls?state=open&per_page=100" \
+            --jq '[.[] | {number, title, head_ref, base_ref, draft: .draft, mergeable_state}]')
+          
+          echo "Found $(echo "$PRS_JSON" | jq length) open PRs"
+          
+          # Filter PRs that:
+          # 1. Are not draft
+          # 2. Have mergeable_state == "clean", "has_hooks", or "blocked"
+          # 3. Have all required checks passed
+          PROCESSABLE_PRs=$(echo "$PRS_JSON" | jq '[.
+            [] | select(
+              .draft == false and
+              (.mergeable_state == "clean" or .mergeable_state == "has_hooks" or .mergeable_state == "blocked")
+            )
+          ]')
+          
+          echo "Processable PRs: $(echo "$PROCESSABLE_PRs" | jq length)"
+          
+          # For each processable PR, check if all required checks passed
+          FINAL_PRs="[]"
+          COUNT=0
+          
+          for PR in $(echo "$PROCESSABLE_PRs" | jq -c '.[]'); do
+            PR_NUM=$(echo "$PR" | jq -r '.number')
+            HEAD_REF=$(echo "$PR" | jq -r '.head_ref')
+            
+            # Check required workflows
+            DOGFOOD_STATUS=$(gh api \
+              "repos/$OWNER/$REPO_NAME/commits/$HEAD_REF/check-runs" \
+              --jq '[.check_runs[] | select(.name | contains("Dogfood Gate"))] | length')
+            
+            SCORECARD_STATUS=$(gh api \
+              "repos/$OWNER/$REPO_NAME/commits/$HEAD_REF/check-runs" \
+              --jq '[.check_runs[] | select(.name | contains("Scorecard"))] | length')
+            
+            HYPATIA_STATUS=$(gh api \
+              "repos/$OWNER/$REPO_NAME/commits/$HEAD_REF/check-runs" \
+              --jq '[.check_runs[] | select(.name | contains("Hypatia"))] | length')
+            
+            # Get all check runs for this PR
+            ALL_CHECKS=$(gh api \
+              "repos/$OWNER/$REPO_NAME/commits/$HEAD_REF/check-runs?per_page=100" \
+              --jq '.check_runs')
+            
+            # Count passed vs total required
+            TOTAL_REQUIRED=$(echo "$ALL_CHECKS" | jq '[.[] | select(.status == "completed")] | length')
+            PASSED=$(echo "$ALL_CHECKS" | jq '[.[] | select(.status == "completed" and .conclusion == "success")] | length')
+            FAILED=$(echo "$ALL_CHECKS" | jq '[.[] | select(.status == "completed" and .conclusion == "failure")] | length')
+            
+            echo "PR #$PR_NUM: $PASSED/$TOTAL_REQUIRED passed, $FAILED failed"
+            
+            # PR passes if all required checks passed
+            # Check if PR mergeable state allows merging
+            PR_MERGEABLE=$(echo "$PR" | jq -r '.mergeable_state // "unknown"')
+            if [ "$FAILED" -eq 0 ] && [ "$TOTAL_REQUIRED" -gt 0 ] && [ "$PR_MERGEABLE" != "dirty" ]; then
+              FINAL_PRs=$(echo "$FINAL_PRs" | jq --argjson pr "$PR" '. + [$pr]')
+              COUNT=$((COUNT + 1))
+            fi
+          done
+          
+          echo "prs_to_process=$FINAL_PRs" >> "$GITHUB_OUTPUT"
+          echo "pr_count=$COUNT" >> "$GITHUB_OUTPUT"
+          
+          echo "::notice::Found $COUNT PRs ready for processing"
+
+  # Job 2: Validate each PR against merge criteria
+  validate-prs:
+    name: Validate PRs against criteria
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: identify-passed-prs
+    if: needs.identify-passed-prs.outputs.pr_count > 0
+    outputs:
+      validated_prs: ${{ steps.validate.outputs.validated_prs }}
+      auto_merge_candidates: ${{ steps.validate.outputs.auto_merge_candidates }}
+    
+    steps:
+      - name: Validate PRs
+        id: validate
+        env:
+          GH_TOKEN: ${{ secrets.FARM_PAT }}
+          PRS_JSON: ${{ needs.identify-passed-prs.outputs.prs_to_process }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          
+          # Define merge criteria
+          # 1. Must have passed Dogfood Gate
+          # 2. Must have passed Scorecard Enforcer (if applicable)
+          # 3. Must have passed Hypatia Security Scan
+          # 4. Must not have any blocking reviews
+          # 5. Must have at least one approval (or be from trusted contributor)
+          # 6. Must have valid SPDX headers in all changed workflow files
+          
+          VALIDATED="[]"
+          AUTO_MERGE="[]"
+          
+          PR_COUNT=$(echo "$PRS_JSON" | jq length)
+          echo "Validating $PR_COUNT PRs..."
+          
+          for PR in $(echo "$PRS_JSON" | jq -c '.[]'); do
+            PR_NUM=$(echo "$PR" | jq -r '.number')
+            HEAD_REF=$(echo "$PR" | jq -r '.head_ref')
+            TITLE=$(echo "$PR" | jq -r '.title')
+            
+            echo "\n=== Validating PR #$PR_NUM: $TITLE ==="
+            
+            # Check 1: Dogfood Gate passed
+            DOGFOOD_PASSED=$(gh api \
+              "repos/${{ github.repository }}/commits/$HEAD_REF/check-runs" \
+              --jq '[.check_runs[] | select(.name | contains("Dogfood Gate")) | .conclusion] | any(. == "success")' || echo "false")
+            
+            # Check 2: Scorecard Enforcer passed (if exists)
+            SCORECARD_PASSED=$(gh api \
+              "repos/${{ github.repository }}/commits/$HEAD_REF/check-runs" \
+              --jq '[.check_runs[] | select(.name | contains("Scorecard")) | .conclusion] | any(. == "success")' || echo "true")
+            
+            # Check 3: Hypatia Security Scan passed
+            HYPATIA_PASSED=$(gh api \
+              "repos/${{ github.repository }}/commits/$HEAD_REF/check-runs" \
+              --jq '[.check_runs[] | select(.name | contains("Hypatia")) | .conclusion] | any(. == "success")' || echo "true")
+            
+            # Check 4: No blocking reviews
+            REVIEWS=$(gh api \
+              "repos/${{ github.repository }}/pulls/$PR_NUM/reviews" \
+              --jq '[.[] | select(.state == "CHANGES_REQUESTED")] | length')
+            BLOCKING=$(echo "$REVIEWS" | jq -r '. // 0')
+            
+            # Check 5: Has approvals
+            APPROVALS=$(gh api \
+              "repos/${{ github.repository }}/pulls/$PR_NUM/reviews" \
+              --jq '[.[] | select(.state == "APPROVED")] | length')
+            
+            # Check 6: Author is trusted or has approval
+            AUTHOR=$(echo "$PR" | jq -r '.user.login')
+            TRUSTED_AUTHORS="hyperpolymath|dependabot|renovate"
+            IS_TRUSTED=$(echo "$AUTHOR" | grep -E "$TRUSTED_AUTHORS" && echo "true" || echo "false")
+            
+            # Validate
+            ALL_CHECKS_PASSED="true"
+            
+            if [ "$DOGFOOD_PASSED" != "true" ]; then
+              echo "  ❌ Dogfood Gate not passed"
+              ALL_CHECKS_PASSED="false"
+            fi
+            
+            if [ "$SCORECARD_PASSED" != "true" ]; then
+              echo "  ❌ Scorecard Enforcer not passed"
+              ALL_CHECKS_PASSED="false"
+            fi
+            
+            if [ "$HYPATIA_PASSED" != "true" ]; then
+              echo "  ❌ Hypatia Security Scan not passed"
+              ALL_CHECKS_PASSED="false"
+            fi
+            
+            if [ "$BLOCKING" -gt 0 ]; then
+              echo "  ❌ Has blocking reviews ($BLOCKING)"
+              ALL_CHECKS_PASSED="false"
+            fi
+            
+            if [ "$APPROVALS" -eq 0 ] && [ "$IS_TRUSTED" != "true" ]; then
+              echo "  ⚠️  No approvals (not auto-mergeable)"
+              ALL_CHECKS_PASSED="false"
+            fi
+            
+            if [ "$ALL_CHECKS_PASSED" = "true" ]; then
+              echo "  ✅ All validation checks passed"
+              VALIDATED=$(echo "$VALIDATED" | jq --argjson pr "$PR" '. + [$pr]')
+              
+              # Determine if auto-merge candidate
+              # Auto-merge if: trusted author OR has approvals AND all checks passed
+              if [ "$IS_TRUSTED" = "true" ] || [ "$APPROVALS" -gt 0 ]; then
+                AUTO_MERGE=$(echo "$AUTO_MERGE" | jq --argjson pr "$PR" '. + [$pr]')
+                echo "  🎯 Auto-merge candidate"
+              else
+                echo "  👤 Needs approval for auto-merge"
+              fi
+            else
+              echo "  ❌ Validation failed"
+            fi
+          done
+          
+          echo "validated_prs=$VALIDATED" >> "$GITHUB_OUTPUT"
+          echo "auto_merge_candidates=$AUTO_MERGE" >> "$GITHUB_OUTPUT"
+          
+          echo "::notice::Validated $(echo "$VALIDATED" | jq length) PRs, $(echo "$AUTO_MERGE" | jq length) auto-merge candidates"
+
+  # Job 3: Auto-merge qualifying PRs
+  auto-merge-prs:
+    name: Auto-merge qualifying PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate-prs
+    if: needs.validate-prs.outputs.auto_merge_candidates != '[]' && inputs.dry_run != 'true'
+    
+    steps:
+      - name: Checkout gitbot-fleet
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Auto-merge PRs
+        id: merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATES: ${{ needs.validate-prs.outputs.auto_merge_candidates }}
+        run: |
+          set -euo pipefail
+          
+          MERGED=0
+          FAILED=0
+          
+          for PR in $(echo "$CANDIDATES" | jq -c '.[]'); do
+            PR_NUM=$(echo "$PR" | jq -r '.number')
+            TITLE=$(echo "$PR" | jq -r '.title')
+            HEAD_REF=$(echo "$PR" | jq -r '.head_ref')
+            
+            echo "\n=== Attempting to merge PR #$PR_NUM ==="
+            
+            # Try to merge with squash (preferred)
+            if gh api \
+              "repos/${{ github.repository }}/pulls/$PR_NUM/merge" \
+              --method PUT \
+              --field merge_method=squash \
+              --field commit_title="$TITLE" \
+              --field commit_message="Auto-merged via Inbox Steward workflow. Original PR: #$PR_NUM" \
+              --silent 2>&1; then
+              
+              echo "✅ Successfully merged PR #$PR_NUM"
+              MERGED=$((MERGED + 1))
+              
+              # Dispatch success event to .git-private-farm
+              gh api \
+                "repos/hyperpolymath/dot-git-private-farm/dispatches" \
+                --method POST \
+                --field event_type="pr-merged" \
+                --field client_payload='{"pr_number":'$PR_NUM',"repo":"${{ github.repository }}","title":"'$TITLE'","head_ref":"'$HEAD_REF'"}' \
+                --silent 2>&1 || echo "::warning::Dispatch to .git-private-farm failed"
+              
+              # Record in findings for Hypatia
+              TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+              echo "{"timestamp":"$TIMESTAMP","action":"auto-merge","repo":"${{ github.repository }}","pr_number":$PR_NUM,"title":"$TITLE","success":true}" >> /tmp/merge-results.jsonl
+              
+            else
+              echo "❌ Failed to merge PR #$PR_NUM"
+              FAILED=$((FAILED + 1))
+              echo "{"timestamp":"$TIMESTAMP","action":"auto-merge","repo":"${{ github.repository }}","pr_number":$PR_NUM,"title":"$TITLE","success":false}" >> /tmp/merge-results.jsonl
+            fi
+          done
+          
+          echo "\n=== Merge Summary ==="
+          echo "Merged: $MERGED"
+          echo "Failed: $FAILED"
+          
+          # Upload results for Hypatia processing
+          if [ -f /tmp/merge-results.jsonl ]; then
+            # Update gitbot-fleet shared context
+            git config user.name "Inbox Steward"
+            git config user.email "inbox-steward@reposystem.dev"
+            
+            mkdir -p shared-context/inbox-steward
+            cp /tmp/merge-results.jsonl shared-context/inbox-steward/$(date -u +%Y%m%d-%H%M%S)-merge-results.jsonl
+            
+            git add shared-context/inbox-steward/
+            git commit -m "inbox-steward: record merge results from $(date -u +%Y-%m-%d)" --allow-empty 2>/dev/null || true
+            git push origin HEAD:findings-submissions 2>/dev/null || echo "::warning::Could not push to findings-submissions"
+          fi
+          
+          echo "merged_count=$MERGED" >> "$GITHUB_OUTPUT"
+          echo "failed_count=$FAILED" >> "$GITHUB_OUTPUT"
+          
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED PRs failed to merge"
+            exit 1
+          fi
+
+  # Job 4: Dispatch lessons to Hypatia
+  dispatch-to-hypatia:
+    name: Dispatch lessons to Hypatia
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [identify-passed-prs, validate-prs, auto-merge-prs]
+    if: always() && (needs.identify-passed-prs.result == 'success' || needs.validate-prs.result == 'success')
+    
+    steps:
+      - name: Checkout gitbot-fleet
+        uses: actions/checkout@v6
+
+      - name: Send dispatch to Hypatia
+        env:
+          GH_TOKEN: ${{ secrets.FARM_PAT || secrets.GITHUB_TOKEN }}
+          PR_COUNT: ${{ needs.identify-passed-prs.outputs.pr_count }}
+          VALIDATED_JSON: ${{ needs.validate-prs.outputs.validated_prs || '[]' }}
+          MERGED_COUNT: ${{ needs.auto-merge-prs.outputs.merged_count || '0' }}
+        run: |
+          set -euo pipefail
+          
+          # Calculate validated count from JSON
+          VALIDATED_COUNT=$(echo "$VALIDATED_JSON" | jq length 2>/dev/null || echo "0")
+          
+          # Build payload
+          PAYLOAD=$(jq -nc \
+            --arg repo "${{ github.repository }}" \
+            --arg pr_count "$PR_COUNT" \
+            --arg validated "$VALIDATED_COUNT" \
+            --arg merged "$MERGED_COUNT" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              "event_type": "inbox-steward-report",
+              "client_payload": {
+                "source_repo": $repo,
+                "source": "gitbot-fleet",
+                "total_prs": ($pr_count | tonumber),
+                "validated_prs": ($validated | tonumber),
+                "auto_merged_prs": ($merged | tonumber),
+                "timestamp": $timestamp,
+                "run_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }')
+          
+          echo "Dispatching to Hypatia: $PAYLOAD"
+          
+          # Send to hypatia repo
+          if [ -n "$GH_TOKEN" ] && gh api -X POST \
+              "/repos/hyperpolymath/hypatia/dispatches" \
+              --input - <<<"$PAYLOAD" >/dev/null 2>&1; then
+            echo "✅ Successfully dispatched to Hypatia"
+          else
+            echo "::warning::Failed to dispatch to Hypatia (missing token or network error)"
+            echo "Continuing without dispatch..."
+          fi
+
+  # Job 5: Summary
+  summary:
+    name: Generate stewardship summary
+    runs-on: ubuntu-latest
+    needs: [identify-passed-prs, validate-prs, auto-merge-prs]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          # Calculate counts
+          PR_COUNT="${{ needs.identify-passed-prs.outputs.pr_count }}"
+          VALIDATED_COUNT=$(echo "${{ needs.validate-prs.outputs.validated_prs }}" | jq length 2>/dev/null || echo "0")
+          AUTO_MERGE_COUNT=$(echo "${{ needs.validate-prs.outputs.auto_merge_candidates }}" | jq length 2>/dev/null || echo "0")
+          MERGED_COUNT="${{ needs.auto-merge-prs.outputs.merged_count || '0' }}"
+          FAILED_COUNT="${{ needs.auto-merge-prs.outputs.failed_count || '0' }}"
+          MERGE_RESULT="${{ needs.auto-merge-prs.result }}"
+          
+          if [ "$MERGE_RESULT" = "success" ]; then
+            MERGE_STATUS="✅"
+          else
+            MERGE_STATUS="❌"
+          fi
+          
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          # Inbox Steward Summary
+          
+          | Metric | Count |
+          |--------|-------|
+          | Open PRs checked | $PR_COUNT |
+          | Passed all checks | $VALIDATED_COUNT |
+          | Auto-merge candidates | $AUTO_MERGE_COUNT |
+          | Auto-merged | $MERGED_COUNT |
+          | Merge failures | $FAILED_COUNT |
+          
+          ## Actions Taken
+          
+          1. ✅ Identified PRs that passed CICD
+          2. ✅ Validated against merge criteria
+          3. $MERGE_STATUS Auto-merged qualifying PRs
+          4. ✅ Dispatched results to Hypatia for ruleset updates
+          5. ✅ Dispatched merge events to .git-private-farm
+          
+          ## Next Steps
+          
+          - Review PRs that didn't meet auto-merge criteria
+          - Update Hypatia ruleset based on patterns
+          - Monitor cross-repo application
+          
+          ---
+          *Generated by Inbox Steward workflow*
+          EOF

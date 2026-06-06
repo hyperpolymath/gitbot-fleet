@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
 #
 # RSR Standard Justfile Template
@@ -572,9 +572,9 @@ guix-shell:
 guix-build:
     guix build -f guix.scm
 
-# Enter Nix development shell (fallback)
-nix-shell:
-    @if [ -f "flake.nix" ]; then nix develop; else echo "No flake.nix"; fi
+# Enter Guix development shell
+guix-shell:
+    @if [ -f "guix.scm" ]; then guix shell -D -f guix.scm; else echo "No guix.scm"; fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HYBRID AUTOMATION

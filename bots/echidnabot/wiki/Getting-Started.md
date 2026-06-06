@@ -33,13 +33,7 @@ sudo cp target/release/echidnabot /usr/local/bin/
 guix install echidnabot
 ```
 
-### Option 4: Using Nix
-
-```bash
-nix profile install github:hyperpolymath/echidnabot
-```
-
-### Option 5: Docker/Podman
+### Option 4: Docker/Podman
 
 ```bash
 podman pull ghcr.io/hyperpolymath/echidnabot:latest

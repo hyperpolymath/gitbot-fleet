@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PMPL-1.0-or-later
+# SPDX-License-Identifier: MPL-2.0
 # RSR-compliant .gitattributes
 * text=auto eol=lf
 # Source
@@ -43,5 +43,4 @@ Containerfile  text eol=lf
 *.gz    binary
 # Lock files
 Cargo.lock  text eol=lf -diff
-flake.lock  text eol=lf -diff
 shared-context/learning/*.jsonl filter=lfs diff=lfs merge=lfs -text
