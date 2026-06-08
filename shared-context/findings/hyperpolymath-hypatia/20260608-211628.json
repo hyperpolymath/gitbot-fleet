@@ -1,0 +1,450 @@
+{
+  "findings": [
+    {
+      "reason": "Action urin 21 JRE\n        uses: actions/setup-java@be666c2fcd27 needs attention",
+      "type": "unpinned_action",
+      "file": "verify-proofs.yml",
+      "action": "pin_sha",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in governance.yml",
+      "type": "missing_timeout_minutes",
+      "file": "governance.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in hypatia-scan.yml",
+      "type": "missing_timeout_minutes",
+      "file": "hypatia-scan.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in mirror.yml",
+      "type": "missing_timeout_minutes",
+      "file": "mirror.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in scorecard.yml",
+      "type": "missing_timeout_minutes",
+      "file": "scorecard.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in secret-scanner.yml",
+      "type": "missing_timeout_minutes",
+      "file": "secret-scanner.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in codeql.yml",
+      "type": "codeql_missing_actions_language",
+      "file": "codeql.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Repository has 3 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "src/ui/gossamer/README.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "scripts/ci-tools/Cargo.toml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "scripts/bench-tools/Cargo.toml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "ffi/zig/README.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/reports/audit/audit-2026-04-15-post.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/integration/github-registry.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/integration/github-registry.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/integration/a2ml-k9.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/architecture/system-integration.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/architecture/boundary-design-options.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/architecture/boundary-design-options.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/EXPLAINME.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/EXPLAINME.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "docs/EXPLAINME.adoc",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": "0-AI-MANIFEST.a2ml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": ".audittraining/security-errors/polyglot-i18n.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": ".audittraining/security-errors/polyglot-i18n.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": ".audittraining/security-errors/echidnabot.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": ".audittraining/security-errors/SUMMARY.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/structural_drift/SD022 -- Hypatia structural_drift: SD022 -- 6 day(s) old",
+      "type": "CSA001",
+      "file": ".audittraining/package-candidates/REPORT.md",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/codeql_missing_actions_language -- Hypatia workflow_audit: codeql_missing_actions_language -- 8 day(s) old",
+      "type": "CSA001",
+      "file": "codeql.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 9 day(s) old",
+      "type": "CSA001",
+      "file": "secret-scanner.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 9 day(s) old",
+      "type": "CSA001",
+      "file": "scorecard.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 9 day(s) old",
+      "type": "CSA001",
+      "file": "mirror.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 9 day(s) old",
+      "type": "CSA001",
+      "file": "hypatia-scan.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 9 day(s) old",
+      "type": "CSA001",
+      "file": "governance.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "26 total open code-scanning alert(s) -- security hygiene review",
+      "type": "CSA002",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/lib/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": ".audittraining/package-candidates/REPORT.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/api/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": ".audittraining/security-errors/SUMMARY.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/api/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": ".audittraining/security-errors/echidnabot.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/i18n/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": ".audittraining/security-errors/polyglot-i18n.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/greetings/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": ".audittraining/security-errors/polyglot-i18n.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/rust/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "0-AI-MANIFEST.a2ml",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/interface/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/EXPLAINME.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/Burble/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/EXPLAINME.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/rust/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/EXPLAINME.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/bridges/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/architecture/boundary-design-options.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/core/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/architecture/boundary-design-options.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/auth/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/architecture/system-integration.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/rust/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/integration/a2ml-k9.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/commands/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/integration/github-registry.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/registry/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/integration/github-registry.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/ci_simulation/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "docs/reports/audit/audit-2026-04-15-post.md",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/connectors/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "ffi/zig/README.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/bin/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "scripts/bench-tools/Cargo.toml",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/bin/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "scripts/ci-tools/Cargo.toml",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    },
+    {
+      "reason": "doc references `src/core/` but no such directory exists in the tree (likely surviving a directory rename)",
+      "type": "SD022",
+      "file": "src/ui/gossamer/README.adoc",
+      "action": "rename_sweep",
+      "rule_module": "structural_drift",
+      "severity": "medium"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "a8e987f622b0e795e19b4a4f753c95e8b50b8c89",
+    "submitted_at": "2026-06-08T21:16:30Z",
+    "scanner_version": "hypatia-v2"
+  }
+}
