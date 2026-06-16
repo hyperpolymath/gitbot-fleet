@@ -42,10 +42,10 @@ on:
         required: false
         default: 'false'
         type: boolean
-  # Scheduled sweep
-  schedule:
-    # Every 15 minutes
-    - cron: '*/15 * * * *'
+  # NEUTERED 2026-06-16 (owner directive: never auto-merge security/dep PRs).
+  # The */15 autonomous sweep cron was removed so this workflow no longer runs
+  # unattended. It still runs on PR/review/check events and workflow_dispatch for
+  # MONITORING; the auto-merge job itself is gated OFF by default (see below).
 
 permissions:
   contents: write
@@ -219,10 +219,13 @@ jobs:
               "repos/${{ github.repository }}/pulls/$PR_NUM/reviews" \
               --jq '[.[] | select(.state == "APPROVED")] | length')
             
-            # Check 6: Author is trusted or has approval
+            # Check 6: Approval is REQUIRED.
             AUTHOR=$(echo "$PR" | jq -r '.user.login')
-            TRUSTED_AUTHORS="hyperpolymath|dependabot|renovate"
-            IS_TRUSTED=$(echo "$AUTHOR" | grep -E "$TRUSTED_AUTHORS" && echo "true" || echo "false")
+            # NEUTERED 2026-06-16 (owner directive: never auto-merge without human
+            # review). The trusted-author approval-bypass (hyperpolymath|dependabot|
+            # renovate merging with ZERO approvals) is removed: no author bypasses
+            # the approval requirement.
+            IS_TRUSTED="false"
             
             # Validate
             ALL_CHECKS_PASSED="true"
@@ -280,7 +283,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate-prs
-    if: needs.validate-prs.outputs.auto_merge_candidates != '[]' && inputs.dry_run != 'true'
+    # NEUTERED 2026-06-16 (owner directive: security/dep PRs are manual-review only).
+    # Auto-merge is gated behind an explicit, default-OFF opt-in. Until the repo
+    # variable INBOX_STEWARD_AUTOMERGE is set to 'true', this job NEVER runs and
+    # nothing is auto-merged. Re-enable deliberately, and only with human-gated review.
+    if: vars.INBOX_STEWARD_AUTOMERGE == 'true' && needs.validate-prs.outputs.auto_merge_candidates != '[]' && inputs.dry_run != 'true'
     
     steps:
       - name: Checkout gitbot-fleet
