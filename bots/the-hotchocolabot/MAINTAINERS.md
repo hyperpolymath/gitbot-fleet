@@ -123,8 +123,8 @@ _None yet - project is new!_
 
 ### For General Questions
 
-- **GitHub Issues**: https://github.com/Hyperpolymath/the-hotchocolabot/issues
-- **Discussions**: https://github.com/Hyperpolymath/the-hotchocolabot/discussions
+- **GitHub Issues**: https://github.com/Hyperpolymath/hotchocolabot/issues
+- **Discussions**: https://github.com/Hyperpolymath/hotchocolabot/discussions
 
 ### For Private Matters
 

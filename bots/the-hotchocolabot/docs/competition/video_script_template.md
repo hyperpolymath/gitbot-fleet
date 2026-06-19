@@ -221,7 +221,7 @@ Open-Source Robotics Education Platform
 35% Knowledge Gain
 100% Open Source
 
-github.com/Hyperpolymath/the-hotchocolabot
+github.com/Hyperpolymath/hotchocolabot
 
 UAL Creative Communities - MechCC
 ```

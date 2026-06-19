@@ -231,7 +231,7 @@ All printable as PDF packets (~15-20 pages per student).
 ## Repository Structure
 
 ```
-the-hotchocolabot/
+hotchocolabot/
 ├── .github/
 │   ├── workflows/          # CI/CD automation
 │   │   ├── rust_ci.yml     # Test, lint, audit, cross-compile
@@ -287,8 +287,8 @@ the-hotchocolabot/
 
 ```bash
 # Clone repository
-git clone https://github.com/Hyperpolymath/the-hotchocolabot.git
-cd the-hotchocolabot
+git clone https://github.com/Hyperpolymath/hotchocolabot.git
+cd hotchocolabot
 
 # Install Rust (if needed)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -320,7 +320,7 @@ just deploy HOST=pi@raspberrypi.local
 
 # Or build directly on Pi
 ssh pi@raspberrypi.local
-cd ~/the-hotchocolabot
+cd ~/hotchocolabot
 cargo build --release
 sudo ./target/release/hotchocolabot
 ```
@@ -582,9 +582,9 @@ These questions from the original handover should be addressed:
 ## Contact & Support
 
 ### Repository
-- GitHub: https://github.com/Hyperpolymath/the-hotchocolabot
-- Issues: https://github.com/Hyperpolymath/the-hotchocolabot/issues
-- Discussions: https://github.com/Hyperpolymath/the-hotchocolabot/discussions
+- GitHub: https://github.com/Hyperpolymath/hotchocolabot
+- Issues: https://github.com/Hyperpolymath/hotchocolabot/issues
+- Discussions: https://github.com/Hyperpolymath/hotchocolabot/discussions
 
 ### Team
 - Lead: [Your name] (see MAINTAINERS.md)

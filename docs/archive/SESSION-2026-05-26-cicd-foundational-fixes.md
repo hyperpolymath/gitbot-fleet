@@ -128,7 +128,7 @@ The 3 `bots/*/examples/SafeDOMExample.affine` fixtures from the
 
 * **53 `.affine` copies in 5 dialect-distinct hash groups** across
   138 repos:
-  * gitbot-fleet (3 copies under `bots/{the-hotchocolabot,echidnabot,
+  * gitbot-fleet (3 copies under `bots/{hotchocolabot,echidnabot,
     finishingbot}/examples/`)
   * burble (1 copy)
   * claude-gecko-browser-extension (1 copy)

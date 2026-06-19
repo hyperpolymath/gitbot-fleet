@@ -297,7 +297,7 @@ impl Detector {
                     }
                 }
 
-                if let Ok(content) = std::fs::read_to_string(file_path) {
+                if let Ok(content) = std::fs::read(file_path) {
                     if re.is_match(&content) {
                         affected.push(file_path.clone());
                     }

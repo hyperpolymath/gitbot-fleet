@@ -583,7 +583,7 @@ See separate file: `education/assessments/workshop_survey.md`
 - Technical Support: MechCC team
 
 **Resources:**
-- Code Repository: https://github.com/Hyperpolymath/the-hotchocolabot
+- Code Repository: https://github.com/Hyperpolymath/hotchocolabot
 - Issue Tracker: [Report problems or suggestions]
 - MechCC Website: [Link to UAL Creative Communities]
 
