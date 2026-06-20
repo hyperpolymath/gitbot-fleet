@@ -92,6 +92,13 @@ Control    (report < 0.85)        →  Human review required
      full copy of OikosBot once lived in `bots/sustainabot/`; it was extracted to
      `hyperpolymath/oikosbot` and the slot reset to a placeholder. `oikos` is a
      separate DSL (`hyperpolymath/oikos-economics-accounting-dsl`).
+7. **Mark intentional mass-deletions.** The Repo Integrity Guard
+   (`.github/workflows/repo-integrity-guard.yml`) fails any change that deletes
+   more than `MAX_DELETIONS` (50) tracked files vs. base — it exists because
+   `main` was once silently gutted from 1777 files to 2. For a *deliberate*
+   large removal, include the literal marker `[mass-delete-ok]` in a commit
+   message in the range, **or** in the PR title/body. Never weaken the guard or
+   trim its critical-file list just to get a change through.
 
 ## Repo health
 
