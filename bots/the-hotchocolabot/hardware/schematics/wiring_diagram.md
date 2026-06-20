@@ -355,7 +355,7 @@ Pin 20 (GND) ──────────────────────�
 
 3. **Software Test**:
    ```bash
-   cd ~/the-hotchocolabot
+   cd ~/hotchocolabot
    cargo run
    ```
    - Watch for successful hardware initialization

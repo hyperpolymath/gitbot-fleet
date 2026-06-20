@@ -353,7 +353,7 @@ Theme: Food security & education
 Deadline: April 1, 2026
 
 Contact: [Your Name], [Email], [Phone]
-Website: github.com/Hyperpolymath/the-hotchocolabot
+Website: github.com/Hyperpolymath/hotchocolabot
 ```
 
 ---

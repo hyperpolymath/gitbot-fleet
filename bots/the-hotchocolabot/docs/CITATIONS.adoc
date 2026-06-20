@@ -1,34 +1,34 @@
-= the-hotchocolabot - Citation Guide
+= hotchocolabot - Citation Guide
 :toc:
 
 == BibTeX
 
 [source,bibtex]
 ----
-@software{the-hotchocolabot_2025,
+@software{hotchocolabot_2025,
   author = {Polymath, Hyper},
-  title = {the-hotchocolabot},
+  title = {hotchocolabot},
   year = {2025},
-  url = {https://github.com/hyperpolymath/the-hotchocolabot},
+  url = {https://github.com/hyperpolymath/hotchocolabot},
   license = {MPL-2.0}
 }
 ----
 
 == Harvard Style
 
-Polymath, H. (2025) _the-hotchocolabot_ [Computer software]. Available at: https://github.com/hyperpolymath/the-hotchocolabot
+Polymath, H. (2025) _hotchocolabot_ [Computer software]. Available at: https://github.com/hyperpolymath/hotchocolabot
 
 == OSCOLA
 
-Hyper Polymath, 'the-hotchocolabot' (2025) <https://github.com/hyperpolymath/the-hotchocolabot>
+Hyper Polymath, 'hotchocolabot' (2025) <https://github.com/hyperpolymath/hotchocolabot>
 
 == MLA
 
-Polymath, Hyper. "the-hotchocolabot." 2025, github.com/hyperpolymath/the-hotchocolabot.
+Polymath, Hyper. "hotchocolabot." 2025, github.com/hyperpolymath/hotchocolabot.
 
 == APA 7
 
-Polymath, H. (2025). _the-hotchocolabot_ [Computer software]. GitHub. https://github.com/hyperpolymath/the-hotchocolabot
+Polymath, H. (2025). _hotchocolabot_ [Computer software]. GitHub. https://github.com/hyperpolymath/hotchocolabot
 
 == See Also
 
