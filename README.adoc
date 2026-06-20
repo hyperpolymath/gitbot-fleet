@@ -67,8 +67,8 @@ The historical `TOPOLOGY.md` dashboard is at the repo root.
 |Active
 
 |**sustainabot**
-|Ecological and economic code standards. Carbon intensity, resource efficiency, technical debt modeling.
-|Active
+|Ecological and economic code standards. *Adapter slot reserved — see link:bots/sustainabot/README.adoc[`bots/sustainabot/`].* The standalone eco/econ App once misfiled here is **OikosBot**, now at https://github.com/hyperpolymath/oikosbot[`hyperpolymath/oikosbot`] (a separate project — not sustainabot).
+|Reserved
 
 |**glambot**
 |Presentation quality. Visual polish, accessibility (WCAG), SEO, machine-readability for AI/bots.
@@ -87,7 +87,7 @@ The historical `TOPOLOGY.md` dashboard is at the repo root.
 |Active
 |===
 
-*Status legend:* `Active` = Tier 1 Verifier or Specialist bot running on every push. `Complete` = Tier 2 Finisher bot that runs after verifiers to validate final release readiness.
+*Status legend:* `Active` = Tier 1 Verifier or Specialist bot running on every push. `Complete` = Tier 2 Finisher bot that runs after verifiers to validate final release readiness. `Reserved` = fleet member retained in `shared-context` but without an in-repo adapter yet (the directory is a placeholder; see that bot's `README.adoc`).
 
 Standalone repos that are intentionally not fleet bots:
 

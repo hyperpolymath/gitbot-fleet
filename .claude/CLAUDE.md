@@ -81,6 +81,17 @@ Control    (report < 0.85)        →  Human review required
 3. No hardcoded secrets — use env vars with `${VAR:-}` defaults.
 4. Fix scripts must be idempotent (safe to run multiple times).
 5. Confidence thresholds gate all automated actions.
+6. **`bots/<name>/` directories are THIN ADAPTERS, not homes for standalone
+   products.** Never vendor an entire external project (its own Cargo
+   workspace, analyzers, containers, deployment, docs) into a bot slot, and
+   never let a bot crate add a `path` dependency that escapes the repo. If a
+   capability deserves its own project, build it in its own repository and
+   depend on it externally. See [`bots/README.adoc`](../bots/README.adoc).
+   - **Disambiguation:** `sustainabot` (this fleet's eco/econ slot, kept as
+     `BotId::Sustainabot`) is **not** `OikosBot` and **not** `oikos`. A misfiled
+     full copy of OikosBot once lived in `bots/sustainabot/`; it was extracted to
+     `hyperpolymath/oikosbot` and the slot reset to a placeholder. `oikos` is a
+     separate DSL (`hyperpolymath/oikos-economics-accounting-dsl`).
 
 ## Repo health
 
