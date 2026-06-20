@@ -139,9 +139,12 @@ execution testing. Gates the path from draft to publishable.
 | `bots/finishingbot/`
 |===
 
-Additional bots present in `bots/`: `accessibilitybot`, `cipherbot`, `panicbot`
-(pre-commit gate wrapping panic-attacker), `gsbot` (game-server integration),
-`the-hotchocolabot` (onboarding/warmth checks).
+Additional fleet bots present in `bots/`: `accessibilitybot`, `cipherbot`,
+`panicbot` (pre-commit gate wrapping panic-attacker).
+
+Standalone repos that are not part of gitbot-fleet but are still maintained in
+the estate: `gsbot` (https://github.com/hyperpolymath/gsbot) and
+`hotchocolabot` (https://github.com/hyperpolymath/hotchocolabot).
 
 == Dogfooded Across The Account
 

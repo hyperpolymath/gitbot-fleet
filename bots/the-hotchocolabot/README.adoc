@@ -5,7 +5,7 @@ image:[Palimpsest-MPL-1.0,link="https://github.com/hyperpolymath/palimpsest-lice
 *An Educational Robotics Platform for Teaching Reverse Engineering and Systems Thinking*
 
 [![RSR Bronze](https://img.shields.io/badge/RSR-Bronze-cd7f32?style=flat-square)](RSR_COMPLIANCE.md)
-[![CI](https://img.shields.io/github/actions/workflow/status/Hyperpolymath/the-hotchocolabot/rust_ci.yml?style=flat-square)](https://github.com/Hyperpolymath/the-hotchocolabot/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/Hyperpolymath/hotchocolabot/rust_ci.yml?style=flat-square)](https://github.com/Hyperpolymath/hotchocolabot/actions)
 
 Part of UAL Creative Communities' Postdisciplinary Mechatronics Group (MechCC)
 
@@ -72,8 +72,8 @@ The deliberate complexity serves pedagogical purposes:
 = Clone repository
 
 image:https://img.shields.io/badge/License-PMPL--1.0-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
-git clone https://github.com/Hyperpolymath/the-hotchocolabot.git
-cd the-hotchocolabot
+git clone https://github.com/Hyperpolymath/hotchocolabot.git
+cd hotchocolabot
 
 = Copy configuration template
 
@@ -166,7 +166,7 @@ scp target/armv7-unknown-linux-gnueabihf/release/hotchocolabot pi@raspberrypi.lo
 === Code Organization
 
 ```
-the-hotchocolabot/
+hotchocolabot/
 ├── src/
 │   ├── main.rs              # Entry point
 │   ├── config/              # Configuration management
@@ -341,8 +341,8 @@ Dual-licensed under MIT OR Apache-2.0. See `LICENSE-MIT` and `LICENSE-APACHE` fo
 
 == Contact
 
-- Repository: https://github.com/Hyperpolymath/the-hotchocolabot
-- Issues: https://github.com/Hyperpolymath/the-hotchocolabot/issues
+- Repository: https://github.com/Hyperpolymath/hotchocolabot
+- Issues: https://github.com/Hyperpolymath/hotchocolabot/issues
 
 ---
 

@@ -121,7 +121,7 @@ and are also captured as `Refs gitbot-fleet#148` commits in #206.
 ## Out of scope (filed separately)
 
 3 byte-identical `SafeDOMExample.affine` fixtures
-(`bots/{the-hotchocolabot,echidnabot,finishingbot}/examples/`) parse-
+(`bots/{hotchocolabot,echidnabot,finishingbot}/examples/`) parse-
 fail with a different shape: they use a **pre-stabilization AffineScript
 dialect** with 8+ grammar divergences from current. Tracked at
 [gitbot-fleet#208](https://github.com/hyperpolymath/gitbot-fleet/issues/208).

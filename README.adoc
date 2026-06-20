@@ -16,7 +16,7 @@ toc::[]
 
 == Overview
 
-Gitbot Fleet coordinates 11 specialised bots through a shared-context layer. The
+Gitbot Fleet coordinates 9 specialised bots through a shared-context layer. The
 `fleet-coordinator` dispatches Hypatia scanner findings to bots based on
 the **safety triangle**:
 
@@ -82,20 +82,17 @@ The historical `TOPOLOGY.md` dashboard is at the repo root.
 |Release readiness. Placeholder removal, license validation, claim verification, execution testing.
 |Complete
 
-|**gsbot**
-|Discord bot for garment sustainability. Sustainability scores, environmental impact analysis, sustainable brand discovery.
-|Active
-
 |**panicbot**
 |Panic recovery and error handling validation. Ensures graceful degradation and proper error handling patterns.
-|Active
-
-|**the-hotchocolabot**
-|Educational robotics platform for teaching reverse engineering and systems thinking. Over-engineered hot chocolate dispenser.
 |Active
 |===
 
 *Status legend:* `Active` = Tier 1 Verifier or Specialist bot running on every push. `Complete` = Tier 2 Finisher bot that runs after verifiers to validate final release readiness. `Reserved` = fleet member retained in `shared-context` but without an in-repo adapter yet (the directory is a placeholder; see that bot's `README.adoc`).
+
+Standalone repos that are intentionally not fleet bots:
+
+* `gsbot` - https://github.com/hyperpolymath/gsbot
+* `hotchocolabot` - https://github.com/hyperpolymath/hotchocolabot
 
 The component-readiness assessment (CRG grades, evidence) lives in
 link:READINESS.md[READINESS.md].

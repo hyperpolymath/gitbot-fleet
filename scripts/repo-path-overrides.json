@@ -86,7 +86,7 @@
   "svalinn": "/var$REPOS_DIR/project-wharf/infra/svalinn",
   "system-tools": "/var$REPOS_DIR/ambientops/system-tools",
   "test-repo": "/var$REPOS_DIR/hypatia/integration/fixtures/test-repo",
-  "the-hotchocolabot": "/var$REPOS_DIR/gitbot-fleet/bots/the-hotchocolabot",
+  "hotchocolabot": "/var$REPOS_DIR/hotchocolabot",
   "thejeffparadox": "/var$REPOS_DIR/games & trivia/thejeffparadox",
   "total-update": "/var$REPOS_DIR/ambientops/total-update",
   "union-policy-parser": "/var$REPOS_DIR/palimpsest-plasma/union-policy-parser",

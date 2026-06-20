@@ -291,7 +291,7 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -380,7 +380,7 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Send dispatch to Hypatia
         env:

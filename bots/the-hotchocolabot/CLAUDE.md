@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-**the-hotchocolabot** is a bot project designed to automate tasks and provide interactive functionality.
+**hotchocolabot** is a bot project designed to automate tasks and provide interactive functionality.
 
 ## Project Structure
 
 This is a new project. The typical structure will include:
 
 ```
-the-hotchocolabot/
+hotchocolabot/
 ├── src/              # Source code
 ├── tests/            # Test files
 ├── config/           # Configuration files
@@ -92,7 +92,7 @@ Install dependencies according to the package manager used in the project.
 ## Resources
 
 ### Useful Links
-- Project repository: https://github.com/Hyperpolymath/the-hotchocolabot
+- Project repository: https://github.com/Hyperpolymath/hotchocolabot
 - Add links to relevant documentation, APIs, or frameworks
 
 ### Documentation

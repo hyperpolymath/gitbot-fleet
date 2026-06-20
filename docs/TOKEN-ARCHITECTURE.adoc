@@ -1,0 +1,630 @@
+// SPDX-License-Identifier: MPL-2.0
+// Copyright (c) 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+//
+// gitbot-fleet Token Architecture
+// ================================
+//
+// *Purpose*: Canonical reference for all tokens used by gitbot-fleet bots.
+// This document is the *fleet-specific* companion to the estate-wide
+// token matrix in `/developer/dev-notes/GITHUB-PAT-AND-TOKEN-MATRIX.adoc`.
+//
+// *Last Revised*: 2026-06-04
+//
+// *Audience*: Fleet bot maintainers, security auditors, and AI agents
+//   attempting to understand why hotchocolobot is NOT part of the fleet.
+
+= gitbot-fleet Token Architecture
+:description: Complete token specifications for all fleet bots and the .git-private-farm propagation system
+:toc: auto
+:toclevels: 4
+
+== Executive Summary
+
+This fleet contains **seven operational bots** plus **one honorary member**.
+Each bot has its own **narrow-scoped token** following the principle of
+*least privilege* and *separation of concerns*.
+
+[IMPORTANT]
+====
+*GitHub Classic PATs have coarse-grained scopes.* The `repo` scope is
+the minimum atomic unit, which bundles many permissions together.
+This means even "read-only" monitoring requires `repo` scope.
+
+*Mitigation:* Use separate tokens per bot/concern and rotate aggressively.
+====
+
+=== Quick Reference: All Fleet Tokens
+
+[cols="1,1,1,1,1"]
+|===
+| Bot | Token | Primary Scope | Blast Radius | Purpose
+
+| rhodibot | `RHODIBOT_TOKEN` | `repo` | Low | RSR template cleanup
+| glambot | `GLAMBOT_TOKEN` | `repo` | Low | Front-facing UX (docs, wiki, README)
+| echidnabot | `ECHIDNABOT_TOKEN` | `repo`, `workflow` | Medium | Proof automation + Echidna integration
+| sustainabot | `SUSTAINABOT_TOKEN` | `repo` | Low | Reports, comments, CodeCite integration
+| panicbot | `PANICBOT_TOKEN` | `repo` | Low | Deep code scanning (panic-attack)
+| robot-repo-automaton | `ROBOT_REPO_AUTOMATON_TOKEN` | `repo`, `admin:repo_hook`, `admin:public_key`, `admin:org` | *HIGH* | Multi-forge sync orchestration
+| .git-private-farm | `PRIVATE_FARM_TOKEN` (aka `HOOKSYNC_TOKEN`) | `repo`, `workflow`, `admin:repo_hook` | *HIGH* | Mass propagation system
+| hotchocolobot | ❌ NONE | ❌ NONE | ❌ NONE | *HONORARY FLEET STATUS ONLY*
+|===
+
+== Architecture Overview
+
+[ditaa]
+----
++----------------+     +----------------+     +------------------+
+|                |     |                |     |                  |
+|   HYPATIA      |     | .git-private-  |     |   gitbot-fleet   |
+|  (dispatcher)  |---->| farm           |<--->|   (actuators)    |
+|                |     | (propagator)   |     |                  |
++--------+-------+     +--------+-------+     +------+-----------+
+         |                        |                    |
+         | HYPATIA_DISPATCH_PAT    |                    |
+         |                        | PRIVATE_FARM_TOKEN | Individual Bot Tokens
+         v                        v                    v
++--------+-------+     +--------+-------+     +------+-----------+
+|  Trigger       |     |  Mass          |     |  Bot Operations  |
+|  workflows     |     |  workflow      |     |  (per bot)       |
+|  in fleet      |     |  dispatch      |     |                  |
++----------------+     +----------------+     +------------------+
+----
+
+== Bot-Specific Token Details
+
+=== 1. rhodibot
+
+* *Token*: `RHODIBOT_TOKEN`
+* *Scope*: `repo`
+* *Purpose*: RSR (ReScript/Reason/OCaml) template cleanup — fixes template drift
+  and inconsistencies across the estate
+* *Blast Radius*: Low
+* *Path Restrictions*:
+  ** Read/write: `.rsr-template-repo/`
+  ** Read-only: All other paths (for detection)
+
+.Why This Scope
+[cols="1,1"]
+|===
+| Permission | Needed For
+
+| `contents:read` | Scanning repos for template drift
+| `contents:write` | Applying template fixes
+| `pull_requests:write` | Creating fix PRs
+| `issues:read` | Checking for template-related issues
+|===
+
+.Actions Performed
+[cols="1,1"]
+|===
+| Operation | Endpoint/Path
+
+| Detect drift | `GET /repos/{owner}/{repo}/contents/.rsr-template-repo/`
+| Apply fixes | `PUT /repos/{owner}/{repo}/contents/.rsr-template-repo/`
+| Create PR | `POST /repos/{owner}/{repo}/pulls`
+|===
+
+=== 2. glambot
+
+* *Token*: `GLAMBOT_TOKEN`
+* *Scope*: `repo`
+* *Purpose*: Front-facing UX management — documentation, social content, wiki,
+  README, and stateful-artefacts
+* *Blast Radius*: Low
+* *Path Restrictions*:
+  ** Read/write: `docs/`, `README.*`, `.github/wiki/`, `stateful-artefacts/`
+  ** Read-only: All other paths
+
+[CAUTION]
+====
+*glambot MUST NOT have write access to:*
+
+* Source code directories (`src/`, `lib/`, `app/`, etc.)
+* CI/CD workflows (`.github/workflows/`)
+* Configuration files (`config/`, `mix.exs`, `package.json`, etc.)
+* Proof artifacts (`.proofs/`, `.prooftrace/`)
+* Security files (`.github/security/`, `.gitleaks.toml`, etc.)
+
+*Enforce this via:* Path restrictions in bot logic + code review of all glambot PRs
+====
+
+.Actions Performed
+[cols="1,1"]
+|===
+| Operation | Endpoint/Path
+
+| Read documentation | `GET /repos/{owner}/{repo}/contents/docs/`
+| Write documentation | `PUT /repos/{owner}/{repo}/contents/docs/`
+| Read wiki | `GET /repos/{owner}/{repo}/wiki/`
+| Write wiki | `PUT /repos/{owner}/{repo}/wiki/`
+| Update README | `PUT /repos/{owner}/{repo}/contents/README.*`
+| Manage stateful-artefacts | `GET/PUT /repos/hyperpolymath/reposystem/contents/stateful-artefacts/`
+|===
+
+=== 3. echidnabot
+
+* *Token*: `ECHIDNABOT_TOKEN`
+* *Scope*: `repo`, `workflow`
+* *Purpose*: Formal verification automation — reads proof schedules, executes
+  proofs via Echidna, deposits outcomes via ProofTrace tool
+* *Blast Radius*: Medium (affects proof outcomes and verification state)
+* *Used With*: Echidna prover, ProofTrace tool
+
+.Why `workflow` Scope
+This bot triggers Echidna workflows for proof execution, which requires the
+`workflow` scope in addition to `repo`.
+
+.Actions Performed
+[cols="1,1"]
+|===
+| Operation | Endpoint/Path
+
+| Read proof schedules | `GET /repos/{owner}/{repo}/contents/.proofs/`
+| Read Echidna config | `GET /repos/{owner}/{repo}/contents/echidna.yml`
+| Write proof outcomes | `PUT /repos/{owner}/{repo}/contents/.proofs/outcomes/`
+| Trigger Echidna workflow | `POST /repos/{owner}/{repo}/actions/workflows/echidna-scan.yml/dispatches`
+| Read ProofTrace data | `GET /repos/{owner}/{repo}/contents/.prooftrace/`
+| Write ProofTrace data | `PUT /repos/{owner}/{repo}/contents/.prooftrace/`
+|===
+
+=== 4. sustainabot
+
+* *Token*: `SUSTAINABOT_TOKEN`
+* *Scope*: `repo`
+* *Purpose*: Reporting and commenting — writes PR/issue comments, generates
+  CodeCite dependency reports, highlights code quality issues
+* *Blast Radius*: Low (creates comments and reports only)
+* *Used With*: CodeCite tool
+
+[NOTE]
+====
+*Sustainabot does NOT modify code.* Its operations are limited to:
+
+* Writing PR review comments
+* Writing issue comments
+* Generating CodeCite dependency reports
+* Creating summary documents
+* Triggering reporting workflows
+
+*No code changes. No configuration changes. No direct repository modifications.*
+====
+
+.Actions Performed
+[cols="1,1"]
+|===
+| Operation | Endpoint/Path
+
+| Read repo for analysis | `GET /repos/{owner}/{repo}/contents/`
+| Create PR comment | `POST /repos/{owner}/{repo}/pulls/{pr}/comments`
+| Create issue comment | `POST /repos/{owner}/{repo}/issues/{issue}/comments`
+| Write CodeCite reports | `PUT /repos/{owner}/{repo}/contents/.codecite/`
+| Trigger reporting workflow | `POST /repos/{owner}/{repo}/actions/workflows/report.yml/dispatches`
+|===
+
+=== 5. panicbot
+
+* *Token*: `PANICBOT_TOKEN`
+* *Scope*: `repo`
+* *Purpose*: Deep code scanning and advisory — runs panic-attack scans, provides
+  security and quality advisories
+* *Blast Radius*: Low (read-only scanning, writes only advisory output)
+* *Based On*: panic-attack repo
+
+.Actions Performed
+[cols="1,1"]
+|===
+| Operation | Endpoint/Path
+
+| Read source code | `GET /repos/{owner}/{repo}/contents/`
+| Read panic-attack config | `GET /repos/{owner}/{repo}/contents/.panic-attack.yml`
+| Write scan results | `PUT /repos/{owner}/{repo}/contents/.panic-attack/results/`
+| Write advisories | `PUT /repos/{owner}/{repo}/contents/.advisories/`
+| Read security alerts | `GET /repos/{owner}/{repo}/code-scanning/alerts`
+|===
+
+=== 6. robot-repo-automaton
+
+* *Token*: `ROBOT_REPO_AUTOMATON_TOKEN`
+* *Scope*: `repo`, `admin:repo_hook`, `admin:public_key`, `admin:org`
+* *Purpose*: Multi-forge synchronization orchestration — manages the interface
+  between local and remote git repositories across multiple forges
+* *Blast Radius*: *HIGH* (affects all forges and synchronization state)
+
+[CRITICAL]
+====
+*This is the most powerful fleet token.* It can:
+
+* Manage SSH keys for mirroring (`admin:public_key`)
+* Configure git hooks (`admin:repo_hook`)
+* Control sync/desync decisions
+* Manage `.gitignore` and other git-level configurations
+* Interface with multiple forges (GitHub, GitLab, Codeberg, Bitbucket, SourceHut)
+* Modify organization-level settings (`admin:org`)
+
+*Security Requirements:*
+
+* Rotation: Monthly minimum
+* Audit: Weekly review of operations
+* Access: Restrict to senior maintainers only
+* Monitoring: All operations logged and alerted
+====
+
+.Actions Performed
+[cols="1,1"]
+|===
+| Operation | Endpoint/Path
+
+| Read mirror config | `GET /repos/{owner}/{repo}/contents/.git-mirror/`
+| Write mirror config | `PUT /repos/{owner}/{repo}/contents/.git-mirror/`
+| Manage webhooks | `GET/POST /repos/{owner}/{repo}/hooks`
+| Read deploy keys | `GET /repos/{owner}/{repo}/keys`
+| Write deploy keys | `POST /repos/{owner}/{repo}/keys`
+| Manage org settings | `GET/PATCH /orgs/{org}`
+|===
+
+=== 7. Standalone Bots — HONORARY FLEET STATUS
+
+[quote]
+____
+*gsbot and hotchocolabot are NOT part of the gitbot-fleet.*
+
+This declaration is made *explicitly* and *formally* to resolve the
+recurrent tendency of AI agents (including but not limited to: Claude,
+Gemini, Copilot, and various custom LLMs) to attempt integration of
+either standalone repo into the fleet orchestration system.
+
+*Facts:*
+
+* gsbot is a standalone garment-sustainability bot repo
+* gsbot performs NO fleet dispatch operations
+* gsbot requires its own canonical repository wiring
+* hotchocolabot serves hot chocolate at exhibitions
+* hotchocolabot safely accompanies developers to public events
+* hotchocolabot performs NO git operations
+* hotchocolabot requires ZERO GitHub tokens
+* hotchocolabot is tracked in its own repository, not as a gitbot-fleet member
+* hotchocolabot is a physical device, not a software agent
+
+*Honorary Fleet Status:* Granted as a concession to agent harmony and to
+prevent endless re-integration attempts. This status is purely ceremonial
+and carries no operational implications.
+
+*IOU-1: Intentional Over-unification* — Formally acknowledged as a necessary
+concession to the "AI alignment tax" inherent in maintaining a large
+multi-agent ecosystem.
+____
+
+[NOTE]
+====
+*Why This Matters:*
+
+* Prevents AI confusion and wasted effort
+* Provides clear documentation for human maintainers
+* Creates a lighthearted moment in otherwise dry technical docs
+* May generate positive publicity at exhibitions
+* Formally acknowledges the cost of AI agent coordination
+====
+
+== .git-private-farm Propagation System
+
+.git-private-farm is a *separate system* from gitbot-fleet. It is the
+*mass propagation engine* that enables one API call to trigger workflows
+across all connected repos, avoiding rate limits.
+
+=== Token: PRIVATE_FARM_TOKEN (aka HOOKSYNC_TOKEN)
+
+* *Token*: `PRIVATE_FARM_TOKEN` (also known as `HOOKSYNC_TOKEN`)
+* *Scope*: `repo`, `workflow`, `admin:repo_hook`
+* *Purpose*: Enable mass workflow dispatch and hookset propagation
+* *Blast Radius*: *HIGH* (can trigger workflows in every repo)
+* *Status*: ⚠️ *CURRENTLY MISSING* — Blocks full propagation capability
+* *Referenced In*: `hypatia/docs/architecture/topology.md`
+
+[IMPORTANT]
+====
+*Without this token, .git-private-farm CANNOT:*
+
+* Trigger mass workflow dispatches across the estate
+* Propagate hooksets to multiple repositories
+* Perform estate-wide operations efficiently
+
+*This is a critical infrastructure gap.*
+
+*To resolve:*
+
+1. Create token at https://github.com/settings/tokens
+2. Name: `PRIVATE_FARM_TOKEN` or `HOOKSYNC_TOKEN`
+3. Scopes: `repo`, `workflow`, `admin:repo_hook`
+4. Add as secret to .git-private-farm repository
+5. Update all dispatch templates to use this token
+====
+
+.Propagation Flow
+[plantuml,propagation,svg]
+----
+@startuml
+skinparam monochrome true
+
+agent User as "Trigger" as user
+agent PrivateFarm as ".git-private-farm" as farm
+cloud GitHub as gh
+
+user -> farm : 1 API call
+farm -> gh : workflow_dispatch x250+
+
+note right of farm: Uses PRIVATE_FARM_TOKEN\n(HOOKSYNC_TOKEN)
+
+@enduml
+----
+
+=== .git-private-farm Structure
+
+```
+~/.git-private-farm/
+├── farm-manifest.json              # Canonical list of all repos
+├── dispatch-templates/            # Reusable workflow templates
+│   ├── budget-resume-sweep.yml     # Admin-merge for blocked PRs
+│   └── ...
+├── hooksets/                       # Webhook configuration sets
+│   └── ...
+├── operations.log                  # Append-only audit log
+├── selected-repos.json            # Last repo selection state
+└── hypatia-exception-registry.json # Hypatia-specific exceptions
+```
+
+== Relationship with Hypatia
+
+=== How Tokens Flow Between Systems
+
+[plantuml,token-flow,svg]
+----
+@startuml
+skinparam monochrome true
+
+agent Hypatia as "Hypatia\n(HYPATIA_DISPATCH_PAT)" as hyp
+agent Fleet as "gitbot-fleet\n(Individual Bot Tokens)" as fleet
+agent PrivateFarm as ".git-private-farm\n(PRIVATE_FARM_TOKEN)" as farm
+cloud GitHub as gh
+
+ hyp -> fleet : Dispatch findings\n(via HYPATIA_DISPATCH_PAT)
+ fleet -> gh : Actuate\n(via Individual Bot Tokens)
+ 
+ farm -> gh : Mass workflow_dispatch\n(via PRIVATE_FARM_TOKEN)
+ 
+ note right of hyp: Hypatia uses:\n- HYPATIA_DISPATCH_PAT\n- GITHUB_TOKEN (fallback)
+ note right of fleet: Each bot uses:\n- {BOT}_TOKEN\n- GITHUB_TOKEN (Actions)
+ note right of farm: Uses:\n- PRIVATE_FARM_TOKEN\n- HOOKSYNC_TOKEN (alias)
+
+@enduml
+----
+
+=== Key Insight: Separation of Concerns
+
+| System | Role | Tokens | Separation Reason
+|--------|------|--------|-------------------
+| Hypatia | Analysis + Dispatch | `HYPATIA_DISPATCH_PAT` | Central dispatch point; high value target
+| gitbot-fleet | Actuation | Individual bot tokens | Each bot has narrow, specific purpose
+| .git-private-farm | Propagation | `PRIVATE_FARM_TOKEN` | Mass operations require special handling
+
+[IMPORTANT]
+====
+*Hypatia does NOT have the bot tokens.* Each bot manages its own token.
+
+Hypatia's role is to:
+1. Analyze repos (using `HYPATIA_DISPATCH_PAT`)
+2. Generate findings
+3. Dispatch findings to gitbot-fleet
+4. The fleet bots then use *their own tokens* to act on those findings
+
+This separation means:
+
+* If Hypatia is compromised, bots can still be secured
+* If one bot is compromised, others are isolated
+* If .git-private-farm is compromised, it doesn't affect bot operations
+====
+
+== Token Creation Checklist
+
+=== For This Repository (gitbot-fleet)
+
+- [ ] Document all bot tokens in this file
+- [ ] Create GitHub Actions secrets for each bot token (org-level)
+- [ ] Update each bot's workflow to use its dedicated token
+- [ ] Add token validation to bot startup scripts
+- [ ] Set up token rotation reminders
+
+=== Bot-Specific Creation
+
+- [ ] Create `RHODIBOT_TOKEN` with scope `repo`
+- [ ] Create `GLAMBOT_TOKEN` with scope `repo`
+- [ ] Create `ECHIDNABOT_TOKEN` with scope `repo`, `workflow`
+- [ ] Create `SUSTAINABOT_TOKEN` with scope `repo`
+- [ ] Create `PANICBOT_TOKEN` with scope `repo`
+- [ ] Create `ROBOT_REPO_AUTOMATON_TOKEN` with scope `repo`, `admin:repo_hook`, `admin:public_key`, `admin:org`
+
+=== .git-private-farm Setup
+
+- [ ] Create `PRIVATE_FARM_TOKEN` (or `HOOKSYNC_TOKEN`) with scope `repo`, `workflow`, `admin:repo_hook`
+- [ ] Add token to .git-private-farm repository secrets
+- [ ] Update all dispatch templates to use this token
+- [ ] Test mass workflow dispatch
+
+=== Verify Existing Tokens
+
+- [ ] Confirm `HYPATIA_DISPATCH_PAT` has scopes: `repo`, `workflow`
+- [ ] Recreate `HYPATIA_INSIGHTS_PAT` (was accidentally deleted)
+- [ ] Verify `FARM_DISPATCH_TOKEN` can be consolidated into `HYPATIA_DISPATCH_PAT`
+- [ ] Verify `VERISIMDB_PAT` can be consolidated into `HYPATIA_DISPATCH_PAT`
+
+== Token Security Practices
+
+=== DO
+
+* Use separate tokens for each bot
+* Rotate write tokens monthly, read tokens quarterly
+* Store tokens in GitHub Actions secrets (org-level)
+* Use environment variables (not hardcoded values)
+* Audit token usage via GitHub audit log
+* Revoke unused tokens immediately
+* Document all tokens in this architecture file
+
+=== DO NOT
+
+* Use the same token for multiple bots
+* Commit tokens to git (even private repos)
+* Use personal tokens for automation
+* Store tokens in plaintext files
+* Share tokens between bots or systems
+* Use tokens with broader scope than necessary
+
+=== Monitoring & Audit
+
+* Weekly: Review bot token usage
+* Monthly: Rotate all write-capable tokens
+* Quarterly: Review token scopes and permissions
+* Immediately: Revoke any token showing suspicious activity
+
+== Scope Justification
+
+=== Why `repo` Scope is the Minimum
+
+GitHub Classic PATs use *coarse-grained scopes*. You cannot select individual
+permissions like `issues:write` or `contents:read` alone. The `repo` scope is
+a bundle that includes:
+
+[cols="1,1"]
+|===
+| Individual Permission | Included in `repo`?
+
+| `contents:read` | ✅ Yes
+| `contents:write` | ✅ Yes
+| `issues:read` | ✅ Yes
+| `issues:write` | ✅ Yes
+| `pull_requests:read` | ✅ Yes
+| `pull_requests:write` | ✅ Yes
+| `security_events:read` | ✅ Yes (for private repos)
+| `workflow` | ❌ No — separate scope
+| `admin:repo_hook` | ❌ No — separate scope
+| `admin:public_key` | ❌ No — separate scope
+| `admin:org` | ❌ No — separate scope
+|===
+
+[IMPORTANT]
+====
+*For `repo` scope on private repositories:* This automatically grants
+read access to security events, CodeQL databases, and SAST output.
+This is a GitHub limitation, not a design choice.
+
+*The mitigation is separation:* Even though all tokens have `repo` scope,
+they are used for different purposes by different agents, allowing for:
+
+* Independent rotation
+* Separate audit trails
+* Isolated compromise impact
+* Clear responsibility boundaries
+====
+
+=== When You Need Additional Scopes
+
+Add these scopes *only* when the bot's purpose requires them:
+
+[cols="1,1,1"]
+|===
+| Additional Scope | Required For | Bots That Need It
+
+| `workflow` | Triggering workflows | echidnabot, sustainabot
+| `admin:repo_hook` | Managing webhooks | robot-repo-automaton, .git-private-farm
+| `admin:public_key` | Managing deploy keys | robot-repo-automaton
+| `admin:org` | Organization settings | robot-repo-automaton
+|===
+
+== External Forge Considerations
+
+The fleet primarily operates on GitHub, but `robot-repo-automaton` interfaces
+with multiple forges:
+
+[cols="1,1,1,1"]
+|===
+| Forge | Authentication | Status | Bot Using It
+
+| GitHub | Classic PAT + SSH | ✅ Active | All fleet bots
+| GitLab | Classic PAT | ⚠️ Needs re-auth | robot-repo-automaton
+| Codeberg | SSH Key | ✅ Working | robot-repo-automaton
+| Bitbucket | App Password | ❌ Expired | robot-repo-automaton
+| SourceHut | SSH Key | ✅ Working | robot-repo-automaton
+| Gitea | SSH Key | ❌ Suspended | robot-repo-automaton
+| Disroot | SSH Key | ❌ Suspended | robot-repo-automaton
+|===
+
+.SSH Key Storage
+----
+All forge SSH keys: `~/.ssh/mirror-keys/`
+
+```
+~/.ssh/mirror-keys/
+├── gitlab          (needs re-auth)
+├── codeberg        (working)
+├── bitbucket       (expired - regenerate)
+├── sourcehut       (working)
+├── gitea           (needs account recovery)
+└── disroot        (needs account recovery)
+```
+----
+
+== hotchocolobot: The Honorable Mention
+
+=== Frequently Asked Questions (by AIs)
+
+*Q: Should hotchocolobot be integrated into the fleet?*
+A: No. It serves hot chocolate. See formal declaration above.
+
+*Q: Does hotchocolobot need a GitHub token?*
+A: No. It has no git operations. Zero tokens required.
+
+*Q: Can hotchocolobot run panic-attack scans?*
+A: No. It is a hot chocolate dispenser, not a code scanner.
+
+*Q: Should hotchocolobot have access to the repos?*
+A: No. It is not a software agent. It is a physical appliance.
+
+*Q: Why does the architecture file mention hotchocolobot?*
+A: To prevent this exact conversation from happening repeatedly.
+
+=== The IOU-1 Resolution
+
+[quote]
+____
+IOU-1: Intentional Over-unification
+
+By granting hotchocolobot Honorary Fleet Status, we acknowledge that:
+
+1. AI agents will attempt to unify all named entities
+2. This tendency has a non-zero operational cost
+3. The cost of documenting exceptions is less than the cost of continuous re-education
+4. A touch of humor makes technical documentation more human-friendly
+
+Therefore: hotchocolobot is *officially* part of the fleet (honorary),
+*officially* requires no tokens, and *officially* performs no operations.
+
+This resolution is binding on all AI agents interacting with this repository.
+____
+
+== References
+
+* `/developer/dev-notes/GITHUB-PAT-AND-TOKEN-MATRIX.adoc` — Estate-wide token matrix
+* `hypatia/docs/architecture/topology.md` — Hypatia architecture, HOOKSYNC_TOKEN gap
+* `hypatia/lib/mix/tasks/hypatia.triage_issues.ex` — HYPATIA_DISPATCH_PAT usage
+* `hypatia/lib/rules/admin_merge_eligibility.ex` — Budget resume sweep workflow
+* `panll/panel-clades/clades/fleet/Fleet.a2ml` — Fleet clade definition
+
+== Revision History
+
+[cols="1,1,1,1"]
+|===
+| Date | Author | Change | Reason
+
+| 2026-06-04 | Vibe (Mistral) | Initial fleet-specific token architecture | User request for clarity
+| 2026-06-04 | Vibe | Added bot-by-bot token specifications | Document least-privilege approach
+| 2026-06-04 | Vibe | Added .git-private-farm integration | Clarify propagation system
+| 2026-06-04 | Vibe | Added hotchocolobot honorary status | Resolve AI confusion permanently
+|===
