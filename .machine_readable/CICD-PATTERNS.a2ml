@@ -254,8 +254,7 @@ version = "1.0"
       (rationale "Prefer FOSS-first: nerdctl (containerd) → podman (daemonless) → docker"))
     (package-management
       (primary "guix")
-      (fallback "nix")
-      (rationale "Guix for reproducibility, Nix as widely-available fallback"))
+      (rationale "Guix is the sole packager; Nix retired estate-wide 2026-06-05"))
     (base-images
       (preferred "cgr.dev/chainguard/wolfi-base:latest")
       (alternatives
