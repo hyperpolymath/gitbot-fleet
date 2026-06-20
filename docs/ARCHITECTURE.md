@@ -41,7 +41,7 @@ rhodibot     echidnabot     sustainabot          ... 8 more bots
 | `fix-*.sh` (~50 files) | `scripts/` | bash | One-shot fixers for eliminate-tier patterns (e.g. SPDX header, license file) |
 | `shared-context/` | `shared-context/` | Rust | Crate for inter-bot communication (RPC + state-sharing) |
 | `robot-repo-automaton/` | `robot-repo-automaton/` | Rust | CLI: scan, fix, PR creation |
-| `bots/*` | `bots/` | mostly Rust, AffineScript in sustainabot | Per-bot specialised logic |
+| `bots/*` | `bots/` | Rust (thin adapters — see `bots/README.adoc`) | Per-bot specialised logic |
 
 ## Safety triangle
 

@@ -24,7 +24,7 @@ based on confidence thresholds (Eliminate >= 0.95, Substitute >= 0.85, Control <
 
 | rhodibot | Git operations, RSR enforcement | Yes
 | echidnabot | Quality verification, multi-prover | Yes
-| sustainabot | Dependency management | Yes
+| sustainabot | Eco/econ standards — _reserved slot, empty_ (standalone impl extracted to `hyperpolymath/oikosbot`) | Yes
 | glambot | Presentation, badges, formatting | Yes
 | seambot | Integration seam maintenance | Yes
 | finishingbot | Completion of partial work | Yes

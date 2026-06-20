@@ -1,146 +1,39 @@
-# SustainaBot
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= sustainabot — reserved fleet slot (currently empty)
+:icons: font
 
-**SustainaBot** is a code analysis tool that evaluates software through an ecological, economic, and engineering quality lens. It integrates with existing developer workflows to highlight inefficiencies, potential risks, and sustainability trade-offs in codebases.
+This directory is a *reserved* slot for **sustainabot**, the fleet's
+ecological/economic verifier bot. **It is intentionally empty** apart from this
+note: the bot has not yet been built as a fleet adapter.
 
-Rather than replacing tools like Dependabot, CodeQL, or linters, SustainaBot complements them by focusing on **resource usage, cost implications, and environmental impact**.
+[IMPORTANT]
+====
+**`sustainabot` is NOT OikosBot.** They are separate projects.
 
----
+A full, standalone copy of **OikosBot** (an eco/econ code-analysis App) was once
+misfiled here — an entire Rust workspace, Haskell analyzer, AffineScript bot,
+containers and policies, vendored inside this one bot slot. That was a mistake.
+It has been extracted into its own top-level repository:
 
-## 🚀 What It Does
+* **OikosBot** → https://github.com/hyperpolymath/oikosbot
 
-SustainaBot analyzes repositories and produces structured reports that help developers:
+See that repo's `DISAMBIGUATION.adoc` for the full breakdown of
+**oikos** (a DSL) vs **OikosBot** (the App) vs **sustainabot** (this fleet slot).
+====
 
-* Identify inefficient patterns that increase compute, memory, or energy usage
-* Highlight potential cost drivers in infrastructure or runtime behavior
-* Correlate code quality and security issues with broader system impact
-* Generate actionable insights in standard formats (e.g., SARIF)
+== What still references sustainabot
 
----
+`sustainabot` remains a first-class fleet *member* in code — `BotId::Sustainabot`
+in `shared-context/`, the coordinator roster, and the safety-triangle routing are
+all intact. Only the *vendored implementation* was removed from this directory.
 
-## 🧠 Core Concepts
+== When this slot is built
 
-### Multi-Dimensional Analysis
+Follow the convention of the sibling bots (see `../README.adoc` and, e.g.,
+`../rhodibot/`): a bot directory is a **thin adapter** — a small Rust crate that
+adapts an analysis capability to the fleet's `shared-context` interface. It is
+**not** a home for an entire standalone product.
 
-SustainaBot evaluates code across three primary dimensions:
-
-* **Ecological (Eco):** Estimated energy usage, resource intensity, and environmental impact
-* **Economic (Econ):** Cost implications of inefficient patterns or architectural decisions
-* **Quality:** Maintainability, security signals, and engineering best practices
-
-These dimensions are combined into a unified **Health Index** to give an overall view of repository health.
-
-> Note: Scores are heuristic-based and intended for guidance rather than exact measurement.
-
----
-
-## 🧩 Architecture Overview
-
-SustainaBot is built as a modular Rust workspace with separate components for:
-
-* CLI interface
-* Static analysis engine
-* Metrics and scoring
-* SARIF report generation
-* Policy integration
-
-This modular design allows components to be reused or extended independently.
-
----
-
-## ⚙️ Installation
-
-```bash
-cargo install sustainabot
-```
-
-Or build from source:
-
-```bash
-git clone https://github.com/hyperpolymath/gitbot-fleet
-cd gitbot-fleet/bots/sustainabot
-cargo build --release
-```
-
----
-
-## ▶️ Usage
-
-Run analysis on a repository:
-
-```bash
-sustainabot analyze .
-```
-
-Output formats include:
-
-* JSON
-* Text summaries
-* SARIF (for GitHub integration)
-
----
-
-## 🔗 GitHub Integration
-
-SustainaBot can integrate into GitHub workflows by producing SARIF output that is uploaded to GitHub’s code scanning interface.
-
-Example GitHub Action:
-
-```yaml
-- name: Run SustainaBot
-  run: sustainabot analyze . --format sarif > results.sarif
-
-- name: Upload SARIF
-  uses: github/codeql-action/upload-sarif@v3
-  with:
-    sarif_file: results.sarif
-```
-
----
-
-## 🌍 Example Insights
-
-SustainaBot may flag issues such as:
-
-* Inefficient loops or excessive allocations
-* Redundant computations
-* Over-provisioned infrastructure assumptions
-* Patterns associated with higher runtime cost or energy usage
-
-Recommendations are provided alongside findings to guide improvements.
-
----
-
-## ⚠️ Limitations
-
-* Estimates of energy or cost are heuristic and may vary by environment
-* Language support may differ in depth (some languages have more complete pattern detection than others)
-* Results should be interpreted as advisory, not definitive
-
----
-
-## 🛣️ Roadmap
-
-Planned improvements include:
-
-* Expanded language support
-* Improved scoring calibration
-* Better benchmarking and validation datasets
-* Enhanced GitHub App integration
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome. Please open issues or pull requests to suggest improvements, report bugs, or extend functionality.
-
----
-
-## 📄 License
-
-See repository for license details.
-
----
-
-## 🧭 Summary
-
-SustainaBot is an experimental but promising tool aimed at helping developers make more informed decisions about the broader impact of their code. It is best used alongside existing tooling as part of a holistic engineering workflow.
+If sustainabot should reuse OikosBot's analysis, depend on it as an external
+crate / service from `hyperpolymath/oikosbot`; do **not** re-vendor it here.
