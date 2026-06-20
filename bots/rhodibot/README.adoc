@@ -287,9 +287,9 @@ Rhodibot is a Tier 1 Verifier in the gitbot-fleet hierarchy:
 | Tier 1 Verifier
 | Sibling (mathematical/formal verification)
 
-| https://github.com/hyperpolymath/sustainabot[sustainabot]
+| link:../sustainabot/README.adoc[sustainabot]
 | Tier 1 Verifier
-| Sibling (ecological/economic standards)
+| Sibling (ecological/economic standards) — reserved fleet slot, _not_ the standalone OikosBot (`hyperpolymath/oikosbot`)
 
 | glambot
 | Tier 2

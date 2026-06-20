@@ -65,6 +65,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           BEFORE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
+          # Untrusted PR text — consumed only via env + grep -F (never eval'd).
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
 
@@ -86,14 +89,18 @@ jobs:
           echo "Deleted tracked files vs $base: $deleted (limit ${MAX_DELETIONS})"
 
           # Intentional large removals: put [mass-delete-ok] in any commit
-          # message in the range (or the PR title/body).
+          # message in the range, or in the PR title/body.
           if git log --format='%B' "${base}..${HEAD_SHA}" | grep -qF '[mass-delete-ok]'; then
-            echo "Override marker [mass-delete-ok] present — tripwire bypassed by intent."
+            echo "Override marker [mass-delete-ok] present in a commit message — tripwire bypassed by intent."
+            exit 0
+          fi
+          if printf '%s\n%s\n' "${PR_TITLE:-}" "${PR_BODY:-}" | grep -qF '[mass-delete-ok]'; then
+            echo "Override marker [mass-delete-ok] present in the PR title/body — tripwire bypassed by intent."
             exit 0
           fi
 
           if [ "$deleted" -gt "${MAX_DELETIONS}" ]; then
-            echo "::error::$deleted files deleted vs base (limit ${MAX_DELETIONS}). If intentional, add [mass-delete-ok] to a commit message in this change. Refusing to let main be silently gutted again."
+            echo "::error::$deleted files deleted vs base (limit ${MAX_DELETIONS}). If intentional, add [mass-delete-ok] to a commit message OR the PR title/body. Refusing to let main be silently gutted again."
             git diff --diff-filter=D --name-only "$base" "$HEAD_SHA" | head -40 | sed 's/^/  deleted: /'
             exit 1
           fi
