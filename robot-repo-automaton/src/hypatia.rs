@@ -562,7 +562,7 @@ impl CicdHyperAClient {
     /// - Auto-approve rules that consistently produce successful fixes
     pub async fn report_results(
         &self,
-        repo_path: &PathBuf,
+        repo_path: &Path,
         results: &[RuleExecutionResult],
     ) -> crate::Result<()> {
         if !self.config.enable_feedback {

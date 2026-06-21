@@ -618,7 +618,6 @@ impl Fixer {
 
         content
             .replace("gitbot-fleet", repo_name)
-            .replace("hyperpolymath", "hyperpolymath")
             .replace("{{LICENSE}}", "MPL-2.0")
             .replace("{{YEAR}}", &year)
             .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")

@@ -20,7 +20,7 @@ use clap::{Parser, Subcommand};
 use robot_repo_automaton::prelude::*;
 use robot_repo_automaton::github::{GitHubClient, CreatePullRequest};
 use robot_repo_automaton::confidence::ThresholdConfig;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 
@@ -712,7 +712,7 @@ async fn cmd_hooks(_config: Option<&Config>, action: HookAction) -> anyhow::Resu
 }
 
 /// Inspect the error catalog.
-fn cmd_catalog(path: &PathBuf, severity_filter: Option<&str>) -> anyhow::Result<()> {
+fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()> {
     let catalog = ErrorCatalog::from_file(path)?;
     println!(
         "Error Catalog: {} error types (v{})",
