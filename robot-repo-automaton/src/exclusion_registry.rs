@@ -135,11 +135,11 @@ impl ExclusionRegistry {
                 e
             ))
         })?;
-        Self::from_str(&source)
+        Self::parse(&source)
     }
 
     /// Parse from an in-memory A2ML string.
-    pub fn from_str(source: &str) -> Result<Self> {
+    pub fn parse(source: &str) -> Result<Self> {
         let raw: RawRegistry = toml::from_str(source).map_err(|e| {
             crate::error::Error::Config(format!("failed to parse exclusion registry: {e}"))
         })?;
@@ -270,7 +270,7 @@ impl ExclusionRegistry {
         }
 
         // Kill-switch check first — cheapest, catches everything.
-        if let Some(kill) = env::var("HYPATIA_AUTOMATION").ok() {
+        if let Ok(kill) = env::var("HYPATIA_AUTOMATION") {
             let k = kill.to_ascii_lowercase();
             if matches!(k.as_str(), "off" | "disabled" | "0" | "false" | "halt") {
                 return Decision::Deny {
@@ -445,7 +445,7 @@ reason = "upstream homebrew"
 "#;
 
     fn registry() -> ExclusionRegistry {
-        ExclusionRegistry::from_str(FIXTURE).unwrap()
+        ExclusionRegistry::parse(FIXTURE).unwrap()
     }
 
     #[test]

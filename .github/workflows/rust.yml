@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MPL-2.0
+name: Rust
+# Build + test + clippy gate for the three standalone Rust crates.
+# Added after a non-compiling crate (robot-repo-automaton) reached `main`
+# unnoticed: the only prior Rust CI was CodeQL in build-mode `none`
+# (buildless), so nothing actually compiled or tested these crates.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ['**']
+permissions:
+  contents: read
+env:
+  CARGO_TERM_COLOR: always
+  # reqwest=rustls-tls, git2=vendored-openssl, gix=rust-tls. OPENSSL_NO_VENDOR
+  # makes openssl-sys link the runner's preinstalled system OpenSSL instead of
+  # recompiling the vendored copy (matches the documented local build).
+  OPENSSL_NO_VENDOR: '1'
+jobs:
+  rust:
+    name: build · test · clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [robot-repo-automaton, shared-context, dashboard]
+    defaults:
+      run:
+        working-directory: ${{ matrix.crate }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Ensure clippy + rustfmt components
+        run: rustup component add clippy rustfmt
+      - name: Build (all targets)
+        run: cargo build --all-targets --verbose
+      - name: Test
+        run: cargo test --verbose
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Rustfmt check (informational)
+        # Pre-existing formatting drift is not yet gated; surfaced here so it
+        # stays visible without blocking. Flip to a hard gate after a dedicated
+        # `cargo fmt` pass lands.
+        run: cargo fmt --check
+        continue-on-error: true
