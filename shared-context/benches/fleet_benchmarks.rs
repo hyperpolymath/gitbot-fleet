@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Performance benchmarks for gitbot-fleet operations
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use gitbot_shared_context::{BotId, Context, Finding, Severity};
+use std::hint::black_box;
 use std::path::PathBuf;
 
 /// Benchmark context creation

@@ -12,7 +12,7 @@ toc::[]
 
 == Current State
 
-Gitbot Fleet coordinates 11 bots through a shared-context system with safety-triangle-aware
+Gitbot Fleet coordinates 9 bots through a shared-context system with safety-triangle-aware
 routing. The fleet-coordinator dispatches findings from Hypatia scans to specialised bots
 based on confidence thresholds (Eliminate >= 0.95, Substitute >= 0.85, Control < 0.85).
 
@@ -24,16 +24,19 @@ based on confidence thresholds (Eliminate >= 0.95, Substitute >= 0.85, Control <
 
 | rhodibot | Git operations, RSR enforcement | Yes
 | echidnabot | Quality verification, multi-prover | Yes
-| sustainabot | Dependency management | Yes
+| sustainabot | Eco/econ standards — _reserved slot, empty_ (standalone impl extracted to `hyperpolymath/oikosbot`) | Yes
 | glambot | Presentation, badges, formatting | Yes
 | seambot | Integration seam maintenance | Yes
 | finishingbot | Completion of partial work | Yes
 | panicbot | Security scanning (panic-attack) | No (uses panic-attack roadmap)
-| gsbot | Git-seo, discoverability | Yes
 | accessibilitybot | Accessibility compliance | Yes
 | cipherbot | Cryptographic hygiene | Yes
-| the-hotchocolabot | Developer experience, warmth | Yes
 |===
+
+Standalone repos kept out of the fleet roster:
+
+* `gsbot` - separate repo: https://github.com/hyperpolymath/gsbot
+* `hotchocolabot` - separate repo: https://github.com/hyperpolymath/hotchocolabot
 
 **Infrastructure:**
 

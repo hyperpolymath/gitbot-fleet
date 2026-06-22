@@ -297,6 +297,8 @@ impl Detector {
                     }
                 }
 
+                // read_to_string returns Err on non-UTF8 bytes, so the
+                // `if let Ok` here also implements the "skip non-UTF8" intent.
                 if let Ok(content) = std::fs::read_to_string(file_path) {
                     if re.is_match(&content) {
                         affected.push(file_path.clone());
@@ -377,6 +379,8 @@ impl Detector {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::catalog::{Detection, Fix, FixAction};
+    use std::collections::HashMap;
     use tempfile::TempDir;
 
     #[test]
@@ -403,5 +407,58 @@ mod tests {
         let detector = Detector::new(temp.path().to_path_buf()).unwrap();
         assert!(detector.file_exists(".github/workflows/ci.yml"));
         assert!(!detector.file_exists(".github/workflows/nonexistent.yml"));
+    }
+
+    fn content_match_error(condition: &str, files: Vec<String>) -> ErrorType {
+        ErrorType {
+            id: "TEST-CONTENT".to_string(),
+            name: "content-match regression".to_string(),
+            severity: Severity::Medium,
+            category: "test".to_string(),
+            description: "regression coverage for detect_content_match".to_string(),
+            detection: Detection {
+                method: DetectionMethod::ContentMatch,
+                files,
+                condition: Some(condition.to_string()),
+                extension_map: HashMap::new(),
+            },
+            affected_repos: vec![],
+            fix: Fix {
+                action: FixAction::Modify,
+                target: String::new(),
+                reason: None,
+                modification: None,
+                fallback: None,
+            },
+            commit_message: "test".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_content_match_detects_and_skips_non_utf8() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("hit.txt"), "contains believe_me here").unwrap();
+        std::fs::write(temp.path().join("miss.txt"), "nothing to see").unwrap();
+        // Invalid UTF-8: detect_content_match must skip this (not panic) — the
+        // bug fix relies on std::fs::read_to_string returning Err here.
+        std::fs::write(temp.path().join("blob.bin"), [0xff, 0xfe, 0x62, 0x6d]).unwrap();
+
+        let detector = Detector::new(temp.path().to_path_buf()).unwrap();
+
+        // Positive: regex hits hit.txt; the non-UTF8 blob is skipped cleanly.
+        assert!(
+            detector
+                .detect(&content_match_error("believe_me", vec!["*".to_string()]))
+                .is_some(),
+            "should detect the file whose contents match the regex"
+        );
+
+        // Negative: a token present in no valid-UTF8 file yields no issue.
+        assert!(
+            detector
+                .detect(&content_match_error("no_such_token", vec!["*".to_string()]))
+                .is_none(),
+            "should report nothing when no file matches"
+        );
     }
 }

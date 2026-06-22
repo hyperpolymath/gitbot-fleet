@@ -32,7 +32,7 @@ PR / issue for human review.
 | **cipherbot** | Crypto + secret hygiene; policy-driven cipher checks |
 | **gsbot** | General-services: backup/load/export fixtures and operational scripts |
 | **panicbot** | Panic + crash-capture surfaces |
-| **the-hotchocolabot** | Comfort / human-facing channels; non-blocking advisory output |
+| **hotchocolabot** | Comfort / human-facing channels; non-blocking advisory output |
 
 Component-readiness grades (CRG) for each bot live in
 [`READINESS.md`](https://github.com/hyperpolymath/gitbot-fleet/blob/main/READINESS.md).

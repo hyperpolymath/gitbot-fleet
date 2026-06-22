@@ -409,8 +409,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 
 # Clone repository
-git clone https://github.com/Hyperpolymath/the-hotchocolabot.git
-cd the-hotchocolabot
+git clone https://github.com/Hyperpolymath/hotchocolabot.git
+cd hotchocolabot
 
 # Copy and edit configuration
 cp config.toml.example config.toml

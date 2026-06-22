@@ -70,7 +70,7 @@
 - [ ] Hardware documentation (BOM, wiring, assembly)
 - [ ] Educational materials included
 
-**Repository**: https://github.com/Hyperpolymath/the-hotchocolabot
+**Repository**: https://github.com/Hyperpolymath/hotchocolabot
 
 ### ✅ 5. Partnership Letters
 

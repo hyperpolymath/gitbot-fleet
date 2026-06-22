@@ -34,7 +34,7 @@ clap = { version = "4.6.1", features = ["derive", "env"] }
 # Web framework (for webhook receiver)
 axum = { version = "0.8.9", features = ["macros"] }
 tower = "0.5.3"
-tower-http = { version = "0.6.11", features = ["trace", "cors"] }
+tower-http = { version = "0.7.0", features = ["trace", "cors"] }
 
 # HTTP client (for GitHub API)
 reqwest = { version = "0.12.28", features = ["json", "rustls-tls"], default-features = false }
@@ -42,7 +42,7 @@ reqwest = { version = "0.12.28", features = ["json", "rustls-tls"], default-feat
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-toml = "1.1.2+spec-1.1.0"
+toml = "1.1.2"
 
 # Git operations
 # Using vendored-openssl to avoid system OpenSSL dependency (libssl-dev)
