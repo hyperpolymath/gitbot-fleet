@@ -140,7 +140,6 @@ Complete checklist for making echidnabot a perfect release.
 - [x] Justfile for task automation
 
 ### To Add
-- [ ] flake.nix for Nix users
 - [ ] cargo-deb configuration
 - [ ] cargo-rpm configuration
 - [ ] Homebrew formula (optional)
@@ -208,7 +207,6 @@ Complete checklist for making echidnabot a perfect release.
 3. **This Month**
    - Achieve MVP release (v0.2)
    - 50% test coverage
-   - flake.nix packaging
 
 4. **Next Quarter**
    - v1.0 production release

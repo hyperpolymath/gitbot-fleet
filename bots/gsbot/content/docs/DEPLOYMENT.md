@@ -39,8 +39,8 @@ This guide covers deployment options for the Garment Sustainability Bot.
 ### Quick Start
 
 ```bash
-git clone https://github.com/hyperpolymath/gitbot-fleet.git
-cd gitbot-fleet/bots/gsbot
+git clone https://github.com/hyperpolymath/gsbot.git
+cd gsbot
 cp .env.example .env        # then edit .env: set DISCORD_TOKEN
 just init                   # build + load sample data
 just run                    # run the bot
@@ -50,8 +50,8 @@ just run                    # run the bot
 
 1. **Clone repository:**
 ```bash
-git clone https://github.com/hyperpolymath/gitbot-fleet.git
-cd gitbot-fleet/bots/gsbot
+git clone https://github.com/hyperpolymath/gsbot.git
+cd gsbot
 ```
 
 2. **Configure environment:**
@@ -157,8 +157,8 @@ sudo apt update && sudo apt install -y git
 
 3. **Clone and build:**
 ```bash
-git clone https://github.com/hyperpolymath/gitbot-fleet.git
-cd gitbot-fleet/bots/gsbot
+git clone https://github.com/hyperpolymath/gsbot.git
+cd gsbot
 cargo build --release --bin gsbot
 ```
 
@@ -178,9 +178,9 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/gitbot-fleet/bots/gsbot
-EnvironmentFile=/home/ubuntu/gitbot-fleet/bots/gsbot/.env
-ExecStart=/home/ubuntu/gitbot-fleet/bots/gsbot/target/release/gsbot
+WorkingDirectory=/home/ubuntu/gsbot
+EnvironmentFile=/home/ubuntu/gsbot/.env
+ExecStart=/home/ubuntu/gsbot/target/release/gsbot
 Restart=always
 RestartSec=10
 
@@ -242,7 +242,7 @@ Schedule it from cron, e.g.:
 
 ```bash
 # crontab -e
-0 2 * * * cd /home/ubuntu/gitbot-fleet/bots/gsbot && ./target/release/gsbot-backup-db
+0 2 * * * cd /home/ubuntu/gsbot && ./target/release/gsbot-backup-db
 ```
 
 You can also export to JSON:
@@ -458,7 +458,7 @@ If an update fails:
 
 ## Support
 
-- GitHub Issues: https://github.com/hyperpolymath/gitbot-fleet/issues
+- GitHub Issues: https://github.com/hyperpolymath/gsbot/issues
 - Documentation: README.adoc, CLAUDE.md
 - Architecture: docs/ARCHITECTURE.md
 - API docs: docs/API.md

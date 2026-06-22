@@ -30,6 +30,12 @@ pub enum BotId {
     Cipherbot,
     /// Targeted audit bot wrapping panic-attack static analysis
     Panicbot,
+    /// External ecological/economic code-analysis App (OikosBot,
+    /// `hyperpolymath/oikosbot`) that publishes findings via the optional
+    /// `oikosbot-fleet` bridge. NOT the reserved `Sustainabot` fleet slot and
+    /// NOT a fleet-managed roster bot — like `Custom`, it is deliberately
+    /// excluded from `all()` so the coordinator never dispatches it.
+    Oikosbot,
     /// Custom/external bot
     Custom(u32),
 }
@@ -48,6 +54,7 @@ impl fmt::Display for BotId {
             BotId::Accessibilitybot => write!(f, "accessibilitybot"),
             BotId::Cipherbot => write!(f, "cipherbot"),
             BotId::Panicbot => write!(f, "panicbot"),
+            BotId::Oikosbot => write!(f, "oikosbot"),
             BotId::Custom(id) => write!(f, "custom-{}", id),
         }
     }
@@ -57,7 +64,7 @@ impl BotId {
     /// Get the tier this bot belongs to
     pub fn tier(&self) -> Tier {
         match self {
-            BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot | BotId::Panicbot => Tier::Verifier,
+            BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot | BotId::Oikosbot | BotId::Panicbot => Tier::Verifier,
             BotId::Glambot | BotId::Seambot | BotId::Finishbot | BotId::Accessibilitybot => Tier::Finisher,
             BotId::Cipherbot => Tier::Specialist,
             BotId::RobotRepoAutomaton => Tier::Executor,
@@ -99,6 +106,7 @@ impl BotId {
             "accessibilitybot" | "accessibility-bot" => Some(BotId::Accessibilitybot),
             "cipherbot" | "cipher-bot" => Some(BotId::Cipherbot),
             "panicbot" | "panic-bot" => Some(BotId::Panicbot),
+            "oikosbot" | "oikos-bot" => Some(BotId::Oikosbot),
             _ => None,
         }
     }
@@ -353,6 +361,19 @@ impl BotInfo {
                 ],
                 can_fix: false,
                 depends_on: vec![BotId::Rhodibot],
+            },
+            BotId::Oikosbot => Self {
+                id,
+                name: "OikosBot".to_string(),
+                description: "External ecological/economic code-analysis App (hyperpolymath/oikosbot) that publishes via the optional oikosbot-fleet bridge — distinct from the reserved Sustainabot slot".to_string(),
+                version: "0.1.0".to_string(),
+                categories: vec![
+                    "sustainability".to_string(),
+                    "ecological".to_string(),
+                    "economic".to_string(),
+                ],
+                can_fix: false,
+                depends_on: vec![],
             },
             BotId::Custom(_) => Self {
                 id,

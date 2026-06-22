@@ -75,7 +75,7 @@ implementation**:
 | `examples/*.affine` (e.g. `SafeDOMExample.affine`) | **fleet** | fleet → standalone (on `.affine` migration) | Estate `.affine` migration touched the fleet copy first; will reach standalone when the SafeDOM stdlib lands (`affinescript#56`). |
 | `examples/*.json`, `examples/*.ts`, `examples/*.rescript` | **standalone** | standalone → fleet | Reference examples for SDK users. |
 | `echidnabot.example.toml`, `echidnabot.toml` | **standalone** | standalone → fleet | Configuration *schema* is SDK surface; fleet should mirror schema and only override defaults. |
-| `Containerfile`, `flake.nix`, `guix.scm` | **standalone** | standalone → fleet | Reproducible-build manifests are SDK surface. Fleet may override base image for deploy. |
+| `Containerfile`, `guix.scm` | **standalone** | standalone → fleet | Reproducible-build manifests are SDK surface. Fleet may override base image for deploy. |
 | `packaging/**` (debian/, rpm/, arch/, aur/, chocolatey/, macports/, scoop/) | **standalone** | standalone → fleet (when versions bump) | Distribution packaging is release-process artefact. |
 | `hooks/**` (git hooks: SPDX, SHA-pins, CodeQL, permissions, tsjs-blocker) | **standalone** | standalone → fleet | Governance hooks; standalone is the source of truth. |
 | `README.adoc`, `README.md`, `CHANGELOG.md` (vs `CHANGELOG.adoc`), `ROADMAP.adoc`, `CITATION.cff`, `codemeta.json`, `PALIMPSEST.adoc` | **standalone** | standalone → fleet | Doc canon. The `.md` vs `.adoc` CHANGELOG split is a long-standing inconsistency; standalone uses both. |

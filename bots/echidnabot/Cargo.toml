@@ -28,7 +28,7 @@ tokio = { version = "1.52.3", features = ["full"] }
 # HTTP framework
 axum = { version = "0.8.9", features = ["macros"] }
 tower = "0.5.3"
-tower-http = { version = "0.6.11", features = ["cors", "trace", "request-id"] }
+tower-http = { version = "0.7.0", features = ["cors", "trace", "request-id"] }
 
 # GraphQL
 async-graphql = { version = "7.2.1", features = ["uuid", "chrono"] }
@@ -43,7 +43,7 @@ toml = "1.1.2+spec-1.1.0"
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite", "postgres", "uuid", "chrono"] }
 
 # GitHub API
-octocrab = "0.51.0"
+octocrab = "0.53.0"
 
 # HTTP client (for ECHIDNA communication)
 reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
@@ -51,7 +51,7 @@ reqwest = { version = "0.12.28", default-features = false, features = ["json", "
 # Utilities
 async-trait = "0.1.89"
 uuid = { version = "1.23.2", features = ["v4", "serde"] }
-chrono = { version = "0.4.44", features = ["serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
 thiserror = "2.0.18"
 anyhow = "1.0.102"
 tracing = "0.1.44"

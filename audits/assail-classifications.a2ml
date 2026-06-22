@@ -1,0 +1,69 @@
+;; SPDX-License-Identifier: MPL-2.0
+;; assail-classifications.a2ml — audited panic-attack findings for gitbot-fleet.
+;;
+;; Read by panic-attack >= 2.5.5 (load_user_classifications): findings
+;; matching (file, category) flip to suppressed = true after the kanren
+;; structural pass. Entries are AUDITED-SOUND residuals with rationale;
+;; the registry lives apart from the source so a code edit cannot
+;; self-suppress (panic-attack CLAUDE.md, User-Classification Registry).
+;;
+;; Audit trail: 2026-06-11 estate-loop session — fresh panic-attack
+;; 2.5.5 scan; every entry inspected at source. Two FP classes:
+;;
+;;   1. Remediation scripts (scripts/fix-*.sh) necessarily CONTAIN the
+;;      patterns they search for and replace — the same reason these
+;;      scripts carry `hypatia: allow` pragmas for hypatia's scanner.
+;;   2. Detector unit tests (cipherbot analyzers) assert detection by
+;;      feeding secret-shaped fixture literals to the analyzer inside
+;;      `#[cfg(test)] mod tests`.
+
+(assail-classifications
+  ;; ── Remediation scripts: pattern strings, not vulnerabilities ────
+  (classification
+    (file "scripts/fix-dynamic-code-exec.sh")
+    (category "CommandInjection")
+    (audit "remediation tool for PA011 — greps for and rewrites eval/exec patterns")
+    (rationale "contains eval as a SEARCH pattern; does not evaluate untrusted input"))
+  (classification
+    (file "scripts/fix-eval-to-safe.sh")
+    (category "CommandInjection")
+    (audit "remediation tool — replaces eval usage with safe alternatives")
+    (rationale "contains eval as a SEARCH/REPLACE pattern; does not evaluate untrusted input"))
+  (classification
+    (file "scripts/fix-heredoc-install.sh")
+    (category "CommandInjection")
+    (audit "remediation tool for PA009-shell-heredoc-eval; carries hypatia allow pragma at line 3")
+    (rationale "contains curl|bash / eval $() as SEARCH patterns; does not itself download-then-run"))
+  (classification
+    (file "scripts/fix-command-injection.sh")
+    (category "CommandInjection")
+    (audit "remediation tool for PA009 — quotes unquoted expansions")
+    (rationale "contains injection-shaped strings as SEARCH patterns only"))
+  (classification
+    (file "scripts/fix-secret-to-env.sh")
+    (category "HardcodedSecret")
+    (audit "remediation tool for PA017 — moves literals into env vars")
+    (rationale "contains secret-shaped strings as SEARCH patterns only"))
+  (classification
+    (file "scripts/fix-hardcoded-secrets.sh")
+    (category "HardcodedSecret")
+    (audit "remediation tool for PA017")
+    (rationale "contains secret-shaped strings as SEARCH patterns only"))
+  (classification
+    (file "scripts/fix-deno-permissions.sh")
+    (category "ExcessivePermissions")
+    (audit "remediation tool — replaces `deno -A` with scoped permission flags")
+    (rationale "contains -A as the SEARCH pattern it removes from other repos"))
+
+  ;; ── Detector tests: fixtures asserting detection works ───────────
+  (classification
+    (file "bots/cipherbot/src/analyzers/config.rs")
+    (category "HardcodedSecret")
+    (audit "config.rs:145+ `mod tests` — test_detect_hardcoded_secret feeds sk-1234… fixture to the analyzer")
+    (rationale "test fixture proving the secret detector detects; not a credential"))
+  (classification
+    (file "bots/cipherbot/src/analyzers/infra.rs")
+    (category "HardcodedSecret")
+    (audit "infra.rs:174+ `mod tests` — fixture password literal fed to the analyzer")
+    (rationale "test fixture proving the secret detector detects; not a credential"))
+)

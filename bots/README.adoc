@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= bots/ — fleet bot adapters
+:icons: font
+
+Each subdirectory here is one member of the gitbot fleet. A bot directory is a
+**thin adapter**: a small Rust crate (`Cargo.toml` + `src/` + `tests/`) that
+wires one analysis capability into the fleet's `shared-context` interface and the
+safety-triangle router. The canonical `BotId` set lives in
+link:../shared-context/src/bot.rs[`shared-context/src/bot.rs`].
+
+== Guardrail — do NOT vendor standalone products here
+
+A bot slot is an *adapter*, not a home for an entire external project. Do not
+copy a whole standalone repository (its own workspace, analyzers, containers,
+deployment, docs…) into `bots/<name>/`.
+
+[IMPORTANT]
+====
+This rule exists because it was once broken: a full copy of **OikosBot** (a
+separate eco/econ code-analysis App) was vendored into `bots/sustainabot/`,
+including a Rust workspace that grew a hard `path` dependency back into
+`shared-context/`. It has since been extracted to its own repo,
+https://github.com/hyperpolymath/oikosbot[`hyperpolymath/oikosbot`], and the slot
+reset to a placeholder. See `sustainabot/README.adoc`.
+====
+
+If a bot needs a heavyweight capability that deserves its own project, build that
+project in its **own repository** and have the adapter here depend on it as an
+external crate or service. Keep the adapter thin.

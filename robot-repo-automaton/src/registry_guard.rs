@@ -152,9 +152,7 @@ fn parse_full_name(url: &str) -> Option<String> {
     for prefix in ["https://", "http://", "ssh://", "git://"] {
         if let Some(rest) = s.strip_prefix(prefix) {
             // Skip the host segment.
-            let mut parts = rest.splitn(2, '/');
-            let _host = parts.next()?;
-            let path = parts.next()?;
+            let (_host, path) = rest.split_once('/')?;
             return Some(path.to_string());
         }
     }

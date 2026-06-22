@@ -1,0 +1,1178 @@
+{
+  "findings": [
+    {
+      "reason": "Action urin 21 JRE\n        uses: actions/setup-java@be666c2fcd27 needs attention",
+      "type": "unpinned_action",
+      "file": "verify-proofs.yml",
+      "action": "pin_sha",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in ci.yml",
+      "type": "missing_timeout_minutes",
+      "file": "ci.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in clusterfuzzlite.yml",
+      "type": "missing_timeout_minutes",
+      "file": "clusterfuzzlite.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in clusterfuzzlite.yml",
+      "type": "missing_timeout_minutes",
+      "file": "clusterfuzzlite.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in codeql.yml",
+      "type": "missing_timeout_minutes",
+      "file": "codeql.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dependabot-automerge.yml",
+      "type": "missing_timeout_minutes",
+      "file": "dependabot-automerge.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "missing_timeout_minutes",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "missing_timeout_minutes",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "missing_timeout_minutes",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "missing_timeout_minutes",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in dogfood-gate.yml",
+      "type": "missing_timeout_minutes",
+      "file": "dogfood-gate.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in governance.yml",
+      "type": "missing_timeout_minutes",
+      "file": "governance.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in hypatia-scan.yml",
+      "type": "missing_timeout_minutes",
+      "file": "hypatia-scan.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in language-blockers.yml",
+      "type": "missing_timeout_minutes",
+      "file": "language-blockers.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in language-blockers.yml",
+      "type": "missing_timeout_minutes",
+      "file": "language-blockers.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in mirror.yml",
+      "type": "missing_timeout_minutes",
+      "file": "mirror.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "missing_timeout_minutes",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "missing_timeout_minutes",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "missing_timeout_minutes",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "missing_timeout_minutes",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "missing_timeout_minutes",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in quality.yml",
+      "type": "missing_timeout_minutes",
+      "file": "quality.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "missing_timeout_minutes",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "missing_timeout_minutes",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "missing_timeout_minutes",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "missing_timeout_minutes",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "missing_timeout_minutes",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "missing_timeout_minutes",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in release.yml",
+      "type": "missing_timeout_minutes",
+      "file": "release.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "missing_timeout_minutes",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "missing_timeout_minutes",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "missing_timeout_minutes",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "missing_timeout_minutes",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "missing_timeout_minutes",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in rust.yml",
+      "type": "missing_timeout_minutes",
+      "file": "rust.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in scorecard.yml",
+      "type": "missing_timeout_minutes",
+      "file": "scorecard.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in secret-scanner.yml",
+      "type": "missing_timeout_minutes",
+      "file": "secret-scanner.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in security-policy.yml",
+      "type": "missing_timeout_minutes",
+      "file": "security-policy.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "missing_timeout_minutes",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "missing_timeout_minutes",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "missing_timeout_minutes",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "missing_timeout_minutes",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "missing_timeout_minutes",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in tests.yml",
+      "type": "missing_timeout_minutes",
+      "file": "tests.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Issue in codeql.yml",
+      "type": "codeql_missing_actions_language",
+      "file": "codeql.yml",
+      "action": "flag",
+      "rule_module": "workflow_audit",
+      "severity": "medium"
+    },
+    {
+      "reason": "Repository has 1 non-main remote branch(es). Policy: single main branch only.",
+      "type": "GS007",
+      "file": ".",
+      "action": "delete_remote_branches",
+      "rule_module": "git_state",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/codeql_missing_actions_language -- Hypatia workflow_audit: codeql_missing_actions_language -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "codeql.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "tests.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "security-policy.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "secret-scanner.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "scorecard.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "rust.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "rust.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "rust.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "rust.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "rust.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "rust.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "release.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "quality.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "quality.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "quality.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "quality.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "quality.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "quality.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "mirror.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "language-blockers.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "language-blockers.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "hypatia-scan.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "governance.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "dogfood-gate.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "dogfood-gate.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "dogfood-gate.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "dogfood-gate.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "dogfood-gate.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "dependabot-automerge.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "codeql.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "clusterfuzzlite.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "clusterfuzzlite.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/missing_timeout_minutes -- Hypatia workflow_audit: missing_timeout_minutes -- 2 day(s) old",
+      "type": "CSA001",
+      "file": "ci.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "Code scanning (Hypatia): hypatia/workflow_audit/unpinned_action -- Hypatia workflow_audit: unpinned_action -- 4 day(s) old",
+      "type": "CSA001",
+      "file": "verify-proofs.yml",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    },
+    {
+      "reason": "72 total open code-scanning alert(s) -- security hygiene review",
+      "type": "CSA002",
+      "file": "hyperpolymath/hypatia",
+      "action": "review",
+      "rule_module": "code_scanning_alerts",
+      "severity": "medium"
+    }
+  ],
+  "submission_metadata": {
+    "repo": "hyperpolymath/hypatia",
+    "commit": "5d52d91b90cbbed2a0b153044294bb21436bfd4b",
+    "submitted_at": "2026-06-02T16:06:08Z",
+    "scanner_version": "hypatia-v2"
+  }
+}

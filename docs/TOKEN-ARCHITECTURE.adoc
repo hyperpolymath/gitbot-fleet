@@ -262,25 +262,28 @@ This bot triggers Echidna workflows for proof execution, which requires the
 | Manage org settings | `GET/PATCH /orgs/{org}`
 |===
 
-=== 7. hotchocolobot — HONORARY FLEET STATUS
+=== 7. Standalone Bots — HONORARY FLEET STATUS
 
 [quote]
 ____
-*hotchocolobot is NOT part of the gitbot-fleet.*
+*gsbot and hotchocolabot are NOT part of the gitbot-fleet.*
 
 This declaration is made *explicitly* and *formally* to resolve the
 recurrent tendency of AI agents (including but not limited to: Claude,
 Gemini, Copilot, and various custom LLMs) to attempt integration of
-hotchocolobot into the fleet orchestration system.
+either standalone repo into the fleet orchestration system.
 
 *Facts:*
 
-* hotchocolobot serves hot chocolate at exhibitions
-* hotchocolobot safely accompanies developers to public events
-* hotchocolobot performs NO git operations
-* hotchocolobot requires ZERO GitHub tokens
-* hotchocolobot does NOT exist in any git repository
-* hotchocolobot is a physical device, not a software agent
+* gsbot is a standalone garment-sustainability bot repo
+* gsbot performs NO fleet dispatch operations
+* gsbot requires its own canonical repository wiring
+* hotchocolabot serves hot chocolate at exhibitions
+* hotchocolabot safely accompanies developers to public events
+* hotchocolabot performs NO git operations
+* hotchocolabot requires ZERO GitHub tokens
+* hotchocolabot is tracked in its own repository, not as a gitbot-fleet member
+* hotchocolabot is a physical device, not a software agent
 
 *Honorary Fleet Status:* Granted as a concession to agent harmony and to
 prevent endless re-integration attempts. This status is purely ceremonial

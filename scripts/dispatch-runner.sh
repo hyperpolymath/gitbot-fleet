@@ -135,6 +135,13 @@ OUTCOME_FILE="${HYPATIA_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
 OUTCOME_FILE_CENTRAL="${VERISIMDB_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
 mkdir -p "$(dirname "$OUTCOME_FILE")"
 
+# Repos that received at least one successful fix this run. Appended by
+# record_outcome (file, not a variable: execute_entry may run in
+# background subshells under --parallel) and consumed by the post-run
+# estate-rescan trigger so verisimdb-data reflects the fixes without
+# waiting for the nightly sweep.
+RESCAN_REPOS_FILE="$(mktemp /tmp/dispatch-rescan-repos.XXXXXX)"
+
 # --- Hypatia closed-loop contract ---
 #
 # Per hypatia/docs/operations/dispatch-runner-contract.adoc, after each
@@ -255,6 +262,7 @@ record_outcome() {
     case "$outcome" in
         success)
             hypatia_outcome="success"
+            echo "$repo" >> "$RESCAN_REPOS_FILE"
             ;;
         failure)
             hypatia_outcome="failure"
@@ -584,6 +592,35 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo ""
     echo "(Dry run — no changes were made)"
 fi
+
+# --- Trigger targeted estate rescan for fixed repos ---
+# Fire a single repository_dispatch to hypatia's estate-rescan workflow
+# listing every repo that received a successful fix this run. This is
+# the loop-closure step: the rescan refreshes verisimdb-data/scans, the
+# next pattern sync marks the fixed patterns resolved, and the numbers
+# actually drop. Best-effort: a missing token or API failure must never
+# fail the dispatch run itself.
+RESCAN_TOKEN="${FLEET_DISPATCH_TOKEN:-${GITHUB_TOKEN:-}}"
+if [[ "$DRY_RUN" != "true" && -s "$RESCAN_REPOS_FILE" && -n "$RESCAN_TOKEN" ]]; then
+    RESCAN_REPOS=$(sort -u "$RESCAN_REPOS_FILE" | tr '\n' ' ' | sed 's/ $//')
+    RESCAN_PAYLOAD=$(jq -n --arg repos "$RESCAN_REPOS" \
+        '{event_type: "estate-rescan", client_payload: {repos: $repos}}')
+    if curl -sf -X POST \
+        -H "Authorization: Bearer ${RESCAN_TOKEN}" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/hyperpolymath/hypatia/dispatches" \
+        -d "$RESCAN_PAYLOAD" >/dev/null; then
+        echo ""
+        echo "Estate rescan requested for: $RESCAN_REPOS"
+    else
+        echo ""
+        echo "WARN: estate-rescan dispatch failed (non-fatal); nightly sweep will catch up" >&2
+    fi
+elif [[ -s "$RESCAN_REPOS_FILE" && -z "$RESCAN_TOKEN" ]]; then
+    echo ""
+    echo "WARN: fixes landed but no FLEET_DISPATCH_TOKEN/GITHUB_TOKEN set — skipping targeted rescan (nightly sweep will catch up)" >&2
+fi
+rm -f "$RESCAN_REPOS_FILE" 2>/dev/null || true
 
 # --- Kin Protocol: write heartbeat ---
 KIN_DIR="${HOME}/.hypatia/kin"

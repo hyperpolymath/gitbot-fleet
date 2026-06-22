@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CHANGELOG.md (this file)
   - .well-known/ directory (security.txt, ai.txt, humans.txt)
   - Justfile with build automation
-  - flake.nix for Nix reproducibility
+  - guix.scm for Guix reproducibility
 
 === Changed
 - N/A (initial release)

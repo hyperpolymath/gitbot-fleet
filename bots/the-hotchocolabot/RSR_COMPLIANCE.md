@@ -19,13 +19,13 @@ HotChocolaBot follows the [Rhodium Standard Repository Framework](https://rhodiu
 | **Memory Safety** | ✅ | Bronze+ | Rust ownership model, zero unsafe blocks |
 | **Offline-First** | ✅ | Bronze | No network calls, air-gapped capable |
 | **Documentation** | ✅ | Silver | Comprehensive docs, tutorials, examples |
-| **Build System** | ✅ | Bronze+ | Justfile, Cargo, Nix, CI/CD |
+| **Build System** | ✅ | Bronze+ | Justfile, Cargo, Guix, CI/CD |
 | **Testing** | ✅ | Bronze | Unit tests, integration tests, mocks |
 | **Security** | ✅ | Bronze+ | SECURITY.md, audit, no CVEs |
 | **Community** | ✅ | Bronze+ | CoC, CONTRIBUTING, MAINTAINERS |
 | **Versioning** | ✅ | Bronze | Semantic Versioning 2.0.0 |
 | **Licensing** | ✅ | Bronze+ | Dual MIT/Apache-2.0, clear attribution |
-| **Reproducibility** | ✅ | Bronze+ | flake.nix, locked dependencies |
+| **Reproducibility** | ✅ | Bronze+ | guix.scm, locked dependencies |
 
 **Overall RSR Level**: **Bronze** (all categories meet minimum)
 **Stretch Goal**: **Silver** (enhanced documentation, testing, formal verification)
@@ -157,7 +157,7 @@ tokio = { version = "1.35", features = ["rt-multi-thread", "macros", "time"] }
 **Implementation**:
 - **Cargo**: Rust's built-in package manager and build system
 - **justfile**: 50+ recipes for common tasks (test, lint, build, deploy, etc.)
-- **flake.nix**: Nix reproducible builds, development shell
+- **guix.scm**: Guix reproducible builds, development shell
 - **GitHub Actions**: CI/CD on every push (test, lint, audit, cross-compile)
 - **Cargo.lock**: Locked dependency versions for reproducibility
 
@@ -321,15 +321,15 @@ Success No vulnerable packages found
 
 **Implementation**:
 - **Cargo.lock**: Committed to repository (exact dependency versions)
-- **flake.nix**: Nix reproducible builds with pinned nixpkgs
+- **guix.scm**: Guix reproducible builds with pinned Guix channels
 - **justfile**: Standardized build commands
 - **CI/CD**: Same build on all platforms
 - **Docker** (future): Containerized builds
 
 **Reproducibility Verification**:
 ```bash
-# Nix build (completely reproducible)
-nix build .#
+# Guix build (completely reproducible)
+guix build
 
 # Cargo build (reproducible with Cargo.lock)
 cargo build --release
@@ -384,13 +384,13 @@ RSR requires a `.well-known/` directory with metadata:
 - [x] Memory Safety (zero unsafe blocks)
 - [x] Offline-First (no network calls)
 - [x] Documentation (README, SECURITY, CoC, etc.)
-- [x] Build System (Justfile, Cargo, Nix, CI/CD)
+- [x] Build System (Justfile, Cargo, Guix, CI/CD)
 - [x] Testing (unit + integration, 100% pass rate)
 - [x] Security (SECURITY.md, audit, secure defaults)
 - [x] Community (CoC, CONTRIBUTING, MAINTAINERS, TPCF)
 - [x] Versioning (SemVer, CHANGELOG)
 - [x] Licensing (dual MIT/Apache-2.0, clear)
-- [x] Reproducibility (Cargo.lock, flake.nix)
+- [x] Reproducibility (Cargo.lock, guix.scm)
 
 ### Path to Silver:
 
@@ -481,7 +481,7 @@ All checks run automatically on every push via GitHub Actions:
 RSR compliance benefits from:
 - Rust language guarantees (memory + type safety)
 - Cargo ecosystem (reproducibility, security)
-- Nix (reproducible builds)
+- Guix (reproducible builds)
 - GitHub Actions (automated verification)
 - Open-source community best practices
 

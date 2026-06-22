@@ -81,6 +81,24 @@ Control    (report < 0.85)        →  Human review required
 3. No hardcoded secrets — use env vars with `${VAR:-}` defaults.
 4. Fix scripts must be idempotent (safe to run multiple times).
 5. Confidence thresholds gate all automated actions.
+6. **`bots/<name>/` directories are THIN ADAPTERS, not homes for standalone
+   products.** Never vendor an entire external project (its own Cargo
+   workspace, analyzers, containers, deployment, docs) into a bot slot, and
+   never let a bot crate add a `path` dependency that escapes the repo. If a
+   capability deserves its own project, build it in its own repository and
+   depend on it externally. See [`bots/README.adoc`](../bots/README.adoc).
+   - **Disambiguation:** `sustainabot` (this fleet's eco/econ slot, kept as
+     `BotId::Sustainabot`) is **not** `OikosBot` and **not** `oikos`. A misfiled
+     full copy of OikosBot once lived in `bots/sustainabot/`; it was extracted to
+     `hyperpolymath/oikosbot` and the slot reset to a placeholder. `oikos` is a
+     separate DSL (`hyperpolymath/oikos-economics-accounting-dsl`).
+7. **Mark intentional mass-deletions.** The Repo Integrity Guard
+   (`.github/workflows/repo-integrity-guard.yml`) fails any change that deletes
+   more than `MAX_DELETIONS` (50) tracked files vs. base — it exists because
+   `main` was once silently gutted from 1777 files to 2. For a *deliberate*
+   large removal, include the literal marker `[mass-delete-ok]` in a commit
+   message in the range, **or** in the PR title/body. Never weaken the guard or
+   trim its critical-file list just to get a change through.
 
 ## Repo health
 
