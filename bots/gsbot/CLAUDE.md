@@ -146,7 +146,7 @@ invoking guild member has the Administrator permission.
 - Keep `domain.rs` pure/total; it is the SPARK substitution boundary.
 - Preserve observable behaviour when porting/refactoring (point awards, embed
   fields, command names and aliases mirror the original cogs).
-- Every source file carries the `SPDX-License-Identifier: MPL-2.0`
+- Every source file carries the `SPDX-License-Identifier: CC-BY-SA-4.0`
   header.
 - Conventional, atomic commits; feature branches off `main`.
 - Run `just lint` and `just test` before opening a PR.

@@ -474,4 +474,4 @@ cargo watch -x 'bench --bench fleet_benchmarks'
 
 ## License
 
-SPDX-License-Identifier: MPL-2.0
+SPDX-License-Identifier: CC-BY-SA-4.0

@@ -40,7 +40,7 @@ else
     # grep -I.
     mapfile -t FILES < <(
         git ls-files -z |
-        xargs -0 grep -lI -E "SPDX-License-Identifier:.*(-or-later-or-later|-or-later\+|\+-or-later)" 2>/dev/null || true
+        xargs -0 grep -lI -E "SPDX-License-Identifier:MPL-2.0*(-or-later-or-later|-or-later\+|\+-or-later)" 2>/dev/null || true
     )
 fi
 
@@ -56,7 +56,7 @@ for f in "${FILES[@]}"; do
     # Three repairs, applied only on lines that match
     # SPDX-License-Identifier: — never globally, to avoid breaking
     # unrelated text or test fixtures.
-    if grep -qE "SPDX-License-Identifier:.*(-or-later-or-later|-or-later\+|\+-or-later)" "$f"; then
+    if grep -qE "SPDX-License-Identifier:MPL-2.0*(-or-later-or-later|-or-later\+|\+-or-later)" "$f"; then
         # Use a temp file (sed -i portability across BSD/GNU)
         tmp=$(mktemp)
         sed -E \
