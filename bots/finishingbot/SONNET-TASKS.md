@@ -22,7 +22,7 @@ Finishingbot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyz
 - Audit ALL `.rs` files in `src/` for SPDX headers
 - Every file must have:
   ```rust
-  // SPDX-License-Identifier: MPL-2.0
+  // SPDX-License-Identifier: CC-BY-SA-4.0
   // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
   ```
 - If any file has `MPL-2.0`, change to `MPL-2.0`

@@ -37,7 +37,7 @@ Glambot is a Tier 2 (Finisher) bot in the gitbot-fleet ecosystem. It analyzes re
 ### 2.3 Fix SPDX headers
 - Every `.rs` file must have:
   ```rust
-  // SPDX-License-Identifier: MPL-2.0
+  // SPDX-License-Identifier: CC-BY-SA-4.0
   // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
   ```
 
