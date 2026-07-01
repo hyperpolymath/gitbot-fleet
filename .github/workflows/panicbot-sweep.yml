@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # stable
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # stable
         with:
           toolchain: stable
 
@@ -106,6 +106,21 @@ jobs:
           echo "- **Findings files**: $TOTAL" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Mode**: ${{ inputs.mode || 'advisor' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Scope**: ${{ inputs.scope || 'all' }}" >> "$GITHUB_STEP_SUMMARY"
+
+      # upload-artifact rejects ':' in paths; a single legacy colon-named file
+      # failed the whole sweep for 3 consecutive weeks. The writer
+      # (scripts/submit-finding.sh) already emits colon-free names — this guard
+      # fails LOUDLY (naming the offender) if any regressed writer reintroduces
+      # one, instead of the upload step failing cryptically.
+      - name: Guard — no artifact-illegal filenames
+        if: always()
+        run: |
+          BAD=$(find shared-context/findings -name '*:*' -print)
+          if [ -n "$BAD" ]; then
+            echo "::error::Colon-named findings file(s) break artifact upload — fix the writer, then rename:"
+            echo "$BAD"
+            exit 1
+          fi
 
       - name: Upload findings artifact
         if: always()
