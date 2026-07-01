@@ -107,6 +107,21 @@ jobs:
           echo "- **Mode**: ${{ inputs.mode || 'advisor' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Scope**: ${{ inputs.scope || 'all' }}" >> "$GITHUB_STEP_SUMMARY"
 
+      # upload-artifact rejects ':' in paths; a single legacy colon-named file
+      # failed the whole sweep for 3 consecutive weeks. The writer
+      # (scripts/submit-finding.sh) already emits colon-free names — this guard
+      # fails LOUDLY (naming the offender) if any regressed writer reintroduces
+      # one, instead of the upload step failing cryptically.
+      - name: Guard — no artifact-illegal filenames
+        if: always()
+        run: |
+          BAD=$(find shared-context/findings -name '*:*' -print)
+          if [ -n "$BAD" ]; then
+            echo "::error::Colon-named findings file(s) break artifact upload — fix the writer, then rename:"
+            echo "$BAD"
+            exit 1
+          fi
+
       - name: Upload findings artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
