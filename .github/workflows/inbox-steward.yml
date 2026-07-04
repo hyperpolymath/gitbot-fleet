@@ -166,7 +166,7 @@ jobs:
       - name: Validate PRs
         id: validate
         env:
-          GH_TOKEN: ${{ secrets.FARM_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRS_JSON: ${{ needs.identify-passed-prs.outputs.prs_to_process }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
@@ -384,7 +384,7 @@ jobs:
 
       - name: Send dispatch to Hypatia
         env:
-          GH_TOKEN: ${{ secrets.FARM_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.FARM_DISPATCH_TOKEN || secrets.GITHUB_TOKEN }}
           PR_COUNT: ${{ needs.identify-passed-prs.outputs.pr_count }}
           VALIDATED_JSON: ${{ needs.validate-prs.outputs.validated_prs || '[]' }}
           MERGED_COUNT: ${{ needs.auto-merge-prs.outputs.merged_count || '0' }}
