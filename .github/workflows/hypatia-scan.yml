@@ -32,5 +32,4 @@ jobs:
     # Total caller-side wall-clock cap for the reusable. Matches
     # Hypatia's `missing_timeout_minutes` rule expectation. The scan is
     # typically ~3 min; the cap leaves headroom for slow estate builds.
-    timeout-minutes: 30
 
