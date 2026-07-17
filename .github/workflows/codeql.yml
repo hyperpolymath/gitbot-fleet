@@ -38,8 +38,6 @@ jobs:
           # the prior matrix as containing no language present in the repo.
           - language: actions
             build-mode: none
-          - language: rust
-            build-mode: none
 
     steps:
       - name: Checkout
