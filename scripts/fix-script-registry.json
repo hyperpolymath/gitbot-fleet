@@ -46,9 +46,11 @@
       "MissingFeedbackIntegration": "fix-missing-feedback-integration.sh",
       "MissingVexometerHooks": "fix-missing-vexometer-hooks.sh",
       "TrackedNpmLockfile": "fix-tracked-package-lock.sh",
-      "LicensePMPLDrift": "fix-pmpl-drift.sh"
+      "LicensePMPLDrift": "fix-pmpl-drift.sh",
+      "ActionsPolicyTooRestrictive": "fix-actions-policy.sh"
     },
     "by_recipe": {
+      "recipe-actions-allow-all": "fix-actions-policy.sh",
       "recipe-heredoc-to-install": "fix-heredoc-install.sh",
       "recipe-unwrap-to-match": "fix-unwrap-to-match.sh",
       "recipe-innerhtml-to-textcontent": "fix-innerhtml.sh",
