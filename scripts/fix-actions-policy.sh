@@ -29,12 +29,24 @@
 #   * every PUT is GET-verified, and the sweep ABORTS if sha_pinning was
 #     silently reset (never trade pinning away for permissiveness)
 #
-# ── Target posture (decision of record, #362) ────────────────────────────
-#   allowed_actions = all   +   sha_pinning_required = true
-# Rationale: an empty allowlist protects nothing — it blocks everything —
-# while a pinned SHA cannot be moved under you. `--mode selected` remains
-# available for a high-sensitivity tier, populating patterns_allowed from
-# hyperpolymath/standards rather than leaving it empty.
+# ── Target posture ───────────────────────────────────────────────────────
+# #362's decision of record was `allowed_actions=all` + sha_pinning. A
+# parallel remediation (llm-coding-configs/claude-code/notification-storm-
+# remediation/FINDINGS.md, 2026-07-21) established a STRICTLY SAFER route
+# that fixes the same 98 repos WITHOUT widening anything:
+#
+#   keep allowed_actions=selected, keep sha_pinning_required=true,
+#   and simply POPULATE the empty patterns_allowed list.
+#
+# Its evidence is a natural experiment over 426 repos:
+#   allowed_actions=all                    286 repos -> wrappers run
+#   selected + `hyperpolymath/*` present    42 repos -> wrappers run
+#   selected + patterns_allowed=[]          98 repos -> ALL startup_failure
+# i.e. the breakage is caused by the list being EMPTY, not by it existing.
+# Populating it therefore restores CI while KEEPING the owner allowlist as a
+# real control — so `selected` is the default here, and `--mode all` is the
+# opt-in fallback rather than the target.
+#
 # NEVER disable sha_pinning_required.
 #
 # Idempotent: healthy repos are reported `ok` and skipped.
@@ -50,7 +62,8 @@ set -euo pipefail
 
 OWNER=""
 ACTION="list"          # list | apply   (report-by-default)
-MODE="all"             # all  | selected
+MODE="selected"        # selected (default, non-widening) | all (opt-in fallback)
+ALLOWLIST=""           # curated patterns_allowed JSON; defaults to standards'
 LIMIT=500
 JSONL=""
 ONE_REPO=""
@@ -64,6 +77,7 @@ while [ $# -gt 0 ]; do
     --list)   ACTION="list" ;;
     --apply)  ACTION="apply" ;;
     --mode)   MODE="${2:-}"; shift ;;
+    --allowlist) ALLOWLIST="${2:-}"; shift ;;
     --limit)  LIMIT="${2:-}"; shift ;;
     --jsonl)  JSONL="${2:-}"; shift ;;
     --repo)   ONE_REPO="${2:-}"; shift ;;
@@ -202,11 +216,23 @@ for R in $REPOS; do
     gh api --method PUT "repos/${FULL}/actions/permissions" \
       -f enabled=true -f allowed_actions=all -F sha_pinning_required=true >/dev/null
   else
-    gh api "repos/${STD_REPO}/actions/permissions/selected-actions" > /tmp/allow.$$.json 2>/dev/null \
-      || die "cannot read the standards allowlist to seed --mode selected"
-    gh api --method PUT "repos/${FULL}/actions/permissions/selected-actions" \
-      --input /tmp/allow.$$.json >/dev/null
-    rm -f /tmp/allow.$$.json
+    # Non-widening path: leave allowed_actions/sha_pinning untouched and only
+    # populate the empty patterns_allowed. Prefer an explicitly curated list
+    # (--allowlist); otherwise mirror hyperpolymath/standards, which is itself
+    # a healthy `selected` repo.
+    SRC="$ALLOWLIST"
+    if [ -z "$SRC" ]; then
+      gh api "repos/${STD_REPO}/actions/permissions/selected-actions" > "/tmp/allow.$$.json" 2>/dev/null \
+        || die "cannot read the standards allowlist; pass --allowlist FILE instead"
+      SRC="/tmp/allow.$$.json"
+    fi
+    [ -s "$SRC" ] || die "allowlist '$SRC' is missing or empty"
+    jq -e '(.patterns_allowed|length) > 0' "$SRC" >/dev/null 2>&1 \
+      || die "allowlist '$SRC' has an EMPTY patterns_allowed — that is the very fault being fixed"
+    gh api --method PUT "repos/${FULL}/actions/permissions/selected-actions" --input "$SRC" >/dev/null
+    # `&& rm` alone would return 1 when the test is false and, under `set -e`,
+    # abort the sweep on the --allowlist path. Keep the guard total.
+    if [ "$SRC" = "/tmp/allow.$$.json" ]; then rm -f "/tmp/allow.$$.json"; fi
   fi
 
   # GET-verify. Trading sha_pinning away for permissiveness is never acceptable,
