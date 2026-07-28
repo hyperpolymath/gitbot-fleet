@@ -21,15 +21,12 @@ on:
     types: [opened, synchronize, ready_for_review, converted_to_draft, review_requested]
   pull_request_review:
     types: [submitted, dismissed]
-  check_suite:
-    types: [completed]
-  workflow_run:
-    workflows: 
-      - Dogfood Gate
-      - Scorecard Enforcer
-      - Hypatia Security Scan
-      - Static Analysis Gate
-    types: [completed]
+  # AMPLIFIER REMOVED 2026-07-29. check_suite:[completed] and
+  # workflow_run:[completed] made this fire once per CI completion on every
+  # watched workflow -- a multiplier on every unit of estate CI activity, and
+  # the mechanism behind the 3,041-notification burst of 2026-07-20/21.
+  # The workflow is currently disabled_manually; these triggers are removed so
+  # that RE-ENABLING it is safe. PR/review events and workflow_dispatch remain.
   # Manual trigger
   workflow_dispatch:
     inputs:
