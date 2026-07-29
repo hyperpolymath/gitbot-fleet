@@ -94,8 +94,12 @@ while IFS= read -r repo_path; do
 
     [[ -d "$repo_path/.machine_readable" ]] && has_machine_readable=true
     [[ -d "$repo_path/.machine_readable/bot_directives" ]] && has_bot_directives=true
-    [[ -f "$repo_path/.machine_readable/META.a2ml" ]] && has_a2ml_meta=true
-    [[ -f "$repo_path/.machine_readable/STATE.a2ml" ]] && has_a2ml_state=true
+    # Canonical location is .machine_readable/6a2/ (SD004). Legacy flat layout is
+    # still accepted here because this script scans OTHER repos, many of which
+    # have not migrated yet -- narrowing to 6a2/ alone would silently mark them
+    # as lacking a manifest they actually have.
+    [[ -f "$repo_path/.machine_readable/6a2/META.a2ml"  || -f "$repo_path/.machine_readable/META.a2ml"  ]] && has_a2ml_meta=true
+    [[ -f "$repo_path/.machine_readable/6a2/STATE.a2ml" || -f "$repo_path/.machine_readable/STATE.a2ml" ]] && has_a2ml_state=true
     if [[ -x "$repo_path/scripts/maintenance/run-maintenance.sh" || -x "$repo_path/run-maintenance.sh" ]]; then
         has_maint_script=true
     fi
