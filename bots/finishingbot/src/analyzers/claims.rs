@@ -10,6 +10,13 @@ use regex::Regex;
 use std::path::Path;
 use tracing::debug;
 use walkdir::WalkDir;
+use std::sync::LazyLock;
+
+// Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
+static MEMBER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"members\s*=\s*\[([\s\S]*?)\]"#).expect("Cargo workspace members regex is a valid constant pattern"));
+static PATH_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#""([^"]+)""#).expect("Cargo workspace member-path regex is a valid constant pattern"));
 
 /// Claim verification analyzer
 pub struct ClaimsAnalyzer;
@@ -442,12 +449,10 @@ impl ClaimsAnalyzer {
         if let Ok(content) = std::fs::read_to_string(cargo_path) {
             // Simple check: look for workspace members that don't exist
             if content.contains("[workspace]") {
-                let member_re = Regex::new(r#"members\s*=\s*\[([\s\S]*?)\]"#)
-                    .expect("Cargo workspace members regex is a valid constant pattern");
+                let member_re = &*MEMBER_RE;
                 if let Some(caps) = member_re.captures(&content) {
                     let members_str = &caps[1];
-                    let path_re = Regex::new(r#""([^"]+)""#)
-                        .expect("Cargo workspace member-path regex is a valid constant pattern");
+                    let path_re = &*PATH_RE;
                     let cargo_dir = cargo_path.parent().unwrap_or_else(|| Path::new("."));
                     for cap in path_re.captures_iter(members_str) {
                         let member_path = cargo_dir.join(&cap[1]);
