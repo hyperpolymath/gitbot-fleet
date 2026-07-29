@@ -74,13 +74,24 @@ HEADER
       directory="/"
     fi
 
+    if [[ "${eco}" == "github-actions" ]]; then
+      limit=2
+      group=actions
+    else
+      limit=3
+      group=dependency-updates
+    fi
+
     cat <<EOF
   - package-ecosystem: "${eco}"
     directory: "${directory}"
     schedule:
       interval: "weekly"
     target-branch: "main"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: ${limit}
+    groups:
+      ${group}:
+        patterns: ["*"]
 EOF
   done
 } > "${REPO_PATH}/.github/dependabot.yml"

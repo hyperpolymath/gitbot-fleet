@@ -44,7 +44,7 @@ implemented in **Rust** (with a designed-in SPARK verification seam — see
 - ✅ Automated testing (`cargo test --all-targets`)
 - ✅ Code quality checks (`cargo clippy --all-targets -- -D warnings`,
   `cargo fmt --all -- --check`)
-- ✅ Banned-language enforcement (Hypatia / ts-blocker / npm-bun-blocker)
+- ✅ Banned-language enforcement (Hypatia / runtime-policy)
 - ✅ Build verification
 
 ### ✅ Testing (Complete)
