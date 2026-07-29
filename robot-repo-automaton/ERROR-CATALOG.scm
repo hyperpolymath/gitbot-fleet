@@ -2,12 +2,12 @@
 ;; SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 ;; ERROR-CATALOG.scm - Machine-readable catalog of common repo security errors
 ;; Format: Guile Scheme (homoiconic, parseable by robot-repo-cleaner)
-;; Updated: 2025-12-15
+;; Updated: 2026-07-29
 
 (define error-catalog
   '((metadata
      (format-version . "1.0")
-     (schema-version . "2025-12-15")
+     (schema-version . "2026-07-29")
      (purpose . "Learning rules for propagating fixes across repositories")
      (generator . "robot-repo-bot/Claude analysis"))
 
@@ -308,5 +308,130 @@
       (sha-pins . "~114 workflows")
       (permissions . "~114 workflows")
       (spdx-headers . "~114 workflows")))))
+
+    ;;=========================================================================
+    ;; ERROR CATEGORY: UNSATISFIABLE MERGE GATES
+    ;; Added 2026-07-29. Every entry below was MEASURED across all 418 active
+    ;; estate repos, not inferred. They share one shape: the board reads green
+    ;; or blocked for a reason no workflow edit can address, because the check
+    ;; never ran at all.
+    ;;=========================================================================
+    (error-type
+     (id . "ERR-GATE-001")
+     (name . "phantom-required-context")
+     (severity . "critical")
+     (category . "unsatisfiable-gate")
+     (description . "A required status-check context that no job ever emits. Every PR sits permanently BLOCKED, and because an absent check produces NO check-run, `gh pr checks` shows nothing wrong.")
+
+     (detection
+      (method . "set-difference")
+      (sources . ("classic branch protection" "ACTIVE branch-target RULESETS"))
+      (sample . "PR HEAD SHAs, not the default branch")
+      (condition . "required-context absent from observed check-runs AND commit statuses"))
+
+     (measured
+      (date . "2026-07-29")
+      (ruleset-context-rows . 236)
+      (note . "Rulesets hold most estate requirements; classic protection alone sees almost none."))
+
+     (variants
+      ("invented name -- hypatia-scan, emitted by nothing"
+       "case mismatch -- required `codeql`, real job is `CodeQL`"
+       "filename as context -- required `.github/dependabot.yml`"))
+
+     (remediation
+      (action . "remove-context-or-rename-to-match-a-real-job")
+      (api . "DELETE /repos/{o}/{r}/branches/{b}/protection/required_status_checks/contexts")
+      (warning . "Use that surgical sub-resource. A full PUT .../protection REPLACES the object and silently drops required_signatures / enforce_admins.")
+      (warning-2 . "In a ruleset, emptying required_status_checks returns HTTP 422 -- the whole rule must be dropped. A ruleset PUT also replaces, so rebuild from a live GET and preserve bypass_actors.")))
+
+    (error-type
+     (id . "ERR-GATE-002")
+     (name . "required-context-never-runs-on-pull-request")
+     (severity . "critical")
+     (category . "unsatisfiable-gate")
+     (description . "The producing job exists and is healthy, but is push-, schedule- or dynamic-triggered and never runs on pull_request. It therefore cannot satisfy a PR gate however green it looks on main.")
+
+     (detection
+      (method . "compare-two-surfaces")
+      (condition . "context PRESENT on default-branch HEAD but ABSENT from every sampled PR head"))
+
+     (measured
+      (date . "2026-07-29")
+      (canonical-case . "Dependabot")
+      (emitter . "GitHub's managed dynamic/dependabot/dependabot-updates runner")
+      (check-runs-on-main . 10)
+      (check-runs-on-pr-head . 0)
+      (repos-affected . 25)
+      (note . "Sampling main scores this HEALTHY -- a false negative. It is the likely root of the estate's --admin merge drift."))
+
+     (remediation
+      (action . "add-pull_request-trigger-or-stop-requiring-on-prs")))
+
+    (error-type
+     (id . "ERR-GATE-003")
+     (name . "dead-action-pin")
+     (severity . "critical")
+     (category . "unsatisfiable-gate")
+     (description . "A `uses:` ref pointing at a DELETED action repository. Actions resolves refs at RUN time, and an unresolvable ref produces NO check run -- not a red one. The repo can be fully green with its scanning entirely absent.")
+
+     (detection
+      (method . "resolve-every-uses-ref-against-the-api")
+      (condition . "repository 404, or SHA not found"))
+
+     (measured
+      (date . "2026-07-29")
+      (repos . 69)
+      (references . 135)
+      (dead . ("hyperpolymath/a2ml-validate-action" "hyperpolymath/k9-validate-action"))
+      (live . ("hyperpolymath/a2ml-ecosystem/validate-action" "hyperpolymath/k9-ecosystem/validate-action")))
+
+     (remediation
+      (action . "REPOINT-not-vendor")
+      (rationale . "Vendoring the script into each consumer creates one drifting copy per repo -- this estate's most recurring failure mode. Repointing is one line per file.")
+      (warning . "Actions does NOT follow repository renames in `uses:`; a rename is a genuine break.")))
+
+    (error-type
+     (id . "ERR-GATE-004")
+     (name . "actions-policy-refuses-every-reusable")
+     (severity . "critical")
+     (category . "unsatisfiable-gate")
+     (description . "allowed_actions=selected with an EMPTY patterns_allowed permits only GitHub-owned and verified actions. Every org reusable is refused at parse time, so runs die as startup_failure with ZERO jobs and no check run.")
+
+     (detection
+      (method . "repository-settings")
+      (api . "GET /repos/{o}/{r}/actions/permissions and .../selected-actions")
+      (condition . "allowed_actions == selected AND patterns_allowed is empty"))
+
+     (measured
+      (date . "2026-07-29")
+      (scanned . 418)
+      (broken . 2)
+      (proof . "governance.yml went startup_failure/0 jobs -> success/10 jobs with NO file change -- settings only."))
+
+     (remediation
+      (action . "populate-patterns_allowed-or-set-allowed_actions-all")
+      (warning . "This is a SETTINGS fault. No workflow edit can fix it, and a startup_failure run cannot be re-run -- it has no jobs. Verify by dispatching a fresh run and asserting jobs > 0.")))
+
+    (error-type
+     (id . "ERR-GATE-005")
+     (name . "empty-jobs-map")
+     (severity . "high")
+     (category . "unsatisfiable-gate")
+     (description . "A workflow whose `jobs:` key is present but has no uncommented job. An empty jobs map is invalid, so the run fails with zero jobs, permanently, on every matching event.")
+
+     (detection
+      (method . "parse-workflow")
+      (condition . "`jobs:` present AND no uncommented `  <name>:` beneath it"))
+
+     (measured
+      (date . "2026-07-29")
+      (repos . 20)
+      (file . "e2e.yml -- an un-instantiated scaffold, every job block commented out"))
+
+     (remediation
+      (action . "instantiate-a-real-job-or-delete-the-workflow")
+      (warning . "Do NOT write a job that passes without testing anything -- that converts a dead gate into a fake one, which is worse because it is read as evidence.")))
+
 
 ;; End of ERROR-CATALOG.scm
