@@ -16,6 +16,15 @@ use crate::analyzers::Analyzer;
 use crate::fleet::{Finding, ImpactAssessment, Severity, WcagLevel};
 use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
+
+// Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
+static FONT_SIZE_PX_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)font-size\s*:\s*(\d+)px").expect("valid regex"));
+static LINE_HEIGHT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)line-height\s*:\s*([\d.]+)").expect("valid regex"));
+static BLOCK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"([^{]+)\{([^}]+)\}").expect("valid regex"));
 
 /// CSS accessibility analyzer
 pub struct CssAnalyzer;
@@ -53,7 +62,7 @@ impl Analyzer for CssAnalyzer {
 
 /// Check for font sizes using px instead of rem/em
 fn check_px_font_sizes(path: &Path, content: &str, findings: &mut Vec<Finding>) {
-    let font_size_px_re = Regex::new(r"(?i)font-size\s*:\s*(\d+)px").expect("valid regex");
+    let font_size_px_re = &*FONT_SIZE_PX_RE;
 
     for (line_num, line) in content.lines().enumerate() {
         if let Some(caps) = font_size_px_re.captures(line) {
@@ -83,8 +92,8 @@ fn check_px_font_sizes(path: &Path, content: &str, findings: &mut Vec<Finding>) 
 
 /// Check line-height is at least 1.5 for body text
 fn check_line_height(path: &Path, content: &str, findings: &mut Vec<Finding>) {
-    let line_height_re = Regex::new(r"(?i)line-height\s*:\s*([\d.]+)").expect("valid regex");
-    let block_re = Regex::new(r"([^{]+)\{([^}]+)\}").expect("valid regex");
+    let line_height_re = &*LINE_HEIGHT_RE;
+    let block_re = &*BLOCK_RE;
 
     for caps in block_re.captures_iter(content) {
         let selector = caps[1].trim();
@@ -203,7 +212,7 @@ fn check_contrast_preference(path: &Path, content: &str, findings: &mut Vec<Find
 
 /// Check for display: none being used where sr-only pattern should be used
 fn check_display_none_misuse(path: &Path, content: &str, findings: &mut Vec<Finding>) {
-    let block_re = Regex::new(r"([^{]+)\{([^}]+)\}").expect("valid regex");
+    let block_re = &*BLOCK_RE;
 
     for caps in block_re.captures_iter(content) {
         let selector = caps[1].trim();
