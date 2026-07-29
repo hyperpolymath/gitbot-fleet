@@ -427,6 +427,7 @@ jobs:
   summary:
     name: Generate stewardship summary
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [identify-passed-prs, validate-prs, auto-merge-prs]
     if: always()
     

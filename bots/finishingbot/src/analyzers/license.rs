@@ -9,6 +9,11 @@ use regex::Regex;
 use std::path::Path;
 use tracing::debug;
 use walkdir::WalkDir;
+use std::sync::LazyLock;
+
+// Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
+static SPDX_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)SPDX-License-Identifier:\s*[A-Za-z0-9.-]+").expect("SPDX header regex is a valid constant pattern"));
 
 /// Repositories that deliberately use AGPL-3.0-or-later instead of PMPL.
 /// These are co-developed projects with the user's son and use AGPL by deliberate choice.
@@ -222,8 +227,7 @@ impl LicenseAnalyzer {
 
     /// Check for SPDX headers in source files
     fn check_spdx_headers(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
-        let spdx_pattern = Regex::new(r"(?i)SPDX-License-Identifier:\s*[A-Za-z0-9.-]+")
-            .expect("SPDX header regex is a valid constant pattern");
+        let spdx_pattern = &*SPDX_PATTERN;
 
         for entry in WalkDir::new(path)
             .follow_links(false)
