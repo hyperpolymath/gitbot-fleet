@@ -10,6 +10,21 @@ use crate::analyzers::Analyzer;
 use crate::fleet::{Finding, ImpactAssessment, Severity, WcagLevel};
 use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
+
+// Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
+static COLOR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:^|;|\{)\s*color\s*:\s*([^;}\n]+)").expect("valid regex"));
+static BG_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)background(?:-color)?\s*:\s*([^;}\n]+)").expect("valid regex"));
+static BLOCK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"([^{]+)\{([^}]+)\}").expect("valid regex"));
+static STYLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"style\s*=\s*"([^"]+)""#).expect("valid regex"));
+static COLOR_RE_4: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:^|;)\s*color\s*:\s*([^;]+)").expect("valid regex"));
+static BG_RE_5: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)background(?:-color)?\s*:\s*([^;]+)").expect("valid regex"));
 
 /// Contrast analyzer for CSS color pairs
 pub struct ContrastAnalyzer;
@@ -133,15 +148,11 @@ pub fn contrast_ratio(fg: (u8, u8, u8), bg: (u8, u8, u8)) -> f64 {
 /// Analyze CSS content for contrast issues
 fn analyze_css(path: &Path, content: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
-    let color_re = Regex::new(
-        r"(?i)(?:^|;|\{)\s*color\s*:\s*([^;}\n]+)"
-    ).expect("valid regex");
-    let bg_re = Regex::new(
-        r"(?i)background(?:-color)?\s*:\s*([^;}\n]+)"
-    ).expect("valid regex");
+    let color_re = &*COLOR_RE;
+    let bg_re = &*BG_RE;
 
     // Extract color/background-color pairs within CSS rule blocks
-    let block_re = Regex::new(r"([^{]+)\{([^}]+)\}").expect("valid regex");
+    let block_re = &*BLOCK_RE;
 
     for caps in block_re.captures_iter(content) {
         let selector = caps[1].trim();
@@ -211,9 +222,9 @@ fn analyze_css(path: &Path, content: &str) -> Vec<Finding> {
 /// Analyze inline styles in HTML for contrast issues
 fn analyze_inline_styles(path: &Path, content: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
-    let style_re = Regex::new(r#"style\s*=\s*"([^"]+)""#).expect("valid regex");
-    let color_re = Regex::new(r"(?i)(?:^|;)\s*color\s*:\s*([^;]+)").expect("valid regex");
-    let bg_re = Regex::new(r"(?i)background(?:-color)?\s*:\s*([^;]+)").expect("valid regex");
+    let style_re = &*STYLE_RE;
+    let color_re = &*COLOR_RE_4;
+    let bg_re = &*BG_RE_5;
 
     for (line_num, line) in content.lines().enumerate() {
         if let Some(style_caps) = style_re.captures(line) {
