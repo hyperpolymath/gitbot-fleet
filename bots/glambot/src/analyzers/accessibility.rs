@@ -7,6 +7,16 @@ use crate::config::Config;
 use crate::error::Result;
 use std::path::Path;
 use walkdir::WalkDir;
+use std::sync::LazyLock;
+use regex::Regex;
+
+// Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
+static MD_IMAGE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"!\[(.*?)\]\((.*?)\)").expect("static markdown image regex literal is valid"));
+static ADOC_IMAGE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"image::(.*?)\[(.*?)\]").expect("static asciidoc image regex literal is valid"));
+static MD_LINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\[(.*?)\]\((.*?)\)").expect("static markdown link regex literal is valid"));
 
 /// Accessibility analyzer
 pub struct AccessibilityAnalyzer;
@@ -121,12 +131,9 @@ impl Analyzer for AccessibilityAnalyzer {
 
 impl AccessibilityAnalyzer {
     fn check_image_alt_text(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
-        use regex::Regex;
 
-        let md_image_re = Regex::new(r"!\[(.*?)\]\((.*?)\)")
-            .expect("static markdown image regex literal is valid");
-        let adoc_image_re = Regex::new(r"image::(.*?)\[(.*?)\]")
-            .expect("static asciidoc image regex literal is valid");
+        let md_image_re = &*MD_IMAGE_RE;
+        let adoc_image_re = &*ADOC_IMAGE_RE;
 
         for entry in WalkDir::new(path)
             .into_iter()
@@ -239,10 +246,8 @@ impl AccessibilityAnalyzer {
     }
 
     fn check_link_text(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
-        use regex::Regex;
 
-        let md_link_re = Regex::new(r"\[(.*?)\]\((.*?)\)")
-            .expect("static markdown link regex literal is valid");
+        let md_link_re = &*MD_LINK_RE;
 
         let non_descriptive = ["click here", "here", "read more", "link", "more"];
 
