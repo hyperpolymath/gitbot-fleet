@@ -17,10 +17,11 @@ source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
 REPO_PATH="${1:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 
-# --- Idempotency check ---
+# --- Idempotency check & prune ---
 if [[ -f "${REPO_PATH}/.github/dependabot.yml" ]] || \
    [[ -f "${REPO_PATH}/.github/dependabot.yaml" ]]; then
-  echo "[fix-dependabot] dependabot.yml already exists — skipping."
+  echo "[fix-dependabot] dependabot.yml already exists — pruning invalid ecosystems."
+  python3 "$SCRIPT_DIR/prune-dependabot.py" "$REPO_PATH"
   exit 0
 fi
 
