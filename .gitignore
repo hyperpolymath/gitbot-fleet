@@ -145,3 +145,17 @@ bun.lockb
 yarn.lock
 pnpm-lock.yaml
 .npmrc
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.claude/
+.editorconfig
+.env.*
+/exports/*.json
+/exports/*.lgt
+/logs/
+ai-cli-crash-capture/
+composer/*.beam
+composer/build/
+secrets/
