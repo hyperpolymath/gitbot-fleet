@@ -51,3 +51,4 @@ Containerfile  text eol=lf
 
 # Lock files
 Cargo.lock  text eol=lf -diff
+flake.lock  text eol=lf -diff
