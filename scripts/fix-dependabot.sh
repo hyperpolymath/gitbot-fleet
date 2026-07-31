@@ -18,10 +18,13 @@ REPO_PATH="${1:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 
 # --- Idempotency check & prune ---
-if [[ -f "${REPO_PATH}/.github/dependabot.yml" ]] || \
-   [[ -f "${REPO_PATH}/.github/dependabot.yaml" ]]; then
+if [[ -f "${REPO_PATH}/.github/dependabot.yml" ]]; then
   echo "[fix-dependabot] dependabot.yml already exists — pruning invalid ecosystems."
-  python3 "$SCRIPT_DIR/prune-dependabot.py" "$REPO_PATH"
+  yq -i 'del(.updates[] | select(.package-ecosystem == "npm"))' "${REPO_PATH}/.github/dependabot.yml"
+  exit 0
+elif [[ -f "${REPO_PATH}/.github/dependabot.yaml" ]]; then
+  echo "[fix-dependabot] dependabot.yaml already exists — pruning invalid ecosystems."
+  yq -i 'del(.updates[] | select(.package-ecosystem == "npm"))' "${REPO_PATH}/.github/dependabot.yaml"
   exit 0
 fi
 
