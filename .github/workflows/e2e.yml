@@ -6,6 +6,7 @@ on:
   pull_request:
     branches: ['**']
 permissions:
+  actions: read
   contents: read
 jobs:
   e2e:

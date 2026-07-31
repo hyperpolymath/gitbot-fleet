@@ -11,6 +11,7 @@ on:
       - hypatia-general-findings
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
