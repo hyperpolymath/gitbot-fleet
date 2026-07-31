@@ -16,7 +16,6 @@
 *.hs    text eol=lf
 *.chpl  text eol=lf
 *.scm   text eol=lf
-*.a2ml  text eol=lf linguist-language=TOML
 *.ncl   text eol=lf
 *.nix   text eol=lf
 
@@ -30,24 +29,11 @@
 *.yaml  text eol=lf
 *.yml   text eol=lf
 *.toml  text eol=lf
-*.jsonl text eol=lf
-
-# Generated / large-corpora hygiene (estate guardrail)
-# Keep large data corpora and generated emit out of language stats and
-# collapsed in diffs so they don't drown review or skew the language bar.
-# (No git-lfs: this template does not configure lfs, so we do not introduce
-# it here — gitignore + linguist attributes only.)
-*.jsonl   linguist-generated=true
-*.res.js  linguist-generated=true
-*.cmj     linguist-generated=true
-*.cmi     linguist-generated=true
-*.cmt     linguist-generated=true
-*.cmti    linguist-generated=true
 
 # Config
 .gitignore     text eol=lf
 .gitattributes text eol=lf
-Justfile       text eol=lf
+justfile       text eol=lf
 Makefile       text eol=lf
 Containerfile  text eol=lf
 
@@ -65,3 +51,4 @@ Containerfile  text eol=lf
 
 # Lock files
 Cargo.lock  text eol=lf -diff
+flake.lock  text eol=lf -diff

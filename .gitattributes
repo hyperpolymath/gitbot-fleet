@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MPL-2.0
 # RSR-compliant .gitattributes
+
 * text=auto eol=lf
+
 # Source
 *.rs    text eol=lf diff=rust
 *.ex    text eol=lf diff=elixir
@@ -16,23 +18,28 @@
 *.scm   text eol=lf
 *.ncl   text eol=lf
 *.nix   text eol=lf
+
 # Docs
 *.md    text eol=lf diff=markdown
 *.adoc  text eol=lf
 *.txt   text eol=lf
+
 # Data
 *.json  text eol=lf
 *.yaml  text eol=lf
 *.yml   text eol=lf
 *.toml  text eol=lf
+
 # Config
 .gitignore     text eol=lf
 .gitattributes text eol=lf
 justfile       text eol=lf
 Makefile       text eol=lf
 Containerfile  text eol=lf
+
 # Scripts
 *.sh   text eol=lf
+
 # Binary
 *.png   binary
 *.jpg   binary
@@ -41,6 +48,7 @@ Containerfile  text eol=lf
 *.woff2 binary
 *.zip   binary
 *.gz    binary
+
 # Lock files
 Cargo.lock  text eol=lf -diff
-shared-context/learning/*.jsonl filter=lfs diff=lfs merge=lfs -text
+flake.lock  text eol=lf -diff
