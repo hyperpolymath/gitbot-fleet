@@ -17,10 +17,14 @@ source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
 REPO_PATH="${1:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Usage: fix-dependabot.sh <repo-path> <finding-json>}"
 
-# --- Idempotency check ---
-if [[ -f "${REPO_PATH}/.github/dependabot.yml" ]] || \
-   [[ -f "${REPO_PATH}/.github/dependabot.yaml" ]]; then
-  echo "[fix-dependabot] dependabot.yml already exists — skipping."
+# --- Idempotency check & prune ---
+if [[ -f "${REPO_PATH}/.github/dependabot.yml" ]]; then
+  echo "[fix-dependabot] dependabot.yml already exists — pruning invalid ecosystems."
+  yq -i 'del(.updates[] | select(.package-ecosystem == "npm"))' "${REPO_PATH}/.github/dependabot.yml"
+  exit 0
+elif [[ -f "${REPO_PATH}/.github/dependabot.yaml" ]]; then
+  echo "[fix-dependabot] dependabot.yaml already exists — pruning invalid ecosystems."
+  yq -i 'del(.updates[] | select(.package-ecosystem == "npm"))' "${REPO_PATH}/.github/dependabot.yaml"
   exit 0
 fi
 
@@ -74,13 +78,24 @@ HEADER
       directory="/"
     fi
 
+    if [[ "${eco}" == "github-actions" ]]; then
+      limit=2
+      group=actions
+    else
+      limit=3
+      group=dependency-updates
+    fi
+
     cat <<EOF
   - package-ecosystem: "${eco}"
     directory: "${directory}"
     schedule:
       interval: "weekly"
     target-branch: "main"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: ${limit}
+    groups:
+      ${group}:
+        patterns: ["*"]
 EOF
   done
 } > "${REPO_PATH}/.github/dependabot.yml"
