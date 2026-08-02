@@ -13,6 +13,13 @@ use crate::fleet::{Finding, ImpactAssessment, Severity, WcagLevel};
 use regex::Regex;
 use scraper::{Html, Selector};
 use std::path::Path;
+use std::sync::LazyLock;
+
+// Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
+static OUTLINE_NONE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)outline\s*:\s*(none|0)\s*[;}\n]").expect("valid regex"));
+static STYLE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"style\s*=\s*"[^"]*outline\s*:\s*(none|0)[^"]*""#).expect("valid regex"));
 
 /// Keyboard navigation analyzer
 pub struct KeyboardAnalyzer;
@@ -185,7 +192,7 @@ fn check_onclick_no_keyboard(
 /// Check for outline: none in CSS (suppresses focus indicator)
 fn check_focus_styles_css(path: &Path, content: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
-    let outline_none_re = Regex::new(r"(?i)outline\s*:\s*(none|0)\s*[;}\n]").expect("valid regex");
+    let outline_none_re = &*OUTLINE_NONE_RE;
 
     for (line_num, line) in content.lines().enumerate() {
         if outline_none_re.is_match(line) {
@@ -228,7 +235,7 @@ fn check_inline_focus_suppression(
     content: &str,
     findings: &mut Vec<Finding>,
 ) {
-    let style_re = Regex::new(r#"style\s*=\s*"[^"]*outline\s*:\s*(none|0)[^"]*""#).expect("valid regex");
+    let style_re = &*STYLE_RE;
 
     for (line_num, line) in content.lines().enumerate() {
         if style_re.is_match(line) {

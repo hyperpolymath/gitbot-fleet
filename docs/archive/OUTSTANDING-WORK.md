@@ -91,4 +91,4 @@ vim /var$REPOS_DIR/OUTSTANDING-WORK.md
 ```
 
 ## License
-SPDX-License-Identifier: MPL-2.0
+SPDX-License-Identifier: CC-BY-SA-4.0

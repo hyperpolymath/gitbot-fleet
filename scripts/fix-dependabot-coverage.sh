@@ -51,48 +51,68 @@ if [[ ! -f "${DEPENDABOT_FILE}" ]]; then
   exit 1
 fi
 
+if ! command -v yq >/dev/null 2>&1; then
+  echo "ERROR: yq v4 is required to update Dependabot coverage safely." >&2
+  exit 1
+fi
+
 # --- Functions ---
 
 # Check whether a given ecosystem+directory pair already exists in dependabot.yml.
-# Uses a simple text-based check: looks for the ecosystem line followed by
-# the directory line within a few lines of each other.
 entry_exists() {
   local ecosystem="$1"
   local directory="$2"
 
-  # Normalise directory for matching: dependabot uses "/" for root,
-  # "/subdir" for subdirectories.
-  local dir_pattern
-  if [[ "${directory}" == "/" ]]; then
-    dir_pattern='directory: "/"'
-  else
-    dir_pattern="directory: \"${directory}\""
-  fi
-
-  # Search for the ecosystem+directory pair within the file.
-  # We look for both on adjacent lines (within 5 lines of each other).
-  if awk -v eco="\"${ecosystem}\"" -v dir="${dir_pattern}" '
-    /package-ecosystem:/ && $0 ~ eco { found_eco=NR }
-    found_eco && NR <= found_eco+5 && $0 ~ dir { exit 0 }
-    END { exit 1 }
-  ' "${DEPENDABOT_FILE}"; then
-    return 0
-  else
-    return 1
-  fi
+  ECOSYSTEM="${ecosystem}" DIRECTORY="${directory}" yq -e '
+    .updates[]
+    | select(."package-ecosystem" == strenv(ECOSYSTEM))
+    | select(
+        .directory == strenv(DIRECTORY) or
+        (.directories[]? == strenv(DIRECTORY))
+      )
+  ' "${DEPENDABOT_FILE}" >/dev/null 2>&1
 }
 
 # Append a new ecosystem+directory entry to dependabot.yml.
 append_entry() {
   local ecosystem="$1"
   local directory="$2"
+  local entry_count
+
+  entry_count="$(ECOSYSTEM="${ecosystem}" yq '
+    [.updates[] | select(."package-ecosystem" == strenv(ECOSYSTEM))] | length
+  ' "${DEPENDABOT_FILE}")"
+
+  if [[ "${entry_count}" -gt 1 ]]; then
+    echo "ERROR: ${ecosystem} already has ${entry_count} update blocks." >&2
+    echo "Consolidate them into one directories: block before adding coverage." >&2
+    return 1
+  fi
+
+  if [[ "${entry_count}" -eq 1 ]]; then
+    ECOSYSTEM="${ecosystem}" DIRECTORY="${directory}" yq -i '
+      (.updates[] | select(."package-ecosystem" == strenv(ECOSYSTEM))) |= (
+        .directories = (((.directories // [.directory]) + [strenv(DIRECTORY)]) | unique)
+        | del(.directory)
+        | ."open-pull-requests-limit" =
+            ([(."open-pull-requests-limit" // 3), 3] | min)
+        | .groups."coverage-shared"."group-by" = "dependency-name"
+      )
+    ' "${DEPENDABOT_FILE}"
+    echo "  CONSOLIDATED: ${ecosystem} @ ${directory}"
+    return 0
+  fi
 
   cat >> "${DEPENDABOT_FILE}" <<EOF
 
   - package-ecosystem: "${ecosystem}"
     directory: "${directory}"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      dependency-updates:
+        patterns: ["*"]
 EOF
   echo "  ADDED: ${ecosystem} @ ${directory}"
 }

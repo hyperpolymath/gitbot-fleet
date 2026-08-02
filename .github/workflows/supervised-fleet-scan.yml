@@ -22,6 +22,7 @@ on:
         default: true
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -31,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           lfs: true  # shared-context/learning/*.jsonl is LFS-tracked (Item 60)
 
@@ -46,14 +47,14 @@ jobs:
           INVENTORY_FILE: ${{ github.event.inputs.inventory_file || '' }}
           PROCESS_FINDINGS: ${{ github.event.inputs.process_findings || 'true' }}
           FLEET_SUPERVISED_REPOS_FILE: ${{ github.event.inputs.inventory_file || '' }}
-          # FLEET_SCAN_PAT is required for Hypatia's DependabotAlerts
+          # HYPATIA_SCAN_PAT is required for Hypatia's DependabotAlerts
           # rule (DA001-DA004) to query per-repo Dependabot alerts via
           # the GitHub REST API. This PAT must have `security_events: read`
           # scope on ALL target repos. Without it, cross-repo alerts will
           # be MISSING. The built-in GITHUB_TOKEN is insufficient for
           # estate-wide scanning. See:
           # 007-lang/audits/audit-dependabot-automation-gap-2026-04-17.md.
-          GITHUB_TOKEN: ${{ secrets.FLEET_SCAN_PAT }}
+          GITHUB_TOKEN: ${{ secrets.HYPATIA_SCAN_PAT }}
           # HYPATIA_SEVERITY=low surfaces low-severity findings from
           # every rule module. The Hypatia CLI's default threshold is
           # "medium"; without this override, low-severity findings

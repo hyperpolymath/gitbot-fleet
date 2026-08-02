@@ -205,24 +205,49 @@ struct AssaultReportEnvelope {
 /// Handles both envelope formats: `{"assail_report": {...}}` and direct
 /// `{"program_path": ..., "weak_points": [...]}`.
 pub fn run_assail(target: &Path, timeout: Duration) -> Result<AssailReport> {
-    let output = invoke_panic_attack(&["assail", &target.display().to_string()], timeout)
-        .context("Failed to run panic-attack assail")?;
+    // `--headless` selects CI-safe output (JSON to stdout, no interactive
+    // prompts). Required for panic-attack >= 2.5: without it the default
+    // `--report-view accordion` renders a human report, not parseable JSON.
+    let output = invoke_panic_attack(
+        &["assail", &target.display().to_string(), "--headless"],
+        timeout,
+    )
+    .context("Failed to run panic-attack assail")?;
+
+    // Even in --headless mode panic-attack prints a human banner line
+    // (e.g. "Running assail analysis on: .") to stdout before the JSON
+    // document. Slice from the first JSON delimiter so serde sees pure JSON.
+    let json = extract_json(&output);
 
     // Try parsing as AssaultReport envelope first
-    if let Ok(envelope) = serde_json::from_str::<AssaultReportEnvelope>(&output) {
+    if let Ok(envelope) = serde_json::from_str::<AssaultReportEnvelope>(json) {
         if let Some(report) = envelope.assail_report {
             return Ok(report);
         }
         // Flat format — the JSON IS the assail report
         if envelope.program_path.is_some() {
-            return serde_json::from_str::<AssailReport>(&output)
+            return serde_json::from_str::<AssailReport>(json)
                 .context("Failed to parse assail report (flat format)");
         }
     }
 
     // Direct parse as AssailReport
-    serde_json::from_str::<AssailReport>(&output)
+    serde_json::from_str::<AssailReport>(json)
         .context("Failed to parse panic-attack assail output as JSON")
+}
+
+/// Slice a captured stdout buffer down to its JSON payload.
+///
+/// panic-attack emits a human-readable banner line before the JSON document
+/// (even with `--headless`), so a raw `serde_json::from_str` on the whole
+/// buffer fails at "line 1 column 1". Return the substring starting at the
+/// first `{` or `[`; if neither is present, return the input unchanged so the
+/// caller still produces a meaningful parse error.
+fn extract_json(raw: &str) -> &str {
+    match raw.find(['{', '[']) {
+        Some(idx) => &raw[idx..],
+        None => raw,
+    }
 }
 
 /// Run `panic-attack adjudicate` on multiple report files.
@@ -464,6 +489,21 @@ fn invoke_panic_attack(args: &[&str], timeout: Duration) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extract_json_strips_leading_banner() {
+        // panic-attack prints a banner line before the JSON, even headless.
+        let raw = "Running assail analysis on: .\n{\"weak_points\": []}";
+        assert_eq!(extract_json(raw), "{\"weak_points\": []}");
+    }
+
+    #[test]
+    fn extract_json_passes_clean_json_through() {
+        let raw = "{\"weak_points\": []}";
+        assert_eq!(extract_json(raw), raw);
+        // No JSON delimiter → returned unchanged for a meaningful parse error.
+        assert_eq!(extract_json("totally not json"), "totally not json");
+    }
 
     #[test]
     fn test_parse_assail_report_envelope() {

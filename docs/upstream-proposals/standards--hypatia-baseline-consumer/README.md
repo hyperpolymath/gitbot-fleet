@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
 # Proposal: `hyperpolymath/standards` — `.hypatia-baseline.json` consumer
 
 **Target repo:** `hyperpolymath/standards`

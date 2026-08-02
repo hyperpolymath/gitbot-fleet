@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT OR Apache-2.0
+# SPDX-License-Identifier: MPL-2.0 OR Apache-2.0
 # SPDX-FileCopyrightText: 2025 hyperpolymath
 
 FROM rust:1.85-slim-bookworm AS builder

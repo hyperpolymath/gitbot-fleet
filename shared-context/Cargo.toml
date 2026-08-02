@@ -9,6 +9,7 @@ license = "MPL-2.0"
 repository = "https://github.com/hyperpolymath/gitbot-fleet"
 keywords = ["gitbot-fleet", "coordination", "context", "ci-cd"]
 categories = ["development-tools"]
+exclude = ["findings/", "learning/", "dispatch/"]
 
 [dependencies]
 # Serialization

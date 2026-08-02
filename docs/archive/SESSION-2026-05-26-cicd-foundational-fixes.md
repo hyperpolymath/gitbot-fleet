@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
 <!-- SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell -->
 
 # CI/CD foundational fixes + estate-wide SafeDOMExample sweep + Hypatia lessons
