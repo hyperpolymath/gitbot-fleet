@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: MPL-2.0
 #
-# fix-stale-template-placeholders.sh — Resolve unfilled {{OWNER}} etc. in workflows
+# fix-stale-template-placeholders.sh — Resolve unfilled hyperpolymath etc. in workflows
 #
 # Fixes HYP-DOG-001 (unfilled template placeholders) by replacing common
 # RSR template placeholders with the correct hyperpolymath values.
@@ -30,12 +30,12 @@ FIXED=0
 for file in "$WORKFLOW_DIR"/*.yml; do
     [[ -f "$file" ]] || continue
 
-    if grep -q '{{OWNER}}\|{{REPO}}\|{{CURRENT_YEAR}}\|{{AUTHOR}}\|{{AUTHOR_EMAIL}}\|{{FORGE}}' "$file" 2>/dev/null; then
+    if grep -q 'hyperpolymath\|gitbot-fleet\|2026\|Jonathan D.A. Jewell\|j.d.a.jewell@open.ac.uk\|github.com' "$file" 2>/dev/null; then
         sed -i \
-            -e 's/{{OWNER}}/hyperpolymath/g' \
-            -e 's/{{CURRENT_YEAR}}/2026/g' \
-            -e 's/{{AUTHOR}}/Jonathan D.A. Jewell/g' \
-            -e 's/{{AUTHOR_EMAIL}}/j.d.a.jewell@open.ac.uk/g' \
+            -e 's/hyperpolymath/hyperpolymath/g' \
+            -e 's/2026/2026/g' \
+            -e 's/Jonathan D.A. Jewell/Jonathan D.A. Jewell/g' \
+            -e 's/j.d.a.jewell@open.ac.uk/j.d.a.jewell@open.ac.uk/g' \
             "$file"
         echo "  Fixed: $(basename "$file")"
         FIXED=$((FIXED + 1))

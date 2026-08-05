@@ -38,7 +38,7 @@ It operates by:
 * *Modify operations*: replace-line, insert-before, insert-after, replace-pattern,
   prepend, append -- with safety checks and rollback on failure
 * *File creation*: template-based with variable expansion (`gitbot-fleet`, `hyperpolymath`,
-  `MPL-2.0`, `{{YEAR}}`, `Jonathan D.A. Jewell`, `{{EMAIL}}`)
+  `MPL-2.0`, `{{YEAR}}`, `Jonathan D.A. Jewell`, `j.d.a.jewell@open.ac.uk`)
 * *Confidence thresholds*: per-repo configuration via `.bot_directives/`, with
   auto-apply, propose, and skip decisions
 * *Safety*: binary file detection, gitignore checking, in-memory rollback
