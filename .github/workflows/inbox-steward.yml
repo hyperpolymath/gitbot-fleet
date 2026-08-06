@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
 # Inbox Steward — Automated PR processing through CICD gate
 #
 # This workflow:
@@ -288,7 +289,7 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -377,7 +378,7 @@ jobs:
     
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@v7.0.1
 
       - name: Send dispatch to Hypatia
         env:

@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
 # Scheduled/dispatch pipeline for supervised-repo scanning via Hypatia + gitbot-fleet.
 name: Supervised Fleet Scan
 
@@ -32,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        uses: actions/checkout@v7.0.1
         with:
           lfs: true  # shared-context/learning/*.jsonl is LFS-tracked (Item 60)
 

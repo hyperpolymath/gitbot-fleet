@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
 name: Rust
 # Build + test + clippy gate for the three standalone Rust crates.
 # Added after a non-compiling crate (robot-repo-automaton) reached `main`
@@ -31,7 +32,7 @@ jobs:
       run:
         working-directory: ${{ matrix.crate }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
       - name: Ensure clippy + rustfmt components
         run: rustup component add clippy rustfmt
       - name: Build (all targets)

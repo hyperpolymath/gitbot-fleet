@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
 # Intake pipeline for cross-repo Hypatia/Gitbot dispatch events.
 name: Hypatia Dispatch Intake
 
@@ -22,7 +23,7 @@ jobs:
       contents: write  # push received events to the findings-submissions inbox branch
     steps:
       - name: Checkout gitbot-fleet
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
