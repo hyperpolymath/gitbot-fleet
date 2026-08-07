@@ -208,5 +208,239 @@
     "rule_module": "cicd_rules",
     "type": "banned_language_file",
     "file": "bots/gsbot/tests/unit/test_services.py"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/accessibilitybot/src/analyzers/alt_text.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/accessibilitybot/src/analyzers/aria.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/accessibilitybot/src/analyzers/forms.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/accessibilitybot/src/analyzers/keyboard.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/accessibilitybot/src/analyzers/language.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/accessibilitybot/src/analyzers/media.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/accessibilitybot/src/analyzers/semantic.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/cipherbot/src/analyzers/dns.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/cipherbot/src/analyzers/hashing.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/cipherbot/src/analyzers/password.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/cipherbot/src/analyzers/rng.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/cipherbot/src/analyzers/signatures.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/cipherbot/src/analyzers/symmetric.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/echidnabot/src/dispatcher/echidna_client.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/echidnabot/src/scheduler/limiter.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/finishingbot/src/analyzers/claims.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/glambot/src/analyzers/accessibility.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "bots/gsbot/src/services.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "robot-repo-automaton/src/hypatia.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "code_safety",
+    "type": "expect_in_hot_path",
+    "file": "shared-context/benches/fleet_benchmarks.rs"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "scorecard",
+    "type": "DependencyPinning",
+    "file": "."
+  },
+  {
+    "severity": "critical",
+    "rule_module": "structural_drift",
+    "type": "SD005",
+    "file": ".claude/worktrees/actions-policy"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "boj-build.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "casket-pages.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "codeql.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "dogfood-gate.yml"
+  },
+  {
+    "severity": "high",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "dogfood-gate.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "e2e.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "hypatia-dispatch-intake.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "inbox-steward.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "instant-sync.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "learning-loop.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "pages.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "panicbot-sweep.yml"
+  },
+  {
+    "severity": "high",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "panicbot-sweep.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "push-email-notify.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "repo-integrity-guard.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "rust.yml"
+  },
+  {
+    "severity": "medium",
+    "rule_module": "workflow_audit",
+    "type": "unpinned_action",
+    "file": "supervised-fleet-scan.yml"
   }
 ]
