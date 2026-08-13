@@ -6,7 +6,9 @@ K9!
 
 {
   pedigree = {
-    name = "ci-config",  # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
+    name = "ci-config.k9.ncl",
+    security = { leash = 'Yard },
+      # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
     schema_version = "1.0.0",
     component_type = "ci-configuration",
     security = {
@@ -17,7 +19,7 @@ K9!
       allow_subprocess = false,
     },
     metadata = {
-      name = "ci-config",
+      
       version = "1.0.0",
       description = "CI/CD configuration with runtime validation",
       author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
@@ -49,21 +51,21 @@ K9!
     # Workflow steps with validation
     steps = [
       {
-        name = "Checkout",
+        
         action = "actions/checkout@v4",
         # Version must be SHA-pinned for security
         sha | String | std.string.NonEmpty = "b4ffde65f46336ab88eb53be808477a3936bae11",
       },
       {
-        name = "Build",
+        
         run = "just build",
       },
       {
-        name = "Test",
+        
         run = "just test",
       },
       {
-        name = "Lint",
+        
         run = "just lint",
       },
     ],
@@ -88,15 +90,15 @@ K9!
 
       scanners = [
         {
-          name = "CodeQL",
+          
           languages = ["rust", "javascript"],
         },
         {
-          name = "OSSF Scorecard",
+          
           enabled = true,
         },
         {
-          name = "TruffleHog",
+          
           scan_for = "secrets",
         },
       ],

@@ -6,7 +6,9 @@ K9!
 
 {
   pedigree = {
-    name = "project-metadata",  # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
+    name = "project-metadata.k9.ncl",
+    security = { leash = 'Yard },
+      # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
     schema_version = "1.0.0",
     component_type = "project-metadata",
     security = {
@@ -17,7 +19,7 @@ K9!
       allow_subprocess = false,
     },
     metadata = {
-      name = "project-metadata",
+      
       version = "1.0.0",
       description = "Pure data configuration for project metadata",
       author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
@@ -26,7 +28,7 @@ K9!
 
   # Project configuration
   project = {
-    name = "my-project",
+    
     version = "0.1.0",
     description = "A project following Rhodium Standard Repositories",
 
@@ -36,7 +38,7 @@ K9!
     },
 
     author = {
-      name = "Jonathan D.A. Jewell",
+      
       email = "j.d.a.jewell@open.ac.uk",
       organization = "The Open University",
     },

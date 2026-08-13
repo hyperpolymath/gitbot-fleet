@@ -9,7 +9,9 @@ K9!
 leash = 'Hunt
 
 pedigree = {
-  name = "deploy-bot-fleet",
+    name = "deploy-bot-fleet.k9.ncl",
+    security = { leash = 'Yard },
+  
   schema_version = "1.0.0",
   component_type = "bot-fleet-deployment",
   author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",

@@ -6,7 +6,9 @@ K9!
 
 {
   pedigree = {
-    name = "template-hunt",  # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
+    name = "template-hunt.k9.ncl",
+    security = { leash = 'Yard },
+      # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
     schema_version = "1.0.0",
     component_type = "TODO: describe component type (e.g., 'deployment', 'setup-script')",
     security = {
@@ -18,7 +20,7 @@ K9!
       signature_required = true,
     },
     metadata = {
-      name = "TODO: component-name",
+      
       version = "1.0.0",
       description = "TODO: Detailed description of what this component does",
       author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",

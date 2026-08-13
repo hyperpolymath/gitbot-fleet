@@ -6,7 +6,9 @@ K9!
 
 {
   pedigree = {
-    name = "setup-repo",  # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
+    name = "setup-repo.k9.ncl",
+    security = { leash = 'Yard },
+      # K9 pedigree identity (first field: validator brace-tracking needs it before nested blocks)
     schema_version = "1.0.0",
     component_type = "repository-setup",
     security = {
@@ -18,7 +20,7 @@ K9!
       signature_required = true,
     },
     metadata = {
-      name = "setup-repo",
+      
       version = "1.0.0",
       description = "Automated repository setup with RSR standards",
       author = "Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>",
