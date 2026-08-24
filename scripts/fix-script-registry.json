@@ -47,7 +47,8 @@
       "MissingVexometerHooks": "fix-missing-vexometer-hooks.sh",
       "TrackedNpmLockfile": "fix-tracked-package-lock.sh",
       "LicensePMPLDrift": "fix-pmpl-drift.sh",
-      "ActionsPolicyTooRestrictive": "fix-actions-policy.sh"
+      "ActionsPolicyTooRestrictive": "fix-actions-policy.sh",
+      "SessionDetritus": "fix-session-detritus.sh"
     },
     "by_recipe": {
       "recipe-actions-allow-all": "fix-actions-policy.sh",
@@ -107,7 +108,8 @@
       "chapel-chpl-llvm-export": "fix-chapel-chpl-llvm-export.sh",
       "chapel-replace-chpl-about-with-version": "fix-chapel-replace-chpl-about.sh",
       "reusable_workflow_sha_bump_needs_propagation": "propagate-sha-bump.sh",
-      "recipe-fix-pmpl-drift": "fix-pmpl-drift.sh"
+      "recipe-fix-pmpl-drift": "fix-pmpl-drift.sh",
+      "recipe-archive-session-detritus": "fix-session-detritus.sh"
     }
   }
 }
