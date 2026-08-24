@@ -1,0 +1,93 @@
+== Getting Started with echidnabot
+
+This guide walks you through setting up echidnabot for your repository.
+
+=== Prerequisites
+
+* A GitHub, GitLab, or Bitbucket repository
+* Proof files in a supported format (Coq, Lean, Agda, etc.)
+* Access to an ECHIDNA Core instance
+
+=== Installation
+
+==== From Cargo
+
+[source,bash]
+----
+cargo install echidnabot
+----
+
+==== From Source
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/echidnabot
+cd echidnabot
+cargo build --release
+----
+
+==== Using Guix
+
+[source,bash]
+----
+guix install echidnabot
+----
+
+=== Configuration
+
+Create an `+echidnabot.toml+` in your repository root:
+
+[source,toml]
+----
+[repository]
+platform = "github"
+owner = "your-org"
+name = "your-repo"
+
+[provers]
+enabled = ["coq", "lean4", "agda"]
+
+[webhook]
+secret = "${ECHIDNABOT_WEBHOOK_SECRET}"
+
+[echidna]
+endpoint = "https://echidna.example.com/graphql"
+rest_endpoint = "https://echidna.example.com"
+mode = "auto"
+----
+
+=== Setting Up Webhooks
+
+==== GitHub
+
+[arabic]
+. Go to Repository Settings → Webhooks
+. Add webhook URL: `+https://your-echidnabot-instance/webhooks/github+`
+. Content type: `+application/json+`
+. Secret: Your configured webhook secret
+. Events: Push, Pull Request
+
+==== GitLab
+
+[arabic]
+. Go to Settings → Webhooks
+. URL: `+https://your-echidnabot-instance/webhooks/gitlab+`
+. Secret token: Your configured webhook secret
+. Triggers: Push events, Merge request events
+
+=== Verifying Setup
+
+[source,bash]
+----
+# Check echidnabot status
+echidnabot status
+
+# Trigger a test verification
+echidnabot check --commit HEAD --dry-run
+----
+
+=== Next Steps
+
+* link:./configuration.md[Configuration Reference]
+* link:./api.md[API Documentation]
+* link:./provers.md[Prover Setup]

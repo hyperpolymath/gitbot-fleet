@@ -1,0 +1,560 @@
+== Deployment Guide
+
+This guide covers deployment options for the Garment Sustainability Bot.
+
+____
+Implementation: *Rust* (`+poise+`/`+serenity+`, `+sqlx+` + *SQLite
+only*). Ported from a now-deleted Python prototype; behaviour preserved.
+There is no Python runtime, no virtualenv, and no Postgres.
+____
+
+=== Table of Contents
+
+* link:#prerequisites[Prerequisites]
+* link:#local-development[Local Development]
+* link:#docker-deployment[Docker Deployment]
+* link:#cloud-deployment[Cloud Deployment]
+* link:#production-considerations[Production Considerations]
+* link:#monitoring[Monitoring]
+* link:#troubleshooting[Troubleshooting]
+
+=== Prerequisites
+
+==== Required
+
+* A Rust toolchain (stable; `+cargo+`)
+* Discord Bot Token
+* Git (for cloning repository)
+
+==== Recommended
+
+* https://github.com/casey/just[`+just+`] for the convenience recipes
+* Docker / Podman (for containerised deployment)
+
+=== Local Development
+
+==== Quick Start
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/gsbot.git
+cd gsbot
+cp .env.example .env        # then edit .env: set DISCORD_TOKEN
+just init                   # build + load sample data
+just run                    # run the bot
+----
+
+==== Manual Setup
+
+[arabic]
+. *Clone repository:*
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/gsbot.git
+cd gsbot
+----
+
+[arabic, start=2]
+. *Configure environment:*
+
+[source,bash]
+----
+cp .env.example .env
+# Edit .env and add your Discord token
+----
+
+[arabic, start=3]
+. *Build:*
+
+[source,bash]
+----
+just build            # or: cargo build (use --release for production)
+----
+
+[arabic, start=4]
+. *Initialize database (optional sample data):*
+
+[source,bash]
+----
+just load-data        # or: cargo run --bin gsbot-load-fixtures
+----
+
+Migrations (`+migrations/0001_init.sql+`) are applied automatically at
+startup via `+sqlx::migrate!+`; no separate migration command is
+required.
+
+[arabic, start=5]
+. *Run bot:*
+
+[source,bash]
+----
+just run              # or: cargo run --bin gsbot
+----
+
+=== Docker Deployment
+
+==== Using Docker Compose (Recommended)
+
+[arabic]
+. *Configure environment:*
+
+[source,bash]
+----
+cp .env.example .env
+# Edit .env with your Discord token
+----
+
+[arabic, start=2]
+. *Build and run* (compose builds with `+dockerfile: Containerfile+`):
+
+[source,bash]
+----
+docker compose up -d
+----
+
+[arabic, start=3]
+. *View logs:*
+
+[source,bash]
+----
+docker compose logs -f bot
+----
+
+[arabic, start=4]
+. *Stop bot:*
+
+[source,bash]
+----
+docker compose down
+----
+
+==== Using Docker / Podman only
+
+[arabic]
+. *Build image:*
+
+[source,bash]
+----
+docker build -t gsbot:latest -f Containerfile .
+----
+
+[arabic, start=2]
+. *Run container* (multi-stage image; non-root `+gsbot+` user;
+`+ENTRYPOINT ["/usr/local/bin/gsbot"]+`):
+
+[source,bash]
+----
+docker run -d \
+  --name gsbot \
+  --env-file .env \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/logs:/app/logs" \
+  gsbot:latest
+----
+
+[arabic, start=3]
+. *View logs:*
+
+[source,bash]
+----
+docker logs -f gsbot
+----
+
+==== Persistence
+
+The SQLite database lives under `+/app/data+` (a declared `+VOLUME+`).
+Mount a host directory or named volume there so data survives container
+restarts. *SQLite is the only supported backend — there is no Postgres
+option.*
+
+=== Cloud Deployment
+
+The bot is a single static-ish Rust binary plus a SQLite file. Any host
+that can run a Linux container or a long-lived process works. Provide a
+persistent volume for `+data/+` (the SQLite DB) and set
+`+DISCORD_TOKEN+`.
+
+==== Container hosts (Fly.io, Render, Railway, etc.)
+
+[arabic]
+. Connect the repository or push the image built from `+Containerfile+`.
+. Set environment variables in the dashboard (at minimum
+`+DISCORD_TOKEN+`; optionally `+DISCORD_PREFIX+`, `+DISCORD_ADMIN_IDS+`,
+`+LOG_FILE+`).
+. Attach a persistent volume mounted at `+/app/data+`.
+. Deploy.
+
+==== VM (e.g. cloud Ubuntu instance)
+
+[arabic]
+. *Provision a Linux VM* and SSH in.
+. *Install a Rust toolchain and git*, e.g. via rustup:
+
+[source,bash]
+----
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+sudo apt update && sudo apt install -y git
+----
+
+[arabic, start=3]
+. *Clone and build:*
+
+[source,bash]
+----
+git clone https://github.com/hyperpolymath/gsbot.git
+cd gsbot
+cargo build --release --bin gsbot
+----
+
+[arabic, start=4]
+. *Configure environment:*
+
+[source,bash]
+----
+cp .env.example .env
+# edit .env: set DISCORD_TOKEN
+----
+
+[arabic, start=5]
+. *Set up a systemd service* — create
+`+/etc/systemd/system/gsbot.service+`:
+
+[source,text]
+----
+[Unit]
+Description=Garment Sustainability Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/gsbot
+EnvironmentFile=/home/ubuntu/gsbot/.env
+ExecStart=/home/ubuntu/gsbot/target/release/gsbot
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+----
+
+[arabic, start=6]
+. *Start the service:*
+
+[source,bash]
+----
+sudo systemctl daemon-reload
+sudo systemctl enable gsbot
+sudo systemctl start gsbot
+sudo systemctl status gsbot
+----
+
+=== Production Considerations
+
+==== Environment Variables
+
+Essential for production (see `+src/config.rs+` for the full list):
+
+[source,text]
+----
+# Bot
+DISCORD_TOKEN=your_production_token
+DISCORD_PREFIX=!
+DISCORD_ADMIN_IDS=comma,separated,ids
+
+# Database (SQLite only)
+DATABASE_URL=sqlite:///app/data/gsbot.db
+DATABASE_ECHO=false
+
+# Caching
+ENABLE_CACHING=true
+CACHE_TTL=3600
+CACHE_MAXSIZE=5000
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=/app/logs/gsbot.log
+----
+
+==== Database
+
+This bot uses *SQLite only*. The schema lives in
+`+migrations/0001_init.sql+` and is applied automatically at startup via
+`+sqlx::migrate!+` — there is no external migration tool to run.
+
+===== Backup Strategy
+
+Use the bundled backup binary (keeps the last 10 backups):
+
+[source,bash]
+----
+cargo run --bin gsbot-backup-db          # or: just backup
+# restore from a backup:
+cargo run --bin gsbot-backup-db restore <backup-file>
+----
+
+Schedule it from cron, e.g.:
+
+[source,bash]
+----
+# crontab -e
+0 2 * * * cd /home/ubuntu/gsbot && ./target/release/gsbot-backup-db
+----
+
+You can also export to JSON:
+
+[source,bash]
+----
+cargo run --bin gsbot-export-data        # or: just export-data
+----
+
+==== Security
+
+[arabic]
+. *Use environment variables / `+.env+`* for secrets (git-excluded).
+. *Run as non-root* (the Containerfile already uses the `+gsbot+` user).
+. *Keep dependencies current* and audited:
++
+[source,bash]
+----
+cargo update
+cargo audit          # or: just security
+----
+. *Lint clean* before deploying:
++
+[source,bash]
+----
+cargo clippy --all-targets -- -D warnings
+----
+
+==== Performance
+
+===== Caching
+
+In-process cache (`+src/cache.rs+`); tune via `+ENABLE_CACHING+`,
+`+CACHE_TTL+`, `+CACHE_MAXSIZE+`.
+
+===== Database Connection Pooling
+
+`+sqlx+` uses a connection pool (configured in `+src/db.rs+`, max 5
+connections). SQLite is single-writer; keep the DB on fast local
+storage.
+
+==== Logging
+
+[arabic]
+. *File logging:*
+
+[source,text]
+----
+LOG_FILE=/app/logs/gsbot.log
+----
+
+[arabic, start=2]
+. *Log rotation* — create `+/etc/logrotate.d/gsbot+`:
+
+[source,text]
+----
+/app/logs/gsbot.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 gsbot gsbot
+}
+----
+
+==== Resource Limits
+
+systemd:
+
+[source,text]
+----
+[Service]
+MemoryMax=512M
+CPUQuota=50%
+----
+
+Docker Compose:
+
+[source,text]
+----
+services:
+  bot:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+----
+
+=== Monitoring
+
+==== Health Checks
+
+[source,bash]
+----
+# Process status
+systemctl status gsbot      # systemd
+docker ps                   # Docker
+
+# Logs
+tail -f /app/logs/gsbot.log
+docker compose logs -f bot
+----
+
+==== Metrics
+
+Track:
+
+* Command usage
+* Response times
+* Error rates
+* Database query performance
+* Memory usage
+* Cache hit rates
+
+Consider Prometheus + Grafana or an error-tracking service.
+
+==== Alerts
+
+Set up alerts for bot downtime, high error rates, high memory usage, and
+database access issues.
+
+=== Troubleshooting
+
+==== Bot won’t start
+
+[arabic]
+. *Check logs:*
+
+[source,bash]
+----
+tail -f /app/logs/gsbot.log
+docker compose logs bot
+----
+
+[arabic, start=2]
+. *Verify token is set* (`+DISCORD_TOKEN+` is required;
+`+Config::validate+` fails fast if missing).
+. *Rebuild:*
+
+[source,bash]
+----
+cargo build --release --bin gsbot
+----
+
+==== Database errors
+
+[arabic]
+. *Check the DB file path* matches `+DATABASE_URL+`
+(`+sqlite:///.../gsbot.db+`); the parent directory is created on
+startup.
+. *Migrations* are applied automatically via `+sqlx::migrate!+` —
+inspect logs for migration errors.
+. *Inspect the database* with the `+sqlite3+` CLI if needed:
+
+[source,bash]
+----
+sqlite3 data/gsbot.db '.tables'
+----
+
+==== High memory usage
+
+[arabic]
+. *Check the process:*
+
+[source,bash]
+----
+ps aux | grep gsbot
+----
+
+[arabic, start=2]
+. *Reduce cache size:*
+
+[source,text]
+----
+CACHE_MAXSIZE=1000
+----
+
+[arabic, start=3]
+. *Restart:*
+
+[source,bash]
+----
+systemctl restart gsbot
+docker compose restart bot
+----
+
+==== Commands not responding
+
+[arabic]
+. Check bot status in Discord.
+. Verify gateway intents are enabled (MESSAGE_CONTENT is required).
+. Check the command prefix matches `+DISCORD_PREFIX+`.
+. Review error logs.
+
+==== Performance issues
+
+[arabic]
+. Ensure caching is enabled.
+. Keep the SQLite file on fast local storage.
+. Review logs at a higher `+LOG_LEVEL+`.
+. Consider more resources.
+
+=== Scaling
+
+==== Horizontal Scaling
+
+SQLite is single-writer and local; horizontal scaling of writers is not
+supported by design. For higher load, scale vertically or shard the bot
+at the gateway level (future work).
+
+==== Vertical Scaling
+
+* More CPU cores
+* More RAM
+* Faster local storage (SSD/NVMe)
+
+=== Maintenance
+
+==== Regular Tasks
+
+* *Daily*: monitor logs and errors
+* *Weekly*: review performance metrics
+* *Monthly*: update dependencies, back up the database
+* *Quarterly*: security audit (`+cargo audit+`), performance review
+
+==== Updates
+
+[arabic]
+. Test in development first.
+. Back up the database (`+gsbot-backup-db+`).
+. Update dependencies:
++
+[source,bash]
+----
+cargo update
+----
+. Rebuild (`+cargo build --release+`); migrations apply on next startup.
+. Restart the bot and monitor.
+
+==== Rollback Procedure
+
+If an update fails:
+
+[arabic]
+. Stop the bot.
+. Restore the database from a backup
+(`+gsbot-backup-db restore <file>+`).
+. Revert code to the previous version and rebuild.
+. Restart the bot and investigate.
+
+=== Support
+
+* GitHub Issues: https://github.com/hyperpolymath/gsbot/issues
+* Documentation: README.adoc, CLAUDE.md
+* Architecture: docs/ARCHITECTURE.md
+* API docs: docs/API.md
