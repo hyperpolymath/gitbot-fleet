@@ -1,0 +1,42 @@
+== Gitbot Fleet Documentation
+
+Authoritative documents and operational guides for the gitbot-fleet.
+
+=== Authoritative
+
+[width="100%",cols="50%,50%",options="header",]
+|===
+|Document |Purpose
+|link:ARCHITECTURE.md[`+ARCHITECTURE.md+`] |Single source of truth for
+the system architecture. The repo-root `+README.adoc+` links here.
+
+|link:BOT-OPERATIONS.md[`+BOT-OPERATIONS.md+`] |Long-form operational
+guide for running and supervising the fleet.
+
+|link:PERFORMANCE.md[`+PERFORMANCE.md+`] |Benchmark notes, profiling
+traces, latency targets.
+
+|link:BRANCH-PROTECTION-SETUP.md[`+BRANCH-PROTECTION-SETUP.md+`] |How to
+wire branch-protection rules for fleet-managed repos.
+|===
+
+=== Wiki source
+
+link:wiki-source/[`+wiki-source/+`] holds the source Markdown for this
+repo’s GitHub wiki. Push it to the wiki via:
+
+[source,bash]
+----
+git clone git@github.com:hyperpolymath/gitbot-fleet.wiki.git
+cp -R docs/wiki-source/* gitbot-fleet.wiki/
+cd gitbot-fleet.wiki && git add -A && git commit -m "Sync from gitbot-fleet/docs/wiki-source" && git push
+----
+
+The repo is the source of truth; the wiki is a publication target.
+
+=== Archive
+
+link:archive/[`+archive/+`] preserves dated session reports and
+historical status snapshots. These are no longer authoritative but are
+kept for audit / change-context tracing. See
+link:archive/README.md[`+archive/README.md+`].
