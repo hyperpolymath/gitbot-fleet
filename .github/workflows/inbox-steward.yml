@@ -325,7 +325,7 @@ jobs:
               
               # Dispatch success event to .git-private-farm
               gh api \
-                "repos/hyperpolymath/dot-git-private-farm/dispatches" \
+                "repos/hyperpolymath/.git-private-farm/dispatches" \
                 --method POST \
                 --field event_type="pr-merged" \
                 --field client_payload='{"pr_number":'$PR_NUM',"repo":"${{ github.repository }}","title":"'$TITLE'","head_ref":"'$HEAD_REF'"}' \
