@@ -364,7 +364,7 @@ All workflows require these GitHub Secrets:
 * `+.github/workflows/inbox-steward-intake.yml+` (NEW)
 * `+.hypatia-baseline.json+` (MODIFIED)
 
-==== dot-git-private-farm
+==== .git-private-farm
 
 * `+.github/workflows/inbox-steward-propagate.yml+` (NEW)
 * `+.github/workflows/inbox-steward-monitor.yml+` (NEW)
@@ -409,7 +409,7 @@ gh workflow run inbox-steward.yml -f dry_run=true
 gh workflow run inbox-steward.yml -f dry_run=false
 
 # Run monitor
-cd dot-git-private-farm
+cd .git-private-farm
 gh workflow run inbox-steward-monitor.yml -f dry_run=false
 ----
 
