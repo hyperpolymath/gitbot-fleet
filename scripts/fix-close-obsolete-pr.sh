@@ -16,7 +16,7 @@ REPO_NWO=$(echo "$URL" | awk -F'/' '{print $4"/"$5}')
 DIFF=$(gh pr diff "$URL" 2>/dev/null)
 PR_USES=$(echo "$DIFF" | grep -E "^\+[[:space:]]+uses:[[:space:]]+[^@[:space:]]+@[0-9a-f]{40}" || true)
 if [ -z "$PR_USES" ]; then
-    echo "SKIP: PR has no `+ uses: …@<sha>` lines"
+    echo 'SKIP: PR has no `+ uses: …@<sha>` lines'
     exit 0
 fi
 
