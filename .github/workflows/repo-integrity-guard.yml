@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
+# This workflow is managed by gh actions-lock.
 # Repo Integrity Guard — prevents a stale-base squash-merge (or any push/PR)
 # from silently mass-deleting gitbot-fleet again.
 #
