@@ -159,3 +159,4 @@ ai-cli-crash-capture/
 composer/*.beam
 composer/build/
 secrets/
+.claude/
