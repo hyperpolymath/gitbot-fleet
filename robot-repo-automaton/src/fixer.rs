@@ -1,14 +1,12 @@
-@@
--        content
--            .replace("gitbot-fleet", repo_name)
--            .replace("{{LICENSE}}", "MPL-2.0")
--            .replace("{{YEAR}}", &year)
--            .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")
--            .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk");
-+        content
-+            .replace("gitbot-fleet", repo_name)
-+            .replace("{{LICENSE}}", "MPL-2.0")
-+            .replace("{{YEAR}}", &year)
-+            .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")
-+            .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
-@@
+       content
+           .replace("gitbot-fleet", repo_name)
+           .replace("{{LICENSE}}", "MPL-2.0")
+           .replace("{{YEAR}}", &year)
+           .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")
+           .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk");
+       content
+           .replace("gitbot-fleet", repo_name)
+           .replace("{{LICENSE}}", "MPL-2.0")
+           .replace("{{YEAR}}", &year)
+           .replace("{{AUTHOR}}", "Jonathan D.A. Jewell")
+           .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
