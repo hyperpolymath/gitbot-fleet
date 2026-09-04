@@ -6,6 +6,9 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Base directory holding local repo checkouts; override with REPOS_BASE.
+repos_base := env_var_or_default("REPOS_BASE", env_var("HOME") / "developer/hyper-repos")
+
 # Default recipe: show help
 import? "contractile.just"
 
@@ -59,10 +62,10 @@ hypatia-scan:
 
 # Run panic-attack static analysis
 panic-scan:
-    @if [ -x "/var$REPOS_DIR/panic-attacker/target/release/panic-attack" ]; then \
-        /var$REPOS_DIR/panic-attacker/target/release/panic-attack assail . --verbose; \
+    @if [ -x "{{repos_base}}/panic-attack/target/release/panic-attack" ]; then \
+        {{repos_base}}/panic-attack/target/release/panic-attack assail . --verbose; \
     else \
-        echo "panic-attack not built — run 'cd /var$REPOS_DIR/panic-attacker && cargo build --release'"; \
+        echo "panic-attack not built — run 'cd {{repos_base}}/panic-attack && cargo build --release'"; \
     fi
 
 # Run release maintenance hard-pass on a target repository
@@ -70,7 +73,7 @@ maintenance-hard-pass repo *ARGS:
     bash scripts/maintenance-hard-pass.sh --repo "{{repo}}" {{ARGS}}
 
 # Discover and register repo coverage for gitbot-fleet/hypatia
-enroll-repos repos_root="/var$REPOS_DIR" apply="false":
+enroll-repos repos_root=repos_base apply="false":
     @if [ "{{apply}}" = "true" ]; then \
         bash scripts/enroll-hypatia-fleet.sh --repos-root "{{repos_root}}" --apply; \
     else \
@@ -131,14 +134,14 @@ doctor:
     }
     check "just"              just      "1.25" 
     check "git"               git       "2.40" 
-# Optional tools
-if command -v panic-attack >/dev/null 2>&1; then
-    echo "  [OK]   panic-attack — available"
-    PASS=$((PASS + 1))
-else
-    echo "  [WARN] panic-attack — not found (pre-commit scanner)"
-    WARN=$((WARN + 1))
-fi
+    # Optional tools
+    if command -v panic-attack >/dev/null 2>&1; then
+        echo "  [OK]   panic-attack — available"
+        PASS=$((PASS + 1))
+    else
+        echo "  [WARN] panic-attack — not found (pre-commit scanner)"
+        WARN=$((WARN + 1))
+    fi
     echo ""
     echo "  Result: $PASS passed, $FAIL failed, $WARN warnings"
     if [ "$FAIL" -gt 0 ]; then
@@ -154,10 +157,10 @@ heal:
     echo "  Gitbot Fleet Heal — Automatic Tool Installation"
     echo "═══════════════════════════════════════════════════"
     echo ""
-if ! command -v just >/dev/null 2>&1; then
-    echo "Installing just..."
-    cargo install just 2>/dev/null || echo "Install just from https://just.systems"
-fi
+    if ! command -v just >/dev/null 2>&1; then
+        echo "Installing just..."
+        cargo install just 2>/dev/null || echo "Install just from https://just.systems"
+    fi
     echo ""
     echo "Heal complete. Run 'just doctor' to verify."
 
@@ -191,16 +194,16 @@ help-me:
     echo "  Gitbot Fleet — Common Workflows"
     echo "═══════════════════════════════════════════════════"
     echo ""
-echo "FIRST TIME SETUP:"
-echo "  just doctor           Check toolchain"
-echo "  just heal             Fix missing tools"
-echo "" 
-echo "PRE-COMMIT:"
-echo "  just assail           Run panic-attacker scan"
-echo ""
-echo "LEARN:"
-echo "  just tour             Guided project tour"
-echo "  just default          List all recipes" 
+    echo "FIRST TIME SETUP:"
+    echo "  just doctor           Check toolchain"
+    echo "  just heal             Fix missing tools"
+    echo "" 
+    echo "PRE-COMMIT:"
+    echo "  just assail           Run panic-attacker scan"
+    echo ""
+    echo "LEARN:"
+    echo "  just tour             Guided project tour"
+    echo "  just default          List all recipes" 
 
 
 # Print the current CRG grade (reads from READINESS.md '**Current Grade:** X' line)

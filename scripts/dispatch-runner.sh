@@ -49,13 +49,20 @@ validate_path_within() {
 }
 
 # --- Configuration ---
+# This repo's own root, resolved relative to this script so the fleet never
+# reaches into a different checkout of itself.
+FLEET_ROOT="${FLEET_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
+# Base directory holding local repo checkouts. Override with REPOS_BASE.
+# This value is also the containment boundary enforced by validate_path_within.
+REPOS_BASE="${REPOS_BASE:-$HOME/developer/hyper-repos}"
+
 # Hypatia's local data store is the primary source for dispatch manifests.
-# Falls back to central verisim-data if HYPATIA_DATA is not set.
-HYPATIA_DATA="${HYPATIA_DATA:-/var$REPOS_DIR/nextgen-databases/verisim/verisim-data}"
-VERISIMDB_DATA="${VERISIMDB_DATA:-/var$REPOS_DIR/nextgen-databases/verisim/verisim-data}"
-REPOS_BASE="${REPOS_BASE:-/var$REPOS_DIR}"
-FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var$REPOS_DIR/gitbot-fleet/scripts}"
-RRA_BIN="${RRA_BIN:-/var$REPOS_DIR/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
+# Falls back to central verisimdb-data if HYPATIA_DATA is not set.
+HYPATIA_DATA="${HYPATIA_DATA:-$REPOS_BASE/verisimdb-data}"
+VERISIMDB_DATA="${VERISIMDB_DATA:-$REPOS_BASE/verisimdb-data}"
+FLEET_SCRIPTS="${FLEET_SCRIPTS:-$FLEET_ROOT/scripts}"
+RRA_BIN="${RRA_BIN:-$FLEET_ROOT/robot-repo-automaton/target/release/robot-repo-automaton}"
 
 # Third-party subdirectories inside monorepos that must NOT be modified.
 # Fix scripts will skip these paths entirely.
@@ -312,8 +319,8 @@ execute_entry() {
             if [[ -f "$overrides" ]]; then
                 local override
                 override=$(jq -r --arg r "$repo" '.[$r] // empty' "$overrides" 2>/dev/null || true)
-                if [[ -n "$override" && -d "$override" ]]; then
-                    repo_path="$override"
+                if [[ -n "$override" && -d "$REPOS_BASE/$override" ]]; then
+                    repo_path="$REPOS_BASE/$override"
                 fi
             fi
         fi

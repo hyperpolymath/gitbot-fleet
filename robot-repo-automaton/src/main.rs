@@ -742,6 +742,19 @@ fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()>
     Ok(())
 }
 
+/// Base directory holding local repo checkouts.
+///
+/// Override with `REPOS_BASE`; otherwise defaults to the canonical estate tree.
+fn repos_base() -> PathBuf {
+    if let Ok(base) = std::env::var("REPOS_BASE") {
+        return PathBuf::from(base);
+    }
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("developer")
+        .join("hyper-repos")
+}
+
 /// Resolve a repo argument to a local path.
 ///
 /// Accepts either a local path or a GitHub owner/name format.
@@ -751,15 +764,15 @@ fn resolve_repo_path(repo: &str) -> anyhow::Result<PathBuf> {
         return Ok(path);
     }
 
-    // Try as a relative path from common locations
-    let eclipse_path = PathBuf::from("/var$REPOS_DIR").join(repo);
-    if eclipse_path.exists() {
-        return Ok(eclipse_path);
+    // Try as a relative path under the repos base
+    let candidate = repos_base().join(repo);
+    if candidate.exists() {
+        return Ok(candidate);
     }
 
     Err(anyhow::anyhow!(
-        "Repository not found: {} (tried local path and /var$REPOS_DIR/{})",
+        "Repository not found: {} (tried local path and {})",
         repo,
-        repo
+        candidate.display()
     ))
 }
