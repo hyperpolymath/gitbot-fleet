@@ -9,6 +9,9 @@
 
 use git2::{Repository, Signature};
 use regex::Regex;
+use std::ffi::OsString;
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
@@ -96,16 +99,19 @@ impl Fixer {
             });
         }
 
-        let target_path = self.repo_path.join(&fix.target);
-
         // SECURITY: Reject any target path that escapes the repository root.
-        // Normalise both paths and verify the target is a child of repo_path.
-        // This prevents path traversal attacks (e.g. target = "../../etc/passwd").
-        let canonical_repo = self.repo_path.canonicalize().unwrap_or_else(|_| self.repo_path.clone());
-        // For the target we normalise without requiring the path to exist yet
-        // (it may be a to-be-created file), so we use a manual component walk.
-        let normalised_target = normalise_path(&target_path);
-        if !normalised_target.starts_with(&canonical_repo) {
+        // Canonicalise every existing component so symlinks cannot redirect a
+        // target outside the repository. The final file may not exist yet.
+        let canonical_repo = match self.repo_path.canonicalize() {
+            Ok(path) => path,
+            Err(error) => return Ok(Self::boundary_failure(issue, fix, &error.to_string())),
+        };
+        let target_path = normalise_path(&canonical_repo.join(&fix.target));
+        let resolved_target = match resolve_existing_path(&target_path) {
+            Ok(path) => path,
+            Err(error) => return Ok(Self::boundary_failure(issue, fix, &error.to_string())),
+        };
+        if !resolved_target.starts_with(&canonical_repo) {
             warn!(
                 target = %fix.target,
                 repo = %self.repo_path.display(),
@@ -128,18 +134,46 @@ impl Fixer {
 
         match fix.action {
             FixAction::Delete => self.apply_delete(&target_path, issue),
-            FixAction::Modify => self.apply_modify(&target_path, issue, fix),
+            FixAction::Modify => self.apply_modify(&resolved_target, issue, fix),
             FixAction::Create => self.apply_create(&target_path, issue, fix),
             FixAction::Disable => self.apply_disable(&target_path, issue),
         }
     }
 
-    /// Check if a file is binary based on its extension
-    fn is_binary(path: &Path) -> bool {
-        path.extension()
+    fn boundary_failure(issue: &DetectedIssue, fix: &Fix, detail: &str) -> FixResult {
+        warn!(
+            target = %fix.target,
+            detail,
+            "SECURITY: could not resolve fix target inside repository — rejecting"
+        );
+        FixResult {
+            issue_id: issue.error_type_id.clone(),
+            success: false,
+            action_taken: format!(
+                "REJECTED: target '{}' could not be verified inside repository boundary",
+                fix.target
+            ),
+            files_modified: vec![],
+            error: Some(format!(
+                "Security violation: target path '{}' could not be verified inside the repository directory: {}",
+                fix.target, detail
+            )),
+        }
+    }
+
+    /// Check if a file is binary based on its extension and bytes.
+    fn is_binary(path: &Path) -> io::Result<bool> {
+        let has_binary_extension = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .map(|ext| BINARY_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if has_binary_extension {
+            return Ok(true);
+        }
+
+        let bytes = fs::read(path)?;
+        Ok(bytes.contains(&0) || std::str::from_utf8(&bytes).is_err())
     }
 
     /// Parse a modification specification string into structured operations
@@ -148,7 +182,8 @@ impl Fixer {
     /// - `replace-line:<N>:<content>` - Replace line N with content
     /// - `insert-before:<N>:<content>` - Insert content before line N
     /// - `insert-after:<N>:<content>` - Insert content after line N
-    /// - `replace-pattern:<regex>:<replacement>` - Replace regex matches
+    /// - `replace-pattern:<regex>:<replacement>` - Replace regex matches. The
+    ///   final unescaped colon separates the fields; use `\:` in a replacement.
     /// - `prepend:<content>` - Add content at file beginning
     /// - `append:<content>` - Add content at file end
     fn parse_modification(spec: &str) -> Result<ModifySpec> {
@@ -192,12 +227,15 @@ impl Fixer {
                 })
             }
             Some("replace-pattern") => {
-                if parts.len() < 3 {
-                    return Err(Error::Fix("replace-pattern requires pattern and replacement".into()));
-                }
+                let fields = spec
+                    .strip_prefix("replace-pattern:")
+                    .and_then(Self::split_replace_pattern)
+                    .ok_or_else(|| {
+                        Error::Fix("replace-pattern requires pattern and replacement".into())
+                    })?;
                 Ok(ModifySpec::ReplacePattern {
-                    pattern: parts[1].to_string(),
-                    replacement: parts[2].to_string(),
+                    pattern: Self::unescape_colons(fields.0),
+                    replacement: Self::unescape_colons(fields.1),
                 })
             }
             Some("prepend") => {
@@ -217,6 +255,34 @@ impl Fixer {
             }
             _ => Err(Error::Fix(format!("Unknown modification type: {}", spec))),
         }
+    }
+
+    /// Split legacy replace-pattern fields without consuming colons in the regex.
+    /// Replacement colons must be escaped as `\:` to keep the representation
+    /// unambiguous.
+    fn split_replace_pattern(fields: &str) -> Option<(&str, &str)> {
+        fields.match_indices(':').rev().find_map(|(index, _)| {
+            let preceding_backslashes = fields[..index]
+                .chars()
+                .rev()
+                .take_while(|character| *character == '\\')
+                .count();
+            (preceding_backslashes % 2 == 0).then(|| (&fields[..index], &fields[index + 1..]))
+        })
+    }
+
+    fn unescape_colons(value: &str) -> String {
+        let mut result = String::with_capacity(value.len());
+        let mut characters = value.chars().peekable();
+        while let Some(character) = characters.next() {
+            if character == '\\' && characters.peek() == Some(&':') {
+                characters.next();
+                result.push(':');
+            } else {
+                result.push(character);
+            }
+        }
+        result
     }
 
     /// Apply a modification specification to file content
@@ -274,6 +340,44 @@ impl Fixer {
             result.push('\n');
         }
         Ok(result)
+    }
+
+    /// Validate edited formats for which this crate has a parser available.
+    fn validate_content(path: &Path, content: &str) -> Result<()> {
+        let extension = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(str::to_ascii_lowercase);
+
+        match extension.as_deref() {
+            Some("json") => {
+                serde_json::from_str::<serde_json::Value>(content)
+                    .map_err(|error| Error::Validation(error.to_string()))?;
+            }
+            Some("jsonl") => {
+                for (index, line) in content.lines().enumerate() {
+                    if !line.trim().is_empty() {
+                        serde_json::from_str::<serde_json::Value>(line).map_err(|error| {
+                            Error::Validation(format!("JSONL line {}: {}", index + 1, error))
+                        })?;
+                    }
+                }
+            }
+            Some("yaml" | "yml") => {
+                serde_yaml_ng::from_str::<serde_yaml_ng::Value>(content)
+                    .map_err(|error| Error::Validation(error.to_string()))?;
+            }
+            Some("toml") => {
+                toml::from_str::<toml::Value>(content)
+                    .map_err(|error| Error::Validation(error.to_string()))?;
+            }
+            Some("scm") => {
+                lexpr::from_str(content).map_err(|error| Error::Validation(error.to_string()))?;
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 
     /// Delete a file
@@ -336,7 +440,7 @@ impl Fixer {
         }
 
         // Safety: never modify binary files
-        if Self::is_binary(target_path) {
+        if Self::is_binary(target_path)? {
             warn!("Skipping binary file: {}", target_path.display());
             return Ok(FixResult {
                 issue_id: issue.error_type_id.clone(),
@@ -407,10 +511,24 @@ impl Fixer {
             });
         }
 
-        // Write modified content
-        if let Err(e) = std::fs::write(target_path, &new_content) {
-            // Attempt rollback on write failure
-            let _ = std::fs::write(target_path, &original_content);
+        if let Err(error) = Self::validate_content(target_path, &new_content) {
+            warn!(
+                "Modification produced invalid content for {}: {}",
+                target_path.display(),
+                error
+            );
+            return Ok(FixResult {
+                issue_id: issue.error_type_id.clone(),
+                success: false,
+                action_taken: format!("Modification failed validation: {}", error),
+                files_modified: vec![],
+                error: Some(format!("Modification failed validation: {}", error)),
+            });
+        }
+
+        // Write to a temporary file in the same directory, then atomically
+        // replace the target. Any failure leaves the original file untouched.
+        if let Err(e) = atomic_replace(target_path, new_content.as_bytes()) {
             return Err(Error::Fix(format!(
                 "Failed to write modified file {}: {}",
                 target_path.display(),
@@ -511,7 +629,28 @@ impl Fixer {
             });
         }
 
-        std::fs::write(target_path, &expanded)?;
+        let mut output = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(target_path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                return Ok(FixResult {
+                    issue_id: issue.error_type_id.clone(),
+                    success: true,
+                    action_taken: "File already exists".to_string(),
+                    files_modified: vec![],
+                    error: None,
+                });
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if let Err(error) = output.write_all(expanded.as_bytes()) {
+            drop(output);
+            let _ = fs::remove_file(target_path);
+            return Err(error.into());
+        }
         info!("Created: {}", target_path.display());
 
         Ok(FixResult {
@@ -560,7 +699,7 @@ impl Fixer {
             });
         }
 
-        std::fs::rename(target_path, &disabled_path)?;
+        rename_noreplace(target_path, &disabled_path)?;
         info!(
             "Disabled: {} -> {}",
             target_path.display(),
@@ -583,7 +722,11 @@ impl Fixer {
     /// Check if a path would be gitignored
     fn would_be_gitignored(&self, path: &Path) -> bool {
         if let Ok(repo) = Repository::open(&self.repo_path) {
-            if let Ok(relative) = path.strip_prefix(&self.repo_path) {
+            if let Ok(repo_root) = self.repo_path.canonicalize() {
+                if let Ok(relative) = path.strip_prefix(repo_root) {
+                    return repo.is_path_ignored(relative).unwrap_or(false);
+                }
+            } else if let Ok(relative) = path.strip_prefix(&self.repo_path) {
                 return repo.is_path_ignored(relative).unwrap_or(false);
             }
         }
@@ -702,6 +845,89 @@ impl Fixer {
 
         Ok(results)
     }
+}
+
+/// Resolve all existing path components and append any missing suffix.
+/// Canonicalisation errors on existing components are returned to the caller so
+/// repository-boundary validation fails closed.
+fn resolve_existing_path(path: &Path) -> io::Result<PathBuf> {
+    let mut candidate = path.to_path_buf();
+    let mut missing_components: Vec<OsString> = Vec::new();
+
+    loop {
+        match fs::symlink_metadata(&candidate) {
+            Ok(_) => {
+                let mut resolved = candidate.canonicalize()?;
+                for component in missing_components.iter().rev() {
+                    resolved.push(component);
+                }
+                return Ok(normalise_path(&resolved));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                let component = candidate.file_name().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("no existing ancestor for {}", path.display()),
+                    )
+                })?;
+                missing_components.push(component.to_os_string());
+                if !candidate.pop() {
+                    return Err(error);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// Replace a file atomically using a same-directory temporary file.
+fn atomic_replace(target: &Path, content: &[u8]) -> io::Result<()> {
+    atomic_replace_with(target, content, |temporary, target| {
+        temporary
+            .persist(target)
+            .map(|_| ())
+            .map_err(|error| error.error)
+    })
+}
+
+fn atomic_replace_with<F>(target: &Path, content: &[u8], persist: F) -> io::Result<()>
+where
+    F: FnOnce(tempfile::NamedTempFile, &Path) -> io::Result<()>,
+{
+    let parent = target.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("target has no parent directory: {}", target.display()),
+        )
+    })?;
+    let permissions = fs::metadata(target)?.permissions();
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    temporary.write_all(content)?;
+    temporary.as_file().set_permissions(permissions)?;
+    temporary.as_file_mut().sync_all()?;
+    persist(temporary, target)
+}
+
+/// Atomically rename without replacing an existing destination.
+#[cfg(target_os = "linux")]
+fn rename_noreplace(source: &Path, destination: &Path) -> io::Result<()> {
+    rustix::fs::renameat_with(
+        rustix::fs::CWD,
+        source,
+        rustix::fs::CWD,
+        destination,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(io::Error::from)
+}
+
+/// Fail closed on platforms without an atomic no-replace rename primitive.
+#[cfg(not(target_os = "linux"))]
+fn rename_noreplace(_source: &Path, _destination: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "atomic no-replace rename is unsupported on this platform",
+    ))
 }
 
 /// Normalise a path by resolving `.` and `..` components without requiring the
@@ -936,5 +1162,176 @@ mod tests {
 
         // Test invalid
         assert!(Fixer::parse_modification("invalid-spec").is_err());
+    }
+
+    #[test]
+    fn test_replace_pattern_preserves_colons_in_regex() {
+        let spec = Fixer::parse_modification("replace-pattern:https?://old:new").unwrap();
+        let ModifySpec::ReplacePattern {
+            pattern,
+            replacement,
+        } = &spec
+        else {
+            panic!("expected replace-pattern specification");
+        };
+        assert_eq!(pattern, "https?://old");
+        assert_eq!(replacement, "new");
+        assert_eq!(
+            Fixer::apply_modification("http://old https://old", &spec).unwrap(),
+            "new new"
+        );
+    }
+
+    #[test]
+    fn test_replace_pattern_supports_escaped_colon_in_replacement() {
+        let spec = Fixer::parse_modification(r"replace-pattern:old:new\:value").unwrap();
+        let ModifySpec::ReplacePattern { replacement, .. } = spec else {
+            panic!("expected replace-pattern specification");
+        };
+        assert_eq!(replacement, "new:value");
+    }
+
+    #[test]
+    fn test_modify_nul_content_is_rejected_without_changes() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("data.txt");
+        let original = b"text\0more text";
+        fs::write(&file_path, original).unwrap();
+
+        let fixer = Fixer::new(temp.path().to_path_buf(), false);
+        let issue = make_issue("TEST-BINARY-CONTENT");
+        let fix = Fix {
+            action: FixAction::Modify,
+            target: "data.txt".to_string(),
+            reason: None,
+            modification: Some("replace-line:1:changed".to_string()),
+            fallback: None,
+        };
+
+        let result = fixer.apply(&issue, &fix).unwrap();
+        assert!(!result.success);
+        assert_eq!(fs::read(file_path).unwrap(), original);
+    }
+
+    #[test]
+    fn test_invalid_json_modification_is_not_persisted() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("data.json");
+        let original = "{\n  \"valid\": true\n}\n";
+        fs::write(&file_path, original).unwrap();
+
+        let fixer = Fixer::new(temp.path().to_path_buf(), false);
+        let issue = make_issue("TEST-VALIDATION");
+        let fix = Fix {
+            action: FixAction::Modify,
+            target: "data.json".to_string(),
+            reason: None,
+            modification: Some("replace-line:2:not valid json".to_string()),
+            fallback: None,
+        };
+
+        let result = fixer.apply(&issue, &fix).unwrap();
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("validation"));
+        assert_eq!(fs::read_to_string(file_path).unwrap(), original);
+    }
+
+    #[test]
+    fn test_invalid_yaml_modification_is_not_persisted() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("workflow.yml");
+        let original = "name: CI\njobs:\n  check:\n    runs-on: ubuntu-latest\n";
+        fs::write(&file_path, original).unwrap();
+
+        let fixer = Fixer::new(temp.path().to_path_buf(), false);
+        let issue = make_issue("TEST-YAML-VALIDATION");
+        let fix = Fix {
+            action: FixAction::Modify,
+            target: "workflow.yml".to_string(),
+            reason: None,
+            modification: Some("replace-line:4:    runs-on: [unterminated".to_string()),
+            fallback: None,
+        };
+
+        let result = fixer.apply(&issue, &fix).unwrap();
+        assert!(!result.success);
+        assert_eq!(fs::read_to_string(file_path).unwrap(), original);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_symlinked_create_target_outside_repo_is_rejected() {
+        use std::os::unix::fs::symlink;
+
+        let repo = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        symlink(outside.path(), repo.path().join("escape")).unwrap();
+
+        let fixer = Fixer::new(repo.path().to_path_buf(), false);
+        let issue = make_issue("TEST-SYMLINK-ESCAPE");
+        let fix = Fix {
+            action: FixAction::Create,
+            target: "escape/injected.txt".to_string(),
+            reason: None,
+            modification: None,
+            fallback: Some("must stay inside".to_string()),
+        };
+
+        let result = fixer.apply(&issue, &fix).unwrap();
+        assert!(!result.success);
+        assert!(!outside.path().join("injected.txt").exists());
+    }
+
+    #[test]
+    fn test_relative_repository_path_is_accepted() {
+        let current = std::env::current_dir().unwrap();
+        let repo = tempfile::Builder::new()
+            .prefix("fixer-relative-")
+            .tempdir_in(&current)
+            .unwrap();
+        let absolute_repo = repo.path().canonicalize().unwrap();
+        let relative_repo = absolute_repo.strip_prefix(&current).unwrap().to_path_buf();
+        let file_path = absolute_repo.join("safe.txt");
+        fs::write(&file_path, "safe").unwrap();
+
+        let fixer = Fixer::new(relative_repo, false);
+        let issue = make_issue("TEST-RELATIVE-REPO");
+        let fix = make_fix(FixAction::Delete, "safe.txt");
+
+        let result = fixer.apply(&issue, &fix).unwrap();
+        assert!(result.success);
+        assert!(!file_path.exists());
+    }
+
+    #[test]
+    fn test_atomic_modify_failure_preserves_original_bytes() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("protected.txt");
+        let original = b"original\n";
+        fs::write(&file_path, original).unwrap();
+
+        let result = atomic_replace_with(&file_path, b"changed\n", |_temporary, _target| {
+            Err(io::Error::other("simulated atomic persist failure"))
+        });
+
+        assert!(result.is_err());
+        assert_eq!(fs::read(file_path).unwrap(), original);
+    }
+
+    #[test]
+    fn test_disable_does_not_replace_existing_destination() {
+        let temp = TempDir::new().unwrap();
+        let source = temp.path().join("workflow.yml");
+        let destination = temp.path().join("workflow.yml.disabled");
+        fs::write(&source, "source").unwrap();
+        fs::write(&destination, "existing").unwrap();
+
+        let fixer = Fixer::new(temp.path().to_path_buf(), false);
+        let issue = make_issue("TEST-DISABLE-NOREPLACE");
+        let fix = make_fix(FixAction::Disable, "workflow.yml");
+
+        assert!(fixer.apply(&issue, &fix).is_err());
+        assert_eq!(fs::read_to_string(source).unwrap(), "source");
+        assert_eq!(fs::read_to_string(destination).unwrap(), "existing");
     }
 }

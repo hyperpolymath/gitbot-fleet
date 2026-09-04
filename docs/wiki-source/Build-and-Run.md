@@ -22,7 +22,7 @@ just scan-supervised
 - **`maintenance-hard-pass`** enforces fail-on-warn release gating using
   the target repo's maintenance script.
 - **`enroll-repos`** refreshes repository coverage metadata. Pass
-  `~/developer/hyper-repos true` to write enrollment directives into repos that
+  `"${REPOS_BASE:-$HOME/developer/hyper-repos}" true` to write enrollment directives into repos that
   already have `.machine_readable/`.
 - **`scan-supervised`** runs Hypatia across the supervised inventory
   (`~/.git-private-farm.scm`, `~/.git-private-repos`, or the enrollment

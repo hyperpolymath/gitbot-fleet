@@ -747,7 +747,9 @@ fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()>
 /// Override with `REPOS_BASE`; otherwise defaults to the canonical estate tree.
 fn repos_base() -> PathBuf {
     if let Ok(base) = std::env::var("REPOS_BASE") {
-        return PathBuf::from(base);
+        if !base.is_empty() {
+            return PathBuf::from(base);
+        }
     }
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))

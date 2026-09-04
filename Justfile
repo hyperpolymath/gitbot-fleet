@@ -7,7 +7,8 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Base directory holding local repo checkouts; override with REPOS_BASE.
-repos_base := env_var_or_default("REPOS_BASE", env_var("HOME") / "developer/hyper-repos")
+repos_base_env := env_var_or_default("REPOS_BASE", "")
+repos_base := if repos_base_env == "" { env_var("HOME") / "developer/hyper-repos" } else { repos_base_env }
 
 # Default recipe: show help
 import? "contractile.just"
@@ -63,7 +64,7 @@ hypatia-scan:
 # Run panic-attack static analysis
 panic-scan:
     @if [ -x "{{repos_base}}/panic-attack/target/release/panic-attack" ]; then \
-        {{repos_base}}/panic-attack/target/release/panic-attack assail . --verbose; \
+        "{{repos_base}}/panic-attack/target/release/panic-attack" assail . --verbose; \
     else \
         echo "panic-attack not built — run 'cd {{repos_base}}/panic-attack && cargo build --release'"; \
     fi

@@ -141,7 +141,10 @@ defmodule SyncAll do
   # --- Argument Parsing ---
 
   defp default_repos_dir do
-    System.get_env("REPOS_BASE") || Path.join(System.user_home!(), "developer/hyper-repos")
+    case System.get_env("REPOS_BASE") do
+      base when is_binary(base) and base != "" -> base
+      _ -> Path.join(System.user_home!(), "developer/hyper-repos")
+    end
   end
 
   defp parse_args(args) do
