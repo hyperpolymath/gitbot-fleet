@@ -96,7 +96,7 @@ case "$LANGUAGE" in
         echo ""
         echo "SHELL SUBSTITUTION:"
         echo "  Source the proven shell wrapper:"
-        echo "  . $REPOS_BASE/proven/bindings/bash/proven.sh"
+        echo "  . \"$REPOS_BASE/proven/bindings/bash/proven.sh\""
         echo "  ${PROVEN_MODULE}_call \"\$@\""
         ;;
 
