@@ -25,6 +25,7 @@ case "$*" in
   *'/compare/'*) printf '%s\n' "${MOCK_COMPARE_STATUS:-ahead}" ;;
   *'/contents/'*) printf '%s\n' file ;;
   *'repos/hyperpolymath/standards --jq .default_branch'*) printf '%s\n' main ;;
+  *'--jq [.fork, .archived] | @tsv'*) printf 'false\tfalse\n' ;;
   *) printf '%s\n' '{}' ;;
 esac
 EOF
@@ -162,6 +163,14 @@ out=$(CONSUMERS_TSV_OVERRIDE="$tmp/consumers.tsv" DRY_RUN=true "$SCRIPT" /ignore
 rc=$?
 set -e
 assert_exit "DRY_RUN with valid finding → exit 0" 0 "$rc"
+
+if printf '%s' "$out" | grep -q 'hyperpolymath/repo-a'; then
+    echo "ok    active override consumer remains eligible"
+    ((pass++))
+else
+    echo "FAIL  active override consumers were filtered out"
+    ((fail++))
+fi
 
 if printf '%s' "$out" | grep -q '"event_type": "propagate-sha-bump"'; then
     echo "ok    payload contains event_type"

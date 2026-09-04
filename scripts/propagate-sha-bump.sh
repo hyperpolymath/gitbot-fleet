@@ -253,8 +253,9 @@ filter_forks() {
     mv "$out" "$tsv"
 }
 
-# Skip fork-filter if the operator supplied an override TSV — they've already vetted it.
-if [[ -s "$CONSUMERS_TSV" && -z "${CONSUMERS_TSV_OVERRIDE:-}" ]]; then
+# Apply the same active-root eligibility check to searched and overridden
+# consumers so the test seam cannot bypass the production safety boundary.
+if [[ -s "$CONSUMERS_TSV" ]]; then
     filter_forks "$CONSUMERS_TSV"
 fi
 
