@@ -42,6 +42,7 @@ reqwest = { version = "0.12.28", features = ["json", "rustls-tls"], default-feat
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+serde_yaml_ng = "0.10.0"
 toml = "1.1.2"
 
 # Git operations
@@ -65,6 +66,10 @@ glob = "0.3.3"
 walkdir = "2.5.0"
 regex = "1.12.3"
 dirs = "6.0.0"
+tempfile = "3.27.0"
+
+# Safe filesystem operations and source validation
+syn = { version = "2.0.117", features = ["full", "parsing"] }
 
 # Async utilities
 futures = "0.3.32"
@@ -78,8 +83,10 @@ uuid = { version = "1.23.2", features = ["v4", "serde"] }
 # Secrets
 secrecy = { version = "0.10.3", features = ["serde"] }
 
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+rustix = { version = "1.1.4", features = ["fs"] }
+
 [dev-dependencies]
-tempfile = "3.27.0"
 tokio-test = "0.4.5"
 wiremock = "0.6.5"
 

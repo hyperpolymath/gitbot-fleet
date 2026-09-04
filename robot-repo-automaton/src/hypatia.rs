@@ -619,13 +619,16 @@ fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     // Build pattern from recipe detection info
     let pattern = if let Some(glob) = recipe.get("file_glob").and_then(|v| v.as_str()) {
         RulePattern::FileGlob { glob: glob.to_string() }
-    } else if let Some(regex) = recipe.get("pattern").and_then(|v| v.as_str()) {
+    } else {
+        // No file_glob: a content regex is then mandatory -- `?` returns None
+        // for a recipe that declares neither, which is the same contract the
+        // old explicit `else { return None; }` had. Written with `?` because
+        // clippy::question_mark is deny-level under `-Dwarnings`.
+        let regex = recipe.get("pattern").and_then(|v| v.as_str())?;
         RulePattern::ContentRegex {
             regex: regex.to_string(),
             file_glob: recipe.get("applies_to").and_then(|v| v.as_str()).map(|s| s.to_string()),
         }
-    } else {
-        return None;
     };
 
     // Build fix from recipe

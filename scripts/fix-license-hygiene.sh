@@ -12,9 +12,10 @@
 # Idempotent: only modifies what's missing or incorrect.
 #
 # Requires canonical templates at:
-#   /var$REPOS_DIR/palimpsest-license/legal/MPL-2.0.txt
-#   /var$REPOS_DIR/palimpsest-license/legal/PALIMPSEST-MPL-1.0.txt
+#   $REPOS_BASE/palimpsest-license/legal/MPL-2.0.txt
+#   $REPOS_BASE/palimpsest-license/legal/PALIMPSEST-MPL-1.0.txt
 set -euo pipefail
+REPOS_BASE="${REPOS_BASE:-$HOME/developer/hyper-repos}"
 
 echo "REFUSED: fix-license-hygiene.sh is disabled per estate policy 2026-06-02." >&2
 echo "        Licence/SPDX edits MUST be manual, per-file, owner-approved." >&2
@@ -48,13 +49,13 @@ fi
 cd "$REPO_DIR"
 
 # Template sources
-PALIMPSEST_REPO="/var$REPOS_DIR/palimpsest-license"
+PALIMPSEST_REPO="$REPOS_BASE/palimpsest-license"
 MPL2_SRC="$PALIMPSEST_REPO/legal/MPL-2.0.txt"
 PMPL_SRC="$PALIMPSEST_REPO/legal/PALIMPSEST-MPL-1.0.txt"
 
 # Fallback to boj-server if palimpsest-license not available
 if [[ ! -f "$MPL2_SRC" ]]; then
-    MPL2_SRC="/var$REPOS_DIR/boj-server/LICENSE"
+    MPL2_SRC="$REPOS_BASE/boj-server/LICENSE"
 fi
 
 changes=false
