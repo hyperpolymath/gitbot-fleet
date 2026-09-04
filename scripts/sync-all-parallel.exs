@@ -142,7 +142,7 @@ defmodule SyncAll do
 
   defp default_repos_dir do
     case System.get_env("REPOS_BASE") do
-      base when is_binary(base) and base != "" -> base
+      base when is_binary(base) and byte_size(base) > 0 -> base
       _ -> Path.join(System.user_home!(), "developer/hyper-repos")
     end
   end

@@ -6,9 +6,13 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# Base directory holding local repo checkouts; override with REPOS_BASE.
-repos_base_env := env_var_or_default("REPOS_BASE", "")
-repos_base := if repos_base_env == "" { env_var("HOME") / "developer/hyper-repos" } else { repos_base_env }
+# Base directory holding local repo checkouts; override with a non-empty REPOS_BASE.
+repos_base_env := env("REPOS_BASE", "")
+repos_base := if repos_base_env == "" {
+    env("HOME") / "developer/hyper-repos"
+} else {
+    repos_base_env
+}
 
 # Default recipe: show help
 import? "contractile.just"

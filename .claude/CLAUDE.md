@@ -72,11 +72,10 @@ Control    (report < 0.85)        →  Human review required
 ## Critical Invariants
 
 1. The seven canonical A2ML files (`STATE`, `META`, `ECOSYSTEM`,
-   `AGENTIC`, `NEUROSYM`, `PLAYBOOK`, `ANCHOR`) live directly under
-   `.machine_readable/`, per the `A2ML-REPO-TEMPLATE` in
-   `hyperpolymath/standards`. (Earlier versions of this CLAUDE.md
-   referenced a `.machine_readable/6scm/` subdir; that layout has been
-   retired.)
+   `AGENTIC`, `NEUROSYM`, `PLAYBOOK`, `ANCHOR`) live under
+   `.machine_readable/descriptiles/`, per the current estate-wide policy.
+   Earlier direct-under-`.machine_readable/`, `6scm/`, and `6a2/` layouts
+   are retired and must not be restored.
 2. All shell scripts validate untrusted input before use.
 3. No hardcoded secrets — use env vars with `${VAR:-}` defaults.
 4. Fix scripts must be idempotent (safe to run multiple times).
