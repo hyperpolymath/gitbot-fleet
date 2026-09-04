@@ -170,6 +170,19 @@ if [[ -n "${CONSUMERS_TSV_OVERRIDE:-}" && -f "$CONSUMERS_TSV_OVERRIDE" ]]; then
 else
     : > "$CONSUMERS_TSV"
 
+    # Paginate GitHub code-search for a given scope (user:… or org:…), validate
+    # result integrity, and append workflow YAML paths to CONSUMERS_TSV. Fails
+    # if total_count exceeds GitHub's 1,000-result horizon or if the API returns
+    # incomplete_results=true.
+    #
+    # Args:
+    #   $1  scope qualifier (e.g. "user:hyperpolymath" or "org:metadatastician")
+    # Env:
+    #   needle          search pattern (reusable path + old SHA)
+    #   GH_BIN          GitHub CLI command
+    #   CONSUMERS_TSV   output file (appended)
+    # Returns:
+    #   0 on success, 1 on search failure or integrity violation
     search_scope() {
         local scope="$1" page=1 body total incomplete count
         while :; do
@@ -212,6 +225,18 @@ fi
 # off-limits. (gh search code does not filter forks; we look up each owner-repo
 # pair and skip forks.) For large sweeps this round-trips N times — cache as
 # needed.
+#
+# Filters a TSV of repo + workflow path pairs, removing forks, archived repos,
+# and inaccessible repositories. Overwrites the input file in-place with the
+# filtered result.
+#
+# Args:
+#   $1  path to TSV file (format: "owner/repo<TAB>workflow_path")
+# Env:
+#   GH_BIN  GitHub CLI command
+# Side effects:
+#   Overwrites the input TSV with filtered content (non-fork, non-archived,
+#   accessible repos only). Logs skipped repos to stderr.
 filter_forks() {
     local tsv="$1"
     local out="${tsv}.no-forks"
