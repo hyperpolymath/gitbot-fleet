@@ -121,10 +121,8 @@ jobs:
           path: '_site'
 
   preview:
-    name: Validate deployable Pages preview
+    name: Validate Pages artifact
     if: github.event_name == 'pull_request'
-    environment:
-      name: pages-preview
     runs-on: ubuntu-24.04
     needs: build
     timeout-minutes: 10
