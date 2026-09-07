@@ -45,6 +45,7 @@ jobs:
             .casket-ssg/dist-newstyle
           key: ${{ runner.os }}-casket-${{ hashFiles('.casket-ssg/casket-ssg.cabal') }}
 
+      # Explicitly allowed by repository policy; actions.lock pins its commit.
       - name: Select tested Haskell toolchain
         uses: haskell-actions/setup@v2.12.0
         with:
