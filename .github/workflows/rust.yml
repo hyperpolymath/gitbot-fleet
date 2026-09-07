@@ -59,3 +59,25 @@ jobs:
         with:
           persist-credentials: false
       - run: bash scripts/tests/dispatch-paths.sh
+
+  gsbot:
+    name: GSBot build, tests and dependency security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: bots/gsbot
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install native TLS build dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Build and test SQLite services
+        run: cargo test --locked --all-targets
+      - name: Install dependency graph auditor
+        run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Audit enabled dependencies (no advisory exclusions)
+        # Poise's unmaintained derive macro is reported as maintenance debt;
+        # vulnerabilities, unsoundness and yanked crates remain blocking.
+        run: cargo deny --locked --config deny.toml check advisories --warn unmaintained

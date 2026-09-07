@@ -61,7 +61,7 @@ jobs:
 
       - name: Build casket-ssg
         working-directory: .casket-ssg
-        run: cabal build
+        run: cabal build --index-state=2026-09-06T00:00:00Z
 
       - name: Prepare site source
         shell: bash
@@ -109,7 +109,7 @@ jobs:
       - name: Build site
         run: |
           mkdir -p _site
-          cd .casket-ssg && cabal run casket-ssg -- build ../.site-src ../_site
+          cd .casket-ssg && cabal run --index-state=2026-09-06T00:00:00Z casket-ssg -- build ../.site-src ../_site
           touch ../_site/.nojekyll
 
       - name: Setup Pages
