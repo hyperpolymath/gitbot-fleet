@@ -115,7 +115,7 @@ scan_supervised_repos() {
     local process_after=false
     local limit=0
     local inventory=""
-    local repos_root="/var/mnt/eclipse/repos"
+    local repos_root="$REPOS_BASE"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in

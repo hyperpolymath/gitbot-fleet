@@ -115,13 +115,13 @@ enum Commands {
 
 #[derive(Subcommand, Debug)]
 enum SkeletonAction {
-    /// Write the canonical RSR required-files set into a directory
+    /// Write the uninstantiated canonical RSR template (keeps project placeholders)
     Emit {
         /// Target directory (created if absent)
         #[arg(default_value = ".")]
         out: PathBuf,
     },
-    /// Verify a repo's required files match canonical; non-zero exit on drift
+    /// Check the uninstantiated template against canonical; non-zero on drift
     Check {
         /// Repository root to verify
         #[arg(default_value = ".")]
@@ -212,7 +212,7 @@ fn cmd_skeleton(action: SkeletonAction) -> anyhow::Result<()> {
         SkeletonAction::Emit { out } => {
             skeleton::emit(&out)?;
             println!(
-                "wrote {} canonical RSR skeleton file(s) to {}",
+                "wrote {} canonical RSR template file(s) to {} (project placeholders retained)",
                 skeleton::SKELETON.len(),
                 out.display()
             );

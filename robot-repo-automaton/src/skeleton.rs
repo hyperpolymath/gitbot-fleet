@@ -8,6 +8,11 @@
 //! of the template structurally impossible to drift (#45/#47 closed the
 //! immediate sanitisation; this closes the stronger structural fix #48).
 //!
+//! `emit` reproduces the **uninstantiated template repository**. Project
+//! identity, purpose, kind, author and licence placeholders are intentional:
+//! this command is not a project initializer. `check` compares that same
+//! template, not a downstream project after its owner has customized it.
+//!
 //! Source of truth = the **post-#47 canonical layout**, not the prose in
 //! `standards` `REQUIRED-FILES.md` (which is stale: it still lists root
 //! `*.scm` + `Mustfile`, predating the estate-wide `.scm`→`.a2ml` migration
@@ -70,7 +75,8 @@ pub const SKELETON: &[(&str, &str)] = &[
     ),
 ];
 
-/// Write the canonical skeleton into `out`, creating parent directories.
+/// Write the uninstantiated canonical template into `out`, creating parents.
+/// Project-specific placeholders remain for the downstream initialization step.
 pub fn emit(out: &Path) -> Result<()> {
     for (rel, content) in SKELETON {
         let dst = out.join(rel);
