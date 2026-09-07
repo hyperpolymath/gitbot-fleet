@@ -319,7 +319,7 @@ process_findings() {
             local review_script="$FLEET_DIR/scripts/process-review-findings.sh"
             if [[ -x "$review_script" ]]; then
                 log_bot "rhodibot" "Processing $total_substitute substitute-tier findings for review"
-                FLEET_BASE="$FLEET_DIR" "$review_script" 2>&1 | sed 's/^/  /' || log_warn "Review processing had errors"
+                FLEET_BASE="${FLEET_ROOT:-$FLEET_DIR}" "$review_script" 2>&1 | sed 's/^/  /' || log_warn "Review processing had errors"
             else
                 log_warn "Review processor not found at $review_script"
             fi

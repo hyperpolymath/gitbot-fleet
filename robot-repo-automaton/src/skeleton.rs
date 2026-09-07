@@ -41,6 +41,10 @@ pub const SKELETON: &[(&str, &str)] = &[
     ),
     ("Justfile", include_str!("../templates/skeleton/Justfile")),
     (
+        ".machine_readable/descriptiles/ANCHOR.a2ml",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/ANCHOR.a2ml"),
+    ),
+    (
         ".machine_readable/descriptiles/META.a2ml",
         include_str!("../templates/skeleton/.machine_readable/descriptiles/META.a2ml"),
     ),
