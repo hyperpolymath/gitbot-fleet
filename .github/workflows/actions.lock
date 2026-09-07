@@ -54,7 +54,7 @@ workflows:
     '.github/workflows/scorecard.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.1'
-        - 'github/codeql-action@v4.37.3'
+        - 'github/codeql-action@v4.37.8'
         - 'ossf/scorecard-action@v2.4.4'
     '.github/workflows/secret-scanner.yml': []
     '.github/workflows/supervised-fleet-scan.yml':
@@ -107,11 +107,6 @@ dependencies:
         commit: 'sha1-2c7215f132e9ebf062739d9130488b56d53c060c'
         owner_id: 1940490
         repo_id: 260749683
-    'github/codeql-action@v4.37.3':
-        ref: 'v4.37.3'
-        commit: 'sha1-e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81'
-        owner_id: 9919
-        repo_id: 259445878
     'github/codeql-action@v4.37.8':
         ref: 'v4.37.8'
         commit: 'sha1-db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28'
