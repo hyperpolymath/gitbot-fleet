@@ -745,6 +745,8 @@ fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()>
 /// Base directory holding local repo checkouts.
 ///
 /// Override with `REPOS_BASE`; otherwise defaults to the canonical estate tree.
+/// Legacy checkout locations can also be selected through `REPOS_BASE`; the
+/// former literal `/var$REPOS_DIR` path did not expand a shell variable in Rust.
 fn repos_base() -> PathBuf {
     if let Ok(base) = std::env::var("REPOS_BASE") {
         if !base.is_empty() {

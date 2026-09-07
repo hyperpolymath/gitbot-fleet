@@ -65,6 +65,8 @@ jobs:
 
       - name: Prepare site source
         shell: bash
+        env:
+          CONTENT_REF: ${{ github.event_name == 'pull_request' && github.sha || github.ref_name }}
         run: |
           set -euo pipefail
           rm -rf .site-src _site
@@ -79,9 +81,9 @@ jobs:
             README_URL=""
 
             if [ -f README.md ]; then
-              README_URL="${REPO_URL}/blob/${{ github.ref_name }}/README.md"
+              README_URL="${REPO_URL}/blob/${CONTENT_REF}/README.md"
             elif [ -f README.adoc ]; then
-              README_URL="${REPO_URL}/blob/${{ github.ref_name }}/README.adoc"
+              README_URL="${REPO_URL}/blob/${CONTENT_REF}/README.adoc"
             fi
 
             {
@@ -99,7 +101,7 @@ jobs:
                 echo "- README: [project README](${README_URL})"
               fi
               if [ -d docs ]; then
-                echo "- Docs directory: [docs/](${REPO_URL}/tree/${{ github.ref_name }}/docs)"
+                echo "- Docs directory: [docs/](${REPO_URL}/tree/${CONTENT_REF}/docs)"
               fi
               echo
               echo "Project-specific site content can be added later under site/."
