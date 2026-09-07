@@ -1,19 +1,59 @@
-# SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
 name: Scorecards supply-chain security
 
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   branch_protection_rule:
   schedule:
     - cron: '23 4 * * 1'
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   analysis:
+    if: github.event_name != 'pull_request'
     permissions:
+      contents: read
       security-events: write
       id-token: write
     uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@571cc734cd69fb846032ec77a662aa8ee4fc32cd
-    secrets: inherit
+
+  pull-request-analysis:
+    name: Scorecard PR analysis
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      # The shared publisher targets the default branch. PRs need their own
+      # real SARIF analysis without OIDC or publishing to the public badge API.
+      # OpenSSF currently labels its pull_request trigger experimental.
+      - name: Analyze the pull request with OpenSSF Scorecard
+        uses: ossf/scorecard-action@v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: false
+      - name: Upload Scorecard SARIF
+        uses: github/codeql-action/upload-sarif@v4.37.3
+        with:
+          sarif_file: results.sarif
+      - name: Retain scan evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: scorecard-pr-results
+          path: results.sarif
+          if-no-files-found: error
+          retention-days: 14
