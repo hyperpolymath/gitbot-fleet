@@ -13,7 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-DEFAULT_REPOS_ROOT="/var/mnt/eclipse/repos"
+DEFAULT_REPOS_ROOT="${REPOS_BASE:-$HOME/developer/hyper-repos}"
 REPOS_ROOT="${REPOS_ROOT:-$DEFAULT_REPOS_ROOT}"
 LIMIT=0
 INVENTORY_FILE="${FLEET_SUPERVISED_REPOS_FILE:-}"
@@ -71,7 +71,7 @@ resolve_repo_path() {
 
     # Expand placeholders sometimes used in generated enrollment metadata.
     candidate="${candidate//\/var\$REPOS_DIR/$REPOS_ROOT}"
-    candidate="${candidate//\$REPOS_DIR/${REPOS_ROOT#/var/}}"
+    candidate="${candidate//\$REPOS_DIR/$REPOS_ROOT}"
 
     if [[ "$candidate" != /* ]]; then
         candidate="$REPOS_ROOT/$candidate"

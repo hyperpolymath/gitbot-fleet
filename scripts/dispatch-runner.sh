@@ -3,7 +3,7 @@
 #
 # dispatch-runner.sh — Execute actions from hypatia dispatch manifests
 #
-# Reads pending.jsonl from verisim-data/dispatch/ and executes fixes
+# Reads pending.jsonl from verisimdb-data/dispatch/ and executes fixes
 # via robot-repo-automaton CLI, gitbot-fleet fix scripts, or advisory logging.
 #
 # Usage:
@@ -15,7 +15,7 @@
 #   --strategy STRAT  Only process entries matching strategy (auto_execute|review|report_only)
 #   --repo REPO       Only process entries for a specific repo
 #   --limit N         Process at most N entries
-#   --manifest PATH   Path to manifest (default: verisim-data/dispatch/pending.jsonl)
+#   --manifest PATH   Path to manifest (default: verisimdb-data/dispatch/pending.jsonl)
 #   --parallel N      Run up to N fix scripts concurrently (default: 1)
 #   --dedup-repo      Group entries by repo, run only first per repo+category
 
@@ -49,13 +49,20 @@ validate_path_within() {
 }
 
 # --- Configuration ---
+# This repo's own root, resolved relative to this script so the fleet never
+# reaches into a different checkout of itself.
+FLEET_ROOT="${FLEET_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
+# Base directory holding local repo checkouts. Override with REPOS_BASE.
+# This value is also the containment boundary enforced by validate_path_within.
+REPOS_BASE="${REPOS_BASE:-$HOME/developer/hyper-repos}"
+
 # Hypatia's local data store is the primary source for dispatch manifests.
-# Falls back to central verisim-data if HYPATIA_DATA is not set.
-HYPATIA_DATA="${HYPATIA_DATA:-/var$REPOS_DIR/nextgen-databases/verisim/verisim-data}"
-VERISIMDB_DATA="${VERISIMDB_DATA:-/var$REPOS_DIR/nextgen-databases/verisim/verisim-data}"
-REPOS_BASE="${REPOS_BASE:-/var$REPOS_DIR}"
-FLEET_SCRIPTS="${FLEET_SCRIPTS:-/var$REPOS_DIR/gitbot-fleet/scripts}"
-RRA_BIN="${RRA_BIN:-/var$REPOS_DIR/gitbot-fleet/robot-repo-automaton/target/release/robot-repo-automaton}"
+# Falls back to central verisimdb-data if HYPATIA_DATA is not set.
+HYPATIA_DATA="${HYPATIA_DATA:-$REPOS_BASE/verisimdb-data}"
+VERISIMDB_DATA="${VERISIMDB_DATA:-$REPOS_BASE/verisimdb-data}"
+FLEET_SCRIPTS="${FLEET_SCRIPTS:-$FLEET_ROOT/scripts}"
+RRA_BIN="${RRA_BIN:-$FLEET_ROOT/robot-repo-automaton/target/release/robot-repo-automaton}"
 
 # Third-party subdirectories inside monorepos that must NOT be modified.
 # Fix scripts will skip these paths entirely.
@@ -65,7 +72,7 @@ THIRD_PARTY_PATHS=(
     "echidna/HOL"
 )
 
-# Try hypatia's data first, then fall back to central verisim-data
+# Try hypatia's data first, then fall back to central verisimdb-data
 if [[ -f "${HYPATIA_DATA}/dispatch/pending.jsonl" ]]; then
     MANIFEST_PATH="${HYPATIA_DATA}/dispatch/pending.jsonl"
 elif [[ -f "${VERISIMDB_DATA}/dispatch/pending.jsonl" ]]; then
@@ -236,7 +243,7 @@ record_outcome() {
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     local json
-    json=$(jq -n \
+    json=$(jq -cn \
         --arg pid "$pattern_id" \
         --arg rid "$recipe_id" \
         --arg repo "$repo" \
@@ -247,8 +254,12 @@ record_outcome() {
         '{pattern_id: $pid, recipe_id: $rid, repo: $repo, file: $file, outcome: $outcome, timestamp: $ts, bot: $bot}')
 
     echo "$json" >> "$OUTCOME_FILE"
-    # Also write to central store if it exists
-    if [[ -d "$(dirname "$OUTCOME_FILE_CENTRAL")" ]] || mkdir -p "$(dirname "$OUTCOME_FILE_CENTRAL")" 2>/dev/null; then
+    # Avoid duplicate JSONL records when the two configured stores are the same.
+    local primary_path central_path
+    primary_path=$(realpath -m "$OUTCOME_FILE")
+    central_path=$(realpath -m "$OUTCOME_FILE_CENTRAL")
+    if [[ "$primary_path" != "$central_path" && ! "$OUTCOME_FILE" -ef "$OUTCOME_FILE_CENTRAL" ]]; then
+        mkdir -p "$(dirname "$OUTCOME_FILE_CENTRAL")"
         echo "$json" >> "$OUTCOME_FILE_CENTRAL"
     fi
 
@@ -312,8 +323,8 @@ execute_entry() {
             if [[ -f "$overrides" ]]; then
                 local override
                 override=$(jq -r --arg r "$repo" '.[$r] // empty' "$overrides" 2>/dev/null || true)
-                if [[ -n "$override" && -d "$override" ]]; then
-                    repo_path="$override"
+                if [[ -n "$override" && -d "$REPOS_BASE/$override" ]]; then
+                    repo_path="$REPOS_BASE/$override"
                 fi
             fi
         fi
@@ -448,7 +459,7 @@ execute_entry() {
             fi
 
             # Write finding to shared-context for rhodibot pickup
-            local findings_dir="$REPOS_BASE/gitbot-fleet/shared-context/findings/pending"
+            local findings_dir="$FLEET_ROOT/shared-context/findings/pending"
             mkdir -p "$findings_dir"
 
             # Sanitize pattern_id for use in filename (strip unsafe chars)
@@ -467,7 +478,7 @@ execute_entry() {
             fi
 
             # Append to sustainabot advisory log
-            local advisory_dir="$REPOS_BASE/gitbot-fleet/shared-context/advisories"
+            local advisory_dir="$FLEET_ROOT/shared-context/advisories"
             mkdir -p "$advisory_dir"
 
             local advisory_file="$advisory_dir/$(date -u +%Y-%m).jsonl"
@@ -623,7 +634,7 @@ fi
 rm -f "$RESCAN_REPOS_FILE" 2>/dev/null || true
 
 # --- Kin Protocol: write heartbeat ---
-KIN_DIR="${HOME}/.hypatia/kin"
+KIN_DIR="${KIN_DIR:-${HOME}/.hypatia/kin}"
 mkdir -p "$KIN_DIR"
 
 HEARTBEAT_STATUS="healthy"

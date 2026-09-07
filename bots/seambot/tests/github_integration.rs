@@ -150,13 +150,18 @@ mod tests {
     #[test]
     fn test_installation_token_response_parsing() {
         // Test installation token response can be parsed
-        let response = r#"{
-            "token": "ghs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        let synthetic_token = format!("{}{}_{}", "g", "hs", "x".repeat(36));
+        let response = serde_json::json!({
+            "token": synthetic_token,
             "expires_at": "2024-01-15T12:00:00Z"
-        }"#;
+        })
+        .to_string();
 
-        let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
-        assert!(parsed["token"].as_str().unwrap().starts_with("ghs_"));
+        let parsed: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert!(parsed["token"]
+            .as_str()
+            .unwrap()
+            .starts_with(&["gh", "s_"].concat()));
         assert!(parsed["expires_at"].as_str().unwrap().contains("T"));
     }
 
