@@ -1,4 +1,3 @@
-# This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
 name: GitHub Pages
@@ -45,6 +44,12 @@ jobs:
             ~/.cabal/store
             .casket-ssg/dist-newstyle
           key: ${{ runner.os }}-casket-${{ hashFiles('.casket-ssg/casket-ssg.cabal') }}
+
+      - name: Select tested Haskell toolchain
+        uses: haskell-actions/setup@v2.12.0
+        with:
+          ghc-version: '9.6.6'
+          cabal-version: '3.10.3.0'
 
       - name: Prepare runner Haskell toolchain
         run: |

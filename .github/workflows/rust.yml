@@ -1,6 +1,4 @@
-# This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
-# This workflow is managed by gh actions-lock.
 # This workflow is managed by gh actions-lock.
 name: Rust
 # Build + test + clippy gate for the three standalone Rust crates.
@@ -49,3 +47,15 @@ jobs:
         # `cargo fmt` pass lands.
         run: cargo fmt --check
         continue-on-error: true
+
+  dispatch-contracts:
+    name: Dispatch path and outcome contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/tests/dispatch-paths.sh

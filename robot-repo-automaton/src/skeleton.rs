@@ -11,7 +11,7 @@
 //! Source of truth = the **post-#47 canonical layout**, not the prose in
 //! `standards` `REQUIRED-FILES.md` (which is stale: it still lists root
 //! `*.scm` + `Mustfile`, predating the estate-wide `.scm`→`.a2ml` migration
-//! and the `.machine_readable/6a2/` layout). Updating that doc to match is a
+//! and the `.machine_readable/descriptiles/` layout). Updating that doc to match is a
 //! separate `standards`-repo change, deliberately out of scope here.
 
 use anyhow::{Context, Result};
@@ -41,28 +41,28 @@ pub const SKELETON: &[(&str, &str)] = &[
     ),
     ("Justfile", include_str!("../templates/skeleton/Justfile")),
     (
-        ".machine_readable/6a2/META.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/6a2/META.a2ml"),
+        ".machine_readable/descriptiles/META.a2ml",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/META.a2ml"),
     ),
     (
-        ".machine_readable/6a2/STATE.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/6a2/STATE.a2ml"),
+        ".machine_readable/descriptiles/STATE.a2ml",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/STATE.a2ml"),
     ),
     (
-        ".machine_readable/6a2/ECOSYSTEM.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/6a2/ECOSYSTEM.a2ml"),
+        ".machine_readable/descriptiles/ECOSYSTEM.a2ml",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/ECOSYSTEM.a2ml"),
     ),
     (
-        ".machine_readable/6a2/PLAYBOOK.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/6a2/PLAYBOOK.a2ml"),
+        ".machine_readable/descriptiles/PLAYBOOK.a2ml",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/PLAYBOOK.a2ml"),
     ),
     (
-        ".machine_readable/6a2/AGENTIC.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/6a2/AGENTIC.a2ml"),
+        ".machine_readable/descriptiles/AGENTIC.a2ml",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/AGENTIC.a2ml"),
     ),
     (
-        ".machine_readable/6a2/NEUROSYM.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/6a2/NEUROSYM.a2ml"),
+        ".machine_readable/descriptiles/NEUROSYM.a2ml",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/NEUROSYM.a2ml"),
     ),
 ];
 
