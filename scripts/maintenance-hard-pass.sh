@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 set -euo pipefail
+REPOS_BASE="${REPOS_BASE:-$HOME/developer/hyper-repos}"
 
 usage() {
     cat <<USAGE
@@ -67,19 +68,19 @@ if [[ -x "$repo/scripts/maintenance/run-maintenance.sh" ]]; then
     runner="$repo/scripts/maintenance/run-maintenance.sh"
 elif [[ -x "$repo/run-maintenance.sh" ]]; then
     runner="$repo/run-maintenance.sh"
-elif [[ -x "/var$REPOS_DIR/run-maintenance.sh" ]]; then
-    runner="/var$REPOS_DIR/run-maintenance.sh"
+elif [[ -x "$REPOS_BASE/run-maintenance.sh" ]]; then
+    runner="$REPOS_BASE/run-maintenance.sh"
 else
     echo "error: no maintenance runner found for $repo" >&2
     echo "expected one of:" >&2
     echo "  $repo/scripts/maintenance/run-maintenance.sh" >&2
     echo "  $repo/run-maintenance.sh" >&2
-    echo "  /var$REPOS_DIR/run-maintenance.sh" >&2
+    echo "  $REPOS_BASE/run-maintenance.sh" >&2
     exit 2
 fi
 
-if [[ -z "$panic_bin" && -x "/var$REPOS_DIR/panic-attacker/target/release/panic-attack" ]]; then
-    panic_bin="/var$REPOS_DIR/panic-attacker/target/release/panic-attack"
+if [[ -z "$panic_bin" && -x "$REPOS_BASE/panic-attack/target/release/panic-attack" ]]; then
+    panic_bin="$REPOS_BASE/panic-attack/target/release/panic-attack"
 fi
 
 cmd=("$runner" --repo "$repo" --output "$output" --strict --fail-on-warn)

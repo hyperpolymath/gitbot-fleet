@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 set -euo pipefail
+REPOS_BASE="${REPOS_BASE:-$HOME/developer/hyper-repos}"
 
 usage() {
     cat <<USAGE
@@ -10,7 +11,7 @@ usage: $(basename "$0") [options]
 Discover and enroll repositories for gitbot-fleet/hypatia maintenance coverage.
 
 Options:
-  --repos-root <path>   Root containing repos (default: /var$REPOS_DIR)
+  --repos-root <path>   Root containing repos (default: $REPOS_BASE)
   --registry <path>     Registry JSON output
                         (default: shared-context/enrollment/repos.json)
   --apply               Write enrollment directives into discovered repos
@@ -18,7 +19,7 @@ Options:
 USAGE
 }
 
-repos_root="/var$REPOS_DIR"
+repos_root="$REPOS_BASE"
 registry=""
 apply=false
 

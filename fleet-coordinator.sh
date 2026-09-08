@@ -6,6 +6,7 @@
 set -euo pipefail
 
 FLEET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPOS_BASE="${REPOS_BASE:-$HOME/developer/hyper-repos}"
 SHARED_CONTEXT="$FLEET_DIR/shared-context"
 FINDINGS_DIR="$SHARED_CONTEXT/findings"
 SESSION_ID="$(date +%Y%m%d-%H%M%S)"
@@ -214,7 +215,7 @@ process_findings() {
     fi
 
     # Load recipes for triangle routing
-    local recipes_dir="/var$REPOS_DIR/verisim-data/recipes"
+    local recipes_dir="$REPOS_BASE/verisimdb-data/recipes"
     local substitutions_file="$recipes_dir/proven-substitutions.json"
 
     # Scan for findings in new directory structure: findings/<repo-name>/<timestamp>.json
@@ -326,9 +327,9 @@ process_findings() {
 
         # Process eliminate-tier findings via dispatch-runner (auto-execute)
         local dispatch_runner="$FLEET_DIR/scripts/dispatch-runner.sh"
-        if [[ -x "$dispatch_runner" && -f "/var$REPOS_DIR/verisim-data/dispatch/pending.jsonl" ]]; then
+        if [[ -x "$dispatch_runner" && -f "$REPOS_BASE/verisimdb-data/dispatch/pending.jsonl" ]]; then
             local auto_count
-            auto_count=$(jq -c 'select(.strategy == "auto_execute")' /var$REPOS_DIR/verisim-data/dispatch/pending.jsonl 2>/dev/null | wc -l)
+            auto_count=$(jq -c 'select(.strategy == "auto_execute")' "$REPOS_BASE/verisimdb-data/dispatch/pending.jsonl" 2>/dev/null | wc -l)
             if [[ $auto_count -gt 0 ]]; then
                 log_bot "robot-repo-automaton" "Dispatch runner: $auto_count auto-execute entries pending"
             fi
