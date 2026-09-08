@@ -15,6 +15,23 @@ SCRIPT="scripts/propagate-sha-bump.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# Hermetic GitHub seam. The actuator must prove the target is reachable and
+# that the reusable exists before it considers consumers; these responses model
+# a mainline target without touching the network.
+cat > "$tmp/gh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *'/compare/'*) printf '%s\n' "${MOCK_COMPARE_STATUS:-ahead}" ;;
+  *'/contents/'*) printf '%s\n' file ;;
+  *'repos/hyperpolymath/standards --jq .default_branch'*) printf '%s\n' main ;;
+  *'--jq [.fork, .archived] | @tsv'*) printf 'false\tfalse\n' ;;
+  *) printf '%s\n' '{}' ;;
+esac
+EOF
+chmod +x "$tmp/gh"
+export GH_BIN="$tmp/gh"
+
 pass=0
 fail=0
 
@@ -147,6 +164,14 @@ rc=$?
 set -e
 assert_exit "DRY_RUN with valid finding → exit 0" 0 "$rc"
 
+if printf '%s' "$out" | grep -q 'hyperpolymath/repo-a'; then
+    echo "ok    active override consumer remains eligible"
+    ((pass++))
+else
+    echo "FAIL  active override consumers were filtered out"
+    ((fail++))
+fi
+
 if printf '%s' "$out" | grep -q '"event_type": "propagate-sha-bump"'; then
     echo "ok    payload contains event_type"
     ((pass++))
@@ -170,6 +195,21 @@ if printf '%s' "$out" | grep -qE '"title_suffix": "bump .github/workflows/govern
     ((pass++))
 else
     echo "FAIL  title_suffix wrong"
+    ((fail++))
+fi
+
+# 7. Existing but non-mainline new_sha → hard refusal before fan-out.
+set +e
+out=$(MOCK_COMPARE_STATUS=diverged CONSUMERS_TSV_OVERRIDE="$tmp/consumers.tsv" \
+    DRY_RUN=true "$SCRIPT" /ignored "$tmp/good.json" 2>&1)
+rc=$?
+set -e
+assert_exit "diverged reusable target → exit 1" 1 "$rc"
+if printf '%s' "$out" | grep -q 'not reachable'; then
+    echo "ok    non-mainline refusal explains reachability"
+    ((pass++))
+else
+    echo "FAIL  non-mainline refusal message missing"
     ((fail++))
 fi
 
