@@ -17,8 +17,8 @@ workflows:
         - 'github/codeql-action@v4.37.8'
     '.github/workflows/dogfood-gate.yml':
         - 'actions/checkout@v7.0.1'
-        - 'hyperpolymath/a2ml-ecosystem@main'
-        - 'hyperpolymath/k9-ecosystem@main'
+        - 'hyperpolymath/deed-ecosystem@main'
+        - 'hyperpolymath/k9-ecosystem@codex/science-ci-20260909'
     '.github/workflows/e2e.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/governance.yml': []
@@ -107,14 +107,14 @@ dependencies:
         commit: 'sha1-6037f33647c3f17758a2356c80fc4a53d7e0685d'
         owner_id: 75048950
         repo_id: 623796603
-    'hyperpolymath/a2ml-ecosystem@main':
+    'hyperpolymath/deed-ecosystem@main':
         ref: 'main'
-        commit: 'sha1-aa4b836bd969df2bc58128cb8e3d20bbc88d5e79'
+        commit: 'sha1-f7a40a4d5cc82b2e73f861119baa6818d77a448d'
         owner_id: 6759885
         repo_id: 1275649586
-    'hyperpolymath/k9-ecosystem@main':
-        ref: 'main'
-        commit: 'sha1-89f3c2702f4f650a92aa7411502f38da06abd562'
+    'hyperpolymath/k9-ecosystem@codex/science-ci-20260909':
+        ref: 'codex/science-ci-20260909'
+        commit: 'sha1-2ee51eed590b4722efcdca2fe4685ef24600bced'
         owner_id: 6759885
         repo_id: 1275650185
     'hyperpolymath/smtp-notify-action@v0.2.0':

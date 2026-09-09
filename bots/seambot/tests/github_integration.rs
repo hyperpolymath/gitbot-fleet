@@ -151,12 +151,12 @@ mod tests {
     fn test_installation_token_response_parsing() {
         // Test installation token response can be parsed
         let response = r#"{
-            "token": "ghs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "token": "test-token",
             "expires_at": "2024-01-15T12:00:00Z"
         }"#;
 
         let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
-        assert!(parsed["token"].as_str().unwrap().starts_with("ghs_"));
+        assert_eq!(parsed["token"].as_str().unwrap(), "test-token");
         assert!(parsed["expires_at"].as_str().unwrap().contains("T"));
     }
 
