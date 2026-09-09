@@ -153,7 +153,7 @@ mod tests {
         let response = r#"{
             "token": "ghs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
             "expires_at": "2024-01-15T12:00:00Z"
-        }"#;
+        }"#; // gitleaks:allow -- placeholder token (all 'x's), not a real credential
 
         let parsed: serde_json::Value = serde_json::from_str(response).unwrap();
         assert!(parsed["token"].as_str().unwrap().starts_with("ghs_"));
