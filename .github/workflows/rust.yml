@@ -1,5 +1,5 @@
-# SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
 name: Rust
 # Build + test + clippy gate for the three standalone Rust crates.
@@ -37,14 +37,48 @@ jobs:
       - name: Ensure clippy + rustfmt components
         run: rustup component add clippy rustfmt
       - name: Build (all targets)
-        run: cargo build --all-targets --verbose
+        run: cargo build --locked --all-targets --verbose
       - name: Test
-        run: cargo test --verbose
+        run: cargo test --locked --verbose
       - name: Clippy (deny warnings)
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
       - name: Rustfmt check (informational)
         # Pre-existing formatting drift is not yet gated; surfaced here so it
         # stays visible without blocking. Flip to a hard gate after a dedicated
         # `cargo fmt` pass lands.
         run: cargo fmt --check
         continue-on-error: true
+
+  dispatch-contracts:
+    name: Dispatch path and outcome contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/tests/dispatch-paths.sh
+
+  gsbot:
+    name: GSBot build, tests and dependency security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: bots/gsbot
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install native TLS build dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Build and test SQLite services
+        run: cargo test --locked --all-targets
+      - name: Install dependency graph auditor
+        run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Audit enabled dependencies (no advisory exclusions)
+        # Poise's unmaintained derive macro is reported as maintenance debt;
+        # vulnerabilities, unsoundness and yanked crates remain blocking.
+        run: cargo deny --locked --config deny.toml check advisories --warn unmaintained

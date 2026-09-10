@@ -48,7 +48,8 @@
       "TrackedNpmLockfile": "fix-tracked-package-lock.sh",
       "LicensePMPLDrift": "fix-pmpl-drift.sh",
       "ActionsPolicyTooRestrictive": "fix-actions-policy.sh",
-      "SessionDetritus": "fix-session-detritus.sh"
+      "SessionDetritus": "fix-session-detritus.sh",
+      "RetiredDescriptilePolicy": "fix-retired-descriptile-policy.sh"
     },
     "by_recipe": {
       "recipe-actions-allow-all": "fix-actions-policy.sh",
@@ -109,7 +110,8 @@
       "chapel-replace-chpl-about-with-version": "fix-chapel-replace-chpl-about.sh",
       "reusable_workflow_sha_bump_needs_propagation": "propagate-sha-bump.sh",
       "recipe-fix-pmpl-drift": "fix-pmpl-drift.sh",
-      "recipe-archive-session-detritus": "fix-session-detritus.sh"
+      "recipe-archive-session-detritus": "fix-session-detritus.sh",
+      "recipe-retired-descriptile-policy": "fix-retired-descriptile-policy.sh"
     }
   }
 }

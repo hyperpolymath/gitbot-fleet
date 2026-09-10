@@ -1,3 +1,4 @@
+# This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
 # This workflow is managed by gh actions-lock.
@@ -21,3 +22,5 @@ jobs:
         run: pip install pyyaml --quiet
       - name: Run E2E tests
         run: bash tests/e2e.sh
+      - name: Verify canonical descriptile policy repair
+        run: bash tests/retired-descriptile-policy-test.sh
