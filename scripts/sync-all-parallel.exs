@@ -10,7 +10,7 @@
 #   elixir sync-all-parallel.exs [OPTIONS]
 #
 # Options:
-#   --repos-dir PATH   Base directory (default: /var$REPOS_DIR)
+#   --repos-dir PATH   Base directory (default: $REPOS_BASE or ~/developer/hyper-repos)
 #   --dry-run          Show what would happen
 #   --auto             Non-interactive mode (skip all issues)
 #   --concurrency N    Max concurrent git operations (default: 32)
@@ -140,9 +140,16 @@ defmodule SyncAll do
 
   # --- Argument Parsing ---
 
+  defp default_repos_dir do
+    case System.get_env("REPOS_BASE") do
+      base when is_binary(base) and byte_size(base) > 0 -> base
+      _ -> Path.join(System.user_home!(), "developer/hyper-repos")
+    end
+  end
+
   defp parse_args(args) do
     parse_args(args, %SyncAll{
-      repos_dir: "/var$REPOS_DIR",
+      repos_dir: default_repos_dir(),
       dry_run: false,
       auto_mode: false,
       concurrency: 32,
