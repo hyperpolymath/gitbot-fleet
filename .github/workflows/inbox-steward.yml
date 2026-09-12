@@ -47,8 +47,8 @@ on:
   # MONITORING; the auto-merge job itself is gated OFF by default (see below).
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
   repository-projects: read
   actions: read
 
@@ -282,6 +282,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate-prs
+    permissions:
+      contents: write
+      pull-requests: write
     # NEUTERED 2026-06-16 (owner directive: security/dep PRs are manual-review only).
     # Auto-merge is gated behind an explicit, default-OFF opt-in. Until the repo
     # variable INBOX_STEWARD_AUTOMERGE is set to 'true', this job NEVER runs and
@@ -376,7 +379,8 @@ jobs:
     timeout-minutes: 5
     needs: [identify-passed-prs, validate-prs, auto-merge-prs]
     if: always() && (needs.identify-passed-prs.result == 'success' || needs.validate-prs.result == 'success')
-    
+    permissions:
+      contents: write
     steps:
       - name: Checkout gitbot-fleet
         uses: actions/checkout@v7.0.1
