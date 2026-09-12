@@ -47,7 +47,7 @@ on:
   # MONITORING; the auto-merge job itself is gated OFF by default (see below).
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   repository-projects: read
   actions: read
