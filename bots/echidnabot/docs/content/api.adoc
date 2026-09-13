@@ -110,19 +110,22 @@ Register a new repository for proof verification.
 
 [source,graphql]
 ----
-mutation {
+mutation RegisterRepository($webhookSecret: String) {
   registerRepository(input: {
     platform: GITHUB
     owner: "org"
     name: "repo"
     enabledProvers: [COQ, LEAN4]
-    webhookSecret: "optional-secret"
+    webhookSecret: $webhookSecret
   }) {
     id
     webhookUrl
   }
 }
 ----
+
+Pass the webhook secret through GraphQL variables; never hard-code it in the
+query or commit it to the repository.
 
 ==== triggerCheck
 
