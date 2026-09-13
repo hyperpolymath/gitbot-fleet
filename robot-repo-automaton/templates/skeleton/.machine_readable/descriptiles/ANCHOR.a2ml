@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath)
+# Populate the repository identity when instantiating this skeleton.
+
+name = "PROJECT_NAME"
+id = "org.hyperpolymath.PROJECT_NAME"
+version = "0.1.0"
+status = "template"
+canonical-descriptors = ".machine_readable/descriptiles/"
