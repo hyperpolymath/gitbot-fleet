@@ -32,9 +32,11 @@ path = "src/lib.rs"
 
 [dependencies]
 # Discord (prefix-command framework over serenity — faithful map of discord.py cogs)
-poise = "0.6.2"
+# Serenity 0.12's WebSocket rustls backend requires the unpatched webpki 0.102
+# series. Use its supported native TLS backend until that chain is upgraded.
+poise = { version = "0.6.2", default-features = false, features = ["cache", "chrono", "handle_panics"] }
 serenity = { version = "0.12.5", default-features = false, features = [
-  "client", "gateway", "rustls_backend", "model", "cache",
+  "client", "gateway", "native_tls_backend", "model", "cache",
 ] }
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal"] }
 

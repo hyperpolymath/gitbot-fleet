@@ -203,7 +203,7 @@ impl CicdHyperAClient {
     /// Fetch a ruleset from the registry.
     ///
     /// Tries the Hypatia API first; falls back to loading rules from the
-    /// local verisim-data recipes directory if the API is unavailable.
+    /// local verisimdb-data recipes directory if the API is unavailable.
     pub async fn fetch_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
         tracing::info!("Fetching ruleset: {} from {}", ruleset_id, self.config.api_url);
 
@@ -233,19 +233,33 @@ impl CicdHyperAClient {
             }
         }
 
-        // Fallback: load from local verisim-data recipes
+        // Fallback: load from local verisimdb-data recipes
         self.load_local_ruleset(ruleset_id)
     }
 
-    /// Load rules from local verisim-data recipes directory.
+    /// Load rules from local verisimdb-data recipes directory.
     fn load_local_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
-        let recipes_dirs = [
-            PathBuf::from("/var/mnt/eclipse/repos/verisim-data/recipes"),
-            dirs::home_dir()
-                .unwrap_or_default()
-                .join("Documents/hyperpolymath-repos/verisim-data/recipes"),
-        ];
+        let mut recipes_dirs = Vec::new();
+        for key in ["HYPATIA_DATA", "VERISIMDB_DATA"] {
+            if let Some(root) = std::env::var_os(key).filter(|s| !s.is_empty()) {
+                recipes_dirs.push(PathBuf::from(root).join("recipes"));
+            }
+        }
+        if let Some(root) = std::env::var_os("REPOS_BASE").filter(|s| !s.is_empty()) {
+            recipes_dirs.push(PathBuf::from(root).join("verisimdb-data/recipes"));
+        }
+        if let Some(home) = dirs::home_dir() {
+            recipes_dirs.push(home.join("developer/hyper-repos/verisimdb-data/recipes"));
+        }
+        // Read-only compatibility fallbacks for installations not yet migrated.
+        recipes_dirs.push(PathBuf::from("/var/mnt/eclipse/repos/verisim-data/recipes"));
+        if let Some(home) = dirs::home_dir() {
+            recipes_dirs.push(home.join("Documents/hyperpolymath-repos/verisim-data/recipes"));
+        }
+        self.load_recipes_from(ruleset_id, &recipes_dirs)
+    }
 
+    fn load_recipes_from(&self, ruleset_id: &str, recipes_dirs: &[PathBuf]) -> crate::Result<Ruleset> {
         let recipes_dir = recipes_dirs.iter().find(|d| d.is_dir());
 
         let mut rules = Vec::new();
@@ -601,7 +615,7 @@ impl CicdHyperAClient {
     }
 }
 
-/// Convert a verisim-data recipe JSON to a Rule.
+/// Convert a verisimdb-data recipe JSON to a Rule.
 fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     let id = recipe.get("id")?.as_str()?.to_string();
     let name = recipe.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
@@ -619,13 +633,16 @@ fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     // Build pattern from recipe detection info
     let pattern = if let Some(glob) = recipe.get("file_glob").and_then(|v| v.as_str()) {
         RulePattern::FileGlob { glob: glob.to_string() }
-    } else if let Some(regex) = recipe.get("pattern").and_then(|v| v.as_str()) {
+    } else {
+        // No file_glob: a content regex is then mandatory -- `?` returns None
+        // for a recipe that declares neither, which is the same contract the
+        // old explicit `else { return None; }` had. Written with `?` because
+        // clippy::question_mark is deny-level under `-Dwarnings`.
+        let regex = recipe.get("pattern").and_then(|v| v.as_str())?;
         RulePattern::ContentRegex {
             regex: regex.to_string(),
             file_glob: recipe.get("applies_to").and_then(|v| v.as_str()).map(|s| s.to_string()),
         }
-    } else {
-        return None;
     };
 
     // Build fix from recipe
@@ -659,6 +676,24 @@ fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn migrated_recipes_take_precedence_over_legacy_recipes() {
+        let root = tempfile::tempdir().unwrap();
+        let current = root.path().join("verisimdb-data/recipes");
+        let legacy = root.path().join("verisim-data/recipes");
+        for (dir, id) in [(&current, "current-rule"), (&legacy, "legacy-rule")] {
+            std::fs::create_dir_all(dir).unwrap();
+            let recipe = serde_json::json!({"id": id, "file_glob": "*.rs"});
+            std::fs::write(dir.join("rule.json"), recipe.to_string()).unwrap();
+        }
+        let client = CicdHyperAClient::new(CicdHyperAConfig::default());
+        let rules = client.load_recipes_from("local", &[current, legacy.clone()]).unwrap();
+        assert_eq!(rules.rules.len(), 1);
+        assert_eq!(rules.rules[0].id, "current-rule");
+        let rules = client.load_recipes_from("local", &[root.path().join("absent"), legacy]).unwrap();
+        assert_eq!(rules.rules[0].id, "legacy-rule");
+    }
 
     #[test]
     fn test_config_defaults() {
