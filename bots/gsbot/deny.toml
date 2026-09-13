@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MPL-2.0
+# Audit the actual enabled dependency graph with cargo-deny. In particular,
+# SQLx's unused MySQL backend is not part of this SQLite application's graph.
+# No vulnerability advisories are ignored.
+[advisories]
+version = 2

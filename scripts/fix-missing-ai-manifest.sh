@@ -35,9 +35,9 @@ format = "a2ml"
 
 [canonical-locations]
 machine-readable = ".machine_readable/"
-state = ".machine_readable/6a2/STATE.a2ml"
-meta = ".machine_readable/6a2/META.a2ml"
-ecosystem = ".machine_readable/6a2/ECOSYSTEM.a2ml"
+state = ".machine_readable/descriptiles/STATE.a2ml"
+meta = ".machine_readable/descriptiles/META.a2ml"
+ecosystem = ".machine_readable/descriptiles/ECOSYSTEM.a2ml"
 contractiles = ".machine_readable/contractiles/"
 bot-directives = ".machine_readable/bot_directives/"
 
