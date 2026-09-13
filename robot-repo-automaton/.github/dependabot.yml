@@ -17,7 +17,7 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 3
   
   - package-ecosystem: "npm"
     directory: "/"
