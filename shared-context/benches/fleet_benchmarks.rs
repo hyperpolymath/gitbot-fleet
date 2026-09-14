@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Performance benchmarks for gitbot-fleet operations
 
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use gitbot_shared_context::{BotId, Context, Finding, Severity};
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -102,12 +102,7 @@ fn bench_finding_queries(c: &mut Criterion) {
             2 => Severity::Info,
             _ => Severity::Suggestion,
         };
-        ctx.add_finding(Finding::new(
-            bot,
-            &format!("TEST-{:03}", i),
-            severity,
-            "Test",
-        ));
+        ctx.add_finding(Finding::new(bot, &format!("TEST-{:03}", i), severity, "Test"));
     }
 
     group.bench_function("query_by_bot", |b| {
@@ -196,11 +191,7 @@ fn bench_health_check(c: &mut Criterion) {
         ctx.add_finding(Finding::new(
             BotId::Rhodibot,
             &format!("TEST-{:03}", i),
-            if i < 5 {
-                Severity::Error
-            } else {
-                Severity::Warning
-            },
+            if i < 5 { Severity::Error } else { Severity::Warning },
             "Test finding",
         ));
     }
@@ -236,11 +227,7 @@ fn bench_report_generation(c: &mut Criterion) {
         ctx.add_finding(Finding::new(
             BotId::Rhodibot,
             &format!("TEST-{:03}", i),
-            if i % 4 == 0 {
-                Severity::Error
-            } else {
-                Severity::Warning
-            },
+            if i % 4 == 0 { Severity::Error } else { Severity::Warning },
             "Test finding with some detail",
         ));
     }

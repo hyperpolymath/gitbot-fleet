@@ -39,12 +39,7 @@ impl PanelId {
         if name.is_empty() {
             return Err(PanelError::InvalidName("Panel name cannot be empty".into()));
         }
-        if !name
-            .chars()
-            .next()
-            .map(|c| c.is_uppercase())
-            .unwrap_or(false)
-        {
+        if !name.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
             return Err(PanelError::InvalidName(
                 "Panel name must start with uppercase (PascalCase)".into(),
             ));
@@ -100,21 +95,8 @@ impl std::fmt::Display for PanelId {
 
 /// Names that cannot be used for panels — they collide with PanLL internals.
 pub const RESERVED_NAMES: &[&str] = &[
-    "Model",
-    "View",
-    "Update",
-    "Msg",
-    "App",
-    "Main",
-    "Tea",
-    "Panel",
-    "Pane",
-    "PaneL",
-    "PaneN",
-    "PaneW",
-    "PanelSwitcher",
-    "Storage",
-    "Connection",
+    "Model", "View", "Update", "Msg", "App", "Main", "Tea", "Panel", "Pane",
+    "PaneL", "PaneN", "PaneW", "PanelSwitcher", "Storage", "Connection",
 ];
 
 // =============================================================================
@@ -251,7 +233,7 @@ impl PanelManifest {
                 !self.validations.iter().any(|v| v.has_errors)
             }
             PanelPhase::Provisioned => true, // Activation is a runtime decision
-            PanelPhase::Active => false,     // Terminal phase
+            PanelPhase::Active => false,      // Terminal phase
         }
     }
 
@@ -547,7 +529,10 @@ impl PanelFileExpectation {
             },
             Self {
                 role: "Engine tests".into(),
-                path: PathBuf::from(format!("tests/{}_engine_test.js", snake)),
+                path: PathBuf::from(format!(
+                    "tests/{}_engine_test.js",
+                    snake
+                )),
                 required: false, // Checked by finishbot, not rhodibot
                 found: false,
             },
@@ -594,7 +579,10 @@ impl PanelFileExpectation {
 
     /// Get files that are required but missing.
     pub fn missing_required(files: &[Self]) -> Vec<&Self> {
-        files.iter().filter(|f| f.required && !f.found).collect()
+        files
+            .iter()
+            .filter(|f| f.required && !f.found)
+            .collect()
     }
 }
 
@@ -678,7 +666,10 @@ pub enum PanelError {
     /// Panel name is reserved by PanLL internals.
     ReservedName(String),
     /// Panel cannot advance to the next phase (conditions not met).
-    CannotAdvance { panel: PanelId, phase: PanelPhase },
+    CannotAdvance {
+        panel: PanelId,
+        phase: PanelPhase,
+    },
     /// Panel is already in the Active phase.
     AlreadyActive(PanelId),
     /// Panel not found in context.
@@ -723,7 +714,7 @@ pub trait PanelContext {
 
     /// Update a panel's wiring status.
     fn update_panel_wiring(&mut self, id: &PanelId, wiring: WiringStatus)
-    -> Result<(), PanelError>;
+        -> Result<(), PanelError>;
 
     /// Record a bot's validation result for a panel.
     fn record_panel_validation(
@@ -886,8 +877,9 @@ mod tests {
     #[test]
     fn test_panel_manifest_lifecycle() {
         let id = PanelId::new("TestPanel").unwrap();
-        let mut manifest =
-            PanelManifest::new_minted(id, "Test", "A test panel", "test-icon", false);
+        let mut manifest = PanelManifest::new_minted(
+            id, "Test", "A test panel", "test-icon", false,
+        );
 
         assert_eq!(manifest.phase, PanelPhase::Minted);
         assert!(!manifest.can_advance()); // Wiring not complete
@@ -926,11 +918,7 @@ mod tests {
         let mut ctx = crate::context::Context::new("panll", "/path/to/panll");
         let id = PanelId::new("Wharf").unwrap();
         let manifest = PanelManifest::new_minted(
-            id.clone(),
-            "Wharf",
-            "Container orchestration panel",
-            "ship",
-            true,
+            id.clone(), "Wharf", "Container orchestration panel", "ship", true,
         );
 
         ctx.register_panel(manifest);

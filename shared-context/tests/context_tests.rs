@@ -256,19 +256,14 @@ fn test_bot_tier() {
 
 #[test]
 fn test_finding_builder() {
-    let finding = Finding::new(
-        BotId::Glambot,
-        "WCAG-1.1.1",
-        Severity::Error,
-        "Missing alt text",
-    )
-    .with_rule_name("Image Alternative Text")
-    .with_category("accessibility")
-    .with_file(PathBuf::from("index.html"))
-    .with_location(42, 15)
-    .with_element("<img src=\"logo.png\">")
-    .with_suggestion("Add alt attribute to describe the image")
-    .fixable();
+    let finding = Finding::new(BotId::Glambot, "WCAG-1.1.1", Severity::Error, "Missing alt text")
+        .with_rule_name("Image Alternative Text")
+        .with_category("accessibility")
+        .with_file(PathBuf::from("index.html"))
+        .with_location(42, 15)
+        .with_element("<img src=\"logo.png\">")
+        .with_suggestion("Add alt attribute to describe the image")
+        .fixable();
 
     assert_eq!(finding.rule_id, "WCAG-1.1.1");
     assert_eq!(finding.rule_name, "Image Alternative Text");
@@ -285,10 +280,7 @@ fn test_finding_location_string() {
     let finding1 = Finding::new(BotId::Glambot, "TEST-001", Severity::Info, "Test")
         .with_file(PathBuf::from("test.html"))
         .with_location(10, 5);
-    assert_eq!(
-        finding1.location_string(),
-        Some("test.html:10:5".to_string())
-    );
+    assert_eq!(finding1.location_string(), Some("test.html:10:5".to_string()));
 
     let finding2 = Finding::new(BotId::Glambot, "TEST-002", Severity::Info, "Test")
         .with_file(PathBuf::from("test.html"))

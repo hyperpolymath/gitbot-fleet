@@ -619,12 +619,13 @@ fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     // Build pattern from recipe detection info
     let pattern = if let Some(glob) = recipe.get("file_glob").and_then(|v| v.as_str()) {
         RulePattern::FileGlob { glob: glob.to_string() }
-    } else {
-        let regex = recipe.get("pattern").and_then(|v| v.as_str())?;
+    } else if let Some(regex) = recipe.get("pattern").and_then(|v| v.as_str()) {
         RulePattern::ContentRegex {
             regex: regex.to_string(),
             file_glob: recipe.get("applies_to").and_then(|v| v.as_str()).map(|s| s.to_string()),
         }
+    } else {
+        return None;
     };
 
     // Build fix from recipe

@@ -175,11 +175,7 @@ async fn report_handler(
 
     match format.to_lowercase().as_str() {
         "html" => (StatusCode::OK, [("content-type", "text/html")], report),
-        "json" => (
-            StatusCode::OK,
-            [("content-type", "application/json")],
-            report,
-        ),
+        "json" => (StatusCode::OK, [("content-type", "application/json")], report),
         _ => (StatusCode::OK, [("content-type", "text/plain")], report),
     }
 }
@@ -215,7 +211,10 @@ async fn websocket_handler(
 }
 
 /// Handle WebSocket connection
-async fn websocket_connection(mut socket: axum::extract::ws::WebSocket, state: AppState) {
+async fn websocket_connection(
+    mut socket: axum::extract::ws::WebSocket,
+    state: AppState,
+) {
     use axum::extract::ws::Message;
     use tokio::time::{interval, Duration};
 

@@ -172,12 +172,13 @@ impl Context {
             let anomalies = self.detect_bot_anomalies(*bot_id, execution);
             let bot_status = determine_bot_health_status(execution, &anomalies);
 
-            let duration_ms =
-                if let (Some(start), Some(end)) = (execution.started_at, execution.completed_at) {
-                    Some((end - start).num_milliseconds() as u64)
-                } else {
-                    None
-                };
+            let duration_ms = if let (Some(start), Some(end)) =
+                (execution.started_at, execution.completed_at)
+            {
+                Some((end - start).num_milliseconds() as u64)
+            } else {
+                None
+            };
 
             health.insert(
                 format!("{:?}", bot_id),
@@ -201,7 +202,12 @@ impl Context {
     /// Check health of tiers
     fn check_tier_health(&self) -> HashMap<String, TierHealth> {
         let mut tier_health = HashMap::new();
-        let tiers = [Tier::Engine, Tier::Verifier, Tier::Finisher, Tier::Executor];
+        let tiers = [
+            Tier::Engine,
+            Tier::Verifier,
+            Tier::Finisher,
+            Tier::Executor,
+        ];
 
         for tier in tiers {
             let tier_bots: Vec<_> = self
@@ -467,7 +473,9 @@ impl Context {
 
 /// Determine overall health status from score and alerts
 fn determine_overall_status(score: f64, alerts: &[HealthAlert]) -> HealthStatus {
-    let has_critical = alerts.iter().any(|a| a.severity == AlertSeverity::Critical);
+    let has_critical = alerts
+        .iter()
+        .any(|a| a.severity == AlertSeverity::Critical);
     let has_errors = alerts.iter().any(|a| a.severity == AlertSeverity::Error);
 
     if has_critical || score < 30.0 {
@@ -517,7 +525,9 @@ impl FleetHealth {
         println!("╠════════════════════════════════════════════════════════════════╣");
         println!(
             "║  Status:  {} {:?} (Score: {:.1}/100)                         ║",
-            status_symbol, self.status, self.health_score
+            status_symbol,
+            self.status,
+            self.health_score
         );
         println!(
             "║  Checked: {}                                   ║",
@@ -543,10 +553,7 @@ impl FleetHealth {
 
         // Alerts
         if !self.alerts.is_empty() {
-            println!(
-                "║  Active Alerts: {}                                            ║",
-                self.alerts.len()
-            );
+            println!("║  Active Alerts: {}                                            ║", self.alerts.len());
             for alert in self.alerts.iter().take(5) {
                 let severity_str = match alert.severity {
                     AlertSeverity::Info => "ℹ️ ",
@@ -559,16 +566,10 @@ impl FleetHealth {
                 } else {
                     alert.message.clone()
                 };
-                println!(
-                    "║    {} {}                                            ║",
-                    severity_str, msg
-                );
+                println!("║    {} {}                                            ║", severity_str, msg);
             }
             if self.alerts.len() > 5 {
-                println!(
-                    "║    ... and {} more alerts                                 ║",
-                    self.alerts.len() - 5
-                );
+                println!("║    ... and {} more alerts                                 ║", self.alerts.len() - 5);
             }
             println!("╠════════════════════════════════════════════════════════════════╣");
         }
@@ -651,11 +652,9 @@ mod tests {
         let bot_health = health.bot_health.get("Rhodibot").unwrap();
 
         assert!(!bot_health.anomalies.is_empty());
-        assert!(
-            bot_health
-                .anomalies
-                .iter()
-                .any(|a| a.contains("High error rate"))
-        );
+        assert!(bot_health
+            .anomalies
+            .iter()
+            .any(|a| a.contains("High error rate")));
     }
 }

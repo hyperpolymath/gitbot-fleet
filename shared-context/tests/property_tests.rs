@@ -18,7 +18,7 @@
 //! carefully constructed set of representative values spanning boundary conditions.
 
 use gitbot_shared_context::{
-    BotId, ConfidenceThresholds, Context, DispatchStrategy, Finding, Severity,
+    BotId, Context, ConfidenceThresholds, DispatchStrategy, Finding, Severity,
 };
 use std::path::PathBuf;
 
@@ -38,19 +38,13 @@ fn prop_any_bot_subset_produces_valid_state() {
         ctx.register_bot(bot);
 
         // Start and complete the single bot
-        ctx.start_bot(bot)
-            .expect("start_bot should not fail for registered bot");
-        ctx.complete_bot(bot, 0, 0, 1)
-            .expect("complete_bot should not fail");
+        ctx.start_bot(bot).expect("start_bot should not fail for registered bot");
+        ctx.complete_bot(bot, 0, 0, 1).expect("complete_bot should not fail");
 
         // State must be internally consistent
-        assert!(
-            ctx.bot_completed(bot),
-            "Bot should be marked complete after complete_bot"
-        );
+        assert!(ctx.bot_completed(bot), "Bot should be marked complete after complete_bot");
         assert_eq!(
-            ctx.findings.len(),
-            0,
+            ctx.findings.len(), 0,
             "No findings added — findings collection should be empty"
         );
     }
@@ -123,12 +117,7 @@ fn prop_findings_are_partitioned_by_bot() {
     // Each bot's findings slice must only contain that bot's findings
     for &bot in &all_bots {
         let bot_findings = ctx.findings_from(bot);
-        assert_eq!(
-            bot_findings.len(),
-            3,
-            "Expected exactly 3 findings for {}",
-            bot
-        );
+        assert_eq!(bot_findings.len(), 3, "Expected exactly 3 findings for {}", bot);
         for f in &bot_findings {
             assert_eq!(
                 f.source, bot,
@@ -158,7 +147,8 @@ fn prop_confidence_scores_always_yield_valid_strategy() {
 
     // Test boundary values and representative points across [0.0, 1.0]
     let test_values: &[f64] = &[
-        0.0, 0.001, 0.1, 0.3, 0.5, 0.69, 0.70, 0.849, 0.85, 0.94, 0.95, 0.96, 0.99, 1.0,
+        0.0, 0.001, 0.1, 0.3, 0.5, 0.69, 0.70, 0.849, 0.85, 0.94,
+        0.95, 0.96, 0.99, 1.0,
     ];
 
     for &confidence in test_values {

@@ -196,10 +196,12 @@ impl Finding {
 
     /// Get location string for display
     pub fn location_string(&self) -> Option<String> {
-        self.file.as_ref().map(|f| match (self.line, self.column) {
-            (Some(l), Some(c)) => format!("{}:{}:{}", f.display(), l, c),
-            (Some(l), None) => format!("{}:{}", f.display(), l),
-            _ => f.display().to_string(),
+        self.file.as_ref().map(|f| {
+            match (self.line, self.column) {
+                (Some(l), Some(c)) => format!("{}:{}:{}", f.display(), l, c),
+                (Some(l), None) => format!("{}:{}", f.display(), l),
+                _ => f.display().to_string(),
+            }
         })
     }
 }
@@ -229,10 +231,7 @@ impl FindingSet {
 
     /// Get findings by source bot
     pub fn by_source(&self, source: BotId) -> Vec<&Finding> {
-        self.findings
-            .iter()
-            .filter(|f| f.source == source)
-            .collect()
+        self.findings.iter().filter(|f| f.source == source).collect()
     }
 
     /// Get findings by severity
@@ -273,10 +272,7 @@ impl FindingSet {
 
     /// Get fixable findings
     pub fn fixable(&self) -> Vec<&Finding> {
-        self.findings
-            .iter()
-            .filter(|f| f.fixable && !f.fixed)
-            .collect()
+        self.findings.iter().filter(|f| f.fixable && !f.fixed).collect()
     }
 
     /// Get unfixed findings
