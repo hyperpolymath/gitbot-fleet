@@ -744,9 +744,9 @@ fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()>
 
 /// Base directory holding local repo checkouts.
 ///
-/// Override with `REPOS_BASE`; otherwise defaults to the canonical estate tree.
-/// Legacy checkout locations can also be selected through `REPOS_BASE`; the
-/// former literal `/var$REPOS_DIR` path did not expand a shell variable in Rust.
+/// Uses a non-empty `REPOS_BASE` value when set; otherwise returns
+/// `$HOME/developer/hyper-repos`, relative to the current directory when no home
+/// directory is available.
 fn repos_base() -> PathBuf {
     if let Ok(base) = std::env::var("REPOS_BASE") {
         if !base.is_empty() {
@@ -761,7 +761,9 @@ fn repos_base() -> PathBuf {
 
 /// Resolve a repo argument to a local path.
 ///
-/// Accepts either a local path or a GitHub owner/name format.
+/// Existing paths are returned directly. Other values are resolved relative to
+/// [`repos_base`], including nested `owner/name` paths, and an error lists the
+/// attempted location when neither exists.
 fn resolve_repo_path(repo: &str) -> anyhow::Result<PathBuf> {
     let path = PathBuf::from(repo);
     if path.exists() {
