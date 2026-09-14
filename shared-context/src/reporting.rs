@@ -102,7 +102,11 @@ impl Context {
     /// Build fleet summary
     fn build_summary(&self) -> FleetSummary {
         let total_bots = self.executions.len();
-        let bots_completed = self.executions.values().filter(|e| e.completed_at.is_some()).count();
+        let bots_completed = self
+            .executions
+            .values()
+            .filter(|e| e.completed_at.is_some())
+            .count();
         let bots_in_progress = self
             .executions
             .values()
@@ -128,9 +132,8 @@ impl Context {
         // Calculate health score (0-100)
         let overall_health = if total_bots > 0 {
             let completion_score = (bots_completed as f64 / total_bots as f64) * 50.0;
-            let severity_penalty = (critical_findings as f64 * 10.0)
-                + (errors as f64 * 5.0)
-                + (warnings as f64 * 1.0);
+            let severity_penalty =
+                (critical_findings as f64 * 10.0) + (errors as f64 * 5.0) + (warnings as f64 * 1.0);
             let finding_score = (50.0 - severity_penalty.min(50.0)).max(0.0);
             completion_score + finding_score
         } else {
@@ -164,11 +167,12 @@ impl Context {
                 }
                 .to_string();
 
-                let duration_ms = if let (Some(start), Some(end)) = (exec.started_at, exec.completed_at) {
-                    Some((end.timestamp_millis() - start.timestamp_millis()) as u64)
-                } else {
-                    None
-                };
+                let duration_ms =
+                    if let (Some(start), Some(end)) = (exec.started_at, exec.completed_at) {
+                        Some((end.timestamp_millis() - start.timestamp_millis()) as u64)
+                    } else {
+                        None
+                    };
 
                 BotExecutionReport {
                     bot_id: format!("{:?}", bot_id),
@@ -226,24 +230,26 @@ impl Context {
 
         tier_stats
             .into_iter()
-            .map(|(tier, (bots_count, completed_count, total_findings, durations))| {
-                let avg_duration_ms = if !durations.is_empty() {
-                    durations.iter().sum::<u64>() as f64 / durations.len() as f64
-                } else {
-                    0.0
-                };
+            .map(
+                |(tier, (bots_count, completed_count, total_findings, durations))| {
+                    let avg_duration_ms = if !durations.is_empty() {
+                        durations.iter().sum::<u64>() as f64 / durations.len() as f64
+                    } else {
+                        0.0
+                    };
 
-                (
-                    format!("{:?}", tier),
-                    TierPerformance {
-                        tier: format!("{:?}", tier),
-                        bots_count,
-                        completed_count,
-                        total_findings,
-                        avg_duration_ms,
-                    },
-                )
-            })
+                    (
+                        format!("{:?}", tier),
+                        TierPerformance {
+                            tier: format!("{:?}", tier),
+                            bots_count,
+                            completed_count,
+                            total_findings,
+                            avg_duration_ms,
+                        },
+                    )
+                },
+            )
             .collect()
     }
 
@@ -261,15 +267,30 @@ impl Context {
 
         // Summary
         md.push_str("## Summary\n\n");
-        md.push_str(&format!("**Overall Health:** {:.1}/100\n\n", report.summary.overall_health));
+        md.push_str(&format!(
+            "**Overall Health:** {:.1}/100\n\n",
+            report.summary.overall_health
+        ));
         md.push_str("| Metric | Value |\n");
         md.push_str("|--------|-------|\n");
         md.push_str(&format!("| Total Bots | {} |\n", report.summary.total_bots));
-        md.push_str(&format!("| Completed | {} |\n", report.summary.bots_completed));
-        md.push_str(&format!("| In Progress | {} |\n", report.summary.bots_in_progress));
+        md.push_str(&format!(
+            "| Completed | {} |\n",
+            report.summary.bots_completed
+        ));
+        md.push_str(&format!(
+            "| In Progress | {} |\n",
+            report.summary.bots_in_progress
+        ));
         md.push_str(&format!("| Pending | {} |\n", report.summary.bots_pending));
-        md.push_str(&format!("| Total Findings | {} |\n", report.summary.total_findings));
-        md.push_str(&format!("| Critical | {} |\n", report.summary.critical_findings));
+        md.push_str(&format!(
+            "| Total Findings | {} |\n",
+            report.summary.total_findings
+        ));
+        md.push_str(&format!(
+            "| Critical | {} |\n",
+            report.summary.critical_findings
+        ));
         md.push_str(&format!("| Errors | {} |\n", report.summary.errors));
         md.push_str(&format!("| Warnings | {} |\n\n", report.summary.warnings));
 
@@ -299,7 +320,11 @@ impl Context {
         for perf in report.tier_performance.values() {
             md.push_str(&format!(
                 "| {} | {} | {} | {} | {:.0} |\n",
-                perf.tier, perf.bots_count, perf.completed_count, perf.total_findings, perf.avg_duration_ms
+                perf.tier,
+                perf.bots_count,
+                perf.completed_count,
+                perf.total_findings,
+                perf.avg_duration_ms
             ));
         }
 
