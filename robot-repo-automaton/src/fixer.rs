@@ -72,7 +72,10 @@ const BINARY_EXTENSIONS: &[&str] = &[
 ];
 
 impl Fixer {
-    /// Create a new fixer for a repository
+    /// Creates a fixer rooted at `repo_path`.
+    ///
+    /// An existing root is canonicalised before use. When `dry_run` is true,
+    /// applicable fixes are reported without writing or committing.
     pub fn new(repo_path: PathBuf, dry_run: bool) -> Self {
         // Keep one root representation for ignore rules and index paths.
         // Invalid roots are retained so apply's boundary check reports the error.
@@ -80,7 +83,10 @@ impl Fixer {
         Fixer { repo_path, dry_run }
     }
 
-    /// Apply a fix for a detected issue
+    /// Applies a fix after enforcing exclusion-registry and repository-boundary checks.
+    ///
+    /// Registry denials and unsafe targets produce unsuccessful results. Errors
+    /// encountered while carrying out an allowed action are returned to the caller.
     pub fn apply(&self, issue: &DetectedIssue, fix: &Fix) -> Result<FixResult> {
         // EXCLUSION REGISTRY GUARD: refuse the write if the target repo,
         // origin, or target path is on the estate-wide denylist. In dry-run
@@ -379,10 +385,10 @@ impl Fixer {
         })
     }
 
-    /// Modify a file with safety checks and rollback support
+    /// Applies a modification specification to a non-binary file.
     ///
-    /// Reads the modification specification from the fix, applies it to the file,
-    /// and rolls back if the modification produces invalid content.
+    /// Supported structured formats are syntax-checked before the replacement is
+    /// published atomically, so rejected content does not overwrite the original.
     fn apply_modify(
         &self,
         target_path: &Path,
@@ -502,13 +508,12 @@ impl Fixer {
         })
     }
 
-    /// Create a file with template expansion
+    /// Creates a missing file from an explicit fallback or a built-in template.
     ///
-    /// Supports template variables:
-    /// - `gitbot-fleet` - Repository name
-    /// - `hyperpolymath` - Repository owner
-    /// - `{{LICENSE}}` - License identifier
-    /// - `{{YEAR}}` - Current year
+    /// Creation is skipped for ignored or empty files and never replaces an entry
+    /// created concurrently. Expansion substitutes the repository name for the
+    /// literal `gitbot-fleet` and resolves the `{{LICENSE}}`, `{{YEAR}}`,
+    /// `{{AUTHOR}}`, and `{{EMAIL}}` placeholders.
     fn apply_create(
         &self,
         target_path: &Path,
@@ -604,7 +609,9 @@ impl Fixer {
         })
     }
 
-    /// Disable a workflow (rename to .disabled)
+    /// Disables a target by replacing its extension with `yml.disabled`.
+    ///
+    /// The rename fails rather than replacing an existing disabled file.
     fn apply_disable(
         &self,
         target_path: &Path,
@@ -671,7 +678,9 @@ impl Fixer {
         false
     }
 
-    /// Get template content for a file creation
+    /// Returns explicit fallback content or a built-in template for a known target.
+    ///
+    /// Unknown targets without fallback content produce an empty string.
     fn get_template_content(&self, target: &str, fix: &Fix) -> String {
         // If the fix has explicit content in the fallback field, use it
         if let Some(ref fallback) = fix.fallback {
@@ -705,7 +714,10 @@ impl Fixer {
             .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
     }
 
-    /// Commit changes to the repository
+    /// Stages supplied absolute paths beneath the repository and commits the index.
+    ///
+    /// Missing paths are staged as removals, paths outside the repository are
+    /// ignored, and dry-run mode performs no Git writes.
     pub fn commit(&self, message: &str, files: &[PathBuf]) -> Result<()> {
         // EXCLUSION REGISTRY GUARD: a commit is a write action even though
         // apply() has already checked each file individually, because some
@@ -761,7 +773,11 @@ impl Fixer {
         Ok(())
     }
 
-    /// Apply multiple fixes and commit
+    /// Applies each issue/fix pair and commits all successfully modified files.
+    ///
+    /// Result-level failures do not stop the batch, but an operation error does.
+    /// No commit is created in dry-run mode or when no files were modified. The
+    /// standalone `_issues` slice is currently unused; each tuple supplies its issue.
     pub fn apply_and_commit(
         &self,
         _issues: &[DetectedIssue],
@@ -889,12 +905,14 @@ fn resolve_from_existing_ancestor(path: &Path) -> Result<PathBuf> {
     }
 }
 
+/// Reports whether the character at `index` follows an odd-length backslash run.
 fn is_escaped(value: &str, index: usize) -> bool {
     value[..index].bytes().rev()
         .take_while(|byte| *byte == b'\\')
         .count() % 2 == 1
 }
 
+/// Unescapes colon escapes while preserving backslashes before other characters.
 fn unescape_colons(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut characters = value.chars().peekable();
