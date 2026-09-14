@@ -186,8 +186,8 @@ mod tests {
     #[test]
     fn test_detect_hardcoded_cred() {
         let analyzer = InfraAnalyzer;
-        let content = r#"password = "SuperSecretPass123!""#; // scanner-allow: rust-secrets
-        let usages = analyzer.analyze_content(Path::new("infra/main.tf"), content);
+        let content = format!(r#"password = "{}""#, "x".repeat(12));
+        let usages = analyzer.analyze_content(Path::new("infra/main.tf"), &content);
         assert!(!usages.is_empty(), "Should detect hardcoded credential");
         assert_eq!(usages[0].status, CryptoStatus::Reject);
     }
@@ -204,8 +204,8 @@ mod tests {
     #[test]
     fn test_skip_non_infra_file() {
         let analyzer = InfraAnalyzer;
-        let content = r#"password = "SuperSecretPass123!""#; // scanner-allow: rust-secrets
-        let usages = analyzer.analyze_content(Path::new("src/main.rs"), content);
+        let content = format!(r#"password = "{}""#, "x".repeat(12));
+        let usages = analyzer.analyze_content(Path::new("src/main.rs"), &content);
         assert!(usages.is_empty(), "Should skip non-IaC files");
     }
 }
