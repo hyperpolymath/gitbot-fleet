@@ -316,6 +316,10 @@ The error catalog uses S-expression format (Guile Scheme compatible):
 | Apply a line-level transformation. Requires a `modification` field with spec
   such as `replace-line:N:content`, `insert-before:N:content`,
   `replace-pattern:regex:replacement`, `prepend:content`, or `append:content`.
+  For `replace-pattern`, the first unescaped colon separates the regex and
+  replacement. Write a colon within either field as `\:` (for example,
+  `replace-pattern:https?\://old:https\://new`). Regex replacement expansion is
+  preserved, so capture references such as `$1` and `$name` are supported.
 
 | `create`
 | Create the target file from a template or `fallback` content. Supports

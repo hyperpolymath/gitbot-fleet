@@ -3,6 +3,7 @@
 
 use regex::Regex;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 
 use crate::catalog::{Fix, FixAction};
@@ -30,11 +31,20 @@ impl Fixer {
         Self { repo_path, dry_run }
     }
 
-    /// Resolve a fix target relative to the repository root, rejecting any
-    /// path that would escape the repository. The target need not exist
-    /// (e.g. for `Create`), so this is pure path arithmetic.
+    /// Resolve a fix target relative to the canonical repository root.
+    ///
+    /// The target need not exist (for example, for `Create`), so the nearest
+    /// existing ancestor is canonicalized and any missing suffix is appended.
+    /// This rejects lexical traversal, symlink escapes, and symlink targets
+    /// (including dangling symlinks) before a mutation can occur.
     fn resolve_target(&self, target: &str) -> Result<PathBuf> {
-        let joined = self.repo_path.join(target);
+        let canonical_root = self.repo_path.canonicalize().map_err(|e| {
+            Error::Fix(format!(
+                "Failed to canonicalize repository '{}': {e}",
+                self.repo_path.display()
+            ))
+        })?;
+        let joined = canonical_root.join(target);
 
         let mut normalized = PathBuf::new();
         for component in joined.components() {
@@ -51,13 +61,73 @@ impl Fixer {
             }
         }
 
-        if !normalized.starts_with(&self.repo_path) {
+        if !normalized.starts_with(&canonical_root) {
             return Err(Error::Fix(format!(
                 "Fix target '{target}' resolves outside the repository"
             )));
         }
 
-        Ok(normalized)
+        match fs::symlink_metadata(&normalized) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(Error::Fix(format!(
+                    "Fix target '{target}' is a symlink and cannot be mutated"
+                )));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(Error::Fix(format!(
+                    "Failed to inspect fix target '{target}': {e}"
+                )));
+            }
+        }
+
+        let mut ancestor = normalized.clone();
+        let mut missing = Vec::new();
+        let canonical_ancestor = loop {
+            match fs::symlink_metadata(&ancestor) {
+                Ok(_) => {
+                    break ancestor.canonicalize().map_err(|e| {
+                        Error::Fix(format!(
+                            "Failed to canonicalize fix target ancestor '{}': {e}",
+                            ancestor.display()
+                        ))
+                    })?;
+                }
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    let component = ancestor.file_name().ok_or_else(|| {
+                        Error::Fix(format!(
+                            "Fix target '{target}' resolves outside the repository"
+                        ))
+                    })?;
+                    missing.push(component.to_os_string());
+                    if !ancestor.pop() {
+                        return Err(Error::Fix(format!(
+                            "Fix target '{target}' resolves outside the repository"
+                        )));
+                    }
+                }
+                Err(e) => {
+                    return Err(Error::Fix(format!(
+                        "Failed to inspect fix target ancestor '{}': {e}",
+                        ancestor.display()
+                    )));
+                }
+            }
+        };
+
+        if !canonical_ancestor.starts_with(&canonical_root) {
+            return Err(Error::Fix(format!(
+                "Fix target '{target}' resolves outside the repository"
+            )));
+        }
+
+        let mut resolved = canonical_ancestor;
+        for component in missing.iter().rev() {
+            resolved.push(component);
+        }
+
+        Ok(resolved)
     }
 
     /// Apply a single fix, returning the outcome. A rejected or failed fix
@@ -80,15 +150,32 @@ impl Fixer {
             FixAction::Delete => self.apply_delete(&target),
             FixAction::Modify => self.apply_modify(&target, fix),
             FixAction::Create => self.apply_create(&target, fix),
-            FixAction::Disable => FixResult {
-                success: true,
-                files_modified: Vec::new(),
-                action_taken: "Disable: no-op, manual review required".to_string(),
-                error: None,
-            },
+            FixAction::Disable => {
+                let disabled = target.with_extension("yml.disabled");
+                match self.resolve_target_path(&disabled) {
+                    Ok(disabled) => self.apply_disable(&target, &disabled),
+                    Err(e) => FixResult {
+                        success: false,
+                        files_modified: Vec::new(),
+                        action_taken: "Disable: rejected".to_string(),
+                        error: Some(e.to_string()),
+                    },
+                }
+            }
         };
 
         Ok(result)
+    }
+
+    fn resolve_target_path(&self, target: &Path) -> Result<PathBuf> {
+        let canonical_root = self.repo_path.canonicalize()?;
+        let relative = target.strip_prefix(&canonical_root).map_err(|_| {
+            Error::Fix(format!(
+                "Fix target '{}' resolves outside the repository",
+                target.display()
+            ))
+        })?;
+        self.resolve_target(&relative.to_string_lossy())
     }
 
     fn apply_delete(&self, target: &Path) -> FixResult {
@@ -127,7 +214,7 @@ impl Fixer {
     }
 
     fn apply_create(&self, target: &Path, fix: &Fix) -> FixResult {
-        if target.exists() {
+        if fs::symlink_metadata(target).is_ok() {
             return FixResult {
                 success: true,
                 files_modified: Vec::new(),
@@ -222,20 +309,20 @@ impl Fixer {
             }
         };
 
-        if self.dry_run {
-            return FixResult {
-                success: true,
-                files_modified: Vec::new(),
-                action_taken: format!("DRY RUN: would modify {}", target.display()),
-                error: None,
-            };
-        }
-
         if new_text == original_text {
             return FixResult {
                 success: true,
                 files_modified: Vec::new(),
                 action_taken: format!("Modify: {} already up to date", target.display()),
+                error: None,
+            };
+        }
+
+        if self.dry_run {
+            return FixResult {
+                success: true,
+                files_modified: Vec::new(),
+                action_taken: format!("DRY RUN: would modify {}", target.display()),
                 error: None,
             };
         }
@@ -256,6 +343,70 @@ impl Fixer {
         }
     }
 
+    fn apply_disable(&self, target: &Path, disabled: &Path) -> FixResult {
+        if !target.exists() {
+            return FixResult {
+                success: true,
+                files_modified: Vec::new(),
+                action_taken: format!("Disable: {} already absent", target.display()),
+                error: None,
+            };
+        }
+
+        if fs::symlink_metadata(disabled).is_ok() {
+            return FixResult {
+                success: false,
+                files_modified: Vec::new(),
+                action_taken: "Disable: failed".to_string(),
+                error: Some(format!(
+                    "Refusing to overwrite existing disabled target {}",
+                    disabled.display()
+                )),
+            };
+        }
+
+        if self.dry_run {
+            return FixResult {
+                success: true,
+                files_modified: Vec::new(),
+                action_taken: format!(
+                    "DRY RUN: would rename {} to {}",
+                    target.display(),
+                    disabled.display()
+                ),
+                error: None,
+            };
+        }
+
+        // `hard_link` publishes the destination without overwriting a file
+        // that appears concurrently. Removing the source completes the rename.
+        match fs::hard_link(target, disabled) {
+            Ok(()) => match fs::remove_file(target) {
+                Ok(()) => FixResult {
+                    success: true,
+                    files_modified: vec![target.to_path_buf(), disabled.to_path_buf()],
+                    action_taken: format!("Renamed {} to {}", target.display(), disabled.display()),
+                    error: None,
+                },
+                Err(e) => {
+                    let _ = fs::remove_file(disabled);
+                    FixResult {
+                        success: false,
+                        files_modified: Vec::new(),
+                        action_taken: "Disable: failed".to_string(),
+                        error: Some(e.to_string()),
+                    }
+                }
+            },
+            Err(e) => FixResult {
+                success: false,
+                files_modified: Vec::new(),
+                action_taken: "Disable: failed".to_string(),
+                error: Some(e.to_string()),
+            },
+        }
+    }
+
     /// Apply a `replace-line:`, `replace-pattern:`, `insert-before:` or
     /// `insert-after:` modification instruction to `content`.
     fn apply_modification(
@@ -263,14 +414,26 @@ impl Fixer {
         modification: &str,
     ) -> std::result::Result<String, String> {
         if let Some(rest) = modification.strip_prefix("replace-pattern:") {
-            let (pattern, replacement) = rest
-                .split_once(':')
+            let separator = rest
+                .char_indices()
+                .find_map(|(index, character)| {
+                    (character == ':' && !Self::is_escaped(rest, index)).then_some(index)
+                })
                 .ok_or_else(|| "Invalid replace-pattern instruction".to_string())?;
-            let re = Regex::new(pattern).map_err(|e| format!("Invalid regex: {e}"))?;
-            return Ok(re.replace_all(content, replacement).into_owned());
+            let pattern = Self::unescape_colons(&rest[..separator]);
+            let replacement = Self::unescape_colons(&rest[separator + 1..]);
+            if pattern.is_empty() {
+                return Err("Invalid replace-pattern instruction: empty regex".to_string());
+            }
+            let re = Regex::new(&pattern).map_err(|e| format!("Invalid regex: {e}"))?;
+            return Ok(re.replace_all(content, replacement.as_str()).into_owned());
         }
 
-        let mut lines: Vec<String> = content.lines().map(str::to_string).collect();
+        let line_ending = Self::dominant_line_ending(content);
+        let mut lines: Vec<String> = content
+            .split_terminator('\n')
+            .map(|line| line.strip_suffix('\r').unwrap_or(line).to_string())
+            .collect();
         let trailing_newline = content.ends_with('\n');
 
         if let Some(rest) = modification.strip_prefix("replace-line:") {
@@ -319,11 +482,55 @@ impl Fixer {
             return Err(format!("Unknown modification instruction: {modification}"));
         }
 
-        let mut result = lines.join("\n");
+        let mut result = lines.join(line_ending);
         if trailing_newline {
-            result.push('\n');
+            result.push_str(line_ending);
         }
         Ok(result)
+    }
+
+    fn is_escaped(value: &str, index: usize) -> bool {
+        value[..index]
+            .bytes()
+            .rev()
+            .take_while(|byte| *byte == b'\\')
+            .count()
+            % 2
+            == 1
+    }
+
+    fn unescape_colons(value: &str) -> String {
+        let mut output = String::with_capacity(value.len());
+        let mut characters = value.chars().peekable();
+        while let Some(character) = characters.next() {
+            if character == '\\' && characters.peek() == Some(&':') {
+                characters.next();
+                output.push(':');
+            } else {
+                output.push(character);
+            }
+        }
+        output
+    }
+
+    fn dominant_line_ending(content: &str) -> &'static str {
+        let bytes = content.as_bytes();
+        let mut crlf = 0;
+        let mut lf = 0;
+        for (index, byte) in bytes.iter().enumerate() {
+            if *byte == b'\n' {
+                if index > 0 && bytes[index - 1] == b'\r' {
+                    crlf += 1;
+                } else {
+                    lf += 1;
+                }
+            }
+        }
+        if crlf > 0 && crlf >= lf {
+            "\r\n"
+        } else {
+            "\n"
+        }
     }
 
     /// Apply a batch of auto-approved fixes and commit the results locally.
@@ -332,6 +539,10 @@ impl Fixer {
         _issues: &[DetectedIssue],
         auto_fixes: &[(DetectedIssue, Fix)],
     ) -> Result<Vec<FixResult>> {
+        if !self.dry_run && !auto_fixes.is_empty() {
+            self.ensure_clean_index()?;
+        }
+
         let mut results = Vec::with_capacity(auto_fixes.len());
         let mut modified: Vec<PathBuf> = Vec::new();
         let mut messages: Vec<String> = Vec::new();
@@ -354,11 +565,15 @@ impl Fixer {
 
     /// Stage and commit the given files in the local repository.
     fn commit_changes(&self, files: &[PathBuf], messages: &[String]) -> Result<()> {
+        // Re-check immediately before touching the index in case another
+        // process staged work while fixes were being applied.
+        self.ensure_clean_index()?;
         let repo = git2::Repository::open(&self.repo_path)?;
         let mut index = repo.index()?;
+        let canonical_root = self.repo_path.canonicalize()?;
 
         for file in files {
-            let relative = file.strip_prefix(&self.repo_path).unwrap_or(file);
+            let relative = file.strip_prefix(&canonical_root).unwrap_or(file);
             if file.exists() {
                 index.add_path(relative)?;
             } else {
@@ -389,6 +604,31 @@ impl Fixer {
             &parents,
         )?;
 
+        Ok(())
+    }
+
+    fn ensure_clean_index(&self) -> Result<()> {
+        let repo = git2::Repository::open(&self.repo_path)?;
+        let index = repo.index()?;
+        let head_tree = match repo.head() {
+            Ok(head) => Some(head.peel_to_tree()?),
+            Err(e)
+                if matches!(
+                    e.code(),
+                    git2::ErrorCode::UnbornBranch | git2::ErrorCode::NotFound
+                ) =>
+            {
+                None
+            }
+            Err(e) => return Err(e.into()),
+        };
+        let diff = repo.diff_tree_to_index(head_tree.as_ref(), Some(&index), None)?;
+        if diff.deltas().len() != 0 {
+            return Err(Error::Fix(
+                "Refusing to apply and commit fixes while the repository index contains staged changes"
+                    .to_string(),
+            ));
+        }
         Ok(())
     }
 }

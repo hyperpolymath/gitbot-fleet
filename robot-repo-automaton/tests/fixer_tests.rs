@@ -20,6 +20,16 @@ fn make_issue(id: &str) -> DetectedIssue {
     }
 }
 
+fn make_fix(action: FixAction, target: &str) -> Fix {
+    Fix {
+        action,
+        target: target.to_string(),
+        reason: None,
+        modification: None,
+        fallback: None,
+    }
+}
+
 // =========================================================================
 // DELETE FIX TESTS
 // =========================================================================
@@ -361,6 +371,134 @@ fn test_dry_run_does_not_delete() {
     assert!(file_path.exists()); // File still exists
 }
 
+#[test]
+fn test_dry_run_unchanged_modify_reports_no_op() {
+    let temp = TempDir::new().unwrap();
+    let file_path = temp.path().join("config.txt");
+    std::fs::write(&file_path, "already=current\n").unwrap();
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), true);
+    let issue = make_issue("DRY-004");
+    let mut fix = make_fix(FixAction::Modify, "config.txt");
+    fix.modification = Some("replace-pattern:missing:replacement".to_string());
+
+    let result = fixer.apply(&issue, &fix).unwrap();
+    assert!(result.success);
+    assert!(result.files_modified.is_empty());
+    assert!(result.action_taken.contains("already up to date"));
+    assert!(!result.action_taken.contains("would modify"));
+}
+
+// =========================================================================
+// DISABLE FIX TESTS
+// =========================================================================
+
+#[test]
+fn test_disable_fix_renames_workflow() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("workflow.yml");
+    let disabled = temp.path().join("workflow.yml.disabled");
+    std::fs::write(&source, "name: active\n").unwrap();
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), false);
+    let result = fixer
+        .apply(
+            &make_issue("DIS-001"),
+            &make_fix(FixAction::Disable, "workflow.yml"),
+        )
+        .unwrap();
+
+    assert!(result.success);
+    assert!(!source.exists());
+    assert_eq!(std::fs::read_to_string(&disabled).unwrap(), "name: active\n");
+    assert_eq!(result.files_modified, vec![source, disabled]);
+}
+
+#[test]
+fn test_disable_fix_does_not_overwrite_existing_destination() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("workflow.yml");
+    let disabled = temp.path().join("workflow.yml.disabled");
+    std::fs::write(&source, "active\n").unwrap();
+    std::fs::write(&disabled, "preserve me\n").unwrap();
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), false);
+    let result = fixer
+        .apply(
+            &make_issue("DIS-002"),
+            &make_fix(FixAction::Disable, "workflow.yml"),
+        )
+        .unwrap();
+
+    assert!(!result.success);
+    assert_eq!(std::fs::read_to_string(source).unwrap(), "active\n");
+    assert_eq!(std::fs::read_to_string(disabled).unwrap(), "preserve me\n");
+}
+
+// =========================================================================
+// MODIFICATION FORMAT AND LINE ENDING TESTS
+// =========================================================================
+
+#[test]
+fn test_replace_pattern_supports_colons_and_capture_expansion() {
+    let temp = TempDir::new().unwrap();
+    let file_path = temp.path().join("urls.txt");
+    std::fs::write(&file_path, "http://old:8080/path\n").unwrap();
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), false);
+    let mut fix = make_fix(FixAction::Modify, "urls.txt");
+    fix.modification =
+        Some(r"replace-pattern:(http\://old\:)(\d+):prefix-$1\:$2".to_string());
+    let result = fixer.apply(&make_issue("MOD-006"), &fix).unwrap();
+
+    assert!(result.success);
+    assert_eq!(
+        std::fs::read_to_string(file_path).unwrap(),
+        "prefix-http://old::8080/path\n"
+    );
+}
+
+#[test]
+fn test_replace_pattern_preserves_named_capture_expansion() {
+    let temp = TempDir::new().unwrap();
+    let file_path = temp.path().join("value.txt");
+    std::fs::write(&file_path, "item=42\n").unwrap();
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), false);
+    let mut fix = make_fix(FixAction::Modify, "value.txt");
+    fix.modification =
+        Some(r"replace-pattern:item=(?P<number>\d+):value=$number".to_string());
+    let result = fixer.apply(&make_issue("MOD-007"), &fix).unwrap();
+
+    assert!(result.success);
+    assert_eq!(std::fs::read_to_string(file_path).unwrap(), "value=42\n");
+}
+
+#[test]
+fn test_line_modifications_preserve_crlf() {
+    let cases = [
+        ("replace-line:1:ONE", "ONE\r\ntwo\r\n"),
+        ("insert-before:2:middle", "one\r\nmiddle\r\ntwo\r\n"),
+        ("insert-after:1:middle", "one\r\nmiddle\r\ntwo\r\n"),
+    ];
+
+    for (index, (modification, expected)) in cases.into_iter().enumerate() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("crlf.txt");
+        std::fs::write(&file_path, b"one\r\ntwo\r\n").unwrap();
+
+        let fixer = Fixer::new(temp.path().to_path_buf(), false);
+        let mut fix = make_fix(FixAction::Modify, "crlf.txt");
+        fix.modification = Some(modification.to_string());
+        let result = fixer
+            .apply(&make_issue(&format!("CRLF-{index}")), &fix)
+            .unwrap();
+
+        assert!(result.success);
+        assert_eq!(std::fs::read(&file_path).unwrap(), expected.as_bytes());
+    }
+}
+
 // =========================================================================
 // IDEMPOTENCY TESTS
 // =========================================================================
@@ -576,4 +714,190 @@ fn test_path_within_repo_is_not_rejected() {
     // A legitimate in-repo path must succeed
     assert!(result.success, "Legitimate in-repo path was incorrectly rejected");
     assert!(!file_path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_symlink_targets_are_rejected_for_every_action() {
+    use std::os::unix::fs::symlink;
+
+    for (index, action) in [
+        FixAction::Delete,
+        FixAction::Modify,
+        FixAction::Create,
+        FixAction::Disable,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let temp = TempDir::new().unwrap();
+        let outer = TempDir::new().unwrap();
+        let victim = outer.path().join("victim.txt");
+        std::fs::write(&victim, "untouched\n").unwrap();
+        symlink(&victim, temp.path().join("target.yml")).unwrap();
+
+        let fixer = Fixer::new(temp.path().to_path_buf(), false);
+        let mut fix = make_fix(action, "target.yml");
+        fix.modification = Some("replace-line:1:changed".to_string());
+        fix.fallback = Some("created".to_string());
+        let result = fixer
+            .apply(&make_issue(&format!("SYM-{index}")), &fix)
+            .unwrap();
+
+        assert!(!result.success);
+        assert!(result.error.as_deref().unwrap().contains("symlink"));
+        assert_eq!(std::fs::read_to_string(victim).unwrap(), "untouched\n");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_dangling_symlink_targets_are_rejected_for_every_action() {
+    use std::os::unix::fs::symlink;
+
+    for (index, action) in [
+        FixAction::Delete,
+        FixAction::Modify,
+        FixAction::Create,
+        FixAction::Disable,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let temp = TempDir::new().unwrap();
+        symlink("missing", temp.path().join("target.yml")).unwrap();
+
+        let fixer = Fixer::new(temp.path().to_path_buf(), false);
+        let mut fix = make_fix(action, "target.yml");
+        fix.modification = Some("replace-line:1:changed".to_string());
+        fix.fallback = Some("created".to_string());
+        let result = fixer
+            .apply(&make_issue(&format!("DANGLING-{index}")), &fix)
+            .unwrap();
+
+        assert!(!result.success);
+        assert!(result.error.as_deref().unwrap().contains("symlink"));
+        assert!(std::fs::symlink_metadata(temp.path().join("target.yml")).is_ok());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn test_symlink_parent_escape_is_rejected() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new().unwrap();
+    let outer = TempDir::new().unwrap();
+    symlink(outer.path(), temp.path().join("outside-link")).unwrap();
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), false);
+    let mut fix = make_fix(FixAction::Create, "outside-link/injected.txt");
+    fix.fallback = Some("injected".to_string());
+    let result = fixer.apply(&make_issue("SYM-PARENT"), &fix).unwrap();
+
+    assert!(!result.success);
+    assert!(
+        result
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("outside the repository")
+    );
+    assert!(!outer.path().join("injected.txt").exists());
+}
+
+#[test]
+fn test_relative_repository_path_accepts_in_repo_target() {
+    let current = std::env::current_dir().unwrap();
+    let temp = tempfile::Builder::new()
+        .prefix("fixer-relative-")
+        .tempdir_in(&current)
+        .unwrap();
+    let relative_repo = temp.path().strip_prefix(&current).unwrap().to_path_buf();
+    let file_path = temp.path().join("safe.txt");
+    std::fs::write(&file_path, "before\n").unwrap();
+
+    let fixer = Fixer::new(relative_repo, false);
+    let mut fix = make_fix(FixAction::Modify, "safe.txt");
+    fix.modification = Some("replace-line:1:after".to_string());
+    let result = fixer.apply(&make_issue("RELATIVE"), &fix).unwrap();
+
+    assert!(result.success);
+    assert_eq!(std::fs::read_to_string(file_path).unwrap(), "after\n");
+}
+
+#[test]
+fn test_apply_and_commit_rejects_staged_changes_before_fixing() {
+    let temp = TempDir::new().unwrap();
+    let repo = git2::Repository::init(temp.path()).unwrap();
+    let staged_path = temp.path().join("staged.txt");
+    std::fs::write(&staged_path, "base\n").unwrap();
+
+    {
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("staged.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let signature = git2::Signature::now("test", "test@example.com").unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "initial",
+            &tree,
+            &[],
+        )
+        .unwrap();
+    }
+
+    std::fs::write(&staged_path, "staged change\n").unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(std::path::Path::new("staged.txt")).unwrap();
+    index.write().unwrap();
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), false);
+    let mut fix = make_fix(FixAction::Create, "new.txt");
+    fix.fallback = Some("must not be created".to_string());
+    let fixes = vec![(make_issue("INDEX-001"), fix)];
+    let error = fixer.apply_and_commit(&[], &fixes).unwrap_err();
+
+    assert!(error.to_string().contains("staged changes"));
+    assert!(!temp.path().join("new.txt").exists());
+    assert_eq!(std::fs::read_to_string(staged_path).unwrap(), "staged change\n");
+}
+
+#[test]
+fn test_apply_and_commit_commits_when_index_is_clean() {
+    let temp = TempDir::new().unwrap();
+    let repo = git2::Repository::init(temp.path()).unwrap();
+    std::fs::write(temp.path().join("tracked.txt"), "base\n").unwrap();
+
+    {
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("tracked.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let signature = git2::Signature::now("test", "test@example.com").unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "initial",
+            &tree,
+            &[],
+        )
+        .unwrap();
+    }
+
+    let fixer = Fixer::new(temp.path().to_path_buf(), false);
+    let mut fix = make_fix(FixAction::Create, "new.txt");
+    fix.fallback = Some("created\n".to_string());
+    let fixes = vec![(make_issue("INDEX-002"), fix)];
+    let results = fixer.apply_and_commit(&[], &fixes).unwrap();
+
+    assert!(results[0].success);
+    assert_eq!(std::fs::read_to_string(temp.path().join("new.txt")).unwrap(), "created\n");
+    assert_eq!(repo.head().unwrap().peel_to_commit().unwrap().parent_count(), 1);
 }
