@@ -151,7 +151,7 @@ mod tests {
     fn test_installation_token_response_parsing() {
         // Test installation token response can be parsed
         let response = r#"{
-            "token": "test-token",
+            "token": "ghs_test-token",
             "expires_at": "2024-01-15T12:00:00Z"
         }"#;
 
