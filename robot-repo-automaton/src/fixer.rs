@@ -72,12 +72,18 @@ const BINARY_EXTENSIONS: &[&str] = &[
 ];
 
 impl Fixer {
-    /// Create a new fixer for a repository
+    /// Create a fixer rooted at `repo_path`.
+    ///
+    /// When `dry_run` is true, fixes report the changes they would make without
+    /// modifying the working tree or creating commits.
     pub fn new(repo_path: PathBuf, dry_run: bool) -> Self {
         Fixer { repo_path, dry_run }
     }
 
-    /// Apply a fix for a detected issue
+    /// Apply one fix after enforcing the exclusion registry and repository boundary.
+    ///
+    /// Policy and boundary rejections are returned as unsuccessful [`FixResult`]s;
+    /// failures while performing an allowed operation are returned as errors.
     pub fn apply(&self, issue: &DetectedIssue, fix: &Fix) -> Result<FixResult> {
         // EXCLUSION REGISTRY GUARD: refuse the write if the target repo,
         // origin, or target path is on the estate-wide denylist. In dry-run
@@ -337,7 +343,7 @@ impl Fixer {
         Ok(result)
     }
 
-    /// Delete a file
+    /// Delete a file, treating an already absent target as a successful no-op.
     fn apply_delete(
         &self,
         target_path: &Path,
@@ -376,10 +382,9 @@ impl Fixer {
         })
     }
 
-    /// Modify a file with safety checks and rollback support
+    /// Modify a non-binary file after validating the resulting source where supported.
     ///
-    /// Reads the modification specification from the fix, applies it to the file,
-    /// and rolls back if the modification produces invalid content.
+    /// Invalid modifications are rejected before the original file is replaced.
     fn apply_modify(
         &self,
         target_path: &Path,
@@ -499,13 +504,10 @@ impl Fixer {
         })
     }
 
-    /// Create a file with template expansion
+    /// Create an absent, non-ignored file from fallback content or a built-in template.
     ///
-    /// Supports template variables:
-    /// - `gitbot-fleet` - Repository name
-    /// - `hyperpolymath` - Repository owner
-    /// - `{{LICENSE}}` - License identifier
-    /// - `{{YEAR}}` - Current year
+    /// Empty expanded content is rejected, and publication does not overwrite a file
+    /// that appears concurrently.
     fn apply_create(
         &self,
         target_path: &Path,
@@ -601,7 +603,7 @@ impl Fixer {
         })
     }
 
-    /// Disable a workflow (rename to .disabled)
+    /// Disable a workflow by renaming it to a `.yml.disabled` path without overwriting.
     fn apply_disable(
         &self,
         target_path: &Path,
@@ -684,7 +686,8 @@ impl Fixer {
         }
     }
 
-    /// Expand template variables in content
+    /// Replace the `gitbot-fleet` token with the repository name and expand the
+    /// licence, year, author and email placeholders.
     fn expand_template(&self, content: &str) -> String {
         let repo_name = self
             .repo_path
@@ -702,7 +705,10 @@ impl Fixer {
             .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
     }
 
-    /// Commit changes to the repository
+    /// Stage the listed repository paths and commit the resulting index to `HEAD`.
+    ///
+    /// Existing staged changes are included in the commit. Dry-run mode leaves both
+    /// the index and `HEAD` unchanged.
     pub fn commit(&self, message: &str, files: &[PathBuf]) -> Result<()> {
         // EXCLUSION REGISTRY GUARD: a commit is a write action even though
         // apply() has already checked each file individually, because some
@@ -758,7 +764,10 @@ impl Fixer {
         Ok(())
     }
 
-    /// Apply multiple fixes and commit
+    /// Apply each issue/fix pair and commit all successfully modified paths together.
+    ///
+    /// No commit is created in dry-run mode or when no fix reports a modified path.
+    /// The `_issues` slice is not consulted; processing is driven by `fixes`.
     pub fn apply_and_commit(
         &self,
         _issues: &[DetectedIssue],
@@ -881,12 +890,14 @@ fn resolve_from_existing_ancestor(path: &Path) -> Result<PathBuf> {
     }
 }
 
+/// Return whether the byte at `index` follows an odd-length run of backslashes.
 fn is_escaped(value: &str, index: usize) -> bool {
     value[..index].bytes().rev()
         .take_while(|byte| *byte == b'\\')
         .count() % 2 == 1
 }
 
+/// Remove one escaping backslash from each `\:` sequence, preserving other escapes.
 fn unescape_colons(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut characters = value.chars().peekable();
