@@ -123,7 +123,10 @@ impl ContextStorage {
         let path = self.repos_dir().join(&filename);
 
         if !path.exists() {
-            return Err(ContextError::NotFound(format!("Repo {} not found", repo_name)));
+            return Err(ContextError::NotFound(format!(
+                "Repo {} not found",
+                repo_name
+            )));
         }
 
         let json = std::fs::read_to_string(&path)?;
@@ -134,7 +137,11 @@ impl ContextStorage {
     }
 
     /// Get or create repository state
-    pub fn get_or_create_repo_state(&self, repo_name: &str, repo_path: PathBuf) -> Result<RepoState> {
+    pub fn get_or_create_repo_state(
+        &self,
+        repo_name: &str,
+        repo_path: PathBuf,
+    ) -> Result<RepoState> {
         match self.load_repo_state(repo_name) {
             Ok(state) => Ok(state),
             Err(ContextError::NotFound(_)) => Ok(RepoState::new(repo_name, repo_path)),
