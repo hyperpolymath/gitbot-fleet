@@ -64,8 +64,14 @@ impl BotId {
     /// Get the tier this bot belongs to
     pub fn tier(&self) -> Tier {
         match self {
-            BotId::Rhodibot | BotId::Echidnabot | BotId::Sustainabot | BotId::Oikosbot | BotId::Panicbot => Tier::Verifier,
-            BotId::Glambot | BotId::Seambot | BotId::Finishbot | BotId::Accessibilitybot => Tier::Finisher,
+            BotId::Rhodibot
+            | BotId::Echidnabot
+            | BotId::Sustainabot
+            | BotId::Oikosbot
+            | BotId::Panicbot => Tier::Verifier,
+            BotId::Glambot | BotId::Seambot | BotId::Finishbot | BotId::Accessibilitybot => {
+                Tier::Finisher
+            }
             BotId::Cipherbot => Tier::Specialist,
             BotId::RobotRepoAutomaton => Tier::Executor,
             BotId::Hypatia => Tier::Engine,
@@ -134,11 +140,11 @@ impl Tier {
     /// Get execution order (lower = earlier)
     pub fn execution_order(&self) -> u8 {
         match self {
-            Tier::Engine => 0,      // Engine coordinates, runs first
+            Tier::Engine => 0, // Engine coordinates, runs first
             Tier::Verifier => 1,
             Tier::Finisher => 2,
-            Tier::Specialist => 3,  // Specialist runs after verifiers/finishers
-            Tier::Executor => 4,    // Executor runs after all analysis
+            Tier::Specialist => 3, // Specialist runs after verifiers/finishers
+            Tier::Executor => 4,   // Executor runs after all analysis
             Tier::Custom => 5,
         }
     }
