@@ -237,7 +237,11 @@ impl CicdHyperAClient {
         self.load_local_ruleset(ruleset_id)
     }
 
-    /// Load rules from local verisimdb-data recipes directory.
+    /// Load a local ruleset from the first configured recipes directory that exists.
+    ///
+    /// Data-root environment variables take precedence over `REPOS_BASE`, the
+    /// default estate directory and legacy locations. Built-in RSR rules are used
+    /// when that selected directory yields no valid recipes.
     fn load_local_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
         let mut recipes_dirs = Vec::new();
         for key in ["HYPATIA_DATA", "VERISIMDB_DATA"] {
@@ -259,6 +263,10 @@ impl CicdHyperAClient {
         self.load_recipes_from(ruleset_id, &recipes_dirs)
     }
 
+    /// Build a ruleset from JSON recipes in the first existing candidate directory.
+    ///
+    /// Unreadable entries and malformed or incomplete recipes are skipped. If no
+    /// rules remain, the built-in RSR rules are returned instead.
     fn load_recipes_from(&self, ruleset_id: &str, recipes_dirs: &[PathBuf]) -> crate::Result<Ruleset> {
         let recipes_dir = recipes_dirs.iter().find(|d| d.is_dir());
 
@@ -615,7 +623,10 @@ impl CicdHyperAClient {
     }
 }
 
-/// Convert a verisimdb-data recipe JSON to a Rule.
+/// Convert a verisimdb-data recipe into a rule.
+///
+/// A string `id` and either `file_glob` or `pattern` are required; recipes
+/// missing those fields are ignored.
 fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     let id = recipe.get("id")?.as_str()?.to_string();
     let name = recipe.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
