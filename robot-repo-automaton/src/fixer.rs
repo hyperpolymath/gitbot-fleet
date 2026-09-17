@@ -72,10 +72,7 @@ const BINARY_EXTENSIONS: &[&str] = &[
 ];
 
 impl Fixer {
-    /// Create a fixer rooted at `repo_path`.
-    ///
-    /// When `dry_run` is true, policy and boundary checks still run, but eligible
-    /// fixes are only reported and no files or commits are changed.
+    /// Create a new fixer for a repository
     pub fn new(repo_path: PathBuf, dry_run: bool) -> Self {
         // Keep one root representation for ignore rules and index paths.
         // Invalid roots are retained so apply's boundary check reports the error.
@@ -83,12 +80,7 @@ impl Fixer {
         Fixer { repo_path, dry_run }
     }
 
-    /// Apply a fix after checking the exclusion registry and repository boundary.
-    ///
-    /// Policy rejections and action-level non-applicability are represented in
-    /// [`FixResult`]; failures that prevent the operation itself may be returned
-    /// as errors. In dry-run mode, eligible fixes report their intended changes
-    /// without writing them.
+    /// Apply a fix for a detected issue
     pub fn apply(&self, issue: &DetectedIssue, fix: &Fix) -> Result<FixResult> {
         // EXCLUSION REGISTRY GUARD: refuse the write if the target repo,
         // origin, or target path is on the estate-wide denylist. In dry-run
@@ -387,10 +379,10 @@ impl Fixer {
         })
     }
 
-    /// Modify a text file without exposing partially written content.
+    /// Modify a file with safety checks and rollback support
     ///
-    /// Binary files are rejected. For supported structured formats, the complete
-    /// result is parsed before the original file is atomically replaced.
+    /// Reads the modification specification from the fix, applies it to the file,
+    /// and rolls back if the modification produces invalid content.
     fn apply_modify(
         &self,
         target_path: &Path,
@@ -510,12 +502,13 @@ impl Fixer {
         })
     }
 
-    /// Create a file from explicit fallback content or a built-in template.
+    /// Create a file with template expansion
     ///
-    /// Existing or ignored targets are not written, and publication uses
-    /// no-clobber semantics. Template expansion replaces the literal
-    /// `gitbot-fleet` name and the `{{LICENSE}}`, `{{YEAR}}`, `{{AUTHOR}}` and
-    /// `{{EMAIL}}` placeholders.
+    /// Supports template variables:
+    /// - `gitbot-fleet` - Repository name
+    /// - `hyperpolymath` - Repository owner
+    /// - `{{LICENSE}}` - License identifier
+    /// - `{{YEAR}}` - Current year
     fn apply_create(
         &self,
         target_path: &Path,
@@ -611,9 +604,7 @@ impl Fixer {
         })
     }
 
-    /// Disable a file by renaming it with a `yml.disabled` extension.
-    ///
-    /// The rename does not replace an existing destination.
+    /// Disable a workflow (rename to .disabled)
     fn apply_disable(
         &self,
         target_path: &Path,
@@ -680,9 +671,7 @@ impl Fixer {
         false
     }
 
-    /// Return explicit fallback content or the built-in template for `target`.
-    ///
-    /// Targets without either source return an empty string.
+    /// Get template content for a file creation
     fn get_template_content(&self, target: &str, fix: &Fix) -> String {
         // If the fix has explicit content in the fallback field, use it
         if let Some(ref fallback) = fix.fallback {
@@ -698,7 +687,7 @@ impl Fixer {
         }
     }
 
-    /// Expand the repository-specific and fixed metadata placeholders in a template.
+    /// Expand template variables in content
     fn expand_template(&self, content: &str) -> String {
         let repo_name = self
             .repo_path
@@ -716,11 +705,7 @@ impl Fixer {
             .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
     }
 
-    /// Stage the listed paths and commit the resulting repository index.
-    ///
-    /// Deleted paths are removed from the index, while paths outside the canonical
-    /// repository root are ignored. Dry-run mode performs the exclusion check but
-    /// neither stages nor commits changes.
+    /// Commit changes to the repository
     pub fn commit(&self, message: &str, files: &[PathBuf]) -> Result<()> {
         // EXCLUSION REGISTRY GUARD: a commit is a write action even though
         // apply() has already checked each file individually, because some
@@ -776,11 +761,7 @@ impl Fixer {
         Ok(())
     }
 
-    /// Apply each issue/fix pair and commit files reported as modified.
-    ///
-    /// No commit is created when nothing changes or dry-run mode is enabled. The
-    /// separate `issues` slice is retained for caller compatibility and is not
-    /// consulted; each tuple in `fixes` supplies its associated issue.
+    /// Apply multiple fixes and commit
     pub fn apply_and_commit(
         &self,
         _issues: &[DetectedIssue],
@@ -908,14 +889,12 @@ fn resolve_from_existing_ancestor(path: &Path) -> Result<PathBuf> {
     }
 }
 
-/// Return whether the character at `index` follows an odd run of backslashes.
 fn is_escaped(value: &str, index: usize) -> bool {
     value[..index].bytes().rev()
         .take_while(|byte| *byte == b'\\')
         .count() % 2 == 1
 }
 
-/// Replace each escaped colon with a literal colon, preserving other backslashes.
 fn unescape_colons(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut characters = value.chars().peekable();
