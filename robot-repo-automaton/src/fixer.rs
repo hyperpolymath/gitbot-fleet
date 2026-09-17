@@ -72,19 +72,15 @@ const BINARY_EXTENSIONS: &[&str] = &[
 ];
 
 impl Fixer {
-    /// Create a fixer rooted at `repo_path`.
-    ///
-    /// When `dry_run` is true, fix operations report intended changes without
-    /// writing files or commits.
+    /// Create a new fixer for a repository
     pub fn new(repo_path: PathBuf, dry_run: bool) -> Self {
+        // Keep one root representation for ignore rules and index paths.
+        // Invalid roots are retained so apply's boundary check reports the error.
+        let repo_path = repo_path.canonicalize().unwrap_or(repo_path);
         Fixer { repo_path, dry_run }
     }
 
-    /// Apply one catalogue fix for a detected issue.
-    ///
-    /// Completed, skipped and rejected actions are represented by a
-    /// `FixResult`; failures that prevent the action from being evaluated or
-    /// persisted are returned as errors.
+    /// Apply a fix for a detected issue
     pub fn apply(&self, issue: &DetectedIssue, fix: &Fix) -> Result<FixResult> {
         // EXCLUSION REGISTRY GUARD: refuse the write if the target repo,
         // origin, or target path is on the estate-wide denylist. In dry-run
@@ -344,7 +340,7 @@ impl Fixer {
         Ok(result)
     }
 
-    /// Delete a file, treating an absent target as a successful no-op.
+    /// Delete a file
     fn apply_delete(
         &self,
         target_path: &Path,
@@ -383,10 +379,10 @@ impl Fixer {
         })
     }
 
-    /// Validate a textual modification before atomically replacing the file.
+    /// Modify a file with safety checks and rollback support
     ///
-    /// Missing, binary or syntactically invalid targets are left unchanged and
-    /// reported through the returned `FixResult`.
+    /// Reads the modification specification from the fix, applies it to the file,
+    /// and rolls back if the modification produces invalid content.
     fn apply_modify(
         &self,
         target_path: &Path,
@@ -506,11 +502,13 @@ impl Fixer {
         })
     }
 
-    /// Create a missing, non-ignored file from fallback content or a built-in
-    /// template.
+    /// Create a file with template expansion
     ///
-    /// Parent directories are created as needed. Existing files are preserved,
-    /// including when one appears concurrently.
+    /// Supports template variables:
+    /// - `gitbot-fleet` - Repository name
+    /// - `hyperpolymath` - Repository owner
+    /// - `{{LICENSE}}` - License identifier
+    /// - `{{YEAR}}` - Current year
     fn apply_create(
         &self,
         target_path: &Path,
@@ -606,10 +604,7 @@ impl Fixer {
         })
     }
 
-    /// Disable a workflow by renaming it to `<stem>.yml.disabled` without
-    /// replacing an existing destination.
-    ///
-    /// An absent target is treated as a successful no-op.
+    /// Disable a workflow (rename to .disabled)
     fn apply_disable(
         &self,
         target_path: &Path,
@@ -666,10 +661,7 @@ impl Fixer {
         })
     }
 
-    /// Check whether Git would ignore a path.
-    ///
-    /// Returns false when the repository cannot be opened or the ignore status
-    /// cannot be determined.
+    /// Check if a path would be gitignored
     fn would_be_gitignored(&self, path: &Path) -> bool {
         if let Ok(repo) = Repository::open(&self.repo_path) {
             if let Ok(relative) = path.strip_prefix(&self.repo_path) {
@@ -679,9 +671,7 @@ impl Fixer {
         false
     }
 
-    /// Return explicit fallback content or a built-in template for the target.
-    ///
-    /// Targets without either source return an empty string.
+    /// Get template content for a file creation
     fn get_template_content(&self, target: &str, fix: &Fix) -> String {
         // If the fix has explicit content in the fallback field, use it
         if let Some(ref fallback) = fix.fallback {
@@ -697,10 +687,7 @@ impl Fixer {
         }
     }
 
-    /// Expand the built-in repository, licence, year and author placeholders.
-    ///
-    /// The literal `gitbot-fleet` is replaced by the repository directory name;
-    /// `{{LICENSE}}`, `{{YEAR}}`, `{{AUTHOR}}` and `{{EMAIL}}` are also filled.
+    /// Expand template variables in content
     fn expand_template(&self, content: &str) -> String {
         let repo_name = self
             .repo_path
@@ -718,10 +705,7 @@ impl Fixer {
             .replace("{{EMAIL}}", "j.d.a.jewell@open.ac.uk")
     }
 
-    /// Stage the listed repository paths and commit the resulting index.
-    ///
-    /// Missing listed paths are removed from the index, while existing staged
-    /// changes remain part of the commit. Dry-run mode performs no Git changes.
+    /// Commit changes to the repository
     pub fn commit(&self, message: &str, files: &[PathBuf]) -> Result<()> {
         // EXCLUSION REGISTRY GUARD: a commit is a write action even though
         // apply() has already checked each file individually, because some
@@ -777,9 +761,7 @@ impl Fixer {
         Ok(())
     }
 
-    /// Apply each fix and commit files reported by successful results together.
-    ///
-    /// No commit is created in dry-run mode or when no files were changed.
+    /// Apply multiple fixes and commit
     pub fn apply_and_commit(
         &self,
         _issues: &[DetectedIssue],
@@ -837,6 +819,11 @@ fn normalise_path(path: &Path) -> PathBuf {
 /// Resolve a target using its nearest existing ancestor and verify that the
 /// result remains under the canonical repository root.
 fn resolve_target_within_repo(repo_path: &Path, target_path: &Path) -> Result<PathBuf> {
+    // Lexically removing `..` before resolving a symlink changes filesystem
+    // semantics. Fix targets must name entries without parent traversal.
+    if target_path.components().any(|part| part == std::path::Component::ParentDir) {
+        return Err(Error::Fix("parent traversal is not permitted in fix targets".into()));
+    }
     let canonical_repo = repo_path.canonicalize().map_err(|error| {
         Error::Fix(format!(
             "failed to canonicalize repository {}: {}",
@@ -902,14 +889,12 @@ fn resolve_from_existing_ancestor(path: &Path) -> Result<PathBuf> {
     }
 }
 
-/// Return whether the character at `index` follows an odd run of backslashes.
 fn is_escaped(value: &str, index: usize) -> bool {
     value[..index].bytes().rev()
         .take_while(|byte| *byte == b'\\')
         .count() % 2 == 1
 }
 
-/// Replace escaped colons with literal colons while preserving other escapes.
 fn unescape_colons(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut characters = value.chars().peekable();
@@ -971,15 +956,13 @@ fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Portable, data-preserving fallback for platforms without renameat2.
+/// Fail closed on platforms where an atomic no-replace rename is unavailable.
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
-fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    std::fs::hard_link(source, destination)?;
-    if let Err(error) = std::fs::remove_file(source) {
-        let _cleanup_result = std::fs::remove_file(destination);
-        return Err(error);
-    }
-    Ok(())
+fn rename_noreplace(_source: &Path, _destination: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic no-replace rename is not implemented on this platform",
+    ))
 }
 
 #[cfg(test)]
@@ -1008,6 +991,58 @@ mod tests {
             modification: None,
             fallback: None,
         }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_parent_traversal_cannot_delete_or_disable_outside_files() {
+        use std::os::unix::fs::symlink;
+        let root = TempDir::new().unwrap();
+        let repo = root.path().join("repo");
+        let outside = root.path().join("outside");
+        std::fs::create_dir(&repo).unwrap();
+        std::fs::create_dir(&outside).unwrap();
+        symlink(&outside, repo.join("link")).unwrap();
+        let victim = root.path().join("victim");
+        std::fs::write(&victim, "preserve").unwrap();
+        let fixer = Fixer::new(repo, false);
+        for action in [FixAction::Delete, FixAction::Disable] {
+            let result = fixer.apply(&make_issue("TRAVERSAL"), &make_fix(action, "link/../victim")).unwrap();
+            assert!(!result.success);
+            assert_eq!(std::fs::read_to_string(&victim).unwrap(), "preserve");
+            assert!(!root.path().join("victim.disabled").exists());
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlink_repository_root_honours_gitignore_for_create() {
+        use std::os::unix::fs::symlink;
+        let root = TempDir::new().unwrap();
+        let repo = root.path().join("repo");
+        Repository::init(&repo).unwrap();
+        std::fs::write(repo.join(".gitignore"), "ignored.txt\n").unwrap();
+        let alias = root.path().join("alias");
+        symlink(&repo, &alias).unwrap();
+        let fixer = Fixer::new(alias, false);
+        let mut fix = make_fix(FixAction::Create, "ignored.txt");
+        fix.modification = Some("preserve ignore boundary".into());
+        let result = fixer.apply(&make_issue("IGNORE"), &fix).unwrap();
+        assert!(!result.success);
+        assert!(!repo.join("ignored.txt").exists());
+    }
+
+    #[test]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    fn unsupported_atomic_rename_preserves_both_entries() {
+        let root = TempDir::new().unwrap();
+        let source = root.path().join("source");
+        let destination = root.path().join("destination");
+        std::fs::write(&source, "source").unwrap();
+        std::fs::write(&destination, "destination").unwrap();
+        assert_eq!(rename_noreplace(&source, &destination).unwrap_err().kind(), std::io::ErrorKind::Unsupported);
+        assert_eq!(std::fs::read_to_string(source).unwrap(), "source");
+        assert_eq!(std::fs::read_to_string(destination).unwrap(), "destination");
     }
 
     #[test]

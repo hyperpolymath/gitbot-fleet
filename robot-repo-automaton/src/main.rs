@@ -115,13 +115,13 @@ enum Commands {
 
 #[derive(Subcommand, Debug)]
 enum SkeletonAction {
-    /// Write the canonical RSR required-files set into a directory
+    /// Write the uninstantiated canonical RSR template (keeps project placeholders)
     Emit {
         /// Target directory (created if absent)
         #[arg(default_value = ".")]
         out: PathBuf,
     },
-    /// Verify a repo's required files match canonical; non-zero exit on drift
+    /// Check the uninstantiated template against canonical; non-zero on drift
     Check {
         /// Repository root to verify
         #[arg(default_value = ".")]
@@ -212,7 +212,7 @@ fn cmd_skeleton(action: SkeletonAction) -> anyhow::Result<()> {
         SkeletonAction::Emit { out } => {
             skeleton::emit(&out)?;
             println!(
-                "wrote {} canonical RSR skeleton file(s) to {}",
+                "wrote {} canonical RSR template file(s) to {} (project placeholders retained)",
                 skeleton::SKELETON.len(),
                 out.display()
             );
@@ -742,11 +742,11 @@ fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()>
     Ok(())
 }
 
-/// Return the base directory holding local repository checkouts.
+/// Base directory holding local repo checkouts.
 ///
-/// A non-empty `REPOS_BASE` takes precedence. Otherwise this uses
-/// `~/developer/hyper-repos`, or the equivalent relative path when no home
-/// directory is available.
+/// Override with `REPOS_BASE`; otherwise defaults to the canonical estate tree.
+/// Legacy checkout locations can also be selected through `REPOS_BASE`; the
+/// former literal `/var$REPOS_DIR` path did not expand a shell variable in Rust.
 fn repos_base() -> PathBuf {
     if let Ok(base) = std::env::var("REPOS_BASE") {
         if !base.is_empty() {
@@ -759,10 +759,9 @@ fn repos_base() -> PathBuf {
         .join("hyper-repos")
 }
 
-/// Resolve an existing repository path directly or beneath [`repos_base`].
+/// Resolve a repo argument to a local path.
 ///
-/// Returns an error containing the attempted base-relative path when neither
-/// candidate exists.
+/// Accepts either a local path or a GitHub owner/name format.
 fn resolve_repo_path(repo: &str) -> anyhow::Result<PathBuf> {
     let path = PathBuf::from(repo);
     if path.exists() {

@@ -9,6 +9,8 @@ K9!
 leash = 'Hunt
 
 pedigree = {
+  # Hunt execution requires an independently verified signature.
+  signature_required = true,
   name = "deploy-bot-fleet",
   schema_version = "1.0.0",
   component_type = "bot-fleet-deployment",

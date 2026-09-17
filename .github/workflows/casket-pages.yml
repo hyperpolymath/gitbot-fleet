@@ -1,3 +1,4 @@
+# This workflow is managed by gh actions-lock.
 # SPDX-License-Identifier: MPL-2.0
 # This workflow is managed by gh actions-lock.
 name: GitHub Pages
@@ -32,7 +33,7 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           repository: hyperpolymath/casket-ssg
-          ref: 4abfd39c78c2eee9de62d658646607877b3ee157 # main 2026-09-03
+          ref: cec3c20d80ea1dc93660b69a4e7b38aa49f2a56b # standalone build; optional liblol bridge
           path: .casket-ssg
           persist-credentials: false
 
@@ -45,6 +46,13 @@ jobs:
             .casket-ssg/dist-newstyle
           key: ${{ runner.os }}-casket-${{ hashFiles('.casket-ssg/casket-ssg.cabal') }}
 
+      # Explicitly allowed by repository policy; actions.lock pins its commit.
+      - name: Select tested Haskell toolchain
+        uses: haskell-actions/setup@v2.12.0
+        with:
+          ghc-version: '9.6.6'
+          cabal-version: '3.10.3.0'
+
       - name: Prepare runner Haskell toolchain
         run: |
           set -euo pipefail
@@ -54,10 +62,12 @@ jobs:
 
       - name: Build casket-ssg
         working-directory: .casket-ssg
-        run: cabal build
+        run: cabal build --index-state=2026-09-06T00:00:00Z
 
       - name: Prepare site source
         shell: bash
+        env:
+          CONTENT_REF: ${{ github.event_name == 'pull_request' && github.sha || github.ref_name }}
         run: |
           set -euo pipefail
           rm -rf .site-src _site
@@ -72,9 +82,9 @@ jobs:
             README_URL=""
 
             if [ -f README.md ]; then
-              README_URL="${REPO_URL}/blob/${{ github.ref_name }}/README.md"
+              README_URL="${REPO_URL}/blob/${CONTENT_REF}/README.md"
             elif [ -f README.adoc ]; then
-              README_URL="${REPO_URL}/blob/${{ github.ref_name }}/README.adoc"
+              README_URL="${REPO_URL}/blob/${CONTENT_REF}/README.adoc"
             fi
 
             {
@@ -92,7 +102,7 @@ jobs:
                 echo "- README: [project README](${README_URL})"
               fi
               if [ -d docs ]; then
-                echo "- Docs directory: [docs/](${REPO_URL}/tree/${{ github.ref_name }}/docs)"
+                echo "- Docs directory: [docs/](${REPO_URL}/tree/${CONTENT_REF}/docs)"
               fi
               echo
               echo "Project-specific site content can be added later under site/."
@@ -102,7 +112,7 @@ jobs:
       - name: Build site
         run: |
           mkdir -p _site
-          cd .casket-ssg && cabal run casket-ssg -- build ../.site-src ../_site
+          cd .casket-ssg && cabal run --index-state=2026-09-06T00:00:00Z casket-ssg -- build ../.site-src ../_site
           touch ../_site/.nojekyll
 
       - name: Setup Pages
@@ -114,10 +124,8 @@ jobs:
           path: '_site'
 
   preview:
-    name: Validate deployable Pages preview
+    name: Validate Pages artifact
     if: github.event_name == 'pull_request'
-    environment:
-      name: pages-preview
     runs-on: ubuntu-24.04
     needs: build
     timeout-minutes: 10
@@ -155,7 +163,7 @@ jobs:
                 echo "::error::Pages artifact contains an unsafe path: ${entry}"
                 exit 1
                 ;;
-              index.html|*/index.html)
+              index.html|./index.html)
                 has_index=1
                 ;;
             esac
@@ -195,4 +203,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5.0.0
+        uses: actions/deploy-pages@v5.0.1

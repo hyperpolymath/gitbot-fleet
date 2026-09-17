@@ -115,7 +115,7 @@ scan_supervised_repos() {
     local process_after=false
     local limit=0
     local inventory=""
-    local repos_root="/var/mnt/eclipse/repos"
+    local repos_root="$REPOS_BASE"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -319,7 +319,7 @@ process_findings() {
             local review_script="$FLEET_DIR/scripts/process-review-findings.sh"
             if [[ -x "$review_script" ]]; then
                 log_bot "rhodibot" "Processing $total_substitute substitute-tier findings for review"
-                "$review_script" 2>&1 | sed 's/^/  /' || log_warn "Review processing had errors"
+                FLEET_BASE="${FLEET_ROOT:-$FLEET_DIR}" "$review_script" 2>&1 | sed 's/^/  /' || log_warn "Review processing had errors"
             else
                 log_warn "Review processor not found at $review_script"
             fi
