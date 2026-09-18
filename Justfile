@@ -104,6 +104,15 @@ check-scm:
     done
     @echo "PASS: No SCM files in root"
 
+# Check the RSR rule table against the estate (drift: rules nobody can satisfy)
+validate-rsr-drift:
+    @bash bots/rhodibot/hooks/validate-rsr-drift.sh
+
+# Refresh the cached estate census that validate-rsr-drift measures against.
+# ~1 API request per repository, so it is refreshed on demand, not per commit.
+refresh-rsr-census:
+    @bash scripts/rsr-census.sh --refresh
+
 # Clean all build artifacts
 clean:
     cd robot-repo-automaton && cargo clean
