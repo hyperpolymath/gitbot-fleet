@@ -85,11 +85,11 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         let files = &[
-            "README.adoc", "LICENSE.txt", "SECURITY.md", "CONTRIBUTING.md",
-            "CODE_OF_CONDUCT.md", ".claude/CLAUDE.md", ".machine_readable/STATE.scm",
+            "README.adoc", "LICENSE", "SECURITY.adoc", "CONTRIBUTING.adoc",
+            "CODE_OF_CONDUCT.adoc", ".claude/CLAUDE.md", ".machine_readable/STATE.a2ml",
             ".machine_readable/META.scm", ".machine_readable/ECOSYSTEM.scm", ".github/workflows",
             ".editorconfig", ".gitattributes", ".gitignore",
-            "justfile", ".machine_readable/bot_directives",
+            "Justfile", ".machine_readable/bot_directives",
         ];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
@@ -120,8 +120,8 @@ mod rsr_tests {
 
         // All files except README.adoc
         let files = &[
-            "LICENSE.txt", "SECURITY.md", "CONTRIBUTING.md",
-            "CODE_OF_CONDUCT.md", ".github/workflows",
+            "LICENSE", "SECURITY.adoc", "CONTRIBUTING.adoc",
+            "CODE_OF_CONDUCT.adoc", ".github/workflows",
         ];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
@@ -170,9 +170,91 @@ mod rsr_tests {
 
         assert!(!report.required_passed, "missing LICENSE should fail required checks");
 
-        let license_check = report.checks.iter().find(|c| c.name == "LICENSE.txt");
+        let license_check = report.checks.iter().find(|c| c.name == "LICENSE");
         assert!(license_check.is_some());
         assert_eq!(license_check.unwrap().status, CheckStatus::Fail);
+    }
+
+    /// A repository still on the superseded spellings must not be reported as
+    /// non-compliant for that alone. This is the regression test for the
+    /// 2026-09-18 revision: before it, the checker demanded exactly
+    /// `LICENSE.txt`/`SECURITY.md`/`CONTRIBUTING.md`/lowercase `justfile`, so
+    /// every repository that had completed the AsciiDoc migration (#486) was
+    /// told to undo it.
+    #[tokio::test]
+    async fn test_superseded_spellings_accepted_as_alternates() {
+        let server = MockServer::start().await;
+        let config = mock_config(&server.uri());
+
+        // Only the PRE-migration spellings exist here; none of the current
+        // canonical paths do. Every check must resolve via an alternate.
+        let files = &[
+            "README.adoc",
+            "LICENSE.txt",
+            "SECURITY.md",
+            "CONTRIBUTING.md",
+            "CODE_OF_CONDUCT.md",
+            "Justfile",
+        ];
+        mount_file_mocks(&server, "test-org", "test-repo", files).await;
+
+        let repo_config = RepoConfig::default();
+        let report = check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
+            .await
+            .expect("compliance check should succeed");
+
+        for name in [
+            "LICENSE",
+            "SECURITY.adoc",
+            "CONTRIBUTING.adoc",
+            "CODE_OF_CONDUCT.adoc",
+            "Justfile",
+        ] {
+            let check = report
+                .checks
+                .iter()
+                .find(|c| c.name == name)
+                .unwrap_or_else(|| panic!("should have {} check", name));
+            assert_eq!(
+                check.status,
+                CheckStatus::Pass,
+                "{} should pass via a superseded spelling",
+                name
+            );
+        }
+    }
+
+    /// The estate has no `www/` tree at all yet (0/269 as of 2026-09-18), so
+    /// the canonical-location check must be present and honest about that
+    /// rather than silently passing.
+    #[tokio::test]
+    async fn test_www_wellknown_check_present_and_failing_when_absent() {
+        let server = MockServer::start().await;
+        let config = mock_config(&server.uri());
+
+        let files = &["README.adoc", "LICENSE", ".well-known/security.txt"];
+        mount_file_mocks(&server, "test-org", "test-repo", files).await;
+
+        let repo_config = RepoConfig { policy: PolicyPack::Strict, ..Default::default() };
+        let report = check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
+            .await
+            .expect("compliance check should succeed");
+
+        let www = report
+            .checks
+            .iter()
+            .find(|c| c.name == "www/.well-known/security.txt")
+            .expect("canonical www/ location must be checked");
+        assert_eq!(www.status, CheckStatus::Fail);
+
+        // The legacy root location is flagged too, so the report points at the
+        // migration rather than at two unrelated facts.
+        let legacy = report
+            .checks
+            .iter()
+            .find(|c| c.name == "no-.well-known/security.txt")
+            .expect("legacy root .well-known/ must be flagged");
+        assert_ne!(legacy.status, CheckStatus::Pass);
     }
 
     #[tokio::test]
@@ -182,7 +264,7 @@ mod rsr_tests {
 
         // Include banned files (go.mod, package-lock.json)
         let files = &[
-            "README.adoc", "LICENSE.txt", "go.mod", "package-lock.json",
+            "README.adoc", "LICENSE", "go.mod", "package-lock.json",
         ];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
@@ -215,7 +297,7 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE.txt", "go.mod"];
+        let files = &["README.adoc", "LICENSE", "go.mod"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -243,7 +325,7 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         // Only README and LICENSE - minimal policy should be satisfied
-        let files = &["README.adoc", "LICENSE.txt"];
+        let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -267,7 +349,7 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         // Missing many files that enterprise requires
-        let files = &["README.adoc", "LICENSE.txt"];
+        let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -291,7 +373,7 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE.txt"];
+        let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         // Mock repository info with approved license
@@ -304,12 +386,12 @@ mod rsr_tests {
 
         // Use check_compliance_with_policy directly with a custom repo config
         let mut severity_overrides = std::collections::HashMap::new();
-        severity_overrides.insert("CONTRIBUTING.md".to_string(), Severity::Optional);
+        severity_overrides.insert("CONTRIBUTING.adoc".to_string(), Severity::Optional);
 
         let repo_config = RepoConfig {
             policy: PolicyPack::Custom,
             severity_overrides,
-            skip: vec!["SECURITY.md".to_string()],
+            skip: vec!["SECURITY.adoc".to_string()],
             ..Default::default()
         };
 
@@ -318,12 +400,12 @@ mod rsr_tests {
             .expect("compliance check should succeed");
 
         // SECURITY.md should be skipped
-        let security_check = report.checks.iter().find(|c| c.name == "SECURITY.md");
+        let security_check = report.checks.iter().find(|c| c.name == "SECURITY.adoc");
         assert!(security_check.is_some());
         assert_eq!(security_check.unwrap().status, CheckStatus::Skip);
 
         // CONTRIBUTING.md should be optional (not warn/fail)
-        let contrib_check = report.checks.iter().find(|c| c.name == "CONTRIBUTING.md");
+        let contrib_check = report.checks.iter().find(|c| c.name == "CONTRIBUTING.adoc");
         assert!(contrib_check.is_some());
         assert_eq!(contrib_check.unwrap().severity, Severity::Optional);
     }
@@ -334,7 +416,7 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         // Only 2 of the scored files: README (5pts) + LICENSE (5pts) = 10pts
-        let files = &["README.adoc", "LICENSE.txt"];
+        let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -361,7 +443,7 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE.txt"];
+        let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -399,7 +481,7 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         // Include .editorconfig along with basics
-        let files = &["README.adoc", "LICENSE.txt", ".editorconfig", ".gitattributes", ".gitignore"];
+        let files = &["README.adoc", "LICENSE", ".editorconfig", ".gitattributes", ".gitignore"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -428,7 +510,7 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE.txt", "justfile", ".machine_readable/bot_directives"];
+        let files = &["README.adoc", "LICENSE", "Justfile", ".machine_readable/bot_directives"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
@@ -442,7 +524,7 @@ mod rsr_tests {
             .await
             .expect("compliance check should succeed");
 
-        let jf_check = report.checks.iter().find(|c| c.name == "justfile");
+        let jf_check = report.checks.iter().find(|c| c.name == "Justfile");
         assert!(jf_check.is_some(), "should have justfile check");
         assert_eq!(jf_check.unwrap().status, CheckStatus::Pass);
 
@@ -456,7 +538,7 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE.txt"];
+        let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         // Mock Cargo.toml with bad author
@@ -491,7 +573,7 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE.txt"];
+        let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         // Mock Cargo.toml with good author
@@ -611,7 +693,7 @@ mod webhook_tests {
             .await;
 
         // Mock README and LICENSE exist
-        for file in &["README.adoc", "LICENSE.txt"] {
+        for file in &["README.adoc", "LICENSE"] {
             Mock::given(method("HEAD"))
                 .and(path(format!("/repos/test-org/test-repo/contents/{}", file)))
                 .respond_with(ResponseTemplate::new(200))
@@ -689,7 +771,7 @@ mod webhook_tests {
             .mount(&server)
             .await;
 
-        for file in &["README.adoc", "LICENSE.txt"] {
+        for file in &["README.adoc", "LICENSE"] {
             Mock::given(method("HEAD"))
                 .and(path(format!("/repos/test-org/test-repo/contents/{}", file)))
                 .respond_with(ResponseTemplate::new(200))
@@ -992,7 +1074,7 @@ mod report_tests {
                     message: "AsciiDoc README found".to_string(),
                 },
                 Check {
-                    name: "SECURITY.md".to_string(),
+                    name: "SECURITY.adoc".to_string(),
                     category: CheckCategory::Security,
                     severity: Severity::Recommended,
                     status: CheckStatus::Warn,
@@ -1001,7 +1083,7 @@ mod report_tests {
                     message: "Security policy missing".to_string(),
                 },
                 Check {
-                    name: "LICENSE.txt".to_string(),
+                    name: "LICENSE".to_string(),
                     category: CheckCategory::Governance,
                     severity: Severity::Required,
                     status: if required_passed { CheckStatus::Pass } else { CheckStatus::Fail },
@@ -1112,7 +1194,7 @@ mod fleet_tests {
                     message: "AsciiDoc README missing".to_string(),
                 },
                 Check {
-                    name: "LICENSE.txt".to_string(),
+                    name: "LICENSE".to_string(),
                     category: CheckCategory::Governance,
                     severity: Severity::Required,
                     status: CheckStatus::Pass,
@@ -1121,7 +1203,7 @@ mod fleet_tests {
                     message: "License file found".to_string(),
                 },
                 Check {
-                    name: "SECURITY.md".to_string(),
+                    name: "SECURITY.adoc".to_string(),
                     category: CheckCategory::Security,
                     severity: Severity::Recommended,
                     status: CheckStatus::Warn,
@@ -1139,7 +1221,7 @@ mod fleet_tests {
                     message: "Go module (use Rust) detected - policy violation".to_string(),
                 },
                 Check {
-                    name: ".machine_readable/STATE.scm".to_string(),
+                    name: ".machine_readable/STATE.a2ml".to_string(),
                     category: CheckCategory::Structure,
                     severity: Severity::Recommended,
                     status: CheckStatus::Skip,
@@ -1180,7 +1262,7 @@ mod fleet_tests {
         assert!(readme_finding.is_some());
         assert_eq!(readme_finding.unwrap().category, "rsr/documentation");
 
-        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.md");
+        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.adoc");
         assert!(security_finding.is_some());
         assert_eq!(security_finding.unwrap().category, "rsr/security");
 
@@ -1199,7 +1281,7 @@ mod fleet_tests {
         assert_eq!(readme_finding.severity, FleetSeverity::Error);
 
         // Recommended + Warn -> Warning
-        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.md").unwrap();
+        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.adoc").unwrap();
         assert_eq!(security_finding.severity, FleetSeverity::Warning);
     }
 
@@ -1231,7 +1313,7 @@ mod fleet_tests {
         let findings = fleet::report_to_findings(&report);
 
         // SECURITY.md should be fixable
-        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.md").unwrap();
+        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.adoc").unwrap();
         assert!(security_finding.fixable, "SECURITY.md should be marked as fixable");
 
         // README.adoc should NOT be fixable (content is project-specific)

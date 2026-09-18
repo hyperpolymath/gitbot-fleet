@@ -76,7 +76,12 @@ pub struct RepoConfig {
 /// Check definition with severity per policy pack
 #[derive(Debug, Clone)]
 pub struct CheckDef {
+    /// Canonical path, ordered by prevalence across the estate so the common
+    /// case resolves on the first request.
     pub name: &'static str,
+    /// Historically valid spellings accepted in place of the canonical path,
+    /// so a rename is not reported as a compliance regression.
+    pub alternates: &'static [&'static str],
     pub description: &'static str,
     pub category: CheckCategory,
     pub points: u8,
@@ -96,67 +101,128 @@ impl CheckDef {
     }
 }
 
+/// Resolve a check against a repository: canonical path first, then each
+/// accepted alternate in order.
+///
+/// Alternates are only consulted when the canonical path is absent, so the
+/// overwhelmingly common case — a repository on the current convention —
+/// costs exactly one request, unchanged from before.
+pub async fn check_path_exists(
+    client: &GitHubClient,
+    owner: &str,
+    repo: &str,
+    def: &CheckDef,
+) -> (bool, String) {
+    if client.file_exists(owner, repo, def.name).await {
+        return (true, def.name.to_string());
+    }
+    for alt in def.alternates {
+        if client.file_exists(owner, repo, alt).await {
+            return (true, (*alt).to_string());
+        }
+    }
+    (false, def.name.to_string())
+}
+
 /// Required files for RSR compliance with policy-based severity
 pub const REQUIRED_FILES: &[CheckDef] = &[
+    // NOTE ON THE 2026-09-18 REVISION
+    //
+    // Every path below was re-measured against 269 estate repositories (the
+    // #119 denominator). The previous table predated the Markdown/TXT ->
+    // AsciiDoc migration (#486, 2026-08) and the canonical-location changes
+    // that followed, so it demanded filenames the estate had deliberately
+    // moved away from: LICENSE.txt (0/269), CONTRIBUTING.md (25/269),
+    // CODE_OF_CONDUCT.md (15/269), SECURITY.md (35/269) and lowercase
+    // `justfile` (7/269). It also required Guile Scheme state files that
+    // exist in a single repository.
+    //
+    // The canonical spelling is listed first and ordered by prevalence, so
+    // the common case resolves on the first request; superseded spellings are
+    // accepted as alternates rather than reported as regressions.
     CheckDef {
         name: "README.adoc",
+        alternates: &["README.md"],
         description: "AsciiDoc README",
         category: CheckCategory::Documentation,
         points: 5,
-        // (minimal, standard, strict, enterprise)
         severity: (Severity::Required, Severity::Required, Severity::Required, Severity::Required),
     },
     CheckDef {
-        name: "LICENSE.txt",
+        // 269/269 repositories carry `LICENSE`; none carries `LICENSE.txt`.
+        name: "LICENSE",
+        alternates: &["LICENSE.txt", "LICENSE.md", "LICENSE.adoc"],
         description: "License file",
         category: CheckCategory::Governance,
         points: 5,
         severity: (Severity::Required, Severity::Required, Severity::Required, Severity::Required),
     },
     CheckDef {
-        name: "SECURITY.md",
+        // SECURITY.adoc 250/269 versus SECURITY.md 35/269.
+        name: "SECURITY.adoc",
+        alternates: &["SECURITY.md"],
         description: "Security policy",
         category: CheckCategory::Security,
         points: 5,
         severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
     },
     CheckDef {
-        name: "CONTRIBUTING.md",
+        // CONTRIBUTING.adoc 255/269 versus CONTRIBUTING.md 25/269.
+        name: "CONTRIBUTING.adoc",
+        alternates: &["CONTRIBUTING.md"],
         description: "Contributing guidelines",
         category: CheckCategory::Documentation,
         points: 3,
         severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
     },
     CheckDef {
-        name: "CODE_OF_CONDUCT.md",
+        // CODE_OF_CONDUCT.adoc 240/269 versus CODE_OF_CONDUCT.md 15/269.
+        name: "CODE_OF_CONDUCT.adoc",
+        alternates: &["CODE_OF_CONDUCT.md"],
         description: "Code of conduct",
         category: CheckCategory::Governance,
         points: 3,
         severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
     },
     CheckDef {
+        // 152/269 under .claude/, 39/269 at the root.
         name: ".claude/CLAUDE.md",
+        alternates: &["CLAUDE.md", ".claude/CLAUDE.adoc"],
         description: "AI assistant instructions",
         category: CheckCategory::Structure,
         points: 2,
         severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
     },
     CheckDef {
-        name: ".machine_readable/STATE.scm",
+        // The machine-readable manifest the estate actually ships: 261/269.
+        // The .scm state files below reached 1/269 and their .a2ml spelling
+        // 13/269, so neither is a fair Required check on its own.
+        name: "0-AI-MANIFEST.a2ml",
+        alternates: &[".machine_readable/STATE.a2ml", ".machine_readable/STATE.scm"],
+        description: "Machine-readable manifest at the repository root",
+        category: CheckCategory::Structure,
+        points: 3,
+        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+    },
+    CheckDef {
+        name: ".machine_readable/STATE.a2ml",
+        alternates: &[".machine_readable/STATE.scm"],
         description: "Project state file in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
     },
     CheckDef {
-        name: ".machine_readable/META.scm",
+        name: ".machine_readable/META.a2ml",
+        alternates: &[".machine_readable/META.scm"],
         description: "Meta information in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
     },
     CheckDef {
-        name: ".machine_readable/ECOSYSTEM.scm",
+        name: ".machine_readable/ECOSYSTEM.a2ml",
+        alternates: &[".machine_readable/ECOSYSTEM.scm"],
         description: "Ecosystem position in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
@@ -165,6 +231,7 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
     // Additional RSR template files
     CheckDef {
         name: ".editorconfig",
+        alternates: &[],
         description: "EditorConfig for consistent formatting",
         category: CheckCategory::Structure,
         points: 2,
@@ -172,6 +239,7 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
     },
     CheckDef {
         name: ".gitattributes",
+        alternates: &[],
         description: "Git attributes for line endings and diffs",
         category: CheckCategory::Structure,
         points: 2,
@@ -179,13 +247,18 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
     },
     CheckDef {
         name: ".gitignore",
+        alternates: &[],
         description: "Git ignore patterns",
         category: CheckCategory::Structure,
         points: 2,
         severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
     },
     CheckDef {
-        name: "justfile",
+        // `Justfile` 267/269; lowercase `justfile` 7/269. Both accepted: the
+        // capital form is what just itself prefers, the lowercase form is
+        // what some older checkouts carry.
+        name: "Justfile",
+        alternates: &["justfile"],
         description: "Just task runner (primary build system)",
         category: CheckCategory::Structure,
         points: 2,
@@ -193,10 +266,34 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
     },
     CheckDef {
         name: ".machine_readable/bot_directives",
+        alternates: &[],
         description: "Bot directives directory in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 2,
         severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+    },
+    CheckDef {
+        // Entered the template 2026-08-26; 59/269 as of 2026-09-18. Either
+        // canonical spelling is accepted (see check-root-shape.sh).
+        name: ".machine_readable/root-allow.txt",
+        alternates: &["machine-readable/root-allow.txt"],
+        description: "Root-shape allowlist in canonical machine-readable location",
+        category: CheckCategory::Structure,
+        points: 2,
+        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+    },
+    CheckDef {
+        // Canonical location since #53 (2026-09-17). Measured 2026-09-18:
+        // 0/269 repositories have any www/ tree, because the RSR update
+        // mechanism that would create it has not yet run anywhere. The check
+        // is therefore honest about the gap and drives the migration rather
+        // than merely noting it; raise it once the sweep has landed.
+        name: "www/.well-known/security.txt",
+        alternates: &[],
+        description: "Security contact metadata in the canonical www/ location",
+        category: CheckCategory::Security,
+        points: 3,
+        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
     },
 ];
 
@@ -265,7 +362,17 @@ pub const BANNED_PATTERNS: &[BannedPattern] = &[
         description: "Go checksum (use Rust)",
         category: CheckCategory::LanguagePolicy,
         severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+    },    BannedPattern {
+        // Legacy location: canonical is www/.well-known/ since #53.
+        // Advisory (Warn) at minimal and standard while the stage-5 migration
+        // window is open; raise .2/.3 to Required once the sweep has landed
+        // and the root location should no longer be tolerated at all.
+        name: ".well-known/security.txt",
+        description: "Legacy repository-root .well-known/ (canonical location is www/.well-known/)",
+        category: CheckCategory::Structure,
+        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
     },
+
 ];
 
 /// RSR Compliance Report
@@ -385,7 +492,7 @@ pub async fn check_compliance_with_policy(
 
         // Skip optional checks in scoring
         if severity == Severity::Optional {
-            let exists = client.file_exists(owner, repo, check_def.name).await;
+            let (exists, found_at) = check_path_exists(&client, owner, repo, check_def).await;
             checks.push(Check {
                 name: check_def.name.to_string(),
                 category: check_def.category,
@@ -394,7 +501,7 @@ pub async fn check_compliance_with_policy(
                 points: 0,
                 max_points: 0,
                 message: if exists {
-                    format!("{} found (optional)", check_def.description)
+                    format!("{} found at {} (optional)", check_def.description, found_at)
                 } else {
                     format!("{} not present (optional)", check_def.description)
                 },
@@ -403,7 +510,12 @@ pub async fn check_compliance_with_policy(
         }
 
         max_score += check_def.points;
-        let exists = client.file_exists(owner, repo, check_def.name).await;
+        let (exists, found_at) = check_path_exists(&client, owner, repo, check_def).await;
+        let accepted = if check_def.alternates.is_empty() {
+            String::new()
+        } else {
+            format!(" (or, historically: {})", check_def.alternates.join(", "))
+        };
 
         if exists {
             total_score += check_def.points;
@@ -414,7 +526,7 @@ pub async fn check_compliance_with_policy(
                 status: CheckStatus::Pass,
                 points: check_def.points,
                 max_points: check_def.points,
-                message: format!("{} found", check_def.description),
+                message: format!("{} found at {}", check_def.description, found_at),
             });
         } else {
             let status = match severity {
@@ -433,7 +545,7 @@ pub async fn check_compliance_with_policy(
                 status,
                 points: 0,
                 max_points: check_def.points,
-                message: format!("{} missing", check_def.description),
+                message: format!("{} missing - expected at {}{}", check_def.description, check_def.name, accepted),
             });
         }
     }
