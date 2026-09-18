@@ -23,6 +23,7 @@ TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 OUT="${RSR_CENSUS_DIR:-.rsr-census}"
 REPOS_FILE=""
 ORG="${ORG:-hyperpolymath}"
+BRANCH="${BRANCH:-main}"
 REFRESH=0
 
 while [ $# -gt 0 ]; do
@@ -40,15 +41,40 @@ done
 mkdir -p "$OUT"
 
 fetch_tree() {
-    # One recursive tree call per repo. Returns newline-separated blob paths.
-    local repo="$1"
+    # Two calls per repo: resolve the branch tip to a commit SHA, then fetch
+    # that exact tree.
+    #
+    # Both details matter:
+    #   * Pinning to a SHA rather than asking for `HEAD` makes the census
+    #     reproducible and stops the trees API serving a cached pre-merge tree.
+    #     Observed: immediately after a squash-merge, `trees/HEAD` still
+    #     returned the old tree for that repository.
+    #   * Trees are emitted as well as blobs. Some rule-table checks name a
+    #     *directory* (.machine_readable/bot_directives), which can never match
+    #     a blob-only listing and would be reported as a false DEAD.
+    # Resolve the branch tip through the ref API, NOT /commits/HEAD.
+    # /commits/HEAD is cacheable and observably lags: immediately after a
+    # squash-merge it still reported the pre-merge commit for that repository
+    # (bfcd9683) while /git/refs/heads/main, /branches/main and git ls-remote
+    # all agreed on the real tip (1511c8a0). Pinning to a stale SHA would make
+    # the census confidently wrong, which is worse than unpinned.
+    local repo="$1" sha
+    sha=$(curl -sS \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/$ORG/$repo/git/refs/heads/$BRANCH" \
+        | jq -r '.object.sha // empty')
+    if [ -z "$sha" ]; then
+        printf '__ERROR__ could not resolve refs/heads/%s\n' "$BRANCH"
+        return
+    fi
     curl -sS \
         -H "Authorization: Bearer $TOKEN" \
         -H "Accept: application/vnd.github+json" \
-        "https://api.github.com/repos/$ORG/$repo/git/trees/HEAD?recursive=1" \
+        "https://api.github.com/repos/$ORG/$repo/git/trees/$sha?recursive=1" \
     | jq -r '
         if .tree then
-            .tree[] | select(.type == "blob") | .path
+            .tree[] | select(.type == "blob" or .type == "tree") | .path
         else
             "__ERROR__ \(.message // "unknown")"
         end'
