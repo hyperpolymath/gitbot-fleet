@@ -197,14 +197,20 @@ Welcome to the hyperpolymath organization! Please ensure your repository follows
 
 ### Required Files
 - [ ] `README.adoc` - Project documentation (AsciiDoc format)
-- [ ] `LICENSE.txt` - License file (MPL-2.0, MIT, Apache-2.0, or MPL-2.0)
-- [ ] `SECURITY.md` - Security policy
-- [ ] `CONTRIBUTING.md` - Contribution guidelines
-- [ ] `CODE_OF_CONDUCT.md` - Code of conduct
+- [ ] `LICENSE` - License file (MPL-2.0, MIT, Apache-2.0)
+- [ ] `SECURITY.adoc` - Security policy (AsciiDoc)
+- [ ] `CONTRIBUTING.adoc` - Contribution guidelines (AsciiDoc)
+- [ ] `CODE_OF_CONDUCT.adoc` - Code of conduct (AsciiDoc)
+- [ ] `Justfile` - Just task runner (capital J)
+- [ ] `0-AI-MANIFEST.a2ml` - Machine-readable manifest at the repository root
 - [ ] `.claude/CLAUDE.md` - AI assistant instructions
-- [ ] `STATE.scm` - Project state (Guile Scheme)
-- [ ] `META.scm` - Meta information (Guile Scheme)
-- [ ] `ECOSYSTEM.scm` - Ecosystem position (Guile Scheme)
+- [ ] `.machine_readable/root-allow.txt` - Root-shape allowlist
+- [ ] `www/.well-known/security.txt` - Security contact in the canonical location
+
+Note: paths are given in the current convention. Superseded spellings
+(`LICENSE.txt`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+lowercase `justfile`, `.machine_readable/STATE.scm` and its siblings) are
+still accepted by the checker and are not compliance failures.
 
 ### Language Policy (CCCP)
 **Allowed:** ReScript, Rust, Deno, Gleam, Bash, Julia, Ada, OCaml

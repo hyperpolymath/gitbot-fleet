@@ -682,7 +682,11 @@ impl Fixer {
         match target {
             "LICENSE" | "LICENSE.txt" => include_str!("../templates/LICENSE.tmpl").to_string(),
             ".editorconfig" => include_str!("../templates/editorconfig.tmpl").to_string(),
-            "SECURITY.md" => include_str!("../templates/SECURITY.tmpl").to_string(),
+            // The estate renamed SECURITY.md -> SECURITY.adoc with the
+            // AsciiDoc migration; both spellings render the same template.
+            // Without this arm the fall-through returns String::new() and
+            // the automaton opens a PR that creates the file EMPTY.
+            "SECURITY.adoc" | "SECURITY.md" => include_str!("../templates/SECURITY.tmpl").to_string(),
             _ => String::new(),
         }
     }
