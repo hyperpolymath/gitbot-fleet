@@ -38,3 +38,24 @@ sha256 = "37cb5f679b414f6ee99c6bb62c460fd5349ff7d50cc1dab25b1e1a8e8d3c7bb9"
 categories = 11
 criteria = 74
 weight_sum = 88
+
+# The release's second artefact: the gate table. It says which capabilities a
+# profile may declare, what a preset expands to, and which module paths belong
+# to which capability. Same rule as the copy above -- taken verbatim, pinned by
+# digest, and pinned by shape. `slot` is the name `canon.lock` gives it; the
+# drift script checks that all three agree, because a pin nothing verifies is
+# not a binding.
+[gates]
+repo = "hyperpolymath/standards"
+path = ".machine_readable/template-capability-gates.toml"
+slot = "gates"
+version = "0.2.0"
+released = "2026-09-17"
+pinned = "2026-09-19"
+sha256 = "b65ce75438c42d01bedf0325b9a97f1a575064866158b4340d7427fca911dd1b"
+
+# The shape of the pinned table. A vocabulary that shrank would leave profiles
+# declaring the lost words unparseable, and criteria gated on them permanently
+# inapplicable -- the failure mode is quiet, so the numbers are asserted.
+known = 28
+presets = 11

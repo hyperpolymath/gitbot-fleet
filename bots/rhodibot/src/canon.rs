@@ -39,6 +39,7 @@
 //! The failure mode to avoid is the quiet one: a rule set that silently shrinks
 //! and reports every repository as compliant.
 
+pub mod profile;
 pub mod requirement;
 
 use std::collections::HashSet;
@@ -55,6 +56,14 @@ use sha2::{Digest, Sha256};
 /// is fixed when it is built: a deployment cannot end up evaluating against
 /// whatever the filesystem happens to contain.
 pub const VENDORED_CRITERIA: &str = include_str!("../canon/rsr-criteria-v2.a2ml");
+
+/// The canon's gate table, copied verbatim from the same release.
+///
+/// This is what says which capabilities exist, what a profile's preset expands
+/// to, and which module paths belong to which capability. Its pin sits beside
+/// the criteria pin in `canon/pin.toml`, under `[gates]`, and
+/// `scripts/check-canon-drift.sh` checks both against the canon.
+pub const VENDORED_GATES: &str = include_str!("../canon/template-capability-gates.toml");
 
 /// The pin describing which canon revision [`VENDORED_CRITERIA`] came from.
 const VENDORED_PIN: &str = include_str!("../canon/pin.toml");
@@ -378,6 +387,25 @@ impl Canon {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Pin {
     pub source: PinSource,
+    pub gates: GatePin,
+}
+
+/// The gate table's pin.
+///
+/// Deliberately does not repeat `canon_version` and `released`: those belong to
+/// the release, and a second copy of them can only ever disagree with the
+/// first. `slot` names the artefact in `canon.lock` whose hash this must match.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GatePin {
+    pub repo: String,
+    pub path: String,
+    pub slot: String,
+    pub version: String,
+    pub sha256: String,
+    /// How many capabilities the pinned table defines.
+    pub known: usize,
+    /// How many presets it defines.
+    pub presets: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -433,6 +461,46 @@ impl Pin {
             "pinned canon weights sum to {}, this copy sums to {}",
             source.weight_sum,
             canon.weight_sum()
+        );
+        Ok(())
+    }
+
+    /// Check the vendored gate table against its pin.
+    pub fn verify_gates(&self, source: &str) -> Result<()> {
+        let actual = digest_of(source);
+        let expected = self.gates.sha256.to_lowercase();
+        if actual != expected {
+            bail!(
+                "vendored gate table does not match its pin: {} (slot {:?}) pins {}, this copy \
+                 hashes {}. Either re-pin (copy {}, update [gates] sha256 in canon/pin.toml) or \
+                 restore the copy.",
+                self.gates.path,
+                self.gates.slot,
+                expected,
+                actual,
+                self.gates.path
+            );
+        }
+        Ok(())
+    }
+
+    /// Check a parsed gate table against the shape this pin describes.
+    ///
+    /// The vocabulary is what makes a profile's declaration checkable. If it
+    /// silently shrinks, profiles declaring the lost words stop parsing and
+    /// criteria gated on them can never apply -- so its size is pinned too.
+    pub fn verify_gate_counts(&self, table: &profile::GateTable) -> Result<()> {
+        ensure!(
+            table.known_count() == self.gates.known,
+            "pinned gate table defines {} capabilities, this copy defines {}",
+            self.gates.known,
+            table.known_count()
+        );
+        ensure!(
+            table.preset_count() == self.gates.presets,
+            "pinned gate table defines {} presets, this copy defines {}",
+            self.gates.presets,
+            table.preset_count()
         );
         Ok(())
     }
