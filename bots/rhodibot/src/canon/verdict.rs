@@ -51,13 +51,14 @@
 //! every retired path as ordinary.
 
 use anyhow::{Result, bail, ensure};
+use serde::Serialize;
 
 use super::Canon;
 use super::Criterion;
 use super::requirement::requirement_from;
 
 /// A location the canon has retired, and the sentence that says so.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Deprecation {
     /// The retired location, resolved to a full path: `.machine_readable/6a2/`.
     pub location: String,
@@ -219,7 +220,8 @@ impl GroupVerdict {
 /// Ordered by how far the repository is from what the canon asks: a file that
 /// is missing is worse than one in a retired place, which is worse than one
 /// somewhere the canon did not name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Severity {
     /// Every group is present where the canon records it.
     Satisfied,
@@ -525,7 +527,7 @@ fn deprecated_copies_for(
 }
 
 /// Where the canon's template keeps this file, when that is somewhere else.
-fn canon_location_note(template_ref: &str, found: &str) -> Option<String> {
+pub fn canon_location_note(template_ref: &str, found: &str) -> Option<String> {
     if template_ref == "-" || template_ref.is_empty() || template_ref.ends_with('/') {
         return None;
     }
