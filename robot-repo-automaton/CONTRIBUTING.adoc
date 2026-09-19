@@ -4,7 +4,7 @@ git clone https://github.com/hyperpolymath/robot-repo-automaton.git
 cd robot-repo-automaton
 
 = Using Guix (recommended for reproducibility)
-guix shell -D -f guix.scm
+guix shell -D -f build/guix.scm
 
 = Or using toolbox/distrobox
 toolbox create robot-repo-automaton-dev
