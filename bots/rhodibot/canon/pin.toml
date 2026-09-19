@@ -10,7 +10,8 @@
 # reviewable commit.
 #
 # To re-pin: copy the new criteria file over `rsr-criteria-v2.a2ml`, update the
-# three version fields and the digest, and run `cargo test`. The canon's own
+# three version fields, the digest, and the `categories`, `criteria` and
+# `weight_sum` shape fields below, then run `cargo test`. The canon's own
 # arithmetic is re-checked on parse, so a half-copied file fails rather than
 # silently losing criteria.
 #
