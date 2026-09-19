@@ -28,7 +28,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [robot-repo-automaton, shared-context, dashboard]
+        # rhodibot was missing from this matrix, so the crate that ships the
+        # GitHub App had never been built, tested or linted in CI. Its
+        # verification was whatever a human remembered to run locally.
+        crate: [robot-repo-automaton, shared-context, dashboard, rhodibot]
     defaults:
       run:
         working-directory: ${{ matrix.crate }}
