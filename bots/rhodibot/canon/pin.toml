@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# The released identity of the canon copied into this directory.
+#
+# The rule set rhodibot applies is not written here: it is read from the canon
+# (`0-canon/rsr/rsr-criteria-v2.a2ml` in hyperpolymath/standards), copied
+# verbatim, and this file records which revision the copy came from. A test
+# recomputes the digest of the copy and fails if it stops matching, so a canon
+# movement cannot take effect by accident -- re-pinning is an ordinary,
+# reviewable commit.
+#
+# To re-pin: copy the new criteria file over `rsr-criteria-v2.a2ml`, update the
+# three version fields and the digest, and run `cargo test`. The canon's own
+# arithmetic is re-checked on parse, so a half-copied file fails rather than
+# silently losing criteria.
+#
+# One discrepancy to be aware of, recorded rather than resolved here: the
+# release in `canon.lock` is 2.0.4 while the criteria file's own `[meta]
+# version` still reads 2.0.0-draft. Both are quoted below so the pin describes
+# the artefact rather than a story about it. `canon.lock` also cannot be pinned
+# by commit: its `commit` field is still the all-zero placeholder with the
+# comment "fill at release".
+
+[source]
+repo = "hyperpolymath/standards"
+path = "0-canon/rsr/rsr-criteria-v2.a2ml"
+slot = "criteria"
+canon_version = "2.0.4"
+criteria_version = "2.0.0-draft"
+released = "2026-09-17"
+pinned = "2026-09-19"
+sha256 = "37cb5f679b414f6ee99c6bb62c460fd5349ff7d50cc1dab25b1e1a8e8d3c7bb9"
+
+# The shape of the pinned revision, checked after parsing as well as by digest.
+# A rule set that silently shrinks is the failure mode that matters: these
+# numbers make shrinking a test failure rather than a quieter scorecard.
+categories = 11
+criteria = 74
+weight_sum = 88

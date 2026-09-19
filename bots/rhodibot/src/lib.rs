@@ -12,6 +12,7 @@
 
 #![forbid(unsafe_code)]
 pub mod app_auth;
+pub mod canon;
 pub mod config;
 pub mod fleet;
 pub mod github;

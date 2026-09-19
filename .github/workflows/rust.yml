@@ -50,6 +50,13 @@ jobs:
         working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Canon pin drift (rhodibot)
+        # The rule set is copied from hyperpolymath/standards and pinned by
+        # digest. This fails when the canon has moved since that pin, so a rule
+        # change arrives as a reviewable commit rather than silently changing
+        # what every repository is measured against.
+        if: matrix.module == 'rhodibot'
+        run: bash "$GITHUB_WORKSPACE/scripts/check-canon-drift.sh"
       - name: Ensure clippy + rustfmt components
         run: rustup component add clippy rustfmt
       - name: Build (all targets)
