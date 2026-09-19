@@ -41,6 +41,7 @@
 
 pub mod profile;
 pub mod requirement;
+pub mod verdict;
 
 use std::collections::HashSet;
 use std::fmt;

@@ -15,6 +15,7 @@ use std::path::PathBuf;
 
 use rhodibot::canon::profile::{Applicability, GateTable, Profile};
 use rhodibot::canon::requirement::requirement_from;
+use rhodibot::canon::verdict::{Deprecation, GroupVerdict, Severity, Verdict};
 use rhodibot::canon::{Canon, Pin, Tier, VENDORED_CRITERIA, VENDORED_GATES, digest_of};
 
 /// The vendored canon as it sits on disk.
@@ -220,5 +221,114 @@ fn capability_gates_split_the_file_presence_criteria() {
         !inapplicable.is_empty(),
         "the canon gates some file-presence criteria; a check that scored them anyway would \
          demand files these repositories have no reason to carry"
+    );
+}
+
+/// The classifier against a real repository the advisory pilot went through by
+/// hand. The paths below are nesy-solver's at `main` on 2026-09-19, read from
+/// the GitHub tree API -- not invented for the test.
+///
+/// The pilot recorded three findings for this repository, all of them
+/// descriptive files left under the location the canon retired. This asserts
+/// the classifier reaches the same three, and that it does not invent a fourth
+/// where the repository is mid-move.
+#[test]
+fn a_real_repository_classifies_the_way_the_pilot_recorded_it() {
+    let canon = Canon::vendored().expect("the canon parses");
+    let deprecations = Deprecation::from_canon(&canon).expect("the canon's retirement is readable");
+    let profile = Profile::default();
+
+    let files: Vec<String> = [
+        // The move's destination.
+        ".machine_readable/STATE.a2ml",
+        ".machine_readable/META.a2ml",
+        ".machine_readable/ECOSYSTEM.a2ml",
+        // The move's source, still populated.
+        ".machine_readable/6a2/STATE.a2ml",
+        ".machine_readable/6a2/META.a2ml",
+        ".machine_readable/6a2/ECOSYSTEM.a2ml",
+        ".machine_readable/6a2/AGENTIC.a2ml",
+        ".machine_readable/6a2/NEUROSYM.a2ml",
+        ".machine_readable/6a2/PLAYBOOK.a2ml",
+        // Everything else the eleven pilot criteria ask about.
+        ".editorconfig",
+        ".pre-commit-config.yaml",
+        ".well-known/security.txt",
+        ".well-known/ai.txt",
+        ".well-known/humans.txt",
+        "0-AI-MANIFEST.a2ml",
+        "Justfile",
+        ".machine_readable/anchors/ANCHOR.a2ml",
+    ]
+    .iter()
+    .map(|path| path.to_string())
+    .collect();
+
+    let verdict_of = |id: &str| {
+        let criterion = canon
+            .criteria()
+            .find(|criterion| criterion.id == id)
+            .unwrap_or_else(|| panic!("the canon has a criterion {id}"));
+        assert!(profile.is_applicable(criterion), "{id} is not universal");
+        Verdict::of(criterion, &files, &deprecations).unwrap_or_else(|| panic!("{id} names files"))
+    };
+
+    // The three the pilot recorded: present, but only under the retired path.
+    for id in ["3.1.5", "3.1.6", "3.1.7"] {
+        let verdict = verdict_of(id);
+        assert_eq!(verdict.severity(), Severity::Deprecated, "{id}");
+        match &verdict.groups[0] {
+            GroupVerdict::Deprecated {
+                found, location, ..
+            } => {
+                assert_eq!(location, ".machine_readable/6a2/");
+                assert!(found.starts_with(".machine_readable/6a2/"), "{found}");
+            }
+            other => panic!("{id}: expected Deprecated, got {other:?}"),
+        }
+    }
+
+    // The three that moved out of the retired directory but not yet into the
+    // canon's: relocated, with the leftover named rather than counted as the
+    // repository's location.
+    for id in ["3.1.2", "3.1.3", "3.1.4"] {
+        let verdict = verdict_of(id);
+        assert_eq!(verdict.severity(), Severity::Relocated, "{id}");
+        assert_eq!(
+            verdict.deprecated_copies().len(),
+            1,
+            "{id} left a copy behind"
+        );
+    }
+
+    // The pilot's own false positive: 1.2.2 is satisfied by a root
+    // .pre-commit-config.yaml even though the canon's template keeps one in ci/.
+    assert_eq!(verdict_of("1.2.2").severity(), Severity::Satisfied);
+
+    // 1.2.4 is genuinely absent here.
+    assert_eq!(verdict_of("1.2.4").severity(), Severity::Missing);
+
+    // The eleven criteria the pilot asked, three ways.
+    let mut counts = std::collections::BTreeMap::new();
+    for id in [
+        "1.1.4", "1.2.2", "1.2.4", "2.3.1", "3.1.2", "3.1.3", "3.1.4", "3.1.5", "3.1.6", "3.1.7",
+        "3.1.8",
+    ] {
+        *counts.entry(verdict_of(id).severity()).or_insert(0) += 1;
+    }
+    println!("nesy-solver, the pilot's eleven: {counts:?}");
+    assert_eq!(
+        (
+            counts.get(&Severity::Satisfied).copied().unwrap_or(0),
+            counts.get(&Severity::Relocated).copied().unwrap_or(0),
+            counts.get(&Severity::Deprecated).copied().unwrap_or(0),
+            counts.get(&Severity::Missing).copied().unwrap_or(0)
+        ),
+        // satisfied: .editorconfig, the root .pre-commit-config.yaml, the
+        // AI manifest. relocated: the three that left 6a2/ for
+        // .machine_readable/, and ANCHOR.a2ml at .machine_readable/anchors/.
+        // deprecated: the three still only under 6a2/. missing: .tool-versions.
+        (3, 4, 3, 1),
+        "the pilot's eleven, reclassified by the canon's own words"
     );
 }
