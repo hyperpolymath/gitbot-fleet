@@ -21,6 +21,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 use rhodibot::config;
+use rhodibot::github::GitHubClient;
 use rhodibot::rsr;
 use rhodibot::webhook;
 
@@ -34,6 +35,16 @@ struct Cli {
     /// Port to listen on
     #[arg(short, long, env = "PORT", default_value = "3000")]
     port: u16,
+
+    /// Address to bind.
+    ///
+    /// Loopback by default: the intended deployment fronts this process with a
+    /// Cloudflare Tunnel (or another reverse proxy) on the same host, so the
+    /// webhook port has no business being reachable from the network. Set
+    /// `--bind 0.0.0.0` (or `BIND_ADDR=0.0.0.0`) to serve directly, which is
+    /// what earlier versions did unconditionally.
+    #[arg(long, env = "BIND_ADDR", default_value = "127.0.0.1")]
+    bind: String,
 
     /// GitHub App ID
     #[arg(long, env = "GITHUB_APP_ID")]
@@ -77,6 +88,10 @@ enum Command {
 #[derive(Clone)]
 struct AppState {
     config: Arc<Config>,
+    /// How the bot authenticates, reported by `/health`. Never credential
+    /// material -- a mode name, so an operator can see whether the App
+    /// credentials were picked up.
+    credential_mode: &'static str,
 }
 
 #[tokio::main]
@@ -114,8 +129,16 @@ async fn main() -> Result<()> {
 
     info!("Starting Rhodibot v{}", env!("CARGO_PKG_VERSION"));
 
+    // Refuse to start with credentials that cannot work. A half-configured App
+    // must not quietly become an anonymous client: that turns into a
+    // permissions puzzle at the first webhook instead of a clear failure now.
+    let credentials = GitHubClient::new(&config);
+    credentials.readiness()?;
+    info!("GitHub credentials: {}", credentials.credential_mode());
+
     let state = AppState {
         config: Arc::new(config),
+        credential_mode: credentials.credential_mode(),
     };
 
     // Build router
@@ -128,7 +151,7 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     // Start server
-    let addr = format!("0.0.0.0:{}", cli.port);
+    let addr = format!("{}:{}", cli.bind, cli.port);
     let listener = TcpListener::bind(&addr).await?;
     info!("Listening on {}", addr);
 
@@ -187,11 +210,12 @@ async fn run_check(config: &Config, owner: &str, repo: &str, format: &str) -> Re
 }
 
 /// Health check endpoint
-async fn health_check() -> impl IntoResponse {
+async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     Json(HealthResponse {
         status: "healthy".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         name: "rhodibot".to_string(),
+        credentials: state.credential_mode.to_string(),
     })
 }
 
@@ -200,6 +224,8 @@ struct HealthResponse {
     status: String,
     version: String,
     name: String,
+    /// e.g. "GitHub App installation tokens". Named, never the credential.
+    credentials: String,
 }
 
 /// Webhook handler for GitHub events

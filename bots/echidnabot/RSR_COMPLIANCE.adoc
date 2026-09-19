@@ -83,6 +83,6 @@ None
 == References
 
 * link:https://github.com/hyperpolymath/RSR-template-repo[RSR Template Repository]
-* link:CONTRIBUTING.adoc[Contributing Guidelines]
+* link:../../.github/CONTRIBUTING.md[Contributing Guidelines]
 * link:CODE_OF_CONDUCT.md[Code of Conduct]
 * link:docs/ARCHITECTURE.adoc[Architecture Documentation]

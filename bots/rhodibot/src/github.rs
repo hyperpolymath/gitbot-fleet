@@ -2,45 +2,150 @@
 
 //! GitHub API client module
 //!
+//! # Authentication
+//!
+//! Credentials are resolved once, in [`GitHubClient::new`]:
+//!
+//! - a **GitHub App**, when `app_id` and a private key are both configured.
+//!   Each request is then scoped to the repository it concerns: the app JWT is
+//!   exchanged for an installation token for that repository (see
+//!   [`crate::app_auth`]), because installation tokens do not carry across
+//!   repositories.
+//! - a **static token** from `GITHUB_TOKEN`, which is a single identity and
+//!   does not expire.
+//! - otherwise anonymous, which works on public repositories under a punitive
+//!   rate limit.
+//!
+//! A half-configured App is *not* allowed to fall back to the anonymous path:
+//! the client reports itself unready (see [`GitHubClient::readiness`]) and
+//! refuses to send authenticated requests, so a misconfiguration surfaces at
+//! start-up instead of as a permissions puzzle later.
+//!
 //! # Security considerations
 //!
-//! - The GitHub token is read from `GITHUB_TOKEN` environment variable and
-//!   passed only to `bearer_auth()`. It is never logged, serialized, or
-//!   included in error messages.
+//! - Credentials are passed only to `bearer_auth()`. They are never logged,
+//!   serialized, or included in error messages.
 //! - File paths passed to content APIs are validated against path traversal.
 
-use anyhow::Result;
+use std::sync::Arc;
+
+use anyhow::{Result, bail};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
+use crate::app_auth::AppAuth;
 use crate::config::Config;
 use crate::sanitize;
+
+/// How the client authenticates to the GitHub API.
+enum Credentials {
+    /// A `GITHUB_TOKEN`-style token: one identity, one lifetime, no exchange.
+    /// `None` means unauthenticated, which is allowed but rate-limited hard.
+    Static(Option<String>),
+    /// A GitHub App. The app JWT is signed per call and exchanged for an
+    /// installation token scoped to the repository being touched; [`AppAuth`]
+    /// caches both the lookup and the token.
+    App(Arc<AppAuth>),
+    /// App credentials were configured but cannot be used. Requests fail
+    /// instead of quietly falling back to anonymous access, which would
+    /// surface later as a puzzling permissions problem somewhere else.
+    Invalid(String),
+}
 
 /// GitHub API client
 pub struct GitHubClient {
     client: Client,
     base_url: String,
-    token: Option<String>,
+    credentials: Credentials,
 }
 
 impl GitHubClient {
-    /// Create a new GitHub client
+    /// Create a new GitHub client.
+    ///
+    /// Credentials come from configuration: a GitHub App when an app ID and a
+    /// private key are both present, otherwise `GITHUB_TOKEN`, otherwise
+    /// anonymous. Call [`Self::readiness`] at start-up so a half-configured App
+    /// is rejected before it serves traffic.
     pub fn new(config: &Config) -> Self {
         Self {
             client: Client::new(),
             base_url: config.github_api_url.clone(),
-            token: std::env::var("GITHUB_TOKEN").ok(),
+            credentials: Self::resolve_credentials(config),
+        }
+    }
+
+    /// Decide how to authenticate. Touches no network.
+    fn resolve_credentials(config: &Config) -> Credentials {
+        match (config.app_id, config.private_key.as_deref()) {
+            (Some(app_id), Some(private_key)) => {
+                match AppAuth::new(app_id, private_key, &config.github_api_url) {
+                    Ok(app_auth) => Credentials::App(Arc::new(app_auth)),
+                    Err(error) => Credentials::Invalid(format!(
+                        "GitHub App credentials are unusable: {error:#}"
+                    )),
+                }
+            }
+            (Some(_), None) => Credentials::Invalid(
+                "GITHUB_APP_ID is set but no private key was provided".to_string(),
+            ),
+            (None, Some(_)) => Credentials::Invalid(
+                "a GitHub App private key was provided but GITHUB_APP_ID is missing".to_string(),
+            ),
+            (None, None) => Credentials::Static(std::env::var("GITHUB_TOKEN").ok()),
+        }
+    }
+
+    /// Fail when this client cannot authenticate.
+    ///
+    /// Called at start-up: an unusable App configuration should stop the
+    /// process, not every webhook that arrives afterwards.
+    pub fn readiness(&self) -> Result<()> {
+        match &self.credentials {
+            Credentials::Invalid(reason) => bail!("{reason}"),
+            _ => Ok(()),
+        }
+    }
+
+    /// Describe the credential in use, for start-up logging. Carries no
+    /// credential material.
+    pub fn credential_mode(&self) -> &'static str {
+        match &self.credentials {
+            Credentials::Static(Some(_)) => "static token from GITHUB_TOKEN",
+            Credentials::Static(None) => "anonymous (public repositories only)",
+            Credentials::App(_) => "GitHub App installation tokens",
+            Credentials::Invalid(_) => "misconfigured",
+        }
+    }
+
+    /// Attach credentials to a request about one repository.
+    ///
+    /// Installation tokens are per repository, so the token is minted for the
+    /// repository this request is about rather than reused across the estate.
+    async fn authorize(
+        &self,
+        request: reqwest::RequestBuilder,
+        owner: &str,
+        repo: &str,
+    ) -> Result<reqwest::RequestBuilder> {
+        match &self.credentials {
+            Credentials::Static(Some(token)) => Ok(request.bearer_auth(token)),
+            Credentials::Static(None) => Ok(request),
+            Credentials::App(app_auth) => {
+                let installation = app_auth.installation_for_repository(owner, repo).await?;
+                let token = app_auth.installation_token(installation).await?;
+                Ok(request.bearer_auth(token))
+            }
+            Credentials::Invalid(reason) => {
+                bail!("refusing to send an unauthenticated request: {reason}")
+            }
         }
     }
 
     /// Get repository information
     pub async fn get_repository(&self, owner: &str, repo: &str) -> Result<Repository> {
         let url = format!("{}/repos/{}/{}", self.base_url, owner, repo);
-        let mut request = self.client.get(&url);
-
-        if let Some(ref token) = self.token {
-            request = request.bearer_auth(token);
-        }
+        let request = self.authorize(self.client.get(&url), owner, repo).await?;
 
         let response = request
             .header("Accept", "application/vnd.github+json")
@@ -61,12 +166,11 @@ impl GitHubClient {
         path: &str,
     ) -> Result<Vec<ContentItem>> {
         sanitize::validate_file_path(path)?;
-        let url = format!("{}/repos/{}/{}/contents/{}", self.base_url, owner, repo, path);
-        let mut request = self.client.get(&url);
-
-        if let Some(ref token) = self.token {
-            request = request.bearer_auth(token);
-        }
+        let url = format!(
+            "{}/repos/{}/{}/contents/{}",
+            self.base_url, owner, repo, path
+        );
+        let request = self.authorize(self.client.get(&url), owner, repo).await?;
 
         let response = request
             .header("Accept", "application/vnd.github+json")
@@ -84,12 +188,20 @@ impl GitHubClient {
         if sanitize::validate_file_path(path).is_err() {
             return false;
         }
-        let url = format!("{}/repos/{}/{}/contents/{}", self.base_url, owner, repo, path);
-        let mut request = self.client.head(&url);
-
-        if let Some(ref token) = self.token {
-            request = request.bearer_auth(token);
-        }
+        let url = format!(
+            "{}/repos/{}/{}/contents/{}",
+            self.base_url, owner, repo, path
+        );
+        let request = match self.authorize(self.client.head(&url), owner, repo).await {
+            Ok(request) => request,
+            Err(error) => {
+                // This function reports a boolean by contract, but "cannot
+                // authenticate" is not "the file is absent" -- reporting it as
+                // absence would mass-report non-compliance. Say so loudly.
+                error!("cannot authenticate a file-existence check: {error:#}");
+                return false;
+            }
+        };
 
         request
             .header("User-Agent", "rhodibot")
@@ -104,12 +216,11 @@ impl GitHubClient {
     /// The `path` parameter is validated against path traversal before use.
     pub async fn get_file_content(&self, owner: &str, repo: &str, path: &str) -> Result<String> {
         sanitize::validate_file_path(path)?;
-        let url = format!("{}/repos/{}/{}/contents/{}", self.base_url, owner, repo, path);
-        let mut request = self.client.get(&url);
-
-        if let Some(ref token) = self.token {
-            request = request.bearer_auth(token);
-        }
+        let url = format!(
+            "{}/repos/{}/{}/contents/{}",
+            self.base_url, owner, repo, path
+        );
+        let request = self.authorize(self.client.get(&url), owner, repo).await?;
 
         let response = request
             .header("Accept", "application/vnd.github.raw+json")
@@ -141,11 +252,7 @@ impl GitHubClient {
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let url = format!("{}/repos/{}/{}/issues", self.base_url, owner, repo);
-        let mut request = self.client.post(&url);
-
-        if let Some(ref token) = self.token {
-            request = request.bearer_auth(token);
-        }
+        let request = self.authorize(self.client.post(&url), owner, repo).await?;
 
         let payload = CreateIssue {
             title: title.to_string(),
@@ -178,11 +285,7 @@ impl GitHubClient {
         .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         let url = format!("{}/repos/{}/{}/check-runs", self.base_url, owner, repo);
-        let mut request = self.client.post(&url);
-
-        if let Some(ref token) = self.token {
-            request = request.bearer_auth(token);
-        }
+        let request = self.authorize(self.client.post(&url), owner, repo).await?;
 
         let response = request
             .header("Accept", "application/vnd.github+json")
@@ -264,4 +367,164 @@ pub struct CheckRun {
     pub id: u64,
     pub name: String,
     pub status: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_auth::tests::test_private_key_pem;
+    use chrono::Duration;
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    /// A config aimed at the mock server, carrying no credentials of its own.
+    fn config_for(server: &MockServer) -> Config {
+        Config {
+            app_id: None,
+            private_key: None,
+            webhook_secret: None,
+            github_api_url: server.uri(),
+        }
+    }
+
+    /// Mount the two calls an App makes before it can act: finding the
+    /// installation, then exchanging a JWT for a token.
+    async fn mount_app_handshake(server: &MockServer, installation_id: u64, token: &str) {
+        Mock::given(method("GET"))
+            .and(path("/repos/acme/widgets/installation"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": installation_id
+            })))
+            .mount(server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path(format!(
+                "/app/installations/{installation_id}/access_tokens"
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "token": token,
+                "expires_at": (chrono::Utc::now() + Duration::hours(1)).to_rfc3339(),
+            })))
+            .mount(server)
+            .await;
+    }
+
+    /// A file check that answers only to the expected token.
+    async fn mount_file_check(server: &MockServer, expected_token: &str) {
+        Mock::given(method("HEAD"))
+            .and(path("/repos/acme/widgets/contents/README.adoc"))
+            .and(header(
+                "authorization",
+                format!("Bearer {expected_token}").as_str(),
+            ))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn app_credentials_are_exchanged_for_a_repository_scoped_token() {
+        let server = MockServer::start().await;
+        mount_app_handshake(&server, 42, "ghs_installation").await;
+        // Answers only when the request carries the installation token, so a
+        // failure here means the app JWT leaked through to the repository API.
+        mount_file_check(&server, "ghs_installation").await;
+
+        let mut config = config_for(&server);
+        config.app_id = Some(1234);
+        config.private_key = Some(test_private_key_pem());
+
+        let client = GitHubClient::new(&config);
+        assert!(client.readiness().is_ok());
+        assert_eq!(client.credential_mode(), "GitHub App installation tokens");
+        assert!(client.file_exists("acme", "widgets", "README.adoc").await);
+    }
+
+    #[tokio::test]
+    async fn the_installation_lookup_and_token_are_reused_across_requests() {
+        let server = MockServer::start().await;
+        mount_app_handshake(&server, 42, "ghs_installation").await;
+        mount_file_check(&server, "ghs_installation").await;
+
+        let mut config = config_for(&server);
+        config.app_id = Some(1234);
+        config.private_key = Some(test_private_key_pem());
+        let client = GitHubClient::new(&config);
+
+        assert!(client.file_exists("acme", "widgets", "README.adoc").await);
+        assert!(client.file_exists("acme", "widgets", "README.adoc").await);
+
+        let requests = server.received_requests().await.expect("recorded");
+        let lookups = requests
+            .iter()
+            .filter(|request| request.url.path() == "/repos/acme/widgets/installation")
+            .count();
+        let exchanges = requests
+            .iter()
+            .filter(|request| request.url.path().ends_with("/access_tokens"))
+            .count();
+        assert_eq!(
+            lookups, 1,
+            "the installation lookup is an API call; it must not repeat per request"
+        );
+        assert_eq!(exchanges, 1, "a valid installation token must be reused");
+    }
+
+    #[tokio::test]
+    async fn a_half_configured_app_is_refused_rather_than_downgraded() {
+        let server = MockServer::start().await;
+        let mut config = config_for(&server);
+        config.app_id = Some(1234); // deliberately no private key
+
+        let client = GitHubClient::new(&config);
+        assert_eq!(client.credential_mode(), "misconfigured");
+        let error = client
+            .readiness()
+            .expect_err("an App without a key is unready");
+        assert!(
+            format!("{error:#}").contains("no private key"),
+            "unexpected message: {error:#}"
+        );
+
+        assert!(!client.file_exists("acme", "widgets", "README.adoc").await);
+        assert!(
+            server
+                .received_requests()
+                .await
+                .expect("recorded")
+                .is_empty(),
+            "an unauthenticated request must not be sent as a fallback"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unusable_private_key_is_reported_at_start_up() {
+        let server = MockServer::start().await;
+        let mut config = config_for(&server);
+        config.app_id = Some(1234);
+        config.private_key = Some("this is not a key".to_string());
+
+        let client = GitHubClient::new(&config);
+        let error = client.readiness().expect_err("an unusable key is unready");
+        assert!(
+            format!("{error:#}").contains("unusable"),
+            "unexpected message: {error:#}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_static_token_is_still_used_for_repository_requests() {
+        let server = MockServer::start().await;
+        mount_file_check(&server, "ghs_static").await;
+
+        // Set directly: the static path reads the environment, and mutating
+        // process-wide env vars from a parallel test suite is a race.
+        let mut client = GitHubClient::new(&config_for(&server));
+        client.credentials = Credentials::Static(Some("ghs_static".to_string()));
+
+        assert!(client.readiness().is_ok());
+        assert_eq!(client.credential_mode(), "static token from GITHUB_TOKEN");
+        assert!(client.file_exists("acme", "widgets", "README.adoc").await);
+    }
 }

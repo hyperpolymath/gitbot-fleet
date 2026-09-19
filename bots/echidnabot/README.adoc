@@ -409,7 +409,7 @@ See link:LICENSE[LICENSE] for details.
 
 == Contributing
 
-Contributions welcome! Please see link:CONTRIBUTING.adoc[CONTRIBUTING.adoc] for guidelines.
+Contributions welcome! Please see link:../../.github/CONTRIBUTING.md[../../.github/CONTRIBUTING.md] for guidelines.
 
 == Security
 

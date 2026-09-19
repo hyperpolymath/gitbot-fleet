@@ -83,7 +83,7 @@ cd echidnabot.wiki && git add . && git commit -m "Initial wiki" && git push
 
 * [x] README.adoc
 * [x] ARCHITECTURE.adoc (if present)
-* [x] CONTRIBUTING.adoc
+* [x] ../../.github/CONTRIBUTING.md
 * [x] SECURITY.md
 * [x] CODE_OF_CONDUCT.md
 
