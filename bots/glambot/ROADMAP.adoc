@@ -179,7 +179,7 @@ This roadmap outlines the development plan for glambot, the presentation quality
 
 == Contributing
 
-See link:CONTRIBUTING.md[Contributing Guidelines] for how to contribute to glambot development.
+See link:../../.github/CONTRIBUTING.md[Contributing Guidelines] for how to contribute to glambot development.
 
 == Versioning
 

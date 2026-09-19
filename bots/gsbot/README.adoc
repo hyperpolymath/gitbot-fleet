@@ -316,7 +316,7 @@ just format                  # or: cargo fmt --all
 
 == Contributing
 
-See link:CONTRIBUTING.md[CONTRIBUTING.md] for development guidelines.
+See link:../../.github/CONTRIBUTING.md[CONTRIBUTING.md] for development guidelines.
 
 Key areas:
 

@@ -474,7 +474,7 @@ Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 
 == Contributing
 
-Contributions are welcome. See link:CONTRIBUTING.md[CONTRIBUTING.md] for guidelines.
+Contributions are welcome. See link:../../.github/CONTRIBUTING.md[CONTRIBUTING.md] for guidelines.
 
 == Security
 

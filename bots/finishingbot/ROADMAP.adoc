@@ -154,7 +154,7 @@ This roadmap outlines the development plan for finishing-bot, the release readin
 
 == Contributing
 
-See link:CONTRIBUTING.md[Contributing Guidelines] for how to contribute to finishing-bot development.
+See link:../../.github/CONTRIBUTING.md[Contributing Guidelines] for how to contribute to finishing-bot development.
 
 == Versioning
 
