@@ -279,7 +279,7 @@ sudo ./target/release/hotchocolabot
 [source,bash]
 ----
 # Enter development shell
-guix shell -D -f guix.scm
+guix shell -D -f build/guix.scm
 
 # Build package
 guix build

@@ -566,15 +566,15 @@ state-phase:
 
 # Enter Guix development shell (primary)
 guix-shell:
-    guix shell -D -f guix.scm
+    guix shell -D -f build/guix.scm
 
 # Build with Guix
 guix-build:
-    guix build -f guix.scm
+    guix build -f build/guix.scm
 
 # Enter Guix development shell
 guix-shell:
-    @if [ -f "guix.scm" ]; then guix shell -D -f guix.scm; else echo "No guix.scm"; fi
+    @if [ -f "build/guix.scm" ]; then guix shell -D -f build/guix.scm; else echo "No guix.scm"; fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HYBRID AUTOMATION
