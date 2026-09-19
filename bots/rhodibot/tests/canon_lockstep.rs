@@ -13,7 +13,9 @@
 
 use std::path::PathBuf;
 
-use rhodibot::canon::{Canon, Pin, Tier, VENDORED_CRITERIA, digest_of};
+use rhodibot::canon::profile::{Applicability, GateTable, Profile};
+use rhodibot::canon::requirement::requirement_from;
+use rhodibot::canon::{Canon, Pin, Tier, VENDORED_CRITERIA, VENDORED_GATES, digest_of};
 
 /// The vendored canon as it sits on disk.
 fn canon_path() -> PathBuf {
@@ -125,5 +127,98 @@ fn requirements_are_derivable_from_descriptions() {
         derived.len() > 20 && derived.len() < canon.criterion_count(),
         "some criteria name files and some do not; {} derived looks wrong",
         derived.len()
+    );
+}
+
+/// The vendored gate table as it sits on disk.
+fn gates_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("canon/template-capability-gates.toml")
+}
+
+#[test]
+fn the_gate_table_on_disk_is_the_copy_compiled_into_the_binary() {
+    let on_disk =
+        std::fs::read_to_string(gates_path()).expect("the vendored gate table is readable");
+
+    // Same failure as the criteria: a binary would ask one vocabulary and the
+    // file would answer another.
+    assert_eq!(
+        digest_of(&on_disk),
+        digest_of(VENDORED_GATES),
+        "the vendored gate table and the embedded copy have diverged"
+    );
+
+    let from_disk = GateTable::parse(&on_disk).expect("the file parses");
+    let embedded = GateTable::vendored().expect("the embedded copy parses");
+    assert_eq!(from_disk.known_count(), embedded.known_count());
+    assert_eq!(from_disk.preset_count(), embedded.preset_count());
+    assert_eq!(from_disk.version(), embedded.version());
+}
+
+#[test]
+fn the_pin_describes_the_vendored_gate_table() {
+    let pin = Pin::vendored().expect("the pin parses");
+    pin.verify_gates(VENDORED_GATES).expect("digest matches");
+    pin.verify_gate_counts(&GateTable::vendored().expect("parses"))
+        .expect("shape matches");
+}
+
+#[test]
+fn the_gate_pin_refuses_a_table_that_changed() {
+    let pin = Pin::vendored().expect("the pin parses");
+    // Removing one capability is enough: a profile declaring it would stop
+    // parsing, and criteria gated on it could never apply again.
+    let edited = VENDORED_GATES.replacen("\"plugin\",", "", 1);
+
+    let error = pin
+        .verify_gates(&edited)
+        .expect_err("an edited gate table must be refused");
+    assert!(format!("{error:#}").contains("does not match its pin"));
+}
+
+#[test]
+fn capability_gates_split_the_file_presence_criteria() {
+    let canon = Canon::vendored().expect("the canon parses");
+    let profile = Profile::default();
+
+    let mut scored = Vec::new();
+    let mut inapplicable = Vec::new();
+
+    for criterion in canon.criteria() {
+        if requirement_from(&criterion.desc).is_none() {
+            continue;
+        }
+        match profile.applicability(criterion) {
+            Applicability::Universal => scored.push(criterion.id.clone()),
+            Applicability::NotDeclared(capability) => {
+                inapplicable.push((criterion.id.clone(), capability));
+            }
+            Applicability::Declared(capability) => {
+                unreachable!("nothing is declared, so {capability} cannot be")
+            }
+        }
+    }
+
+    println!("with no profile -- the pilot's five repositories:");
+    println!("  scored     {}", scored.join(" "));
+    for (id, capability) in &inapplicable {
+        println!("  na         {id} (needs {capability})");
+    }
+    println!(
+        "scored {}  na {}  of {} derived",
+        scored.len(),
+        inapplicable.len(),
+        scored.len() + inapplicable.len()
+    );
+
+    assert_eq!(
+        scored.len() + inapplicable.len(),
+        31,
+        "the number of criteria whose description names files changed"
+    );
+    assert!(
+        !inapplicable.is_empty(),
+        "the canon gates some file-presence criteria; a check that scored them anyway would \
+         demand files these repositories have no reason to carry"
     );
 }
