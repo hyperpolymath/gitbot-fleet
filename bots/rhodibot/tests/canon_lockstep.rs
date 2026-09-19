@@ -93,3 +93,37 @@ fn the_rule_set_the_pilot_is_quoted_from() {
     // What a repository with no declared capabilities is measured on at bronze.
     assert_eq!(canon.universal_criteria_up_to(Tier::Bronze).count(), 17);
 }
+
+#[test]
+fn requirements_are_derivable_from_descriptions() {
+    use rhodibot::canon::requirement::requirement_from;
+
+    let canon = Canon::vendored().expect("the canon parses");
+    let mut derived = Vec::new();
+
+    for criterion in canon.criteria() {
+        if let Some(requirement) = requirement_from(&criterion.desc) {
+            derived.push(format!(
+                "  {:<7} {:<8} {}",
+                criterion.id,
+                criterion.tier,
+                requirement.paths().cloned().collect::<Vec<_>>().join(" | ")
+            ));
+        }
+    }
+
+    for line in &derived {
+        println!("{line}");
+    }
+    println!(
+        "filed presence requirements: {} of {} criteria",
+        derived.len(),
+        canon.criterion_count()
+    );
+
+    assert!(
+        derived.len() > 20 && derived.len() < canon.criterion_count(),
+        "some criteria name files and some do not; {} derived looks wrong",
+        derived.len()
+    );
+}

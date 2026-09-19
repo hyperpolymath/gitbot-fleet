@@ -39,6 +39,8 @@
 //! The failure mode to avoid is the quiet one: a rule set that silently shrinks
 //! and reports every repository as compliant.
 
+pub mod requirement;
+
 use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
