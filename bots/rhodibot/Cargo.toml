@@ -30,6 +30,15 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 toml = "1.1.2+spec-1.1.0"
 
+# Crypto for GitHub App JWT signing (RS256).
+#
+# `ring` and `base64` are deliberately taken from versions already present in
+# Cargo.lock via rustls/reqwest, so this adds no new package to the graph --
+# which matters because CI builds with `--locked` and a regenerated lock would
+# otherwise have to be trusted sight-unseen.
+ring = "0.17"
+base64 = "0.22"
+
 # Crypto for webhook verification
 hmac = "0.13.0"
 sha2 = "0.11.0"

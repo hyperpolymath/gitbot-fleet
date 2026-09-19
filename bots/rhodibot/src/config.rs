@@ -17,16 +17,18 @@ use anyhow::Result;
 /// Application configuration
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// GitHub App ID (used for JWT auth when running as a GitHub App).
+    /// GitHub App ID.
     ///
-    /// TODO: Implement GitHub App JWT authentication using app_id + private_key
-    /// to generate installation tokens. Currently only GITHUB_TOKEN env var is used.
+    /// Together with [`Self::private_key`] this enables App authentication;
+    /// see [`crate::app_auth`], which signs the RS256 JWT and exchanges it for
+    /// installation tokens. When either is absent the REST client falls back to
+    /// a `GITHUB_TOKEN`, which is single-repository and does not expire.
     pub app_id: Option<u64>,
 
-    /// GitHub App private key PEM (used for JWT auth when running as a GitHub App).
+    /// GitHub App private key PEM (PKCS#1 or PKCS#8).
     ///
-    /// TODO: Implement GitHub App JWT authentication using app_id + private_key
-    /// to generate installation tokens. Currently only GITHUB_TOKEN env var is used.
+    /// Read from a file path or `GITHUB_PRIVATE_KEY`, held in memory, and never
+    /// logged or serialised.
     pub private_key: Option<String>,
 
     /// Webhook secret for HMAC-SHA256 signature verification
