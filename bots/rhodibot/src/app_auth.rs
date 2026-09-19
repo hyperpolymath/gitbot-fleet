@@ -25,6 +25,7 @@
 //!   five minutes early, so a request never races the expiry.
 //! - Errors carry a status code and a context string, never a credential.
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use anyhow::{Context, Result, anyhow};
@@ -51,7 +52,6 @@ const TOKEN_REFRESH_MARGIN_SECS: i64 = 300;
 /// A cached installation token and the moment it stops being usable.
 #[derive(Clone)]
 struct CachedToken {
-    installation_id: u64,
     token: String,
     expires_at: DateTime<Utc>,
 }
@@ -76,7 +76,19 @@ pub struct AppAuth {
     key_pair: RsaKeyPair,
     client: reqwest::Client,
     api_url: String,
-    cached: Mutex<Option<CachedToken>>,
+    /// Installation tokens by installation ID.
+    ///
+    /// A single slot would thrash: an App is installed once per owner, so a
+    /// sweep across owners would re-mint a token on nearly every request.
+    /// Tokens are per installation and last an hour.
+    tokens: Mutex<HashMap<u64, CachedToken>>,
+    /// `owner/repo` to installation ID.
+    ///
+    /// The lookup is an API call billed to the App's own rate-limit budget,
+    /// which is far smaller than an installation's, so it is remembered rather
+    /// than repeated per request. Bounded by the number of repositories the App
+    /// is installed on.
+    installations: Mutex<HashMap<String, u64>>,
 }
 
 impl AppAuth {
@@ -96,7 +108,8 @@ impl AppAuth {
             key_pair,
             client: reqwest::Client::new(),
             api_url: api_url.trim_end_matches('/').to_string(),
-            cached: Mutex::new(None),
+            tokens: Mutex::new(HashMap::new()),
+            installations: Mutex::new(HashMap::new()),
         })
     }
 
@@ -116,6 +129,16 @@ impl AppAuth {
     /// This is how a webhook delivery learns which installation to act as,
     /// since the payload's `installation.id` is not always present.
     pub async fn installation_for_repository(&self, owner: &str, repo: &str) -> Result<u64> {
+        let key = format!("{owner}/{repo}");
+        if let Some(installation_id) = self
+            .installations
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(&key).copied())
+        {
+            return Ok(installation_id);
+        }
+
         let jwt = self.app_jwt()?;
         let url = format!("{}/repos/{owner}/{repo}/installation", self.api_url);
         let response = self
@@ -138,6 +161,11 @@ impl AppAuth {
             .json()
             .await
             .context("parsing the installation lookup response")?;
+
+        if let Ok(mut cache) = self.installations.lock() {
+            cache.insert(key, installation.id);
+        }
+
         Ok(installation.id)
     }
 
@@ -176,23 +204,22 @@ impl AppAuth {
             .await
             .context("parsing the installation token response")?;
 
-        if let Ok(mut cache) = self.cached.lock() {
-            *cache = Some(CachedToken {
+        if let Ok(mut cache) = self.tokens.lock() {
+            cache.insert(
                 installation_id,
-                token: body.token.clone(),
-                expires_at: body.expires_at,
-            });
+                CachedToken {
+                    token: body.token.clone(),
+                    expires_at: body.expires_at,
+                },
+            );
         }
 
         Ok(body.token)
     }
 
     fn cached_token(&self, installation_id: u64) -> Option<String> {
-        let cache = self.cached.lock().ok()?;
-        let entry = cache.as_ref()?;
-        if entry.installation_id != installation_id {
-            return None;
-        }
+        let cache = self.tokens.lock().ok()?;
+        let entry = cache.get(&installation_id)?;
         let remaining = entry.expires_at.signed_duration_since(Utc::now());
         if remaining <= ChronoDuration::seconds(TOKEN_REFRESH_MARGIN_SECS) {
             return None;
@@ -326,8 +353,10 @@ fn der_len(len: usize) -> Vec<u8> {
     out
 }
 
+/// Compiles only under test, but is reachable from the tests of the other
+/// modules in this crate, which need a usable key to configure an App.
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use ring::signature::{RSA_PKCS1_2048_8192_SHA256, RsaPublicKeyComponents};
 
@@ -409,6 +438,15 @@ mod tests {
             .map(|chunk| String::from_utf8_lossy(chunk).into_owned())
             .collect();
         format!("{begin}\n{}\n{end}\n", wrapped.join("\n"))
+    }
+
+    /// The test key as a PEM, in the PKCS#1 form GitHub hands out.
+    ///
+    /// Exposed to the rest of the crate (tests only) so that tests of the
+    /// client wiring can configure a GitHub App without duplicating the key.
+    pub(crate) fn test_private_key_pem() -> String {
+        let der = hex::decode(TEST_KEY_PKCS1_DER_HEX).expect("hex");
+        test_key_pem("RSA PRIVATE KEY", &der)
     }
 
     #[test]
