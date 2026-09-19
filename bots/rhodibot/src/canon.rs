@@ -241,6 +241,11 @@ impl Canon {
 
             // A multi-line list other than a category's criteria: skip it.
             if value == "[" && !(section == "category" && key == "criteria") {
+                ensure!(
+                    section != "category",
+                    "line {line_no}: unknown category field {key:?}; \
+                     this parser is older than the canon it is reading"
+                );
                 skipping_list = true;
                 continue;
             }
