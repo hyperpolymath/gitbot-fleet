@@ -22,19 +22,32 @@ env:
   OPENSSL_NO_VENDOR: '1'
 jobs:
   rust:
-    name: build · test · clippy
+    name: build · test · clippy (${{ matrix.module }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # rhodibot was missing from this matrix, so the crate that ships the
-        # GitHub App had never been built, tested or linted in CI. Its
-        # verification was whatever a human remembered to run locally.
-        crate: [robot-repo-automaton, shared-context, dashboard, rhodibot]
+        # `module` is the label used in the job name; `dir` is where the crate
+        # actually lives. They differ for rhodibot, which sits under bots/ --
+        # naming it `rhodibot` alone sent the job looking for a top-level
+        # directory that does not exist.
+        #
+        # rhodibot was missing entirely until 2026-09-19, so the crate that
+        # implements the GitHub App had never been built, tested or linted in
+        # CI; its verification was whatever a human remembered to run locally.
+        include:
+          - module: robot-repo-automaton
+            dir: robot-repo-automaton
+          - module: shared-context
+            dir: shared-context
+          - module: dashboard
+            dir: dashboard
+          - module: rhodibot
+            dir: bots/rhodibot
     defaults:
       run:
-        working-directory: ${{ matrix.crate }}
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Ensure clippy + rustfmt components
