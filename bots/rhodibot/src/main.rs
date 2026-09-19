@@ -20,6 +20,10 @@ use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
+use rhodibot::canon::Canon;
+use rhodibot::canon::local;
+use rhodibot::canon::profile::GateTable;
+use rhodibot::canon::report::{CanonReport, FailOn};
 use rhodibot::config;
 use rhodibot::github::GitHubClient;
 use rhodibot::rsr;
@@ -64,6 +68,43 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Check a repository against the RSR canon's file-presence criteria.
+    ///
+    /// Reads the canon vendored beside the rules (never a hardcoded list),
+    /// skips the criteria the repository's `.machine_readable/rsr-profile.a2ml`
+    /// does not declare a capability for, and reports what is present where the
+    /// canon records it, present elsewhere, present under a location the canon
+    /// has retired, or absent.
+    ///
+    /// **Advisory by default**: exits 0 whatever it finds. The canon names
+    /// hypatia's `rsr-conformance` the single normative checker, so a second
+    /// opinion should not claim authority it does not have. Pass `--fail-on`
+    /// to make it gate CI anyway.
+    ///
+    /// Works unauthenticated on public repositories; set `GITHUB_TOKEN` to
+    /// check private ones or lift the rate limit.
+    Canon {
+        /// Repository owner (user or org), e.g. `hyperpolymath`
+        #[arg(long)]
+        owner: Option<String>,
+
+        /// Repository name, e.g. `ubicity`
+        #[arg(long)]
+        repo: Option<String>,
+
+        /// Check a local checkout instead of a GitHub repository
+        #[arg(long, conflicts_with_all = ["owner", "repo"])]
+        path: Option<String>,
+
+        /// Output format
+        #[arg(long, default_value = "pretty", value_parser = ["pretty", "json"])]
+        format: String,
+
+        /// Exit non-zero when a finding at or above this severity is present
+        #[arg(long, default_value = "none", value_parser = ["none", "relocated", "deprecated", "missing"])]
+        fail_on: String,
+    },
+
     /// Run a one-shot RSR compliance check against a remote repository and exit.
     ///
     /// Uses the GitHub REST API (honours the `GITHUB_TOKEN` env var for rate
@@ -127,6 +168,19 @@ async fn main() -> Result<()> {
         return run_check(&config, owner, repo, format).await;
     }
 
+    // The canon check: the same rule set the estate is scored against, read
+    // from the canon itself rather than from a list in this file.
+    if let Some(Command::Canon {
+        owner,
+        repo,
+        path,
+        format,
+        fail_on,
+    }) = &cli.command
+    {
+        return run_canon(&config, owner, repo, path, format, fail_on).await;
+    }
+
     info!("Starting Rhodibot v{}", env!("CARGO_PKG_VERSION"));
 
     // Refuse to start with credentials that cannot work. A half-configured App
@@ -162,6 +216,92 @@ async fn main() -> Result<()> {
 
 /// One-shot RSR compliance check for CI. Prints a report and exits non-zero
 /// when required checks fail (so the caller's job fails too).
+/// The file paths a repository's profile may live at, in preference order.
+const PROFILE_PATHS: [&str; 2] = [
+    ".machine_readable/rsr-profile.a2ml",
+    "machine-readable/rsr-profile.a2ml",
+];
+
+/// Check one repository against the canon.
+///
+/// The rules come from the vendored canon; the applicability comes from the
+/// repository's own profile; the classification comes from the verdict module.
+/// Nothing about the rule set is decided here.
+async fn run_canon(
+    config: &Config,
+    owner: &Option<String>,
+    repo: &Option<String>,
+    path: &Option<String>,
+    format: &str,
+    fail_on: &str,
+) -> Result<()> {
+    let fail_on = FailOn::parse(fail_on)?;
+
+    let (subject, files, profile_source, from_git) = match (owner, repo, path) {
+        (Some(owner), Some(repo), None) => {
+            rhodibot::sanitize::validate_owner_repo(owner, repo)?;
+            let client = GitHubClient::new(config);
+            let files = client.tree_paths(owner, repo).await?;
+
+            // The profile decides which criteria apply, so a failure to read it
+            // must not pass as "declares nothing".
+            let mut profile = None;
+            for candidate in PROFILE_PATHS {
+                if let Some(text) = client
+                    .get_file_content_if_present(owner, repo, candidate)
+                    .await?
+                {
+                    profile = Some(text);
+                    break;
+                }
+            }
+
+            (format!("{owner}/{repo}"), files, profile, true)
+        }
+        (None, None, Some(path)) => {
+            let source = local::read(std::path::Path::new(path))?;
+            let from_git = source.from_git();
+            (path.clone(), source.files, source.profile, from_git)
+        }
+        _ => anyhow::bail!("give either --owner and --repo, or --path: one repository, one way"),
+    };
+
+    let canon = Canon::vendored()?;
+    let gates = GateTable::vendored()?;
+    let report = CanonReport::build(&subject, &canon, &gates, &files, profile_source.as_deref())?;
+
+    if format == "json" {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        if !from_git && path.is_some() {
+            // A walked list includes untracked files, which can satisfy a
+            // criterion by accident. Say so rather than let the reader assume
+            // the tracked set.
+            println!(
+                "warning: git was not available, so this is a walk of the working directory -- \
+                 untracked and build files are included."
+            );
+        }
+        print!("{}", report.render());
+    }
+
+    if fail_on.breached_by(&report) {
+        let counts = report.findings_by_severity();
+        println!(
+            "\n--fail-on {}: {}",
+            fail_on.as_str(),
+            counts
+                .iter()
+                .map(|(severity, count)| format!("{count} {severity}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
 async fn run_check(config: &Config, owner: &str, repo: &str, format: &str) -> Result<()> {
     rhodibot::sanitize::validate_owner_repo(owner, repo)?;
 

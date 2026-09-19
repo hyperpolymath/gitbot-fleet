@@ -181,6 +181,106 @@ impl GitHubClient {
         Ok(response.json().await?)
     }
 
+    /// Every file path in a repository's default branch.
+    ///
+    /// One request, not one per path: the canon's file-presence criteria ask
+    /// about a few dozen paths and a repository holds thousands of files, so
+    /// asking path by path would spend the whole rate limit on one repository.
+    ///
+    /// A truncated response is an error, not a short answer. GitHub truncates
+    /// the tree at 100,000 entries; a truncated list is missing files, and a
+    /// missing file reads as an absent one, which would manufacture findings
+    /// against a repository that has the file. Refusing is the honest option --
+    /// there is no way to tell "absent" from "not fetched" in a partial tree.
+    pub async fn tree_paths(&self, owner: &str, repo: &str) -> Result<Vec<String>> {
+        let repository = self.get_repository(owner, repo).await?;
+        self.tree_paths_at(owner, repo, &repository.default_branch)
+            .await
+    }
+
+    /// Every file path at one ref.
+    pub async fn tree_paths_at(
+        &self,
+        owner: &str,
+        repo: &str,
+        reference: &str,
+    ) -> Result<Vec<String>> {
+        sanitize::validate_file_path(reference)?;
+        let url = format!(
+            "{}/repos/{}/{}/git/trees/{}?recursive=1",
+            self.base_url, owner, repo, reference
+        );
+        let request = self.authorize(self.client.get(&url), owner, repo).await?;
+
+        let response = request
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "rhodibot")
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            bail!(
+                "could not read the tree of {owner}/{repo} at {reference}: {}",
+                response.status()
+            );
+        }
+
+        let tree: TreeResponse = response.json().await?;
+        if tree.truncated {
+            bail!(
+                "{owner}/{repo} at {reference} is too large for GitHub to list in one response, \
+                 so the file list is incomplete. A partial list cannot tell an absent file from \
+                 an unfetched one, and reporting the difference as a finding would be wrong. \
+                 Check this repository with `--path` against a local clone instead."
+            );
+        }
+
+        Ok(tree
+            .tree
+            .into_iter()
+            .filter(|entry| entry.entry_type == "blob")
+            .map(|entry| entry.path)
+            .collect())
+    }
+
+    /// Read a file, treating "not found" as `None` rather than an error.
+    ///
+    /// The distinction matters for optional files: an absent
+    /// `.machine_readable/rsr-profile.a2ml` means a repository declares no
+    /// capabilities, which is an answer. Only a 404 is absence; anything else
+    /// is a real failure and is reported as one.
+    pub async fn get_file_content_if_present(
+        &self,
+        owner: &str,
+        repo: &str,
+        path: &str,
+    ) -> Result<Option<String>> {
+        sanitize::validate_file_path(path)?;
+        let url = format!(
+            "{}/repos/{}/{}/contents/{}",
+            self.base_url, owner, repo, path
+        );
+        let request = self.authorize(self.client.get(&url), owner, repo).await?;
+
+        let response = request
+            .header("Accept", "application/vnd.github.raw+json")
+            .header("User-Agent", "rhodibot")
+            .send()
+            .await?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            bail!(
+                "could not read {path} from {owner}/{repo}: {}",
+                response.status()
+            );
+        }
+
+        Ok(Some(response.text().await?))
+    }
+
     /// Check if a file exists
     ///
     /// The `path` parameter is validated against path traversal before use.
@@ -323,6 +423,22 @@ pub struct License {
 }
 
 /// Content item from the GitHub contents API (directory listings).
+/// A tree listing, as the git trees API returns it.
+#[derive(Debug, Deserialize)]
+struct TreeResponse {
+    tree: Vec<TreeEntry>,
+    /// Absent from the payload when false.
+    #[serde(default)]
+    truncated: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct TreeEntry {
+    path: String,
+    #[serde(rename = "type")]
+    entry_type: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ContentItem {
     pub name: String,
@@ -511,6 +627,130 @@ mod tests {
             format!("{error:#}").contains("unusable"),
             "unexpected message: {error:#}"
         );
+    }
+
+    /// A repository whose default branch is `main`, as `/repos/{o}/{r}` reports.
+    async fn mount_repository(server: &MockServer) {
+        Mock::given(method("GET"))
+            .and(path("/repos/acme/widgets"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": 1,
+                "name": "widgets",
+                "full_name": "acme/widgets",
+                "description": null,
+                "default_branch": "main",
+                "language": null,
+                "topics": [],
+                "license": null
+            })))
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn the_tree_listing_returns_files_and_not_directories() {
+        let server = MockServer::start().await;
+        mount_repository(&server).await;
+        Mock::given(method("GET"))
+            .and(path("/repos/acme/widgets/git/trees/main"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "truncated": false,
+                "tree": [
+                    { "path": "src", "type": "tree" },
+                    { "path": "src/main.rs", "type": "blob" },
+                    { "path": "README.adoc", "type": "blob" },
+                    { "path": ".machine_readable/descriptiles/STATE.a2ml", "type": "blob" }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::new(&config_for(&server));
+        let paths = client
+            .tree_paths("acme", "widgets")
+            .await
+            .expect("the listing parses");
+
+        assert_eq!(
+            paths,
+            vec![
+                "src/main.rs",
+                "README.adoc",
+                ".machine_readable/descriptiles/STATE.a2ml"
+            ],
+            "directories are not files: counting `src` would not tell a check anything, and a \
+             criterion naming a directory is satisfied by what is inside it"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_truncated_tree_is_an_error_rather_than_a_short_list() {
+        let server = MockServer::start().await;
+        mount_repository(&server).await;
+        Mock::given(method("GET"))
+            .and(path("/repos/acme/widgets/git/trees/main"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "truncated": true,
+                "tree": [{ "path": "README.adoc", "type": "blob" }]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::new(&config_for(&server));
+        let error = client
+            .tree_paths("acme", "widgets")
+            .await
+            .expect_err("a partial tree must not be reported as a complete one");
+
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("incomplete") && message.contains("--path"),
+            "the refusal must say why it matters and what to do instead: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_absent_optional_file_is_none_and_a_failure_is_an_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path(
+                "/repos/acme/widgets/contents/.machine_readable/rsr-profile.a2ml",
+            ))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Not Found"
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path(
+                "/repos/acme/widgets/contents/.machine_readable/STATE.a2ml",
+            ))
+            .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+            .mount(&server)
+            .await;
+
+        let client = GitHubClient::new(&config_for(&server));
+
+        assert_eq!(
+            client
+                .get_file_content_if_present(
+                    "acme",
+                    "widgets",
+                    ".machine_readable/rsr-profile.a2ml"
+                )
+                .await
+                .expect("a 404 is an answer, not a failure"),
+            None,
+            "a repository with no profile declares no capabilities"
+        );
+
+        let error = client
+            .get_file_content_if_present("acme", "widgets", ".machine_readable/STATE.a2ml")
+            .await
+            .expect_err("a server error must not read as \"the file is absent\"");
+        assert!(format!("{error:#}").contains("500"), "{error:#}");
     }
 
     #[tokio::test]
