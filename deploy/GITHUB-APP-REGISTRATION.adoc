@@ -1,0 +1,100 @@
+= Registering the rhodibot GitHub App
+:toc:
+
+This sheet is filled in by hand in the browser: GitHub has no API to create an
+App (the GraphQL schema has no `createGitHubApp` mutation, and the REST API can
+only *list* and *read* Apps). Everything else about the deployment is
+reproducible from the repository; this page is the one manual step, so it is
+written down as a form to fill in rather than a memory to rely on.
+
+Record the values as you go. Two of them -- the App ID and the private key --
+cannot be recovered in this form later.
+
+== 1. Where
+
+https://github.com/settings/apps/new -- a personal App, which is what an owner
+of this estate needs. An organisation App is created at
+`https://github.com/organizations/<org>/settings/apps/new` and behaves the same
+otherwise, except that the App's owner controls it.
+
+== 2. The form
+
+[cols="1,1,2"]
+|===
+| Field | Value | Why
+| GitHub App name | `rhodibot` | Must be globally unique across GitHub; if taken, `rhodibot-<owner>`
+| Homepage URL | `https://github.com/hyperpolymath/gitbot-fleet` | Required by the form; unused by the bot
+| Webhook URL | `https://rhodibot.<your-domain>/webhook` | The tunnel ingress rule, `/webhook` exactly
+| Webhook secret | 32+ random bytes, e.g. `openssl rand -hex 32` | Goes in `rhodibot.env` as `GITHUB_WEBHOOK_SECRET`; without it the origin accepts unsigned deliveries
+|===
+
+Then, under *Repository permissions*:
+
+[cols="1,2,2"]
+|===
+| Permission | Access | Used for
+| Metadata | Read-only | Mandatory once any other permission is set
+| Checks | Read and write | `createCheckRun` / `updateCheckRun` -- the compliance result on a commit
+| Issues | Read and write | `createIssue` for drift that is not tied to a commit
+| Contents | Read-only | Reading repository trees and file contents
+| Pull requests | Read-only | Reviewing the PRs the fixers open
+|===
+
+Nothing else. Every unused permission is a permission that can be abused by a
+mistake in this codebase, and the bot has no use for administration, actions,
+secrets, or organisation-level access. If a future rule needs more, add it then,
+in its own commit, with the reason.
+
+Under *Subscribe to events*: `push`, `pull_request`, `repository`,
+`installation`, `installation_repositories`. The handler ignores everything else
+by name (the match in `bots/rhodibot/src/main.rs` is exhaustive in intent: an
+unknown event is logged and dropped).
+
+== 3. The two values you cannot get back
+
+*App ID* (top of the App's settings page, "About"):
+
+[source]
+----
+GITHUB_APP_ID = ______________
+----
+
+*Private key*: "Generate a private key" downloads a `.pem` exactly once. GitHub
+stores only the public half; a lost key means generating a new one and
+redeploying, which is survivable but avoidable.
+
+[source]
+----
+downloaded at: ______________
+fingerprint:   openssl rsa -in rhodibot.<date>.private-key.pem -pubout | sha256sum
+stored to /etc/fleet/rhodibot-app.pem, 0600 root:root
+----
+
+The PEM is in PKCS#1 form (`BEGIN RSA PRIVATE KEY`). `AppAuth` also accepts
+PKCS#8, so converting it first is optional, not required.
+
+== 4. Install
+
+"Install App" -> the account -> *Only select repositories*. Start with one
+repository that has no drift, so that the first deliveries produce boring
+results and a wrongly-scoped installation is visible immediately.
+
+Do not choose "All repositories" to begin with: it is the largest possible
+blast radius for a bot whose checks have never run against a real installation.
+
+== 5. Confirm the service picked it up
+
+[source,bash]
+----
+systemctl restart rhodibot
+journalctl -u rhodibot -n 20 --no-pager      # "GitHub credentials: GitHub App installation tokens"
+curl -sS https://rhodibot.<your-domain>/health
+----
+
+== 6. Clean up
+
+* The key is installed at `/etc/fleet/rhodibot-app.pem`; delete the copy in
+  `~/Downloads` once the password-manager copy is confirmed.
+* Keep the webhook secret in the password manager too: it is shown again in the
+  App's settings, so it is recoverable, but only to someone with account access.
+* `GITHUB_APP_ID` is not secret and belongs in the deployment notes.

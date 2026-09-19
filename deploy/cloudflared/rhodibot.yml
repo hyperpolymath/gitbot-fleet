@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Cloudflare Tunnel ingress for rhodibot.
+#
+# The tunnel is the *origin* for GitHub's webhook delivery: GitHub must reach a
+# public HTTPS endpoint, and this host has no inbound exposure. cloudflared dials
+# out to Cloudflare's edge and reverses the flow, so no port is opened on the
+# firewall and no certificate is managed here.
+#
+# Replace these two placeholders before installing (see RHODIBOT-DEPLOYMENT.adoc):
+#   <TUNNEL-UUID>   from `cloudflared tunnel create rhodibot`
+#   <your-domain>   a zone you control on Cloudflare
+#
+# Verify with:
+#   cloudflared tunnel ingress validate --config deploy/cloudflared/rhodibot.yml
+#   cloudflared tunnel ingress rule https://rhodibot.<your-domain>/health
+
+tunnel: <TUNNEL-UUID>
+credentials-file: /etc/cloudflared/rhodibot.json
+
+# rhodibot binds loopback only (see --bind in bots/rhodibot/src/main.rs): the
+# origin is a local process, not a public interface.
+originRequest:
+  connectTimeout: 30s
+  # Webhook deliveries carry a small JSON body; anything larger is not a
+  # delivery GitHub would send, and there is no reason to buffer it.
+  noHappyEyeballs: false
+
+ingress:
+  # Only the two routes the service needs. GitHub delivers webhooks to
+  # POST /webhook and nothing else; /health is here so the tunnel can be
+  # checked without shell access to the host.
+  - hostname: rhodibot.<your-domain>
+    path: ^/webhook$
+    service: http://127.0.0.1:3000
+
+  - hostname: rhodibot.<your-domain>
+    path: ^/health$
+    service: http://127.0.0.1:3000
+
+  # Deliberately *not* exposed: GET /api/check/{owner}/{repo}, which spends
+  # GitHub API quota and reports on repositories. It is an operator endpoint,
+  # reachable over an SSH tunnel or from the host, and it stays that way.
+  # Everything else on this hostname is a 404, including anything added to the
+  # router later without a matching rule here -- the default is denial.
+  - hostname: rhodibot.<your-domain>
+    service: http_status:404
+
+  # Any other hostname pointing at this tunnel (a stale DNS record, say) also
+  # gets nothing.
+  - service: http_status:404

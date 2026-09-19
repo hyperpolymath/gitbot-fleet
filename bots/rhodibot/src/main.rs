@@ -36,6 +36,16 @@ struct Cli {
     #[arg(short, long, env = "PORT", default_value = "3000")]
     port: u16,
 
+    /// Address to bind.
+    ///
+    /// Loopback by default: the intended deployment fronts this process with a
+    /// Cloudflare Tunnel (or another reverse proxy) on the same host, so the
+    /// webhook port has no business being reachable from the network. Set
+    /// `--bind 0.0.0.0` (or `BIND_ADDR=0.0.0.0`) to serve directly, which is
+    /// what earlier versions did unconditionally.
+    #[arg(long, env = "BIND_ADDR", default_value = "127.0.0.1")]
+    bind: String,
+
     /// GitHub App ID
     #[arg(long, env = "GITHUB_APP_ID")]
     app_id: Option<u64>,
@@ -141,7 +151,7 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     // Start server
-    let addr = format!("0.0.0.0:{}", cli.port);
+    let addr = format!("{}:{}", cli.bind, cli.port);
     let listener = TcpListener::bind(&addr).await?;
     info!("Listening on {}", addr);
 
