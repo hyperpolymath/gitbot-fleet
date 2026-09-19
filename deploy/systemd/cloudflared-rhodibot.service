@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MPL-2.0
+# Systemd service for the Cloudflare Tunnel that fronts rhodibot.
+#
+# The tunnel is the public origin: cloudflared holds an outbound connection to
+# Cloudflare's edge and forwards requests to the local origin. No inbound port
+# is opened and no certificate is provisioned on this host.
+
+[Unit]
+Description=Cloudflare Tunnel for rhodibot
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+After=network-online.target rhodibot.service
+Wants=network-online.target
+# rhodibot.service declares `Before=` this unit; a tunnel with no origin behind
+# it would answer 502 to GitHub, which counts as a failed delivery.
+Requires=rhodibot.service
+
+[Service]
+Type=simple
+User=cloudflared
+Group=cloudflared
+
+# Credentials file is /etc/cloudflared/rhodibot.json, mode 0600
+# cloudflared:cloudflared -- the tunnel's own secret, not a Cloudflare API token.
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/cloudflared/rhodibot.yml tunnel run
+
+Restart=always
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

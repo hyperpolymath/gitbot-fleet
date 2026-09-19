@@ -1,0 +1,139 @@
+= Deploying rhodibot behind a Cloudflare Tunnel
+:toc:
+
+Rhodibot needs a public HTTPS endpoint because that is where GitHub delivers
+webhooks, but the host it runs on does not need to be reachable. A Cloudflare
+Tunnel gives us the first without the second: `cloudflared` dials out to
+Cloudflare's edge and forwards requests back down that connection to a loopback
+origin. No inbound port, no certificate to renew on this host.
+
+The pieces:
+
+[cols="1,2"]
+|===
+| `deploy/systemd/rhodibot.service` | the bot itself, bound to `127.0.0.1:3000`
+| `deploy/systemd/cloudflared-rhodibot.service` | the tunnel
+| `deploy/cloudflared/rhodibot.yml` | ingress: `/webhook` and `/health`, everything else 404
+| `deploy/rhodibot.env.example` | the App credentials, as environment variables
+| `deploy/verify-rhodibot.sh` | proof of life, from the outside in
+|===
+
+== 1. Register the GitHub App first
+
+The App ID, private key and webhook secret all feed the service, and GitHub will
+start delivering webhooks as soon as the App exists. Do
+xref:GITHUB-APP-REGISTRATION.adoc[the registration sheet] before this, or accept
+a few minutes of failed deliveries while you catch up -- they are redeliverable
+from the App's "Advanced" tab, which is only mildly annoying at this scale.
+
+== 2. Build and install the binary
+
+[source,bash]
+----
+cargo build --locked --release --manifest-path bots/rhodibot/Cargo.toml
+install -D -m 0755 bots/rhodibot/target/release/rhodibot /opt/gitbot-fleet/bots/rhodibot/rhodibot
+install -d -m 0755 /opt/gitbot-fleet/bots/rhodibot
+----
+
+== 3. Place the credentials
+
+[source,bash]
+----
+install -d -m 0750 /etc/fleet
+install -m 0600 -o root -g root ~/Downloads/rhodibot.<date>.private-key.pem /etc/fleet/rhodibot-app.pem
+install -m 0640 -o root -g fleet /dev/null /etc/fleet/rhodibot.env
+$EDITOR /etc/fleet/rhodibot.env      # from deploy/rhodibot.env.example
+----
+
+The private key is downloadable exactly once. Put it in the password manager
+before it is deleted from the download directory.
+
+Note: `ProtectHome=true` in the unit means the key cannot live under `/home`,
+and `ProtectSystem=strict` makes the rest of the filesystem read-only, so
+`/etc/fleet` is the only sensible home for it.
+
+== 4. Create the tunnel
+
+[source,bash]
+----
+cloudflared tunnel login                       # browser step, picks the zone
+cloudflared tunnel create rhodibot             # prints the UUID and writes the credentials file
+install -D -m 0600 -o cloudflared -g cloudflared \
+  ~/.cloudflared/<TUNNEL-UUID>.json /etc/cloudflared/rhodibot.json
+install -D -m 0644 \
+  deploy/cloudflared/rhodibot.yml /etc/cloudflared/rhodibot.yml
+$EDITOR /etc/cloudflared/rhodibot.yml          # replace <TUNNEL-UUID> and <your-domain>
+cloudflared tunnel ingress validate --config /etc/cloudflared/rhodibot.yml
+----
+
+Then point DNS at the tunnel and check the routing table before starting
+anything:
+
+[source,bash]
+----
+cloudflared tunnel route dns rhodibot rhodibot.<your-domain>
+cloudflared tunnel ingress rule https://rhodibot.<your-domain>/health
+cloudflared tunnel ingress rule https://rhodibot.<your-domain>/api/check/x/y   # must be http_status:404
+----
+
+== 5. Start, in order
+
+[source,bash]
+----
+install -m 0644 deploy/systemd/rhodibot.service deploy/systemd/cloudflared-rhodibot.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now rhodibot.service
+journalctl -u rhodibot -n 20 --no-pager    # expect: "GitHub credentials: GitHub App installation tokens"
+systemctl enable --now cloudflared-rhodibot.service
+----
+
+If the credential line says `misconfigured`, the App ID and key do not agree --
+the service exits rather than serving unauthenticated traffic, and `systemd`
+stops retrying after five attempts. Fix `rhodibot.env` and restart.
+
+== 6. Verify from the outside
+
+[source,bash]
+----
+RHODIBOT_HOST=rhodibot.<your-domain> ./deploy/verify-rhodibot.sh
+----
+
+Every line must read `PASS`; `SKIP` means the check could not be made, not that
+it passed. The check that matters most is the unsigned `POST /webhook`, which
+proves both that the tunnel reaches the origin and that the webhook secret is
+set -- without a secret the handler accepts anything, and the tunnel would
+forward it to GitHub's own write path.
+
+== 7. Prove a delivery end to end
+
+In the App's settings, "Advanced" -> recent deliveries -> pick one -> *Redeliver*.
+Then:
+
+[source,bash]
+----
+journalctl -u rhodibot -f
+----
+
+A `push` delivery should log `Received webhook event: push`. Under ten seconds
+of silence means the tunnel is not reaching the origin; see below.
+
+== Troubleshooting
+
+[cols="1,2"]
+|===
+| 502 from Cloudflare | `rhodibot.service` is not running, or is not on the port the ingress rule names |
+| 401 on every delivery | webhook secret in the App and in `rhodibot.env` differ |
+| 404 on a valid delivery | the ingress rule does not match the path GitHub used |
+| `misconfigured` in the journal | App ID and private key do not belong together; the key must be the PEM as downloaded |
+| App requests 403 or 404 | the installation is missing the repository, or the App's permissions were changed and not approved |
+| rate limits hit during a sweep | an installation token is being minted per request; check `start-up` logs for the credential mode, and see the caching notes in `bots/rhodibot/src/app_auth.rs` |
+|===
+
+== Notes
+
+* The origin is loopback-only (`--bind 127.0.0.1`). To serve without a tunnel,
+  pass `--bind 0.0.0.0`, and put the webhook secret and a firewall in front of it.
+* `/api/check/{owner}/{repo}` is deliberately not published: it spends GitHub
+  API quota and reports on repositories, and neither is a public service.
+* The bot holds no state -- no database, no writable paths -- so backups are
+  limited to `/etc/fleet` and the App registration.

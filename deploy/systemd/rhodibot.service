@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: MPL-2.0
+# Systemd service for rhodibot (RSR compliance bot)
+#
+# Certificate-free origin: this process binds 127.0.0.1 and is reached through
+# cloudflared-rhodibot.service. Nothing here listens on a public interface.
+
+[Unit]
+Description=Rhodibot - RSR compliance bot
+Documentation=https://github.com/hyperpolymath/gitbot-fleet
+After=network-online.target
+Wants=network-online.target
+# The tunnel is useless without the origin; ordering makes start-up deterministic.
+Before=cloudflared-rhodibot.service
+
+[Service]
+Type=simple
+User=fleet
+Group=fleet
+WorkingDirectory=/opt/gitbot-fleet/bots/rhodibot
+
+# Defaults first, then the file, so /etc/fleet/rhodibot.env wins.
+Environment="RUST_LOG=rhodibot=info,tower_http=info"
+
+# /etc/fleet/rhodibot.env holds, at 0640 root:fleet:
+#   GITHUB_APP_ID=<app id>
+#   GITHUB_PRIVATE_KEY_PATH=/etc/fleet/rhodibot-app.pem
+#   GITHUB_WEBHOOK_SECRET=<secret from the App's webhook settings>
+#   RUST_LOG=rhodibot=info,tower_http=info
+# `-` makes the file optional, so the service starts and fails loudly in the
+# journal rather than refusing to start with no explanation.
+EnvironmentFile=-/etc/fleet/rhodibot.env
+
+ExecStart=/opt/gitbot-fleet/bots/rhodibot/rhodibot --bind 127.0.0.1
+
+# Start-up logs one line naming the credential mode -- "GitHub App installation
+# tokens", or "misconfigured" followed by a non-zero exit. The credential itself
+# is never logged. Check it with:
+#   journalctl -u rhodibot -n 20
+
+Restart=on-failure
+RestartSec=5s
+# A misconfigured App exits non-zero at start-up. Without a limit, systemd would
+# restart it forever and bury the reason in the journal.
+StartLimitBurst=5
+StartLimitIntervalSec=60s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+# The bot holds no state: the filesystem is read-only, /home is out of reach
+# (so the App key cannot live there), and nothing needs writing anywhere.
+# The key and this configuration are read from /etc/fleet.
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target
