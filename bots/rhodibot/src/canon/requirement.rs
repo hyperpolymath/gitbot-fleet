@@ -50,7 +50,7 @@ impl Requirement {
         self.all_of.iter().flatten()
     }
 
-    /// How many files have to be present, at minimum.
+    /// How many path groups must be satisfied.
     pub fn group_count(&self) -> usize {
         self.all_of.len()
     }
@@ -70,8 +70,9 @@ impl Requirement {
 
 /// Read a requirement from a criterion description.
 ///
-/// `None` means the description does not name files this can resolve, which is
-/// an answer: the criterion is not a file-presence question.
+/// `None` means no unambiguous path requirement can be derived. This includes
+/// descriptions that name no paths and alternatives that cannot all be
+/// resolved; callers should leave those criteria to another check.
 pub fn requirement_from(desc: &str) -> Option<Requirement> {
     // Parentheses hold explanation or exclusion -- "(NOT LICENSE.txt)",
     // "(Keep a Changelog)", "(.adoc primary per estate doc policy)". None of it

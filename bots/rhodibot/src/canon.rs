@@ -409,11 +409,10 @@ impl Pin {
 
     /// Check a parsed canon against the shape this pin describes.
     ///
-    /// The digest proves the bytes are the ones recorded; these counts catch a
-    /// copy that is byte-identical to *nothing* -- a hand-edited file whose
-    /// digest was casually updated along with it, or a parse that silently lost
-    /// records. A rule set that shrinks is the failure that matters here, so the
-    /// size of the rule set is pinned too.
+    /// This complements [`Self::verify`], which checks the source digest. The
+    /// counts catch a hand-edited file whose digest was updated along with it,
+    /// or a parse that silently lost records. A rule set that shrinks is the
+    /// failure that matters here, so the size of the rule set is pinned too.
     pub fn verify_counts(&self, canon: &Canon) -> Result<()> {
         let source = &self.source;
         ensure!(
@@ -437,7 +436,7 @@ impl Pin {
         Ok(())
     }
 
-    /// Check a canon source against this pin.
+    /// Check a canon source's SHA-256 digest against this pin.
     pub fn verify(&self, source: &str) -> Result<()> {
         let actual = digest_of(source);
         let expected = self.source.sha256.to_lowercase();
@@ -476,6 +475,7 @@ struct Builder {
 }
 
 impl Builder {
+    /// Validate the accumulated sections and build a canon.
     fn finish(self, digest: String) -> Result<Canon> {
         ensure!(
             !self.version.is_empty(),
@@ -676,7 +676,7 @@ fn strip_comment(line: &str) -> &str {
     line
 }
 
-/// Split `key = value`, requiring whitespace or nothing around the `=`.
+/// Split at the first `=` and trim whitespace from the key and value.
 fn split_assignment(line: &str) -> Option<(&str, &str)> {
     let (key, value) = line.split_once('=')?;
     Some((key.trim(), value.trim()))
