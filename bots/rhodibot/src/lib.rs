@@ -2,8 +2,8 @@
 
 //! Rhodibot - RSR Compliance Bot library
 //!
-//! Provides the RSR compliance checking engine, GitHub API client,
-//! and webhook handling for the rhodibot GitHub App.
+//! Provides the RSR compliance checking engine, GitHub REST and GraphQL
+//! clients, GitHub App authentication, and webhook handling.
 //!
 //! # Security
 //!
@@ -11,9 +11,11 @@
 //! being used in API calls or markdown output. Tokens are never logged.
 
 #![forbid(unsafe_code)]
+pub mod app_auth;
 pub mod config;
 pub mod fleet;
 pub mod github;
+pub mod graphql;
 pub mod rsr;
 pub mod sanitize;
 pub mod webhook;

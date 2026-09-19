@@ -2501,6 +2501,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64",
  "chrono",
  "clap",
  "dotenvy",
@@ -2510,6 +2511,7 @@ dependencies = [
  "hmac",
  "minijinja",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "sha2",
