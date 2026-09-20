@@ -49,7 +49,7 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v7.0.1
       - name: Canon pin drift (rhodibot)
         # The rule set is copied from hyperpolymath/standards and pinned by
         # digest. This fails when the canon has moved since that pin, so a rule
@@ -79,7 +79,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - run: bash scripts/tests/dispatch-paths.sh
@@ -92,7 +92,7 @@ jobs:
       run:
         working-directory: bots/gsbot
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - name: Install native TLS build dependencies
