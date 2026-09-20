@@ -416,6 +416,12 @@ impl Pin {
     pub fn verify_counts(&self, canon: &Canon) -> Result<()> {
         let source = &self.source;
         ensure!(
+            canon.version == source.criteria_version,
+            "pin names criteria version {}, this copy declares {}",
+            source.criteria_version,
+            canon.version
+        );
+        ensure!(
             canon.categories.len() == source.categories,
             "pinned canon has {} categories, this copy has {}",
             source.categories,
