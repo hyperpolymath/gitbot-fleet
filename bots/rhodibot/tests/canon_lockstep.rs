@@ -122,8 +122,12 @@ fn requirements_are_derivable_from_descriptions() {
     );
 
     assert!(
-        derived.len() > 20 && derived.len() < canon.criterion_count(),
-        "some criteria name files and some do not; {} derived looks wrong",
-        derived.len()
+        derived.len() < canon.criterion_count(),
+        "some criteria name no file at all"
+    );
+    assert_eq!(
+        derived.len(),
+        31,
+        "file-presence requirements derived from criterion descriptions"
     );
 }
