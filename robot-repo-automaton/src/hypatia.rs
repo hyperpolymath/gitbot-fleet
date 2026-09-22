@@ -205,8 +205,8 @@ impl CicdHyperAClient {
 
     /// Fetch a ruleset from the registry.
     ///
-    /// Tries the Hypatia API first; falls back to loading rules from the
-    /// local verisimdb-data recipes directory if the API is unavailable.
+    /// Tries the Hypatia API first; falls back to local recipes when the request
+    /// fails, returns a non-success status, or does not contain a valid ruleset.
     pub async fn fetch_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
         tracing::info!(
             "Fetching ruleset: {} from {}",
@@ -268,6 +268,8 @@ impl CicdHyperAClient {
         self.load_recipes_from(ruleset_id, &recipes_dirs)
     }
 
+    /// Load recipes from the first existing candidate directory, or use the
+    /// built-in RSR rules when no valid recipes are found.
     fn load_recipes_from(
         &self,
         ruleset_id: &str,

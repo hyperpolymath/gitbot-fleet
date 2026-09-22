@@ -424,10 +424,10 @@ impl Fixer {
         })
     }
 
-    /// Modify a file with safety checks and rollback support
+    /// Modify a file with safety checks.
     ///
-    /// Reads the modification specification from the fix, applies it to the file,
-    /// and rolls back if the modification produces invalid content.
+    /// Reads the modification specification from the fix and rejects invalid
+    /// structured content before atomically replacing the original file.
     fn apply_modify(
         &self,
         target_path: &Path,
@@ -542,11 +542,8 @@ impl Fixer {
 
     /// Create a file with template expansion
     ///
-    /// Supports template variables:
-    /// - `gitbot-fleet` - Repository name
-    /// - `hyperpolymath` - Repository owner
-    /// - `{{LICENSE}}` - License identifier
-    /// - `{{YEAR}}` - Current year
+    /// Supports the literal `gitbot-fleet` as a repository-name placeholder,
+    /// plus `{{LICENSE}}`, `{{YEAR}}`, `{{AUTHOR}}`, and `{{EMAIL}}`.
     fn apply_create(
         &self,
         target_path: &Path,
@@ -938,6 +935,8 @@ fn resolve_from_existing_ancestor(path: &Path) -> Result<PathBuf> {
     }
 }
 
+/// Return whether the character at byte offset `index` is escaped by an odd run
+/// of backslashes. `index` must be a UTF-8 boundary.
 fn is_escaped(value: &str, index: usize) -> bool {
     value[..index]
         .bytes()

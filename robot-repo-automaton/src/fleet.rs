@@ -157,12 +157,10 @@ impl FleetCoordinator {
         }
     }
 
-    /// Report fix outcomes to Hypatia's neurosymbolic learning loop.
+    /// Record a fix outcome as a fleet finding for Hypatia's learning loop.
     ///
-    /// When robot-repo-automaton applies a fix (or fails to apply one),
-    /// this method records the outcome so the learning engine can adjust
-    /// confidence thresholds and propose new rules based on real-world
-    /// success/failure rates.
+    /// If connected, records the pattern, result, fix type, and confidence in
+    /// the shared context. If disconnected, this is a no-op.
     pub fn report_fix_outcome(
         &mut self,
         pattern: &str,

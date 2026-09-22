@@ -34,7 +34,8 @@ use std::path::PathBuf;
 pub struct PanelId(pub String);
 
 impl PanelId {
-    /// Create a new panel ID, validating PascalCase format.
+    /// Create a panel ID whose non-reserved name starts with an uppercase letter
+    /// and contains only alphanumeric characters.
     pub fn new(name: &str) -> Result<Self, PanelError> {
         if name.is_empty() {
             return Err(PanelError::InvalidName("Panel name cannot be empty".into()));

@@ -85,6 +85,9 @@ USES_FILE="$(mktemp "${TMPDIR:-/tmp}/check-lock-sync.uses.XXXXXX")"
 RAW_USES_FILE="$(mktemp "${TMPDIR:-/tmp}/check-lock-sync.raw-uses.XXXXXX")"
 trap 'rm -f "$USES_FILE" "$RAW_USES_FILE"' EXIT
 
+# Print each valid scalar `uses` value from the workflow at $1, one per line.
+# Return non-zero if parsing fails or a value is empty, non-string, or contains
+# a tab or line break.
 extract_uses_yq() {
   local workflow="$1"
 
@@ -97,6 +100,9 @@ extract_uses_yq() {
   yq -r '.. | select(type == "!!map" and has("uses")) | .uses | select(type == "!!str")' "$workflow"
 }
 
+# Print each valid scalar `uses` value from the workflow at $1, one per line.
+# Return non-zero if parsing fails or a value is empty, non-string, or contains
+# a tab or line break.
 extract_uses_ruby() {
   local workflow="$1"
 
@@ -106,6 +112,8 @@ require "yaml"
 workflow = ARGV.fetch(0)
 document = YAML.safe_load(File.read(workflow), aliases: true)
 
+# Traverse a parsed workflow and emit its valid scalar `uses` values.
+# Abort if a value is empty, non-string, or contains a tab or line break.
 def emit_uses(node, workflow)
   case node
   when Hash

@@ -279,7 +279,10 @@ impl PreCommitChecker {
         Ok(violations)
     }
 
-    /// Check for secrets in staged files
+    /// Return secret findings for staged files.
+    ///
+    /// Secret scanning is not yet implemented, so this currently returns an
+    /// empty list.
     pub fn check_secrets(&self) -> Result<Vec<String>> {
         let findings = Vec::new();
 
