@@ -143,10 +143,9 @@ fn split_on<'a>(text: &'a str, separators: &[&str]) -> Vec<&'a str> {
     // Iterated by character, not by byte: the canon's descriptions carry em
     // dashes, and stepping through bytes would cut them in half.
     while index < text.len() {
-        let ch = text[index..]
-            .chars()
-            .next()
-            .expect("index is a char boundary");
+        let Some(ch) = text[index..].chars().next() else {
+            break;
+        };
 
         match ch {
             '{' => depth += 1,

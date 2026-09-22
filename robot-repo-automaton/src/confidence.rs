@@ -308,21 +308,36 @@ fn is_protected_file(target: &str) -> bool {
 
     // Exact protected filenames (case-insensitive check on basename)
     let protected_names = [
-        "TODO.md", "TODO.adoc", "TODO.txt",
-        "BLOCKERS.md", "BLOCKERS.adoc",
-        "CHANGELOG.md", "CHANGELOG.adoc",
-        "README.md", "README.adoc", "README.rst",
-        "TOPOLOGY.md", "TOPOLOGY.adoc",
-        "ARCHITECTURE.md", "ARCHITECTURE.adoc",
-        "ROADMAP.md", "ROADMAP.adoc",
+        "TODO.md",
+        "TODO.adoc",
+        "TODO.txt",
+        "BLOCKERS.md",
+        "BLOCKERS.adoc",
+        "CHANGELOG.md",
+        "CHANGELOG.adoc",
+        "README.md",
+        "README.adoc",
+        "README.rst",
+        "TOPOLOGY.md",
+        "TOPOLOGY.adoc",
+        "ARCHITECTURE.md",
+        "ARCHITECTURE.adoc",
+        "ROADMAP.md",
+        "ROADMAP.adoc",
     ];
-    if protected_names.iter().any(|&p| p.eq_ignore_ascii_case(basename)) {
+    if protected_names
+        .iter()
+        .any(|&p| p.eq_ignore_ascii_case(basename))
+    {
         return true;
     }
 
     // Protected extensions — checkpoint and manifest files
     let protected_extensions = [".scm", ".a2ml"];
-    if protected_extensions.iter().any(|ext| basename.ends_with(ext)) {
+    if protected_extensions
+        .iter()
+        .any(|ext| basename.ends_with(ext))
+    {
         return true;
     }
 
@@ -630,7 +645,10 @@ mod tests {
 
         assert_eq!(config.classify_fix(&issue, &fix), ConfidenceLevel::High);
         // And the decision should be AutoApply
-        assert!(matches!(config.decide(&issue, &fix), FixDecision::AutoApply));
+        assert!(matches!(
+            config.decide(&issue, &fix),
+            FixDecision::AutoApply
+        ));
     }
 
     #[test]
@@ -654,11 +672,13 @@ mod tests {
             assert_eq!(
                 config.classify_fix(&issue, &fix),
                 ConfidenceLevel::Medium,
-                "Expected Medium at confidence={}", confidence
+                "Expected Medium at confidence={}",
+                confidence
             );
             assert!(
                 matches!(config.decide(&issue, &fix), FixDecision::Propose { .. }),
-                "Expected Propose at confidence={}", confidence
+                "Expected Propose at confidence={}",
+                confidence
             );
         }
     }
@@ -674,7 +694,8 @@ mod tests {
             assert_eq!(
                 config.classify_fix(&issue, &fix),
                 ConfidenceLevel::Low,
-                "Expected Low at confidence={}", confidence
+                "Expected Low at confidence={}",
+                confidence
             );
         }
     }
@@ -686,16 +707,25 @@ mod tests {
         // High confidence Delete -> AutoApply
         let issue_high = make_issue("TEST", 0.97);
         let fix = make_fix(FixAction::Delete, "stale.txt");
-        assert!(matches!(config.decide(&issue_high, &fix), FixDecision::AutoApply));
+        assert!(matches!(
+            config.decide(&issue_high, &fix),
+            FixDecision::AutoApply
+        ));
 
         // Medium confidence Delete -> Propose
         let issue_medium = make_issue("TEST", 0.80);
-        assert!(matches!(config.decide(&issue_medium, &fix), FixDecision::Propose { .. }));
+        assert!(matches!(
+            config.decide(&issue_medium, &fix),
+            FixDecision::Propose { .. }
+        ));
 
         // Low confidence Delete -> also Propose (not Skip, since Low >= Low)
         // (Skip only occurs when the action is somehow forced below the propose floor,
         // which is not reachable in current logic — Low always Proposes)
         let issue_low = make_issue("TEST", 0.30);
-        assert!(matches!(config.decide(&issue_low, &fix), FixDecision::Propose { .. }));
+        assert!(matches!(
+            config.decide(&issue_low, &fix),
+            FixDecision::Propose { .. }
+        ));
     }
 }

@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Tests for error catalog parsing
 
-use robot_repo_automaton::catalog::{
-    DetectionMethod, ErrorCatalog, FixAction, Severity,
-};
+use robot_repo_automaton::catalog::{DetectionMethod, ErrorCatalog, FixAction, Severity};
 
 const SAMPLE_CATALOG: &str = r#"
 (define error-catalog
@@ -77,12 +75,21 @@ fn test_parse_detection() {
     let catalog = ErrorCatalog::parse(SAMPLE_CATALOG).expect("Should parse sample catalog");
 
     let first = &catalog.error_types[0];
-    assert!(matches!(first.detection.method, DetectionMethod::FileExistence));
+    assert!(matches!(
+        first.detection.method,
+        DetectionMethod::FileExistence
+    ));
     assert!(first.detection.files.contains(&"test.txt".to_string()));
 
     let second = &catalog.error_types[1];
-    assert!(matches!(second.detection.method, DetectionMethod::ContentMatch));
-    assert_eq!(second.detection.condition, Some("contains API_KEY".to_string()));
+    assert!(matches!(
+        second.detection.method,
+        DetectionMethod::ContentMatch
+    ));
+    assert_eq!(
+        second.detection.condition,
+        Some("contains API_KEY".to_string())
+    );
 }
 
 #[test]

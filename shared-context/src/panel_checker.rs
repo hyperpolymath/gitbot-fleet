@@ -261,8 +261,7 @@ pub fn pcc_results_to_findings(results: &[PccPanelResult], bot: BotId) -> Vec<Fi
 /// that consume PanelManifest (e.g. finishbot checking `can_advance()`)
 /// to work with live PCC data.
 pub fn pcc_result_to_manifest(result: &PccPanelResult) -> PanelManifest {
-    let id = PanelId::new(&result.panel_id)
-        .unwrap_or_else(|_| PanelId(result.panel_id.clone()));
+    let id = PanelId::new(&result.panel_id).unwrap_or_else(|_| PanelId(result.panel_id.clone()));
 
     let phase = match result.state.as_deref() {
         Some("releasable") => PanelPhase::Active,
