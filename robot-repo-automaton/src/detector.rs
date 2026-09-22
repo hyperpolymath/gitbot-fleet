@@ -178,10 +178,7 @@ impl Detector {
                 description: error_type.description.clone(),
                 affected_files: existing,
                 confidence: 1.0, // File existence is deterministic
-                suggested_fix: format!(
-                    "{:?} {}",
-                    error_type.fix.action, error_type.fix.target
-                ),
+                suggested_fix: format!("{:?} {}", error_type.fix.action, error_type.fix.target),
                 commit_message: error_type.commit_message.clone(),
             })
         } else {
@@ -322,10 +319,7 @@ impl Detector {
                 ),
                 affected_files: affected,
                 confidence: 0.95,
-                suggested_fix: format!(
-                    "{:?} {}",
-                    error_type.fix.action, error_type.fix.target
-                ),
+                suggested_fix: format!("{:?} {}", error_type.fix.action, error_type.fix.target),
                 commit_message: error_type.commit_message.clone(),
             })
         }
@@ -398,11 +392,7 @@ mod tests {
     fn test_file_exists() {
         let temp = TempDir::new().unwrap();
         std::fs::create_dir_all(temp.path().join(".github/workflows")).unwrap();
-        std::fs::write(
-            temp.path().join(".github/workflows/ci.yml"),
-            "name: CI",
-        )
-        .unwrap();
+        std::fs::write(temp.path().join(".github/workflows/ci.yml"), "name: CI").unwrap();
 
         let detector = Detector::new(temp.path().to_path_buf()).unwrap();
         assert!(detector.file_exists(".github/workflows/ci.yml"));

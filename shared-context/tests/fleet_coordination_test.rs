@@ -15,7 +15,16 @@ fn test_bot_registration() {
     let mut ctx = Context::new("test-repo", PathBuf::from("/tmp/test-repo"));
     ctx.register_all_bots();
 
-    let bots = [BotId::Rhodibot, BotId::Echidnabot, BotId::Sustainabot, BotId::Glambot, BotId::Seambot, BotId::Finishbot, BotId::RobotRepoAutomaton, BotId::Hypatia];
+    let bots = [
+        BotId::Rhodibot,
+        BotId::Echidnabot,
+        BotId::Sustainabot,
+        BotId::Glambot,
+        BotId::Seambot,
+        BotId::Finishbot,
+        BotId::RobotRepoAutomaton,
+        BotId::Hypatia,
+    ];
 
     for bot in &bots {
         assert!(ctx.executions.contains_key(bot));
@@ -28,7 +37,12 @@ fn test_finding_publication() {
     ctx.register_all_bots();
     ctx.start_bot(BotId::RobotRepoAutomaton).unwrap();
 
-    let finding = Finding::new(BotId::RobotRepoAutomaton, "TEST-FINDING", Severity::Warning, "Test finding description");
+    let finding = Finding::new(
+        BotId::RobotRepoAutomaton,
+        "TEST-FINDING",
+        Severity::Warning,
+        "Test finding description",
+    );
     ctx.add_finding(finding);
 
     let findings = ctx.findings_from(BotId::RobotRepoAutomaton);
@@ -43,8 +57,18 @@ fn test_cross_bot_findings() {
     ctx.start_bot(BotId::Echidnabot).unwrap();
     ctx.start_bot(BotId::RobotRepoAutomaton).unwrap();
 
-    ctx.add_finding(Finding::new(BotId::Echidnabot, "PROOF-VERIFIED", Severity::Info, "Contract verified successfully"));
-    ctx.add_finding(Finding::new(BotId::RobotRepoAutomaton, "COMPLIANCE-VIOLATION", Severity::Error, "Missing LICENSE file"));
+    ctx.add_finding(Finding::new(
+        BotId::Echidnabot,
+        "PROOF-VERIFIED",
+        Severity::Info,
+        "Contract verified successfully",
+    ));
+    ctx.add_finding(Finding::new(
+        BotId::RobotRepoAutomaton,
+        "COMPLIANCE-VIOLATION",
+        Severity::Error,
+        "Missing LICENSE file",
+    ));
 
     assert_eq!(ctx.findings_from(BotId::Echidnabot).len(), 1);
     assert_eq!(ctx.findings_from(BotId::RobotRepoAutomaton).len(), 1);
@@ -57,7 +81,13 @@ fn test_session_lifecycle() {
     ctx.register_all_bots();
 
     ctx.start_bot(BotId::Seambot).unwrap();
-    assert!(ctx.executions.get(&BotId::Seambot).unwrap().started_at.is_some());
+    assert!(
+        ctx.executions
+            .get(&BotId::Seambot)
+            .unwrap()
+            .started_at
+            .is_some()
+    );
 
     ctx.complete_bot(BotId::Seambot, 5, 2, 10).unwrap();
     let exec = ctx.executions.get(&BotId::Seambot).unwrap();
@@ -75,6 +105,18 @@ fn test_tier_hierarchy() {
     ctx.start_bot(BotId::Seambot).unwrap();
     ctx.start_bot(BotId::RobotRepoAutomaton).unwrap();
 
-    assert!(ctx.executions.get(&BotId::Hypatia).unwrap().started_at.is_some());
-    assert!(ctx.executions.get(&BotId::RobotRepoAutomaton).unwrap().started_at.is_some());
+    assert!(
+        ctx.executions
+            .get(&BotId::Hypatia)
+            .unwrap()
+            .started_at
+            .is_some()
+    );
+    assert!(
+        ctx.executions
+            .get(&BotId::RobotRepoAutomaton)
+            .unwrap()
+            .started_at
+            .is_some()
+    );
 }

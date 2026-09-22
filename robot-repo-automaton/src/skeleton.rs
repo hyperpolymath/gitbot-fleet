@@ -144,7 +144,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         emit(dir.path()).unwrap();
         let drift = check(dir.path()).unwrap();
-        assert!(drift.is_empty(), "freshly emitted skeleton drifted: {drift:?}");
+        assert!(
+            drift.is_empty(),
+            "freshly emitted skeleton drifted: {drift:?}"
+        );
     }
 
     #[test]

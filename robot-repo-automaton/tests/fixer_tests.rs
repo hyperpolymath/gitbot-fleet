@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Tests for fix application - delete, modify, create, rollback
 
+use robot_repo_automaton::catalog::Severity;
 use robot_repo_automaton::catalog::{Fix, FixAction};
 use robot_repo_automaton::detector::DetectedIssue;
-use robot_repo_automaton::catalog::Severity;
 use robot_repo_automaton::fixer::Fixer;
 use tempfile::TempDir;
 
@@ -423,8 +423,10 @@ fn test_create_fix_is_idempotent() {
 
     // Content must not have been overwritten or doubled
     let content_after_second = std::fs::read_to_string(&file_path).unwrap();
-    assert_eq!(content_after_first, content_after_second,
-        "File content changed on second create — not idempotent");
+    assert_eq!(
+        content_after_first, content_after_second,
+        "File content changed on second create — not idempotent"
+    );
 }
 
 #[test]
@@ -454,8 +456,10 @@ fn test_modify_fix_is_idempotent() {
     let result2 = fixer.apply(&issue, &fix).unwrap();
     assert!(result2.success, "Second modify should succeed (idempotent)");
     let content_v2 = std::fs::read_to_string(&file_path).unwrap();
-    assert_eq!(content_v1, content_v2,
-        "File content changed on second modify — not idempotent");
+    assert_eq!(
+        content_v1, content_v2,
+        "File content changed on second modify — not idempotent"
+    );
 }
 
 // =========================================================================
@@ -478,7 +482,10 @@ fn test_path_traversal_delete_rejected() {
     let issue = make_issue("SEC-001");
 
     // Attempt to delete a file using a path traversal sequence
-    let traversal = format!("../../{}/sentinel.txt", outer.path().file_name().unwrap().to_str().unwrap());
+    let traversal = format!(
+        "../../{}/sentinel.txt",
+        outer.path().file_name().unwrap().to_str().unwrap()
+    );
     let fix = Fix {
         action: FixAction::Delete,
         target: traversal,
@@ -491,12 +498,19 @@ fn test_path_traversal_delete_rejected() {
     // Must fail with a security error, not succeed
     assert!(!result.success);
     assert!(
-        result.error.as_deref().unwrap_or("").contains("outside the repository"),
+        result
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("outside the repository"),
         "Expected path traversal error, got: {:?}",
         result.error
     );
     // Sentinel file must be untouched
-    assert!(sentinel.exists(), "Sentinel file was deleted — path traversal succeeded");
+    assert!(
+        sentinel.exists(),
+        "Sentinel file was deleted — path traversal succeeded"
+    );
 }
 
 #[test]
@@ -507,7 +521,10 @@ fn test_path_traversal_create_rejected() {
     let fixer = Fixer::new(temp.path().to_path_buf(), false);
     let issue = make_issue("SEC-002");
 
-    let traversal = format!("../../../{}/injected.txt", outer.path().file_name().unwrap().to_str().unwrap());
+    let traversal = format!(
+        "../../../{}/injected.txt",
+        outer.path().file_name().unwrap().to_str().unwrap()
+    );
     let fix = Fix {
         action: FixAction::Create,
         target: traversal,
@@ -519,7 +536,11 @@ fn test_path_traversal_create_rejected() {
     let result = fixer.apply(&issue, &fix).unwrap();
     assert!(!result.success);
     assert!(
-        result.error.as_deref().unwrap_or("").contains("outside the repository"),
+        result
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("outside the repository"),
         "Expected path traversal error, got: {:?}",
         result.error
     );
@@ -535,7 +556,10 @@ fn test_path_traversal_modify_rejected() {
     let fixer = Fixer::new(temp.path().to_path_buf(), false);
     let issue = make_issue("SEC-003");
 
-    let traversal = format!("../../{}/victim.conf", outer.path().file_name().unwrap().to_str().unwrap());
+    let traversal = format!(
+        "../../{}/victim.conf",
+        outer.path().file_name().unwrap().to_str().unwrap()
+    );
     let fix = Fix {
         action: FixAction::Modify,
         target: traversal,
@@ -547,13 +571,20 @@ fn test_path_traversal_modify_rejected() {
     let result = fixer.apply(&issue, &fix).unwrap();
     assert!(!result.success);
     assert!(
-        result.error.as_deref().unwrap_or("").contains("outside the repository"),
+        result
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("outside the repository"),
         "Expected path traversal error, got: {:?}",
         result.error
     );
     // Original file must be untouched
     let content = std::fs::read_to_string(&victim).unwrap();
-    assert_eq!(content, "original=true\n", "Victim file was modified — path traversal succeeded");
+    assert_eq!(
+        content, "original=true\n",
+        "Victim file was modified — path traversal succeeded"
+    );
 }
 
 #[test]
@@ -574,6 +605,9 @@ fn test_path_within_repo_is_not_rejected() {
 
     let result = fixer.apply(&issue, &fix).unwrap();
     // A legitimate in-repo path must succeed
-    assert!(result.success, "Legitimate in-repo path was incorrectly rejected");
+    assert!(
+        result.success,
+        "Legitimate in-repo path was incorrectly rejected"
+    );
     assert!(!file_path.exists());
 }

@@ -11,11 +11,11 @@
 
 use crate::detector::DetectedIssue;
 use crate::error::{Error, Result};
+use chrono;
+use dirs;
 use gitbot_shared_context::{BotId, Context, Finding, Severity as FleetSeverity};
 use std::path::PathBuf;
 use tracing::{debug, info};
-use chrono;
-use dirs;
 
 /// Fleet coordinator for robot-repo-automaton
 pub struct FleetCoordinator {
@@ -47,13 +47,25 @@ impl FleetCoordinator {
     }
 
     /// Disconnect from fleet (mark robot-repo-automaton as complete)
-    pub fn disconnect(&mut self, findings_count: usize, errors_count: usize, files_analyzed: usize) -> Result<()> {
+    pub fn disconnect(
+        &mut self,
+        findings_count: usize,
+        errors_count: usize,
+        files_analyzed: usize,
+    ) -> Result<()> {
         if let Some(ref mut ctx) = self.context {
-            info!("Disconnecting from gitbot-fleet (findings: {}, errors: {}, files: {})",
-                  findings_count, errors_count, files_analyzed);
+            info!(
+                "Disconnecting from gitbot-fleet (findings: {}, errors: {}, files: {})",
+                findings_count, errors_count, files_analyzed
+            );
 
-            ctx.complete_bot(BotId::RobotRepoAutomaton, findings_count, errors_count, files_analyzed)
-                .map_err(|e| Error::Internal(format!("Failed to complete bot: {}", e)))?;
+            ctx.complete_bot(
+                BotId::RobotRepoAutomaton,
+                findings_count,
+                errors_count,
+                files_analyzed,
+            )
+            .map_err(|e| Error::Internal(format!("Failed to complete bot: {}", e)))?;
         }
 
         // Persist session to disk (after mutable borrow is released)
@@ -122,7 +134,10 @@ impl FleetCoordinator {
                     BotId::RobotRepoAutomaton,
                     "COMPLIANCE-FIXED",
                     FleetSeverity::Info,
-                    &format!("Compliance issues automatically fixed in {}", file.display()),
+                    &format!(
+                        "Compliance issues automatically fixed in {}",
+                        file.display()
+                    ),
                 )
                 .with_rule_name("Automated Compliance Fix")
                 .with_category("compliance-fix")
@@ -165,7 +180,11 @@ impl FleetCoordinator {
             let finding = Finding::new(
                 BotId::RobotRepoAutomaton,
                 "FIX-OUTCOME",
-                if success { FleetSeverity::Info } else { FleetSeverity::Warning },
+                if success {
+                    FleetSeverity::Info
+                } else {
+                    FleetSeverity::Warning
+                },
                 &format!(
                     "Fix {} for pattern '{}' (confidence: {})",
                     outcome_label, pattern, confidence
@@ -281,18 +300,16 @@ mod tests {
         let mut coordinator = FleetCoordinator::new();
         coordinator.connect("test-repo", "/tmp/test-repo").unwrap();
 
-        let issues = vec![
-            DetectedIssue {
-                error_type_id: "MISSING-LICENSE".to_string(),
-                error_name: "Missing License File".to_string(),
-                severity: Severity::High,
-                description: "Repository missing LICENSE file".to_string(),
-                affected_files: vec![PathBuf::from(".")],
-                confidence: 1.0,
-                suggested_fix: "Add LICENSE file".to_string(),
-                commit_message: "Add LICENSE file".to_string(),
-            },
-        ];
+        let issues = vec![DetectedIssue {
+            error_type_id: "MISSING-LICENSE".to_string(),
+            error_name: "Missing License File".to_string(),
+            severity: Severity::High,
+            description: "Repository missing LICENSE file".to_string(),
+            affected_files: vec![PathBuf::from(".")],
+            confidence: 1.0,
+            suggested_fix: "Add LICENSE file".to_string(),
+            commit_message: "Add LICENSE file".to_string(),
+        }];
 
         coordinator.publish_detections(&issues).unwrap();
 
