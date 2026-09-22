@@ -15,6 +15,13 @@ updates:
   # open-PR limit applies to the fleet as a whole, rather than once per bot.
   # Grouping by dependency name updates a shared crate across every affected
   # project in one PR instead of opening one PR per Cargo.lock.
+    ignore:
+      # HOLD: github/codeql-action at v4.38.0 (SHA-pinned). v4.38.1 fails
+      # GitHub workflow-startup validation estate-wide (nexia-list#100;
+      # SHA-form re-bump bypassed versions-scoped ignores - nexia-list#101).
+      # Hold until upstream clears 4.38.1 or a new release verifies green.
+      - dependency-name: "github/codeql-action"
+
   - package-ecosystem: "cargo"
     directories:
       - "/robot-repo-automaton"
