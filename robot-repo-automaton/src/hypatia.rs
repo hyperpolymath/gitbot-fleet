@@ -639,6 +639,9 @@ impl CicdHyperAClient {
 }
 
 /// Convert a verisimdb-data recipe JSON to a Rule.
+///
+/// Returns `None` unless the recipe has a string `id` and either a string
+/// `file_glob` or `pattern`.
 fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     let id = recipe.get("id")?.as_str()?.to_string();
     let name = recipe
