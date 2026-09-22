@@ -76,6 +76,75 @@ if [ "${#WORKFLOWS[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# Workflow files are YAML, not line-oriented configuration.  In particular,
+# `uses` may be a quoted key or occur in a flow mapping, neither of which a
+# line regex can reliably discover.  Extract every scalar `uses` value with a
+# YAML parser before the lockfile comparison.  A parser failure is fatal: a
+# green lock check with an omitted reference is worse than no check at all.
+USES_FILE="$(mktemp "${TMPDIR:-/tmp}/check-lock-sync.uses.XXXXXX")"
+RAW_USES_FILE="$(mktemp "${TMPDIR:-/tmp}/check-lock-sync.raw-uses.XXXXXX")"
+trap 'rm -f "$USES_FILE" "$RAW_USES_FILE"' EXIT
+
+extract_uses_yq() {
+  local workflow="$1"
+
+  # Values outside this representation cannot be safely handed to awk as one
+  # record per reference.  They are not valid GitHub Action references either.
+  if ! yq -e '[.. | select(type == "!!map" and has("uses")) | .uses | select(type != "!!str" or . == "" or test("[\\t\\r\\n]"))] | length == 0' "$workflow" >/dev/null; then
+    echo "check-lock-sync: FATAL: cannot safely inspect uses: values in $workflow" >&2
+    return 1
+  fi
+  yq -r '.. | select(type == "!!map" and has("uses")) | .uses | select(type == "!!str")' "$workflow"
+}
+
+extract_uses_ruby() {
+  local workflow="$1"
+
+  ruby - "$workflow" <<'RUBY'
+require "yaml"
+
+workflow = ARGV.fetch(0)
+document = YAML.safe_load(File.read(workflow), aliases: true)
+
+def emit_uses(node, workflow)
+  case node
+  when Hash
+    node.each do |key, value|
+      if key == "uses"
+        unless value.is_a?(String) && !value.empty? && !value.match?(/[\t\r\n]/)
+          abort "check-lock-sync: FATAL: cannot safely inspect uses: values in #{workflow}"
+        end
+        puts value
+      end
+      emit_uses(value, workflow)
+    end
+  when Array
+    node.each { |value| emit_uses(value, workflow) }
+  end
+end
+
+emit_uses(document, workflow)
+RUBY
+}
+
+if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -qi 'mikefarah/yq'; then
+  EXTRACT_USES=extract_uses_yq
+elif command -v ruby >/dev/null 2>&1 && ruby -e 'require "yaml"' >/dev/null 2>&1; then
+  EXTRACT_USES=extract_uses_ruby
+else
+  echo "check-lock-sync: FATAL: need mikefarah/yq or Ruby with Psych to parse workflow YAML" >&2
+  exit 1
+fi
+
+for workflow in "${WORKFLOWS[@]}"; do
+  if ! "$EXTRACT_USES" "$workflow" > "$RAW_USES_FILE"; then
+    exit 1
+  fi
+  while IFS= read -r raw; do
+    printf '%s\t%s\n' "$workflow" "$raw" >> "$USES_FILE"
+  done < "$RAW_USES_FILE"
+done
+
 read -r -d '' PROG <<'AWK' || true
 # owner/repo[/subpath...]@ref  ->  owner/repo@ref   ("" if not an external ref)
 function norm(r,   at, path, ref, n, parts) {
@@ -145,15 +214,12 @@ FILENAME == lockfile {
   next
 }
 
-# ---------- pass 2: the workflow YAML ----------
-FNR == 1 { wf = FILENAME }
-{
-  line = $0
-  sub(/[[:space:]]+#.*$/, "", line)              # strip trailing comment
-  if (match(line, /^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*(.+)$/, m)) {
-    raw = m[1]
-    gsub(/^["']|["']$/, "", raw)
-    gsub(/[[:space:]]+$/, "", raw)
+# ---------- pass 2: parser-extracted workflow uses: values ----------
+FILENAME == usesfile {
+  split($0, fields, "\t")
+  wf = fields[1]
+  raw = fields[2]
+  if (wf != "" && raw != "") {
     n = norm(raw)
     if (n != "") {
       uses[wf, ck(n)] = 1
@@ -165,13 +231,14 @@ FNR == 1 { wf = FILENAME }
       useslist[wf] = useslist[wf] " " n
     }
   }
+  next
 }
 
 END {
   bad = 0
   for (i = 1; i < ARGC; i++) {
     wf = ARGV[i]
-    if (wf == lockfile) continue
+    if (wf == lockfile || wf == usesfile) continue
     key = wf
     sub(/.*\//, "", key)
     key = ".github/workflows/" key          # the lockfile always uses this canonical path
@@ -247,6 +314,7 @@ END {
     found = 0
     for (i = 1; i < ARGC; i++) {
       q = ARGV[i]; if (q == lockfile) continue
+      if (q == usesfile) continue
       sub(/.*\//, "", q); q = ".github/workflows/" q
       if (q == p) { found = 1; break }
     }
@@ -268,6 +336,7 @@ END {
   nunlisted = 0; unlisted = ""
   for (i = 1; i < ARGC; i++) {
     q = ARGV[i]; if (q == lockfile) continue
+    if (q == usesfile) continue
     sub(/.*\//, "", q); q = ".github/workflows/" q
     if (q in seen_path) continue
     nunlisted++; unlisted = unlisted "\n       " q
@@ -335,4 +404,4 @@ END {
 }
 AWK
 
-"$AWK" -v lockfile="$LOCK" "$PROG" "$LOCK" "${WORKFLOWS[@]}"
+"$AWK" -v lockfile="$LOCK" -v usesfile="$USES_FILE" "$PROG" "$LOCK" "${WORKFLOWS[@]}" "$USES_FILE"
