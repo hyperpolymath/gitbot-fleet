@@ -39,7 +39,7 @@ comrak = "0.54.0"
 
 # HTML parsing (for accessibility checks)
 scraper = "0.27.0"
-html5ever = "0.39.0"
+html5ever = "0.40.1"
 
 # Image metadata (for alt-text validation)
 image = "0.25.10"
