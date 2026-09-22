@@ -53,9 +53,15 @@ fn rule_id(check_name: &str) -> String {
         "CONTRIBUTING.md" | "CONTRIBUTING.adoc" => format!("{}-004", RULE_PREFIX),
         "CODE_OF_CONDUCT.md" | "CODE_OF_CONDUCT.adoc" => format!("{}-005", RULE_PREFIX),
         ".claude/CLAUDE.md" => format!("{}-006", RULE_PREFIX),
-        ".machine_readable/STATE.scm" | ".machine_readable/STATE.a2ml" => format!("{}-007", RULE_PREFIX),
-        ".machine_readable/META.scm" | ".machine_readable/META.a2ml" => format!("{}-008", RULE_PREFIX),
-        ".machine_readable/ECOSYSTEM.scm" | ".machine_readable/ECOSYSTEM.a2ml" => format!("{}-009", RULE_PREFIX),
+        ".machine_readable/STATE.scm" | ".machine_readable/STATE.a2ml" => {
+            format!("{}-007", RULE_PREFIX)
+        }
+        ".machine_readable/META.scm" | ".machine_readable/META.a2ml" => {
+            format!("{}-008", RULE_PREFIX)
+        }
+        ".machine_readable/ECOSYSTEM.scm" | ".machine_readable/ECOSYSTEM.a2ml" => {
+            format!("{}-009", RULE_PREFIX)
+        }
         ".github/workflows" => format!("{}-010", RULE_PREFIX),
         ".editorconfig" => format!("{}-011", RULE_PREFIX),
         ".gitattributes" => format!("{}-012", RULE_PREFIX),
@@ -68,7 +74,11 @@ fn rule_id(check_name: &str) -> String {
         "no-.bot_directives" => format!("{}-LEGACY-001", RULE_PREFIX),
         "license-type" => format!("{}-LIC-001", RULE_PREFIX),
         name if name.starts_with("no-") => {
-            format!("{}-BAN-{}", RULE_PREFIX, name.strip_prefix("no-").unwrap_or(name))
+            format!(
+                "{}-BAN-{}",
+                RULE_PREFIX,
+                name.strip_prefix("no-").unwrap_or(name)
+            )
         }
         _ => format!("{}-CUSTOM", RULE_PREFIX),
     }
@@ -125,10 +135,9 @@ fn is_fixable(check_name: &str) -> bool {
     // (.gitattributes, .gitignore, .claude/CLAUDE.md and
     // .machine_readable/bot_directives), which is how an empty-file PR could
     // reach a repository and be merged without anyone reading it.
-    matches!(check_name,
-        "LICENSE" | "LICENSE.txt" |
-        "SECURITY.adoc" | "SECURITY.md" |
-        ".editorconfig"
+    matches!(
+        check_name,
+        "LICENSE" | "LICENSE.txt" | "SECURITY.adoc" | "SECURITY.md" | ".editorconfig"
     )
 }
 
@@ -150,14 +159,9 @@ pub fn report_to_findings(report: &ComplianceReport) -> Vec<Finding> {
         let rid = rule_id(&check.name);
         let category = category_string(check.category);
 
-        let mut finding = Finding::new(
-            BotId::Rhodibot,
-            &rid,
-            fleet_severity,
-            &check.message,
-        )
-        .with_rule_name(&check.name)
-        .with_category(category);
+        let mut finding = Finding::new(BotId::Rhodibot, &rid, fleet_severity, &check.message)
+            .with_rule_name(&check.name)
+            .with_category(category);
 
         // Set file path for file-based checks
         if !check.name.starts_with("license-type") && !check.name.starts_with("no-") {
@@ -197,7 +201,10 @@ pub fn publish_to_context(
         let data = std::fs::read_to_string(context_path)?;
         serde_json::from_str(&data)?
     } else {
-        let mut ctx = Context::new(&repo_full_name, context_path.parent().unwrap_or(Path::new(".")));
+        let mut ctx = Context::new(
+            &repo_full_name,
+            context_path.parent().unwrap_or(Path::new(".")),
+        );
         ctx.register_bot(BotId::Rhodibot);
         ctx
     };
@@ -208,7 +215,10 @@ pub fn publish_to_context(
     // Convert and add findings
     let findings = report_to_findings(report);
     let findings_count = findings.len();
-    let errors_count = findings.iter().filter(|f| f.severity == FleetSeverity::Error).count();
+    let errors_count = findings
+        .iter()
+        .filter(|f| f.severity == FleetSeverity::Error)
+        .count();
 
     context.add_findings(findings);
 
@@ -216,8 +226,14 @@ pub fn publish_to_context(
     context.set_data("rsr:score", serde_json::json!(report.score));
     context.set_data("rsr:max_score", serde_json::json!(report.max_score));
     context.set_data("rsr:percentage", serde_json::json!(report.percentage));
-    context.set_data("rsr:policy", serde_json::json!(format!("{}", report.policy)));
-    context.set_data("rsr:required_passed", serde_json::json!(report.required_passed));
+    context.set_data(
+        "rsr:policy",
+        serde_json::json!(format!("{}", report.policy)),
+    );
+    context.set_data(
+        "rsr:required_passed",
+        serde_json::json!(report.required_passed),
+    );
 
     // Complete rhodibot execution
     let _ = context.complete_bot(
