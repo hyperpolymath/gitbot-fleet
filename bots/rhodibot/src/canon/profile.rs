@@ -491,7 +491,7 @@ version = \"2.0.4\"
     #[test]
     fn the_vendored_gate_table_has_the_expected_shape() {
         let table = gates();
-        assert_eq!(table.version(), "0.2.0");
+        assert_eq!(table.version(), "0.3.0");
         assert_eq!(
             table.known_count(),
             28,

@@ -402,13 +402,16 @@ fn classify_group(
     //    leftover under a retired one is moving, not living in the retired one
     //    -- calling that "deprecated location" would overstate it.
     let mut live: Vec<String> = Vec::new();
-    let mut retired: Vec<String> = Vec::new();
+    let mut retired: Vec<(String, &Deprecation)> = Vec::new();
     for alternative in alternatives.iter().filter(|path| !path.ends_with('/')) {
         let basename = basename(alternative);
         for file in files.iter().filter(|file| basename_of(file) == basename) {
-            if is_retired(file, deprecations) {
-                if !retired.contains(file) {
-                    retired.push(file.clone());
+            if let Some(deprecation) = deprecations
+                .iter()
+                .find(|deprecation| deprecation.matches(file))
+            {
+                if !retired.iter().any(|(path, _)| path == file) {
+                    retired.push((file.clone(), deprecation));
                 }
             } else if !live.contains(file) {
                 live.push(file.clone());
@@ -420,16 +423,12 @@ fn classify_group(
         return GroupVerdict::Elsewhere {
             expected: alternatives.to_vec(),
             found: live,
-            deprecated_copies: retired,
+            deprecated_copies: retired.into_iter().map(|(path, _)| path).collect(),
         };
     }
 
     // 4. Present only under a location the canon has retired.
-    if let Some(found) = retired.first() {
-        let deprecated = deprecations
-            .iter()
-            .find(|deprecated| deprecated.matches(found))
-            .expect("a retired path came from a deprecation");
+    if let Some((found, deprecated)) = retired.first() {
         return GroupVerdict::Deprecated {
             found: found.clone(),
             location: deprecated.location.clone(),

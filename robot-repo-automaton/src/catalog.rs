@@ -114,7 +114,8 @@ impl ErrorCatalog {
     /// Convert from S-expression value
     fn from_sexpr(value: &Value) -> Result<Self> {
         // Expect (define error-catalog '(...))
-        let _list = value.as_cons()
+        let _list = value
+            .as_cons()
             .ok_or_else(|| Error::CatalogParse("Expected list at top level".into()))?;
 
         // Navigate to the catalog content
@@ -154,6 +155,10 @@ impl ErrorCatalog {
         })
     }
 
+    /// Extract catalogue entries from a quoted `define` form or an already
+    /// unwrapped list.
+    ///
+    /// Returns a catalogue-parse error when `value` is not a non-empty list.
     fn find_catalog_content(value: &Value) -> Result<Vec<&Value>> {
         // Handle (define error-catalog '(...)) structure
         if let Some(cons) = value.as_cons() {
@@ -163,7 +168,8 @@ impl ErrorCatalog {
                     if sym == "define" {
                         // Third element should be the quoted list
                         if let Some(quoted) = items[2].as_cons() {
-                            let quoted_items: Vec<&Value> = quoted.iter().map(|c| c.car()).collect();
+                            let quoted_items: Vec<&Value> =
+                                quoted.iter().map(|c| c.car()).collect();
                             if !quoted_items.is_empty() {
                                 if let Some(quote_sym) = quoted_items[0].as_symbol() {
                                     if quote_sym == "quote" && quoted_items.len() > 1 {

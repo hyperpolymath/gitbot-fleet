@@ -203,7 +203,8 @@ if ! echo "$commit_msg" | grep -qE "$pattern"; then
 fi
 
 exit 0
-"#.to_string()
+"#
+        .to_string()
     }
 
     /// Install standard hooks for cicd-hyper-a integration
@@ -278,7 +279,10 @@ impl PreCommitChecker {
         Ok(violations)
     }
 
-    /// Check for secrets in staged files
+    /// Return secret findings for staged files.
+    ///
+    /// Secret scanning is not yet implemented, so this currently returns an
+    /// empty list.
     pub fn check_secrets(&self) -> Result<Vec<String>> {
         let findings = Vec::new();
 
@@ -287,9 +291,9 @@ impl PreCommitChecker {
             r#"(?i)api[_-]?key\s*[:=]\s*["'][^"']+["']"#,
             r#"(?i)secret[_-]?key\s*[:=]\s*["'][^"']+["']"#,
             r#"(?i)password\s*[:=]\s*["'][^"']+["']"#,
-            r"ghp_[a-zA-Z0-9]{36}",  // GitHub PAT
-            r"github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}",  // Fine-grained PAT
-            r"sk-[a-zA-Z0-9]{48}",   // OpenAI key
+            r"ghp_[a-zA-Z0-9]{36}",                        // GitHub PAT
+            r"github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}", // Fine-grained PAT
+            r"sk-[a-zA-Z0-9]{48}",                         // OpenAI key
         ];
 
         // This would scan staged files for secret patterns
@@ -320,10 +324,7 @@ impl PreCommitChecker {
 
                     if let Ok(content) = fs::read_to_string(&path) {
                         if !content.contains("SPDX-License-Identifier") {
-                            missing.push(format!(
-                                "Missing SPDX header: {}",
-                                path.display()
-                            ));
+                            missing.push(format!("Missing SPDX header: {}", path.display()));
                         }
                     }
                 }

@@ -44,7 +44,10 @@ pub enum ModifySpec {
     /// Insert content after a specific line number (1-indexed)
     InsertAfter { line: usize, content: String },
     /// Replace all occurrences of a regex pattern with a replacement string
-    ReplacePattern { pattern: String, replacement: String },
+    ReplacePattern {
+        pattern: String,
+        replacement: String,
+    },
     /// Prepend content to the beginning of the file
     Prepend { content: String },
     /// Append content to the end of the file
@@ -61,14 +64,10 @@ pub struct Fixer {
 
 /// Known binary file extensions that should never be modified
 const BINARY_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg",
-    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-    "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
-    "exe", "dll", "so", "dylib", "o", "a",
-    "wasm", "pyc", "class",
-    "ttf", "otf", "woff", "woff2", "eot",
-    "mp3", "mp4", "avi", "mkv", "flac", "ogg", "wav",
-    "db", "sqlite", "sqlite3",
+    "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg", "pdf", "doc", "docx", "xls", "xlsx",
+    "ppt", "pptx", "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "exe", "dll", "so", "dylib", "o",
+    "a", "wasm", "pyc", "class", "ttf", "otf", "woff", "woff2", "eot", "mp3", "mp4", "avi", "mkv",
+    "flac", "ogg", "wav", "db", "sqlite", "sqlite3",
 ];
 
 impl Fixer {
@@ -145,7 +144,8 @@ impl Fixer {
 
     /// Check whether a file should be treated as binary.
     fn is_binary(path: &Path, content: &[u8]) -> bool {
-        let binary_extension = path.extension()
+        let binary_extension = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .map(|ext| BINARY_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
             .unwrap_or(false);
@@ -157,7 +157,8 @@ impl Fixer {
     /// automaton's trusted dependency set. Unknown formats are left alone
     /// because guessing their grammar would cause false failures.
     fn validate_source(path: &Path, content: &str) -> Result<()> {
-        let extension = path.extension()
+        let extension = path
+            .extension()
             .and_then(|ext| ext.to_str())
             .unwrap_or_default()
             .to_ascii_lowercase();
@@ -209,7 +210,8 @@ impl Fixer {
     /// - `prepend:<content>` - Add content at file beginning
     /// - `append:<content>` - Add content at file end
     fn parse_modification(spec: &str) -> Result<ModifySpec> {
-        let (kind, payload) = spec.split_once(':')
+        let (kind, payload) = spec
+            .split_once(':')
             .ok_or_else(|| Error::Fix(format!("Invalid modification specification: {spec}")))?;
 
         match kind {
@@ -217,30 +219,46 @@ impl Fixer {
                 let (line, content) = payload.split_once(':').ok_or_else(|| {
                     Error::Fix("replace-line requires line number and content".into())
                 })?;
-                let line: usize = line.parse()
+                let line: usize = line
+                    .parse()
                     .map_err(|_| Error::Fix(format!("Invalid line number: {line}")))?;
-                Ok(ModifySpec::ReplaceLine { line, content: content.to_string() })
+                Ok(ModifySpec::ReplaceLine {
+                    line,
+                    content: content.to_string(),
+                })
             }
             "insert-before" => {
                 let (line, content) = payload.split_once(':').ok_or_else(|| {
                     Error::Fix("insert-before requires line number and content".into())
                 })?;
-                let line: usize = line.parse()
+                let line: usize = line
+                    .parse()
                     .map_err(|_| Error::Fix(format!("Invalid line number: {line}")))?;
-                Ok(ModifySpec::InsertBefore { line, content: content.to_string() })
+                Ok(ModifySpec::InsertBefore {
+                    line,
+                    content: content.to_string(),
+                })
             }
             "insert-after" => {
                 let (line, content) = payload.split_once(':').ok_or_else(|| {
                     Error::Fix("insert-after requires line number and content".into())
                 })?;
-                let line: usize = line.parse()
+                let line: usize = line
+                    .parse()
                     .map_err(|_| Error::Fix(format!("Invalid line number: {line}")))?;
-                Ok(ModifySpec::InsertAfter { line, content: content.to_string() })
+                Ok(ModifySpec::InsertAfter {
+                    line,
+                    content: content.to_string(),
+                })
             }
             "replace-pattern" => Self::parse_replace_pattern(payload),
             "replace-pattern-json" => Self::parse_replace_pattern_json(payload),
-            "prepend" => Ok(ModifySpec::Prepend { content: payload.to_string() }),
-            "append" => Ok(ModifySpec::Append { content: payload.to_string() }),
+            "prepend" => Ok(ModifySpec::Prepend {
+                content: payload.to_string(),
+            }),
+            "append" => Ok(ModifySpec::Append {
+                content: payload.to_string(),
+            }),
             _ => Err(Error::Fix(format!("Unknown modification type: {}", spec))),
         }
     }
@@ -248,34 +266,48 @@ impl Fixer {
     /// Split a legacy replacement at its final unescaped colon. This preserves
     /// colons in URL-like regex patterns. Colons in a replacement use `\:`.
     fn parse_replace_pattern(payload: &str) -> Result<ModifySpec> {
-        let separator = payload.char_indices().rev()
+        let separator = payload
+            .char_indices()
+            .rev()
             .find_map(|(index, character)| {
                 (character == ':' && !is_escaped(payload, index)).then_some(index)
             })
-            .ok_or_else(|| Error::Fix(
-                "replace-pattern requires a pattern and replacement separated by ':'".into()
-            ))?;
+            .ok_or_else(|| {
+                Error::Fix(
+                    "replace-pattern requires a pattern and replacement separated by ':'".into(),
+                )
+            })?;
 
         let pattern = unescape_colons(&payload[..separator]);
         let replacement = unescape_colons(&payload[separator + 1..]);
         if pattern.is_empty() {
-            return Err(Error::Fix("replace-pattern requires a non-empty pattern".into()));
+            return Err(Error::Fix(
+                "replace-pattern requires a non-empty pattern".into(),
+            ));
         }
 
-        Ok(ModifySpec::ReplacePattern { pattern, replacement })
+        Ok(ModifySpec::ReplacePattern {
+            pattern,
+            replacement,
+        })
     }
 
     /// Parse an unambiguous JSON representation of a regex replacement.
     fn parse_replace_pattern_json(payload: &str) -> Result<ModifySpec> {
-        let value: serde_json::Value = serde_json::from_str(payload)
-            .map_err(|error| Error::Fix(format!("Invalid replace-pattern-json payload: {error}")))?;
-        let pattern = value.get("pattern")
+        let value: serde_json::Value = serde_json::from_str(payload).map_err(|error| {
+            Error::Fix(format!("Invalid replace-pattern-json payload: {error}"))
+        })?;
+        let pattern = value
+            .get("pattern")
             .and_then(serde_json::Value::as_str)
             .filter(|pattern| !pattern.is_empty())
             .ok_or_else(|| Error::Fix("replace-pattern-json requires a string 'pattern'".into()))?;
-        let replacement = value.get("replacement")
+        let replacement = value
+            .get("replacement")
             .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| Error::Fix("replace-pattern-json requires a string 'replacement'".into()))?;
+            .ok_or_else(|| {
+                Error::Fix("replace-pattern-json requires a string 'replacement'".into())
+            })?;
 
         Ok(ModifySpec::ReplacePattern {
             pattern: pattern.to_string(),
@@ -288,7 +320,10 @@ impl Fixer {
         let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
 
         match spec {
-            ModifySpec::ReplaceLine { line, content: new_content } => {
+            ModifySpec::ReplaceLine {
+                line,
+                content: new_content,
+            } => {
                 if *line == 0 || *line > lines.len() {
                     return Err(Error::Fix(format!(
                         "Line {} out of range (file has {} lines)",
@@ -298,7 +333,10 @@ impl Fixer {
                 }
                 lines[*line - 1] = new_content.clone();
             }
-            ModifySpec::InsertBefore { line, content: new_content } => {
+            ModifySpec::InsertBefore {
+                line,
+                content: new_content,
+            } => {
                 if *line == 0 || *line > lines.len() + 1 {
                     return Err(Error::Fix(format!(
                         "Line {} out of range for insertion (file has {} lines)",
@@ -308,7 +346,10 @@ impl Fixer {
                 }
                 lines.insert(*line - 1, new_content.clone());
             }
-            ModifySpec::InsertAfter { line, content: new_content } => {
+            ModifySpec::InsertAfter {
+                line,
+                content: new_content,
+            } => {
                 if *line == 0 || *line > lines.len() {
                     return Err(Error::Fix(format!(
                         "Line {} out of range for insertion (file has {} lines)",
@@ -318,16 +359,24 @@ impl Fixer {
                 }
                 lines.insert(*line, new_content.clone());
             }
-            ModifySpec::ReplacePattern { pattern, replacement } => {
-                let re = Regex::new(pattern)
-                    .map_err(|e| Error::Fix(format!("Invalid regex pattern '{}': {}", pattern, e)))?;
+            ModifySpec::ReplacePattern {
+                pattern,
+                replacement,
+            } => {
+                let re = Regex::new(pattern).map_err(|e| {
+                    Error::Fix(format!("Invalid regex pattern '{}': {}", pattern, e))
+                })?;
                 let result = re.replace_all(content, replacement.as_str());
                 return Ok(result.into_owned());
             }
-            ModifySpec::Prepend { content: new_content } => {
+            ModifySpec::Prepend {
+                content: new_content,
+            } => {
                 lines.insert(0, new_content.clone());
             }
-            ModifySpec::Append { content: new_content } => {
+            ModifySpec::Append {
+                content: new_content,
+            } => {
                 lines.push(new_content.clone());
             }
         }
@@ -341,11 +390,7 @@ impl Fixer {
     }
 
     /// Delete a file
-    fn apply_delete(
-        &self,
-        target_path: &Path,
-        issue: &DetectedIssue,
-    ) -> Result<FixResult> {
+    fn apply_delete(&self, target_path: &Path, issue: &DetectedIssue) -> Result<FixResult> {
         if !target_path.exists() {
             return Ok(FixResult {
                 issue_id: issue.error_type_id.clone(),
@@ -379,10 +424,10 @@ impl Fixer {
         })
     }
 
-    /// Modify a file with safety checks and rollback support
+    /// Modify a file with safety checks.
     ///
-    /// Reads the modification specification from the fix, applies it to the file,
-    /// and rolls back if the modification produces invalid content.
+    /// Reads the modification specification from the fix and rejects invalid
+    /// structured content before atomically replacing the original file.
     fn apply_modify(
         &self,
         target_path: &Path,
@@ -439,19 +484,16 @@ impl Fixer {
             });
         }
 
-        let original_content = String::from_utf8(original_bytes)
-            .map_err(|e| Error::Fix(format!("Failed to decode {}: {}", target_path.display(), e)))?;
+        let original_content = String::from_utf8(original_bytes).map_err(|e| {
+            Error::Fix(format!("Failed to decode {}: {}", target_path.display(), e))
+        })?;
 
         // Parse and apply the modification
         let spec = Self::parse_modification(modification)?;
         let new_content = match Self::apply_modification(&original_content, &spec) {
             Ok(content) => content,
             Err(e) => {
-                warn!(
-                    "Modification failed for {}: {}",
-                    target_path.display(),
-                    e
-                );
+                warn!("Modification failed for {}: {}", target_path.display(), e);
                 return Ok(FixResult {
                     issue_id: issue.error_type_id.clone(),
                     success: false,
@@ -487,11 +529,7 @@ impl Fixer {
 
         atomic_replace(target_path, new_content.as_bytes())?;
 
-        info!(
-            "Modified {}: {}",
-            target_path.display(),
-            modification
-        );
+        info!("Modified {}: {}", target_path.display(), modification);
 
         Ok(FixResult {
             issue_id: issue.error_type_id.clone(),
@@ -504,11 +542,8 @@ impl Fixer {
 
     /// Create a file with template expansion
     ///
-    /// Supports template variables:
-    /// - `gitbot-fleet` - Repository name
-    /// - `hyperpolymath` - Repository owner
-    /// - `{{LICENSE}}` - License identifier
-    /// - `{{YEAR}}` - Current year
+    /// Supports the literal `gitbot-fleet` as a repository-name placeholder,
+    /// plus `{{LICENSE}}`, `{{YEAR}}`, `{{AUTHOR}}`, and `{{EMAIL}}`.
     fn apply_create(
         &self,
         target_path: &Path,
@@ -605,11 +640,7 @@ impl Fixer {
     }
 
     /// Disable a workflow (rename to .disabled)
-    fn apply_disable(
-        &self,
-        target_path: &Path,
-        issue: &DetectedIssue,
-    ) -> Result<FixResult> {
+    fn apply_disable(&self, target_path: &Path, issue: &DetectedIssue) -> Result<FixResult> {
         if !target_path.exists() {
             return Ok(FixResult {
                 issue_id: issue.error_type_id.clone(),
@@ -686,7 +717,9 @@ impl Fixer {
             // AsciiDoc migration; both spellings render the same template.
             // Without this arm the fall-through returns String::new() and
             // the automaton opens a PR that creates the file EMPTY.
-            "SECURITY.adoc" | "SECURITY.md" => include_str!("../templates/SECURITY.tmpl").to_string(),
+            "SECURITY.adoc" | "SECURITY.md" => {
+                include_str!("../templates/SECURITY.tmpl").to_string()
+            }
             _ => String::new(),
         }
     }
@@ -728,7 +761,8 @@ impl Fixer {
         let canonical_repo = self.repo_path.canonicalize().map_err(|error| {
             Error::Fix(format!(
                 "Failed to canonicalize repository {} before commit: {}",
-                self.repo_path.display(), error
+                self.repo_path.display(),
+                error
             ))
         })?;
         let repo = Repository::open(&canonical_repo)?;
@@ -752,14 +786,7 @@ impl Fixer {
         let sig = Signature::now("robot-repo-automaton", "robot@hyperpolymath.dev")?;
         let parent = repo.head()?.peel_to_commit()?;
 
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            message,
-            &tree,
-            &[&parent],
-        )?;
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])?;
 
         info!("Committed: {}", message);
         Ok(())
@@ -825,13 +852,19 @@ fn normalise_path(path: &Path) -> PathBuf {
 fn resolve_target_within_repo(repo_path: &Path, target_path: &Path) -> Result<PathBuf> {
     // Lexically removing `..` before resolving a symlink changes filesystem
     // semantics. Fix targets must name entries without parent traversal.
-    if target_path.components().any(|part| part == std::path::Component::ParentDir) {
-        return Err(Error::Fix("parent traversal is not permitted in fix targets".into()));
+    if target_path
+        .components()
+        .any(|part| part == std::path::Component::ParentDir)
+    {
+        return Err(Error::Fix(
+            "parent traversal is not permitted in fix targets".into(),
+        ));
     }
     let canonical_repo = repo_path.canonicalize().map_err(|error| {
         Error::Fix(format!(
             "failed to canonicalize repository {}: {}",
-            repo_path.display(), error
+            repo_path.display(),
+            error
         ))
     })?;
     let absolute_target = if target_path.is_absolute() {
@@ -847,7 +880,8 @@ fn resolve_target_within_repo(repo_path: &Path, target_path: &Path) -> Result<Pa
     if !resolved_target.starts_with(&canonical_repo) {
         return Err(Error::Fix(format!(
             "resolved target {} is outside repository {}",
-            resolved_target.display(), canonical_repo.display()
+            resolved_target.display(),
+            canonical_repo.display()
         )));
     }
 
@@ -866,7 +900,8 @@ fn resolve_from_existing_ancestor(path: &Path) -> Result<PathBuf> {
                 let mut resolved = ancestor.canonicalize().map_err(|error| {
                     Error::Fix(format!(
                         "failed to canonicalize target ancestor {}: {}",
-                        ancestor.display(), error
+                        ancestor.display(),
+                        error
                     ))
                 })?;
                 for component in missing_components.iter().rev() {
@@ -876,27 +911,40 @@ fn resolve_from_existing_ancestor(path: &Path) -> Result<PathBuf> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 let component = ancestor.file_name().ok_or_else(|| {
-                    Error::Fix(format!("no existing ancestor for target {}", path.display()))
+                    Error::Fix(format!(
+                        "no existing ancestor for target {}",
+                        path.display()
+                    ))
                 })?;
                 missing_components.push(component.to_os_string());
                 if !ancestor.pop() {
                     return Err(Error::Fix(format!(
-                        "no existing ancestor for target {}", path.display()
+                        "no existing ancestor for target {}",
+                        path.display()
                     )));
                 }
             }
-            Err(error) => return Err(Error::Fix(format!(
-                "failed to inspect target ancestor {}: {}",
-                ancestor.display(), error
-            ))),
+            Err(error) => {
+                return Err(Error::Fix(format!(
+                    "failed to inspect target ancestor {}: {}",
+                    ancestor.display(),
+                    error
+                )))
+            }
         }
     }
 }
 
+/// Return whether the character at byte offset `index` is escaped by an odd run
+/// of backslashes. `index` must be a UTF-8 boundary.
 fn is_escaped(value: &str, index: usize) -> bool {
-    value[..index].bytes().rev()
+    value[..index]
+        .bytes()
+        .rev()
         .take_while(|byte| *byte == b'\\')
-        .count() % 2 == 1
+        .count()
+        % 2
+        == 1
 }
 
 fn unescape_colons(value: &str) -> String {
@@ -917,7 +965,10 @@ fn unescape_colons(value: &str) -> String {
 /// over it only after a complete, synced write.
 fn atomic_replace(target_path: &Path, content: &[u8]) -> Result<()> {
     let parent = target_path.parent().ok_or_else(|| {
-        Error::Fix(format!("Target {} has no parent directory", target_path.display()))
+        Error::Fix(format!(
+            "Target {} has no parent directory",
+            target_path.display()
+        ))
     })?;
     let permissions = std::fs::metadata(target_path)?.permissions();
     let mut temporary = NamedTempFile::new_in(parent)?;
@@ -925,24 +976,30 @@ fn atomic_replace(target_path: &Path, content: &[u8]) -> Result<()> {
     temporary.as_file_mut().flush()?;
     temporary.as_file().sync_all()?;
     temporary.as_file().set_permissions(permissions)?;
-    temporary.persist(target_path).map_err(|error| Error::Fix(format!(
-        "Failed to atomically replace {}: {}",
-        target_path.display(), error.error
-    )))?;
+    temporary.persist(target_path).map_err(|error| {
+        Error::Fix(format!(
+            "Failed to atomically replace {}: {}",
+            target_path.display(),
+            error.error
+        ))
+    })?;
     Ok(())
 }
 
 /// Stage a complete new file and publish it with no-clobber semantics.
 fn persist_new_file(target_path: &Path, content: &[u8]) -> std::io::Result<()> {
-    let parent = target_path.parent().ok_or_else(|| std::io::Error::new(
-        std::io::ErrorKind::InvalidInput,
-        format!("Target {} has no parent directory", target_path.display()),
-    ))?;
+    let parent = target_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Target {} has no parent directory", target_path.display()),
+        )
+    })?;
     let mut temporary = NamedTempFile::new_in(parent)?;
     temporary.write_all(content)?;
     temporary.as_file_mut().flush()?;
     temporary.as_file().sync_all()?;
-    temporary.persist_noclobber(target_path)
+    temporary
+        .persist_noclobber(target_path)
         .map(|_| ())
         .map_err(|error| error.error)
 }
@@ -1011,7 +1068,12 @@ mod tests {
         std::fs::write(&victim, "preserve").unwrap();
         let fixer = Fixer::new(repo, false);
         for action in [FixAction::Delete, FixAction::Disable] {
-            let result = fixer.apply(&make_issue("TRAVERSAL"), &make_fix(action, "link/../victim")).unwrap();
+            let result = fixer
+                .apply(
+                    &make_issue("TRAVERSAL"),
+                    &make_fix(action, "link/../victim"),
+                )
+                .unwrap();
             assert!(!result.success);
             assert_eq!(std::fs::read_to_string(&victim).unwrap(), "preserve");
             assert!(!root.path().join("victim.disabled").exists());
@@ -1044,7 +1106,10 @@ mod tests {
         let destination = root.path().join("destination");
         std::fs::write(&source, "source").unwrap();
         std::fs::write(&destination, "destination").unwrap();
-        assert_eq!(rename_noreplace(&source, &destination).unwrap_err().kind(), std::io::ErrorKind::Unsupported);
+        assert_eq!(
+            rename_noreplace(&source, &destination).unwrap_err().kind(),
+            std::io::ErrorKind::Unsupported
+        );
         assert_eq!(std::fs::read_to_string(source).unwrap(), "source");
         assert_eq!(std::fs::read_to_string(destination).unwrap(), "destination");
     }
@@ -1234,7 +1299,10 @@ mod tests {
     fn test_replace_pattern_preserves_url_colons() {
         let spec = Fixer::parse_modification("replace-pattern:https?://old:new").unwrap();
         match spec {
-            ModifySpec::ReplacePattern { pattern, replacement } => {
+            ModifySpec::ReplacePattern {
+                pattern,
+                replacement,
+            } => {
                 assert_eq!(pattern, "https?://old");
                 assert_eq!(replacement, "new");
             }
@@ -1246,7 +1314,10 @@ mod tests {
     fn test_replace_pattern_supports_escaped_replacement_colons() {
         let spec = Fixer::parse_modification("replace-pattern:old:urn\\:new").unwrap();
         match spec {
-            ModifySpec::ReplacePattern { pattern, replacement } => {
+            ModifySpec::ReplacePattern {
+                pattern,
+                replacement,
+            } => {
                 assert_eq!(pattern, "old");
                 assert_eq!(replacement, "urn:new");
             }
@@ -1258,9 +1329,13 @@ mod tests {
     fn test_replace_pattern_json_is_unambiguous() {
         let spec = Fixer::parse_modification(
             r#"replace-pattern-json:{"pattern":"https?://old","replacement":"urn:new"}"#,
-        ).unwrap();
+        )
+        .unwrap();
         match spec {
-            ModifySpec::ReplacePattern { pattern, replacement } => {
+            ModifySpec::ReplacePattern {
+                pattern,
+                replacement,
+            } => {
                 assert_eq!(pattern, "https?://old");
                 assert_eq!(replacement, "urn:new");
             }
@@ -1299,7 +1374,11 @@ mod tests {
 
         let result = fixer.apply(&issue, &fix).unwrap();
         assert!(!result.success);
-        assert!(result.error.as_deref().unwrap().contains("Rust syntax validation"));
+        assert!(result
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("Rust syntax validation"));
         assert_eq!(std::fs::read_to_string(&file_path).unwrap(), original);
     }
 
@@ -1334,7 +1413,10 @@ mod tests {
         let fix = make_fix(FixAction::Disable, "workflow.yml");
 
         assert!(fixer.apply(&issue, &fix).is_err());
-        assert_eq!(std::fs::read_to_string(&source).unwrap(), "active workflow\n");
+        assert_eq!(
+            std::fs::read_to_string(&source).unwrap(),
+            "active workflow\n"
+        );
         assert_eq!(
             std::fs::read_to_string(&disabled).unwrap(),
             "previous disabled workflow\n"

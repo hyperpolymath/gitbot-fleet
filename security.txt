@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath)
+#
+# Compatibility copy for governance checks that only inspect the repository
+# root. The canonical published RFC 9116 file is www/.well-known/security.txt.
+
+Contact: mailto:jonathan.jewell@open.ac.uk
+Contact: https://github.com/hyperpolymath/gitbot-fleet/security/advisories
+Expires: 2027-12-31T23:59:59.000Z
+Preferred-Languages: en
+Canonical: https://github.com/hyperpolymath/gitbot-fleet/.well-known/security.txt
+Policy: https://github.com/hyperpolymath/gitbot-fleet/blob/main/SECURITY.md

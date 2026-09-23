@@ -53,7 +53,12 @@ mod rsr_tests {
     /// Mounts HEAD 200 for specified files, HEAD 404 catch-all for all others,
     /// and GET 404 for .rsr.toml (config lookup). The GET catch-all is NOT mounted
     /// here to avoid conflicting with test-specific GET mocks (e.g., repo info).
-    async fn mount_file_mocks(server: &MockServer, owner: &str, repo: &str, existing_files: &[&str]) {
+    async fn mount_file_mocks(
+        server: &MockServer,
+        owner: &str,
+        repo: &str,
+        existing_files: &[&str],
+    ) {
         // Mount 200 for existing files
         for file in existing_files {
             Mock::given(method("HEAD"))
@@ -72,7 +77,10 @@ mod rsr_tests {
 
         // 404 for .rsr.toml GET (repo config lookup)
         Mock::given(method("GET"))
-            .and(path(format!("/repos/{}/{}/contents/.rsr.toml", owner, repo)))
+            .and(path(format!(
+                "/repos/{}/{}/contents/.rsr.toml",
+                owner, repo
+            )))
             .respond_with(ResponseTemplate::new(404))
             .expect(0..)
             .mount(server)
@@ -85,11 +93,21 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         let files = &[
-            "README.adoc", "LICENSE", "SECURITY.adoc", "CONTRIBUTING.adoc",
-            "CODE_OF_CONDUCT.adoc", ".claude/CLAUDE.md", ".machine_readable/STATE.a2ml",
-            ".machine_readable/META.scm", ".machine_readable/ECOSYSTEM.scm", ".github/workflows",
-            ".editorconfig", ".gitattributes", ".gitignore",
-            "Justfile", ".machine_readable/bot_directives",
+            "README.adoc",
+            "LICENSE",
+            "SECURITY.adoc",
+            "CONTRIBUTING.adoc",
+            "CODE_OF_CONDUCT.adoc",
+            ".claude/CLAUDE.md",
+            ".machine_readable/STATE.a2ml",
+            ".machine_readable/META.scm",
+            ".machine_readable/ECOSYSTEM.scm",
+            ".github/workflows",
+            ".editorconfig",
+            ".gitattributes",
+            ".gitignore",
+            "Justfile",
+            ".machine_readable/bot_directives",
         ];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
@@ -98,7 +116,10 @@ mod rsr_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -108,7 +129,11 @@ mod rsr_tests {
             .expect("compliance check should succeed");
 
         assert!(report.required_passed, "all required checks should pass");
-        assert!(report.percentage >= 90.0, "score should be >= 90%, got {:.1}%", report.percentage);
+        assert!(
+            report.percentage >= 90.0,
+            "score should be >= 90%, got {:.1}%",
+            report.percentage
+        );
         assert_eq!(report.owner, "test-org");
         assert_eq!(report.repo, "test-repo");
     }
@@ -120,8 +145,11 @@ mod rsr_tests {
 
         // All files except README.adoc
         let files = &[
-            "LICENSE", "SECURITY.adoc", "CONTRIBUTING.adoc",
-            "CODE_OF_CONDUCT.adoc", ".github/workflows",
+            "LICENSE",
+            "SECURITY.adoc",
+            "CONTRIBUTING.adoc",
+            "CODE_OF_CONDUCT.adoc",
+            ".github/workflows",
         ];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
@@ -129,7 +157,10 @@ mod rsr_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -139,7 +170,10 @@ mod rsr_tests {
             .expect("compliance check should succeed");
 
         // README is Required in all policies - should fail
-        assert!(!report.required_passed, "missing README should fail required checks");
+        assert!(
+            !report.required_passed,
+            "missing README should fail required checks"
+        );
 
         // Verify the specific check failed
         let readme_check = report.checks.iter().find(|c| c.name == "README.adoc");
@@ -168,7 +202,10 @@ mod rsr_tests {
             .await
             .expect("compliance check should succeed");
 
-        assert!(!report.required_passed, "missing LICENSE should fail required checks");
+        assert!(
+            !report.required_passed,
+            "missing LICENSE should fail required checks"
+        );
 
         let license_check = report.checks.iter().find(|c| c.name == "LICENSE");
         assert!(license_check.is_some());
@@ -235,7 +272,10 @@ mod rsr_tests {
         let files = &["README.adoc", "LICENSE", ".well-known/security.txt"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
-        let repo_config = RepoConfig { policy: PolicyPack::Strict, ..Default::default() };
+        let repo_config = RepoConfig {
+            policy: PolicyPack::Strict,
+            ..Default::default()
+        };
         let report = check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
             .await
             .expect("compliance check should succeed");
@@ -263,16 +303,17 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         // Include banned files (go.mod, package-lock.json)
-        let files = &[
-            "README.adoc", "LICENSE", "go.mod", "package-lock.json",
-        ];
+        let files = &["README.adoc", "LICENSE", "go.mod", "package-lock.json"];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -287,8 +328,14 @@ mod rsr_tests {
         assert_eq!(go_check.unwrap().status, CheckStatus::Warn);
         assert_eq!(go_check.unwrap().category, CheckCategory::LanguagePolicy);
 
-        let npm_check = report.checks.iter().find(|c| c.name == "no-package-lock.json");
-        assert!(npm_check.is_some(), "should have a package-lock.json ban check");
+        let npm_check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "no-package-lock.json");
+        assert!(
+            npm_check.is_some(),
+            "should have a package-lock.json ban check"
+        );
         assert_eq!(npm_check.unwrap().status, CheckStatus::Warn);
     }
 
@@ -303,11 +350,17 @@ mod rsr_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
-        let repo_config = RepoConfig { policy: PolicyPack::Strict, ..Default::default() };
+        let repo_config = RepoConfig {
+            policy: PolicyPack::Strict,
+            ..Default::default()
+        };
         let report = check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
             .await
             .expect("compliance check should succeed");
@@ -331,16 +384,25 @@ mod rsr_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
-        let repo_config = RepoConfig { policy: PolicyPack::Minimal, ..Default::default() };
+        let repo_config = RepoConfig {
+            policy: PolicyPack::Minimal,
+            ..Default::default()
+        };
         let report = check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
             .await
             .expect("compliance check should succeed");
 
-        assert!(report.required_passed, "minimal policy should pass with just README + LICENSE");
+        assert!(
+            report.required_passed,
+            "minimal policy should pass with just README + LICENSE"
+        );
     }
 
     #[tokio::test]
@@ -355,17 +417,26 @@ mod rsr_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
-        let repo_config = RepoConfig { policy: PolicyPack::Enterprise, ..Default::default() };
+        let repo_config = RepoConfig {
+            policy: PolicyPack::Enterprise,
+            ..Default::default()
+        };
         let report = check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
             .await
             .expect("compliance check should succeed");
 
         // Enterprise requires everything - should fail with only README + LICENSE
-        assert!(!report.required_passed, "enterprise policy should fail with minimal files");
+        assert!(
+            !report.required_passed,
+            "enterprise policy should fail with minimal files"
+        );
     }
 
     #[tokio::test]
@@ -380,7 +451,10 @@ mod rsr_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -422,7 +496,10 @@ mod rsr_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -435,7 +512,10 @@ mod rsr_tests {
         assert!(report.score > 0, "score should be > 0");
         assert!(report.max_score > 0, "max_score should be > 0");
         let expected_pct = (report.score as f32 / report.max_score as f32) * 100.0;
-        assert!((report.percentage - expected_pct).abs() < 0.01, "percentage should match calculation");
+        assert!(
+            (report.percentage - expected_pct).abs() < 0.01,
+            "percentage should match calculation"
+        );
     }
 
     #[tokio::test]
@@ -448,9 +528,10 @@ mod rsr_tests {
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(
-                repo_json(Some("pmpl-1.0-or-later"), Some("Palimpsest License"))
-            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(
+                Some("pmpl-1.0-or-later"),
+                Some("Palimpsest License"),
+            )))
             .mount(&server)
             .await;
 
@@ -460,8 +541,11 @@ mod rsr_tests {
             .expect("compliance check should succeed");
 
         let license_check = report.checks.iter().find(|c| c.name == "license-type");
-        assert!(license_check.is_some(), "should have a license-type check, got checks: {:?}",
-            report.checks.iter().map(|c| &c.name).collect::<Vec<_>>());
+        assert!(
+            license_check.is_some(),
+            "should have a license-type check, got checks: {:?}",
+            report.checks.iter().map(|c| &c.name).collect::<Vec<_>>()
+        );
         assert_eq!(license_check.unwrap().status, CheckStatus::Pass);
         assert!(license_check.unwrap().message.contains("Approved license"));
     }
@@ -481,12 +565,21 @@ mod rsr_tests {
         let config = mock_config(&server.uri());
 
         // Include .editorconfig along with basics
-        let files = &["README.adoc", "LICENSE", ".editorconfig", ".gitattributes", ".gitignore"];
+        let files = &[
+            "README.adoc",
+            "LICENSE",
+            ".editorconfig",
+            ".gitattributes",
+            ".gitignore",
+        ];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -510,16 +603,27 @@ mod rsr_tests {
         let server = MockServer::start().await;
         let config = mock_config(&server.uri());
 
-        let files = &["README.adoc", "LICENSE", "Justfile", ".machine_readable/bot_directives"];
+        let files = &[
+            "README.adoc",
+            "LICENSE",
+            "Justfile",
+            ".machine_readable/bot_directives",
+        ];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
-        let repo_config = RepoConfig { policy: PolicyPack::Enterprise, ..Default::default() };
+        let repo_config = RepoConfig {
+            policy: PolicyPack::Enterprise,
+            ..Default::default()
+        };
         let report = check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
             .await
             .expect("compliance check should succeed");
@@ -528,8 +632,14 @@ mod rsr_tests {
         assert!(jf_check.is_some(), "should have justfile check");
         assert_eq!(jf_check.unwrap().status, CheckStatus::Pass);
 
-        let bd_check = report.checks.iter().find(|c| c.name == ".machine_readable/bot_directives");
-        assert!(bd_check.is_some(), "should have .machine_readable/bot_directives check");
+        let bd_check = report
+            .checks
+            .iter()
+            .find(|c| c.name == ".machine_readable/bot_directives");
+        assert!(
+            bd_check.is_some(),
+            "should have .machine_readable/bot_directives check"
+        );
         assert_eq!(bd_check.unwrap().status, CheckStatus::Pass);
     }
 
@@ -546,14 +656,17 @@ mod rsr_tests {
             .and(path("/repos/test-org/test-repo/contents/Cargo.toml"))
             .and(header("Accept", "application/vnd.github.raw+json"))
             .respond_with(ResponseTemplate::new(200).set_body_string(
-                "[package]\nname = \"test\"\nauthors = [\"hyperpolymath <noreply@github.com>\"]\n"
+                "[package]\nname = \"test\"\nauthors = [\"hyperpolymath <noreply@github.com>\"]\n",
             ))
             .mount(&server)
             .await;
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -562,10 +675,19 @@ mod rsr_tests {
             .await
             .expect("compliance check should succeed");
 
-        let author_check = report.checks.iter().find(|c| c.name == "author-attribution");
-        assert!(author_check.is_some(), "should have author-attribution check");
-        assert_eq!(author_check.unwrap().status, CheckStatus::Warn,
-            "bad author should warn under standard policy");
+        let author_check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "author-attribution");
+        assert!(
+            author_check.is_some(),
+            "should have author-attribution check"
+        );
+        assert_eq!(
+            author_check.unwrap().status,
+            CheckStatus::Warn,
+            "bad author should warn under standard policy"
+        );
     }
 
     #[tokio::test]
@@ -588,7 +710,10 @@ mod rsr_tests {
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -597,8 +722,14 @@ mod rsr_tests {
             .await
             .expect("compliance check should succeed");
 
-        let author_check = report.checks.iter().find(|c| c.name == "author-attribution");
-        assert!(author_check.is_some(), "should have author-attribution check");
+        let author_check = report
+            .checks
+            .iter()
+            .find(|c| c.name == "author-attribution");
+        assert!(
+            author_check.is_some(),
+            "should have author-attribution check"
+        );
         assert_eq!(author_check.unwrap().status, CheckStatus::Pass);
     }
 }
@@ -636,7 +767,8 @@ mod webhook_tests {
     fn test_invalid_signature_rejected() {
         let secret = "test-webhook-secret";
         let payload = r#"{"action":"opened"}"#;
-        let bad_signature = "sha256=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        let bad_signature =
+            "sha256=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
         assert!(
             !webhook::verify_signature(secret, payload, bad_signature),
@@ -712,7 +844,10 @@ mod webhook_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -738,7 +873,10 @@ mod webhook_tests {
         });
 
         let result = webhook::handle_push(&config, &push_body.to_string()).await;
-        assert!(result.is_ok(), "push to default branch should create check run");
+        assert!(
+            result.is_ok(),
+            "push to default branch should create check run"
+        );
     }
 
     #[tokio::test]
@@ -757,7 +895,10 @@ mod webhook_tests {
         });
 
         let result = webhook::handle_push(&config, &push_body.to_string()).await;
-        assert!(result.is_ok(), "push to non-default branch should be ignored silently");
+        assert!(
+            result.is_ok(),
+            "push to non-default branch should be ignored silently"
+        );
     }
 
     #[tokio::test]
@@ -788,7 +929,10 @@ mod webhook_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
             .and(header("Accept", "application/vnd.github+json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -867,7 +1011,10 @@ mod webhook_tests {
         });
 
         let result = webhook::handle_repository(&config, &repo_event.to_string()).await;
-        assert!(result.is_ok(), "repository creation should trigger issue creation");
+        assert!(
+            result.is_ok(),
+            "repository creation should trigger issue creation"
+        );
     }
 
     #[tokio::test]
@@ -883,7 +1030,10 @@ mod webhook_tests {
         });
 
         let result = webhook::handle_installation(&config, &install_event.to_string()).await;
-        assert!(result.is_ok(), "installation event should be handled gracefully");
+        assert!(
+            result.is_ok(),
+            "installation event should be handled gracefully"
+        );
     }
 }
 
@@ -907,7 +1057,11 @@ mod github_client_tests {
             .await;
 
         let client = GitHubClient::new(&config);
-        assert!(client.file_exists("test-org", "test-repo", "README.adoc").await);
+        assert!(
+            client
+                .file_exists("test-org", "test-repo", "README.adoc")
+                .await
+        );
     }
 
     #[tokio::test]
@@ -922,7 +1076,11 @@ mod github_client_tests {
             .await;
 
         let client = GitHubClient::new(&config);
-        assert!(!client.file_exists("test-org", "test-repo", "MISSING.md").await);
+        assert!(
+            !client
+                .file_exists("test-org", "test-repo", "MISSING.md")
+                .await
+        );
     }
 
     #[tokio::test]
@@ -933,14 +1091,14 @@ mod github_client_tests {
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo/contents/.rsr.toml"))
             .and(header("Accept", "application/vnd.github.raw+json"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string("policy = \"strict\"\n"),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string("policy = \"strict\"\n"))
             .mount(&server)
             .await;
 
         let client = GitHubClient::new(&config);
-        let content = client.get_file_content("test-org", "test-repo", ".rsr.toml").await;
+        let content = client
+            .get_file_content("test-org", "test-repo", ".rsr.toml")
+            .await;
         assert!(content.is_ok());
         assert_eq!(content.unwrap(), "policy = \"strict\"\n");
     }
@@ -957,7 +1115,9 @@ mod github_client_tests {
             .await;
 
         let client = GitHubClient::new(&config);
-        let content = client.get_file_content("test-org", "test-repo", "nonexistent").await;
+        let content = client
+            .get_file_content("test-org", "test-repo", "nonexistent")
+            .await;
         assert!(content.is_err());
     }
 
@@ -990,7 +1150,9 @@ mod github_client_tests {
             }),
         };
 
-        let result = client.create_check_run("test-org", "test-repo", &check_run).await;
+        let result = client
+            .create_check_run("test-org", "test-repo", &check_run)
+            .await;
         assert!(result.is_ok(), "check run creation should succeed");
     }
 
@@ -1024,7 +1186,10 @@ mod github_client_tests {
 
         assert!(result.is_ok(), "issue creation should succeed");
         let issue = result.unwrap();
-        assert_eq!(issue.html_url, "https://github.com/test-org/test-repo/issues/1");
+        assert_eq!(
+            issue.html_url,
+            "https://github.com/test-org/test-repo/issues/1"
+        );
     }
 
     #[tokio::test]
@@ -1034,7 +1199,10 @@ mod github_client_tests {
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(repo_json(Some("mit"), Some("MIT License"))))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(repo_json(Some("mit"), Some("MIT License"))),
+            )
             .mount(&server)
             .await;
 
@@ -1086,7 +1254,11 @@ mod report_tests {
                     name: "LICENSE".to_string(),
                     category: CheckCategory::Governance,
                     severity: Severity::Required,
-                    status: if required_passed { CheckStatus::Pass } else { CheckStatus::Fail },
+                    status: if required_passed {
+                        CheckStatus::Pass
+                    } else {
+                        CheckStatus::Fail
+                    },
                     points: if required_passed { 5 } else { 0 },
                     max_points: 5,
                     message: if required_passed {
@@ -1114,10 +1286,22 @@ mod report_tests {
         let report = sample_report(true);
         let text = super::format_report_text_pub(&report);
 
-        assert!(text.contains("Documentation"), "report should contain Documentation category");
-        assert!(text.contains("Security"), "report should contain Security category");
-        assert!(text.contains("Governance"), "report should contain Governance category");
-        assert!(text.contains("Language Policy"), "report should contain Language Policy category");
+        assert!(
+            text.contains("Documentation"),
+            "report should contain Documentation category"
+        );
+        assert!(
+            text.contains("Security"),
+            "report should contain Security category"
+        );
+        assert!(
+            text.contains("Governance"),
+            "report should contain Governance category"
+        );
+        assert!(
+            text.contains("Language Policy"),
+            "report should contain Language Policy category"
+        );
     }
 
     #[test]
@@ -1125,7 +1309,10 @@ mod report_tests {
         let report = sample_report(true);
         let text = super::format_report_text_pub(&report);
 
-        assert!(text.contains(":white_check_mark:"), "pass should show checkmark");
+        assert!(
+            text.contains(":white_check_mark:"),
+            "pass should show checkmark"
+        );
         assert!(text.contains(":warning:"), "warn should show warning");
     }
 
@@ -1135,7 +1322,10 @@ mod report_tests {
         let text = super::format_report_text_pub(&report);
 
         assert!(text.contains(":x:"), "failed required check should show X");
-        assert!(text.contains("Required checks failed"), "should note required checks failed");
+        assert!(
+            text.contains("Required checks failed"),
+            "should note required checks failed"
+        );
     }
 
     #[test]
@@ -1144,7 +1334,10 @@ mod report_tests {
         let text = super::format_report_text_pub(&report);
 
         assert!(text.contains("[required]"), "should show required badge");
-        assert!(text.contains("[recommended]"), "should show recommended badge");
+        assert!(
+            text.contains("[recommended]"),
+            "should show recommended badge"
+        );
     }
 
     #[test]
@@ -1152,7 +1345,10 @@ mod report_tests {
         let report = sample_report(true);
         let text = super::format_report_text_pub(&report);
 
-        assert!(text.contains("Policy: standard"), "should include policy name");
+        assert!(
+            text.contains("Policy: standard"),
+            "should include policy name"
+        );
     }
 
     #[test]
@@ -1161,7 +1357,10 @@ mod report_tests {
         let text = super::format_report_text_pub(&report);
 
         // Points should be shown for checks with max_points > 0
-        assert!(text.contains("(5/5)"), "should show points for scored checks");
+        assert!(
+            text.contains("(5/5)"),
+            "should show points for scored checks"
+        );
     }
 }
 
@@ -1170,9 +1369,9 @@ mod report_tests {
 // ============================================================================
 
 mod fleet_tests {
+    use gitbot_shared_context::{BotId, Severity as FleetSeverity};
     use rhodibot::fleet;
     use rhodibot::rsr::*;
-    use gitbot_shared_context::{BotId, Severity as FleetSeverity};
 
     fn sample_report_with_issues() -> ComplianceReport {
         ComplianceReport {
@@ -1240,7 +1439,11 @@ mod fleet_tests {
         let findings = fleet::report_to_findings(&report);
 
         // Only fail/warn checks should produce findings (not pass/skip)
-        assert_eq!(findings.len(), 3, "should have 3 findings (1 fail + 2 warn)");
+        assert_eq!(
+            findings.len(),
+            3,
+            "should have 3 findings (1 fail + 2 warn)"
+        );
     }
 
     #[test]
@@ -1249,7 +1452,11 @@ mod fleet_tests {
         let findings = fleet::report_to_findings(&report);
 
         for finding in &findings {
-            assert_eq!(finding.source, BotId::Rhodibot, "all findings should come from Rhodibot");
+            assert_eq!(
+                finding.source,
+                BotId::Rhodibot,
+                "all findings should come from Rhodibot"
+            );
         }
     }
 
@@ -1277,11 +1484,17 @@ mod fleet_tests {
         let findings = fleet::report_to_findings(&report);
 
         // Required + Fail -> Error
-        let readme_finding = findings.iter().find(|f| f.rule_name == "README.adoc").unwrap();
+        let readme_finding = findings
+            .iter()
+            .find(|f| f.rule_name == "README.adoc")
+            .unwrap();
         assert_eq!(readme_finding.severity, FleetSeverity::Error);
 
         // Recommended + Warn -> Warning
-        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.adoc").unwrap();
+        let security_finding = findings
+            .iter()
+            .find(|f| f.rule_name == "SECURITY.adoc")
+            .unwrap();
         assert_eq!(security_finding.severity, FleetSeverity::Warning);
     }
 
@@ -1290,10 +1503,16 @@ mod fleet_tests {
         let report = sample_report_with_issues();
         let findings = fleet::report_to_findings(&report);
 
-        let readme_finding = findings.iter().find(|f| f.rule_name == "README.adoc").unwrap();
+        let readme_finding = findings
+            .iter()
+            .find(|f| f.rule_name == "README.adoc")
+            .unwrap();
         assert_eq!(readme_finding.rule_id, "RSR-001");
 
-        let gomod_finding = findings.iter().find(|f| f.rule_name == "no-go.mod").unwrap();
+        let gomod_finding = findings
+            .iter()
+            .find(|f| f.rule_name == "no-go.mod")
+            .unwrap();
         assert!(gomod_finding.rule_id.starts_with("RSR-BAN-"));
     }
 
@@ -1302,9 +1521,18 @@ mod fleet_tests {
         let report = sample_report_with_issues();
         let findings = fleet::report_to_findings(&report);
 
-        let readme_finding = findings.iter().find(|f| f.rule_name == "README.adoc").unwrap();
+        let readme_finding = findings
+            .iter()
+            .find(|f| f.rule_name == "README.adoc")
+            .unwrap();
         assert!(readme_finding.suggestion.is_some());
-        assert!(readme_finding.suggestion.as_ref().unwrap().contains("README.adoc"));
+        assert!(
+            readme_finding
+                .suggestion
+                .as_ref()
+                .unwrap()
+                .contains("README.adoc")
+        );
     }
 
     #[test]
@@ -1313,12 +1541,24 @@ mod fleet_tests {
         let findings = fleet::report_to_findings(&report);
 
         // SECURITY.md should be fixable
-        let security_finding = findings.iter().find(|f| f.rule_name == "SECURITY.adoc").unwrap();
-        assert!(security_finding.fixable, "SECURITY.md should be marked as fixable");
+        let security_finding = findings
+            .iter()
+            .find(|f| f.rule_name == "SECURITY.adoc")
+            .unwrap();
+        assert!(
+            security_finding.fixable,
+            "SECURITY.md should be marked as fixable"
+        );
 
         // README.adoc should NOT be fixable (content is project-specific)
-        let readme_finding = findings.iter().find(|f| f.rule_name == "README.adoc").unwrap();
-        assert!(!readme_finding.fixable, "README.adoc should not be auto-fixable");
+        let readme_finding = findings
+            .iter()
+            .find(|f| f.rule_name == "README.adoc")
+            .unwrap();
+        assert!(
+            !readme_finding.fixable,
+            "README.adoc should not be auto-fixable"
+        );
     }
 
     #[test]
@@ -1355,8 +1595,14 @@ mod fleet_tests {
 
         // Verify RSR metadata is stored
         assert_eq!(context.get_data("rsr:score"), Some(&serde_json::json!(10)));
-        assert_eq!(context.get_data("rsr:required_passed"), Some(&serde_json::json!(false)));
-        assert_eq!(context.get_data("rsr:policy"), Some(&serde_json::json!("standard")));
+        assert_eq!(
+            context.get_data("rsr:required_passed"),
+            Some(&serde_json::json!(false))
+        );
+        assert_eq!(
+            context.get_data("rsr:policy"),
+            Some(&serde_json::json!("standard"))
+        );
 
         // Cleanup
         let _ = std::fs::remove_dir_all(&dir);
@@ -1370,7 +1616,10 @@ fn format_report_text_pub(report: &rhodibot::rsr::ComplianceReport) -> String {
     let mut text = String::new();
 
     text.push_str(&format!("## Policy: {}\n\n", report.policy));
-    text.push_str(&format!("{}\n\n", rhodibot::rsr::policy_summary(report.policy)));
+    text.push_str(&format!(
+        "{}\n\n",
+        rhodibot::rsr::policy_summary(report.policy)
+    ));
 
     if !report.required_passed {
         text.push_str("> :x: **Required checks failed** - repository does not meet minimum RSR requirements\n\n");
@@ -1383,7 +1632,10 @@ fn format_report_text_pub(report: &rhodibot::rsr::ComplianceReport) -> String {
         ("Security", rhodibot::rsr::CheckCategory::Security),
         ("Governance", rhodibot::rsr::CheckCategory::Governance),
         ("Structure", rhodibot::rsr::CheckCategory::Structure),
-        ("Language Policy", rhodibot::rsr::CheckCategory::LanguagePolicy),
+        (
+            "Language Policy",
+            rhodibot::rsr::CheckCategory::LanguagePolicy,
+        ),
     ];
 
     for (cat_name, cat) in categories {

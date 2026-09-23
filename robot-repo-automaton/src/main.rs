@@ -17,9 +17,9 @@
 //!    (rsr-template-repo#48).
 
 use clap::{Parser, Subcommand};
-use robot_repo_automaton::prelude::*;
-use robot_repo_automaton::github::{GitHubClient, CreatePullRequest};
 use robot_repo_automaton::confidence::ThresholdConfig;
+use robot_repo_automaton::github::{CreatePullRequest, GitHubClient};
+use robot_repo_automaton::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
@@ -167,7 +167,10 @@ async fn main() -> anyhow::Result<()> {
     let config = if cli.config.exists() {
         Some(Config::from_file_with_env(&cli.config)?)
     } else {
-        debug!("No config file found at {}, using defaults", cli.config.display());
+        debug!(
+            "No config file found at {}, using defaults",
+            cli.config.display()
+        );
         None
     };
 
@@ -258,7 +261,10 @@ async fn cmd_scan(
         .map(|c| c.catalog_path.clone())
         .unwrap_or_else(|| PathBuf::from("ERROR-CATALOG.scm"));
     let catalog = ErrorCatalog::from_file(&catalog_path)?;
-    info!("Loaded {} error types from catalog", catalog.error_types.len());
+    info!(
+        "Loaded {} error types from catalog",
+        catalog.error_types.len()
+    );
 
     // Detect issues
     let detector = Detector::new(repo_path.clone())?;
@@ -395,7 +401,10 @@ async fn cmd_fix(
                 FixDecision::Propose { diff_preview } => {
                     let proposal =
                         threshold_config.create_proposal(issue, &error_type.fix, &diff_preview);
-                    info!("Proposing fix for {} (below auto-apply threshold)", issue.error_name);
+                    info!(
+                        "Proposing fix for {} (below auto-apply threshold)",
+                        issue.error_name
+                    );
                     proposals.push(proposal);
                 }
                 FixDecision::Skip { reason } => {
@@ -508,7 +517,8 @@ async fn cmd_fix(
                     Ok(created_pr) => {
                         println!("Created PR #{}: {}", created_pr.number, created_pr.html_url);
                         // Enable auto-merge — PR merges automatically when CI passes
-                        if let Err(e) = github.enable_auto_merge(repo_name, created_pr.number).await {
+                        if let Err(e) = github.enable_auto_merge(repo_name, created_pr.number).await
+                        {
                             debug!("Auto-merge enable failed (non-fatal): {}", e);
                         }
                     }
@@ -523,7 +533,10 @@ async fn cmd_fix(
             warn!("No GitHub config — skipping PR creation");
         }
     } else if create_pr && has_fixes && dry_run {
-        println!("[DRY RUN] Would create PR with {} fixes", fix_results.iter().filter(|r| r.success).count());
+        println!(
+            "[DRY RUN] Would create PR with {} fixes",
+            fix_results.iter().filter(|r| r.success).count()
+        );
     }
 
     // Create GitHub issues for proposals (below auto-apply threshold)
@@ -723,7 +736,8 @@ fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()>
 
     for error_type in &catalog.error_types {
         if let Some(filter) = severity_filter {
-            let matches = format!("{:?}", error_type.severity).to_lowercase() == filter.to_lowercase();
+            let matches =
+                format!("{:?}", error_type.severity).to_lowercase() == filter.to_lowercase();
             if !matches {
                 continue;
             }
@@ -735,7 +749,10 @@ fn cmd_catalog(path: &Path, severity_filter: Option<&str>) -> anyhow::Result<()>
         );
         println!("  {}", error_type.description);
         println!("  Category: {}", error_type.category);
-        println!("  Fix: {:?} {}", error_type.fix.action, error_type.fix.target);
+        println!(
+            "  Fix: {:?} {}",
+            error_type.fix.action, error_type.fix.target
+        );
         println!();
     }
 
