@@ -298,11 +298,11 @@ impl ThresholdConfig {
     }
 }
 
-/// Check if a file is protected from bot deletion or modification.
+/// Return whether a target matches a protected basename, extension, or
+/// directory marker used to lower confidence for automated fixes.
 ///
-/// Protected files include project state, documentation, and checkpoint files
-/// that bots should NEVER delete or overwrite. These represent intentional
-/// project work that cannot be regenerated from templates.
+/// Basenames are matched case-insensitively; extension and directory matches
+/// are case-sensitive.
 fn is_protected_file(target: &str) -> bool {
     let basename = target.rsplit('/').next().unwrap_or(target);
 
