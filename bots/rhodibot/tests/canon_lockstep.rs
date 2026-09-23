@@ -67,7 +67,7 @@ fn the_rule_set_the_pilot_is_quoted_from() {
     let canon = Canon::vendored().expect("the canon parses");
 
     assert_eq!(canon.categories.len(), 11, "weighted categories");
-    assert_eq!(canon.criterion_count(), 74, "criteria in total");
+    assert_eq!(canon.criterion_count(), 78, "criteria in total");
     assert_eq!(
         canon.weight_sum(),
         88,
@@ -77,7 +77,7 @@ fn the_rule_set_the_pilot_is_quoted_from() {
     let bronze = canon.criteria().filter(|c| c.tier == Tier::Bronze).count();
     let gold = canon.criteria().filter(|c| c.tier == Tier::Gold).count();
     let rhodium = canon.criteria().filter(|c| c.tier == Tier::Rhodium).count();
-    assert_eq!((bronze, gold, rhodium), (17, 29, 4));
+    assert_eq!((bronze, gold, rhodium), (18, 30, 4));
 
     // The honest half of the coverage story: the canon says outright that these
     // have no automated detection. A tool that reported them as passing would
@@ -91,7 +91,7 @@ fn the_rule_set_the_pilot_is_quoted_from() {
         .criteria()
         .filter(|c| c.capability().is_some())
         .count();
-    assert_eq!(gated, 26);
+    assert_eq!(gated, 30);
 
     // What a repository with no declared capabilities is measured on at bronze.
     assert_eq!(canon.universal_criteria_up_to(Tier::Bronze).count(), 17);
@@ -214,7 +214,7 @@ fn capability_gates_split_the_file_presence_criteria() {
 
     assert_eq!(
         scored.len() + inapplicable.len(),
-        31,
+        33,
         "the number of criteria whose description names files changed"
     );
     assert!(

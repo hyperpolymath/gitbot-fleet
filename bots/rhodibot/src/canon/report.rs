@@ -440,9 +440,9 @@ mod tests {
             CanonReport::build("acme/widgets", &canon(), &gates(), &files(COMPLIANT), None)
                 .expect("the report builds");
 
-        // The vendored canon: 74 criteria, 26 gated on a capability.
-        assert_eq!(report.criteria, 74);
-        assert_eq!(report.not_applicable, 26);
+        // The vendored canon: 78 criteria, 30 gated on a capability.
+        assert_eq!(report.criteria, 78);
+        assert_eq!(report.not_applicable, 30);
         assert_eq!(report.scored, 22);
         assert_eq!(report.not_file_questions, 26);
         assert_eq!(
@@ -630,7 +630,7 @@ mod tests {
 
         let value = serde_json::to_value(&report).expect("serialises");
         assert_eq!(value["subject"], "acme/widgets");
-        assert_eq!(value["criteria"], 74);
+        assert_eq!(value["criteria"], 78);
         assert!(value["counts"]["deprecated"].as_u64().unwrap() > 0);
         assert!(
             value["findings"]

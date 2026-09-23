@@ -104,9 +104,7 @@ impl GitHubClient {
 
         Ok(GitHubClient {
             client,
-            base_url: base_url
-                .unwrap_or("https://api.github.com")
-                .to_string(),
+            base_url: base_url.unwrap_or("https://api.github.com").to_string(),
             org: org.to_string(),
         })
     }
@@ -167,7 +165,10 @@ impl GitHubClient {
         pr: CreatePullRequest,
     ) -> Result<PullRequest> {
         let full = format!("{}/{}", self.org, repo);
-        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreatePr)?;
+        crate::registry_guard::check_github_write(
+            &full,
+            crate::exclusion_registry::Action::CreatePr,
+        )?;
 
         let url = format!("{}/repos/{}/{}/pulls", self.base_url, self.org, repo);
 
@@ -241,15 +242,13 @@ impl GitHubClient {
             ),
         };
 
-        let result = self
-            .client
-            .post(graphql_url)
-            .json(&mutation)
-            .send()
-            .await?;
+        let result = self.client.post(graphql_url).json(&mutation).send().await?;
 
         if result.status().is_success() {
-            info!("Enabled auto-merge (squash) on PR #{} in {}", pr_number, repo);
+            info!(
+                "Enabled auto-merge (squash) on PR #{} in {}",
+                pr_number, repo
+            );
         } else {
             let status = result.status();
             let body = result.text().await.unwrap_or_default();
@@ -264,18 +263,14 @@ impl GitHubClient {
     }
 
     /// Create a check run
-    pub async fn create_check_run(
-        &self,
-        repo: &str,
-        check: CreateCheckRun,
-    ) -> Result<()> {
+    pub async fn create_check_run(&self, repo: &str, check: CreateCheckRun) -> Result<()> {
         let full = format!("{}/{}", self.org, repo);
-        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreateCheckRun)?;
+        crate::registry_guard::check_github_write(
+            &full,
+            crate::exclusion_registry::Action::CreateCheckRun,
+        )?;
 
-        let url = format!(
-            "{}/repos/{}/{}/check-runs",
-            self.base_url, self.org, repo
-        );
+        let url = format!("{}/repos/{}/{}/check-runs", self.base_url, self.org, repo);
 
         self.client
             .post(&url)
@@ -292,7 +287,10 @@ impl GitHubClient {
     /// Create an issue
     pub async fn create_issue(&self, repo: &str, issue: CreateIssue) -> Result<u64> {
         let full = format!("{}/{}", self.org, repo);
-        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreateIssue)?;
+        crate::registry_guard::check_github_write(
+            &full,
+            crate::exclusion_registry::Action::CreateIssue,
+        )?;
 
         let url = format!("{}/repos/{}/{}/issues", self.base_url, self.org, repo);
 
@@ -339,14 +337,12 @@ impl GitHubClient {
     }
 
     /// Create a new branch
-    pub async fn create_branch(
-        &self,
-        repo: &str,
-        branch_name: &str,
-        from_sha: &str,
-    ) -> Result<()> {
+    pub async fn create_branch(&self, repo: &str, branch_name: &str, from_sha: &str) -> Result<()> {
         let full = format!("{}/{}", self.org, repo);
-        crate::registry_guard::check_github_write(&full, crate::exclusion_registry::Action::CreateBranch)?;
+        crate::registry_guard::check_github_write(
+            &full,
+            crate::exclusion_registry::Action::CreateBranch,
+        )?;
 
         let url = format!("{}/repos/{}/{}/git/refs", self.base_url, self.org, repo);
 

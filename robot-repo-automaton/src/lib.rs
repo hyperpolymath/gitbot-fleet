@@ -52,29 +52,32 @@
 #![forbid(unsafe_code)]
 pub mod catalog;
 pub mod confidence;
-pub mod hypatia;
 pub mod config;
 pub mod detector;
 pub mod error;
 pub mod exclusion_registry;
 pub mod fixer;
-pub mod registry_guard;
 pub mod fleet;
 pub mod github;
 pub mod hooks;
+pub mod hypatia;
+pub mod registry_guard;
 pub mod skeleton;
 
 pub use catalog::ErrorCatalog;
 pub use confidence::{ConfidenceLevel, FixDecision, ProposedFix, ThresholdConfig};
-pub use exclusion_registry::{Action as ExclusionAction, ActionContext, Decision as ExclusionDecision, DenyAxis, ExclusionRegistry};
-pub use hypatia::{CicdHyperAClient, CicdHyperAConfig, Rule, Ruleset};
 pub use config::Config;
 pub use detector::{DetectedIssue, Detector};
 pub use error::{Error, Result};
+pub use exclusion_registry::{
+    Action as ExclusionAction, ActionContext, Decision as ExclusionDecision, DenyAxis,
+    ExclusionRegistry,
+};
 pub use fixer::{FixResult, Fixer};
 pub use fleet::FleetCoordinator;
 pub use github::GitHubClient;
 pub use hooks::{HookManager, HookType, PreCommitChecker};
+pub use hypatia::{CicdHyperAClient, CicdHyperAConfig, Rule, Ruleset};
 
 /// Prelude module for common imports
 pub mod prelude {
