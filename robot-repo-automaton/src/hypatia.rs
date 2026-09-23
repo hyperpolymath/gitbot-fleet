@@ -21,9 +21,9 @@
 //! Hypatia learning loop
 //! ```
 
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use dirs;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 /// Configuration for cicd-hyper-a integration
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -109,7 +109,10 @@ pub enum RulePattern {
     /// File path glob pattern
     FileGlob { glob: String },
     /// Content regex pattern
-    ContentRegex { regex: String, file_glob: Option<String> },
+    ContentRegex {
+        regex: String,
+        file_glob: Option<String>,
+    },
     /// AST-based pattern (language-specific)
     Ast { language: String, query: String },
     /// Custom detector function
@@ -202,14 +205,20 @@ impl CicdHyperAClient {
 
     /// Fetch a ruleset from the registry.
     ///
-    /// Tries the Hypatia API first; falls back to loading rules from the
-    /// local verisimdb-data recipes directory if the API is unavailable.
+    /// Tries the Hypatia API first; falls back to local recipes when the request
+    /// fails, returns a non-success status, or does not contain a valid ruleset.
     pub async fn fetch_ruleset(&self, ruleset_id: &str) -> crate::Result<Ruleset> {
-        tracing::info!("Fetching ruleset: {} from {}", ruleset_id, self.config.api_url);
+        tracing::info!(
+            "Fetching ruleset: {} from {}",
+            ruleset_id,
+            self.config.api_url
+        );
 
         // Try API first
         let url = format!("{}/rulesets/{}", self.config.api_url, ruleset_id);
-        match self.http_client.get(&url)
+        match self
+            .http_client
+            .get(&url)
             .header("Accept", "application/json")
             .send()
             .await
@@ -259,7 +268,13 @@ impl CicdHyperAClient {
         self.load_recipes_from(ruleset_id, &recipes_dirs)
     }
 
-    fn load_recipes_from(&self, ruleset_id: &str, recipes_dirs: &[PathBuf]) -> crate::Result<Ruleset> {
+    /// Load recipes from the first existing candidate directory, or use the
+    /// built-in RSR rules when no valid recipes are found.
+    fn load_recipes_from(
+        &self,
+        ruleset_id: &str,
+        recipes_dirs: &[PathBuf],
+    ) -> crate::Result<Ruleset> {
         let recipes_dir = recipes_dirs.iter().find(|d| d.is_dir());
 
         let mut rules = Vec::new();
@@ -272,7 +287,8 @@ impl CicdHyperAClient {
                     let path = entry.path();
                     if path.extension().and_then(|e| e.to_str()) == Some("json") {
                         if let Ok(content) = std::fs::read_to_string(&path) {
-                            if let Ok(recipe) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Ok(recipe) = serde_json::from_str::<serde_json::Value>(&content)
+                            {
                                 if let Some(rule) = recipe_to_rule(&recipe) {
                                     rules.push(rule);
                                 }
@@ -292,7 +308,14 @@ impl CicdHyperAClient {
 
         Ok(Ruleset {
             id: ruleset_id.to_string(),
-            name: format!("RSR Compliance ({})", if recipes_dir.is_some() { "local" } else { "built-in" }),
+            name: format!(
+                "RSR Compliance ({})",
+                if recipes_dir.is_some() {
+                    "local"
+                } else {
+                    "built-in"
+                }
+            ),
             description: "Rhodium Standard Repositories compliance rules".to_string(),
             version: "2.0.0".to_string(),
             rules,
@@ -616,13 +639,32 @@ impl CicdHyperAClient {
 }
 
 /// Convert a verisimdb-data recipe JSON to a Rule.
+///
+/// Returns `None` unless the recipe has a string `id` and either a string
+/// `file_glob` or `pattern`.
 fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
     let id = recipe.get("id")?.as_str()?.to_string();
-    let name = recipe.get("name").and_then(|v| v.as_str()).unwrap_or(&id).to_string();
-    let category = recipe.get("category").and_then(|v| v.as_str()).unwrap_or("general").to_string();
-    let _description = recipe.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let name = recipe
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&id)
+        .to_string();
+    let category = recipe
+        .get("category")
+        .and_then(|v| v.as_str())
+        .unwrap_or("general")
+        .to_string();
+    let _description = recipe
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
-    let severity = match recipe.get("severity").and_then(|v| v.as_str()).unwrap_or("medium") {
+    let severity = match recipe
+        .get("severity")
+        .and_then(|v| v.as_str())
+        .unwrap_or("medium")
+    {
         "critical" => RuleSeverity::Critical,
         "high" => RuleSeverity::High,
         "medium" => RuleSeverity::Medium,
@@ -632,7 +674,9 @@ fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
 
     // Build pattern from recipe detection info
     let pattern = if let Some(glob) = recipe.get("file_glob").and_then(|v| v.as_str()) {
-        RulePattern::FileGlob { glob: glob.to_string() }
+        RulePattern::FileGlob {
+            glob: glob.to_string(),
+        }
     } else {
         // No file_glob: a content regex is then mandatory -- `?` returns None
         // for a recipe that declares neither, which is the same contract the
@@ -641,17 +685,21 @@ fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
         let regex = recipe.get("pattern").and_then(|v| v.as_str())?;
         RulePattern::ContentRegex {
             regex: regex.to_string(),
-            file_glob: recipe.get("applies_to").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            file_glob: recipe
+                .get("applies_to")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
         }
     };
 
     // Build fix from recipe
-    let fix = recipe.get("fix_script").and_then(|v| v.as_str()).map(|script| {
-        RuleFix::Command {
+    let fix = recipe
+        .get("fix_script")
+        .and_then(|v| v.as_str())
+        .map(|script| RuleFix::Command {
             command: script.to_string(),
             args: vec![],
-        }
-    });
+        });
 
     Some(Rule {
         id,
@@ -661,14 +709,32 @@ fn recipe_to_rule(recipe: &serde_json::Value) -> Option<Rule> {
         pattern,
         fix,
         metadata: RuleMetadata {
-            author: recipe.get("author").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            updated_at: recipe.get("updated_at").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            version: recipe.get("version").and_then(|v| v.as_str()).unwrap_or("1.0.0").to_string(),
-            tags: recipe.get("tags")
+            author: recipe
+                .get("author")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            updated_at: recipe
+                .get("updated_at")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            version: recipe
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or("1.0.0")
+                .to_string(),
+            tags: recipe
+                .get("tags")
                 .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
                 .unwrap_or_default(),
-            learned: recipe.get("learned").and_then(|v| v.as_bool()).unwrap_or(false),
+            learned: recipe
+                .get("learned")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
         },
     })
 }
@@ -688,10 +754,14 @@ mod tests {
             std::fs::write(dir.join("rule.json"), recipe.to_string()).unwrap();
         }
         let client = CicdHyperAClient::new(CicdHyperAConfig::default());
-        let rules = client.load_recipes_from("local", &[current, legacy.clone()]).unwrap();
+        let rules = client
+            .load_recipes_from("local", &[current, legacy.clone()])
+            .unwrap();
         assert_eq!(rules.rules.len(), 1);
         assert_eq!(rules.rules[0].id, "current-rule");
-        let rules = client.load_recipes_from("local", &[root.path().join("absent"), legacy]).unwrap();
+        let rules = client
+            .load_recipes_from("local", &[root.path().join("absent"), legacy])
+            .unwrap();
         assert_eq!(rules.rules[0].id, "legacy-rule");
     }
 

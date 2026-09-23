@@ -275,10 +275,7 @@ impl ExclusionRegistry {
             if matches!(k.as_str(), "off" | "disabled" | "0" | "false" | "halt") {
                 return Decision::Deny {
                     axis: DenyAxis::KillSwitch,
-                    reason: format!(
-                        "HYPATIA_AUTOMATION={} — global kill switch engaged",
-                        kill
-                    ),
+                    reason: format!("HYPATIA_AUTOMATION={} — global kill switch engaged", kill),
                 };
             }
         }
@@ -636,9 +633,18 @@ mod real_registry_smoke {
         }
         let r = ExclusionRegistry::load(path).expect("parse real registry");
         // Smoke: at least one of each axis.
-        assert!(!r.external_repos.is_empty(), "external_repos axis populated");
-        assert!(!r.vendored_patterns.is_empty(), "vendored_patterns axis populated");
-        assert!(!r.remote_origin_patterns.is_empty(), "remote_origin_patterns axis populated");
+        assert!(
+            !r.external_repos.is_empty(),
+            "external_repos axis populated"
+        );
+        assert!(
+            !r.vendored_patterns.is_empty(),
+            "vendored_patterns axis populated"
+        );
+        assert!(
+            !r.remote_origin_patterns.is_empty(),
+            "remote_origin_patterns axis populated"
+        );
     }
 
     #[test]
@@ -646,7 +652,9 @@ mod real_registry_smoke {
         let path = std::path::Path::new(
             "/var/mnt/eclipse/repos/developer-ecosystem/standards/.machine_readable/bot_exclusion_registry.a2ml"
         );
-        if !path.exists() { return; }
+        if !path.exists() {
+            return;
+        }
         let r = ExclusionRegistry::load(path).unwrap();
         let d = r.check(&ActionContext {
             repo_full_name: "JoshuaJewell/IDApTIK",
@@ -654,7 +662,10 @@ mod real_registry_smoke {
             remote_origin: None,
             action: Action::CreatePr,
         });
-        assert!(!d.is_allow(), "real registry must deny JoshuaJewell/IDApTIK writes");
+        assert!(
+            !d.is_allow(),
+            "real registry must deny JoshuaJewell/IDApTIK writes"
+        );
     }
 
     #[test]
@@ -662,7 +673,9 @@ mod real_registry_smoke {
         let path = std::path::Path::new(
             "/var/mnt/eclipse/repos/developer-ecosystem/standards/.machine_readable/bot_exclusion_registry.a2ml"
         );
-        if !path.exists() { return; }
+        if !path.exists() {
+            return;
+        }
         let r = ExclusionRegistry::load(path).unwrap();
         let d = r.check(&ActionContext {
             repo_full_name: "somewhere-locally/rust-clone",
@@ -670,6 +683,9 @@ mod real_registry_smoke {
             remote_origin: Some("git@github.com:rust-lang/rust.git"),
             action: Action::CreatePr,
         });
-        assert!(!d.is_allow(), "real registry must deny rust-lang origin writes");
+        assert!(
+            !d.is_allow(),
+            "real registry must deny rust-lang origin writes"
+        );
     }
 }

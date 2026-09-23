@@ -797,7 +797,7 @@ mod tests {
     fn parses_the_vendored_canon() {
         let canon = vendored();
         assert_eq!(canon.categories.len(), 11, "the canon has 11 categories");
-        assert_eq!(canon.criterion_count(), 74);
+        assert_eq!(canon.criterion_count(), 78);
         assert_eq!(canon.weight_sum(), 88);
         assert_eq!(canon.declared_weight_sum, Some(88));
         assert_eq!(canon.tiers.bronze, 75);
@@ -813,7 +813,7 @@ mod tests {
         assert_eq!(pin.source.repo, "hyperpolymath/standards");
         assert_eq!(pin.source.sha256, digest_of(VENDORED_CRITERIA));
         assert_eq!(pin.source.categories, 11);
-        assert_eq!(pin.source.criteria, 74);
+        assert_eq!(pin.source.criteria, 78);
         assert_eq!(pin.source.weight_sum, 88);
     }
 
@@ -848,7 +848,7 @@ mod tests {
             .criteria()
             .filter(|c| c.capability().is_some())
             .count();
-        assert_eq!(gated, 26, "criteria gated on a declared capability");
+        assert_eq!(gated, 30, "criteria gated on a declared capability");
     }
 
     // ---- fail-closed ---------------------------------------------------------
@@ -959,7 +959,7 @@ criteria = [
 
     #[test]
     fn a_canon_without_a_version_is_rejected() {
-        let source = VENDORED_CRITERIA.replacen("version = \"2.0.0-draft\"", "", 1);
+        let source = VENDORED_CRITERIA.replacen("version = \"2.1.0-draft\"", "", 1);
         let error = Canon::parse(&source).expect_err("a versionless canon must not parse");
         assert!(
             format!("{error:#}").contains("no [meta] version"),

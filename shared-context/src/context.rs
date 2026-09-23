@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Shared context for coordinating bot executions
 
+use crate::Result;
 use crate::bot::{BotExecution, BotId, BotStatus, Tier};
 use crate::finding::{Finding, FindingSet};
-use crate::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -191,10 +191,7 @@ impl Context {
             }
 
             let info = BotInfo::standard(*bot);
-            let deps_satisfied = info
-                .depends_on
-                .iter()
-                .all(|dep| self.bot_completed(*dep));
+            let deps_satisfied = info.depends_on.iter().all(|dep| self.bot_completed(*dep));
 
             if deps_satisfied {
                 ready.push(*bot);
