@@ -146,7 +146,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "AsciiDoc README",
         category: CheckCategory::Documentation,
         points: 5,
-        severity: (Severity::Required, Severity::Required, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Required,
+            Severity::Required,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // 269/269 repositories carry `LICENSE`; none carries `LICENSE.txt`.
@@ -155,7 +160,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "License file",
         category: CheckCategory::Governance,
         points: 5,
-        severity: (Severity::Required, Severity::Required, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Required,
+            Severity::Required,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // SECURITY.adoc 250/269 versus SECURITY.md 35/269.
@@ -164,7 +174,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Security policy",
         category: CheckCategory::Security,
         points: 5,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // CONTRIBUTING.adoc 255/269 versus CONTRIBUTING.md 25/269.
@@ -173,7 +188,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Contributing guidelines",
         category: CheckCategory::Documentation,
         points: 3,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // CODE_OF_CONDUCT.adoc 240/269 versus CODE_OF_CONDUCT.md 15/269.
@@ -182,7 +202,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Code of conduct",
         category: CheckCategory::Governance,
         points: 3,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // 152/269 under .claude/, 39/269 at the root.
@@ -191,18 +216,31 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "AI assistant instructions",
         category: CheckCategory::Structure,
         points: 2,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // The machine-readable manifest the estate actually ships: 261/269.
         // The .scm state files below reached 1/269 and their .a2ml spelling
         // 13/269, so neither is a fair Required check on its own.
         name: "0-AI-MANIFEST.a2ml",
-        alternates: &[".machine_readable/STATE.a2ml", ".machine_readable/STATE.scm"],
+        alternates: &[
+            ".machine_readable/STATE.a2ml",
+            ".machine_readable/STATE.scm",
+        ],
         description: "Machine-readable manifest at the repository root",
         category: CheckCategory::Structure,
         points: 3,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         name: ".machine_readable/STATE.a2ml",
@@ -210,7 +248,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Project state file in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     CheckDef {
         name: ".machine_readable/META.a2ml",
@@ -218,7 +261,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Meta information in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     CheckDef {
         name: ".machine_readable/ECOSYSTEM.a2ml",
@@ -226,7 +274,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Ecosystem position in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 3,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     // Additional RSR template files
     CheckDef {
@@ -235,7 +288,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "EditorConfig for consistent formatting",
         category: CheckCategory::Structure,
         points: 2,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         name: ".gitattributes",
@@ -243,7 +301,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Git attributes for line endings and diffs",
         category: CheckCategory::Structure,
         points: 2,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         name: ".gitignore",
@@ -251,7 +314,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Git ignore patterns",
         category: CheckCategory::Structure,
         points: 2,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // `Justfile` 267/269; lowercase `justfile` 7/269. Both accepted: the
@@ -262,7 +330,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Just task runner (primary build system)",
         category: CheckCategory::Structure,
         points: 2,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     CheckDef {
         name: ".machine_readable/bot_directives",
@@ -270,7 +343,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Bot directives directory in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 2,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // Entered the template 2026-08-26; 59/269 as of 2026-09-18. Either
@@ -280,7 +358,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Root-shape allowlist in canonical machine-readable location",
         category: CheckCategory::Structure,
         points: 2,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
     CheckDef {
         // Canonical location since #53 (2026-09-17). Measured 2026-09-18:
@@ -293,7 +376,12 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
         description: "Security contact metadata in the canonical www/ location",
         category: CheckCategory::Security,
         points: 3,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
 ];
 
@@ -325,44 +413,80 @@ pub const BANNED_PATTERNS: &[BannedPattern] = &[
         name: ".bot_directives",
         description: "Legacy bot directives directory at repo root (use .machine_readable/bot_directives)",
         category: CheckCategory::Structure,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     BannedPattern {
         name: "package-lock.json",
         description: "npm lock file (use Deno)",
         category: CheckCategory::LanguagePolicy,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     BannedPattern {
         name: "yarn.lock",
         description: "Yarn lock file (use Deno)",
         category: CheckCategory::LanguagePolicy,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     BannedPattern {
         name: "pnpm-lock.yaml",
         description: "pnpm lock file (use Deno)",
         category: CheckCategory::LanguagePolicy,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     BannedPattern {
         name: "bun.lockb",
         description: "Bun lock file (use Deno)",
         category: CheckCategory::LanguagePolicy,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     BannedPattern {
         name: "go.mod",
         description: "Go module (use Rust)",
         category: CheckCategory::LanguagePolicy,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
     },
     BannedPattern {
         name: "go.sum",
         description: "Go checksum (use Rust)",
         category: CheckCategory::LanguagePolicy,
-        severity: (Severity::Optional, Severity::Recommended, Severity::Required, Severity::Required),
-    },    BannedPattern {
+        severity: (
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+            Severity::Required,
+        ),
+    },
+    BannedPattern {
         // Legacy location: canonical is www/.well-known/ since #53.
         // Advisory (Warn) at minimal and standard while the stage-5 migration
         // window is open; raise .2/.3 to Required once the sweep has landed
@@ -370,9 +494,13 @@ pub const BANNED_PATTERNS: &[BannedPattern] = &[
         name: ".well-known/security.txt",
         description: "Legacy repository-root .well-known/ (canonical location is www/.well-known/)",
         category: CheckCategory::Structure,
-        severity: (Severity::Optional, Severity::Optional, Severity::Recommended, Severity::Required),
+        severity: (
+            Severity::Optional,
+            Severity::Optional,
+            Severity::Recommended,
+            Severity::Required,
+        ),
     },
-
 ];
 
 /// RSR Compliance Report
@@ -432,18 +560,20 @@ pub enum CheckStatus {
 /// Load repository configuration from .rsr.toml
 pub async fn load_repo_config(client: &GitHubClient, owner: &str, repo: &str) -> RepoConfig {
     match client.get_file_content(owner, repo, ".rsr.toml").await {
-        Ok(content) => {
-            toml::from_str(&content).unwrap_or_else(|e| {
-                tracing::warn!("Failed to parse .rsr.toml: {}", e);
-                RepoConfig::default()
-            })
-        }
+        Ok(content) => toml::from_str(&content).unwrap_or_else(|e| {
+            tracing::warn!("Failed to parse .rsr.toml: {}", e);
+            RepoConfig::default()
+        }),
         Err(_) => RepoConfig::default(),
     }
 }
 
 /// Check repository compliance with RSR
-pub async fn check_compliance(config: &Config, owner: &str, repo: &str) -> Result<ComplianceReport> {
+pub async fn check_compliance(
+    config: &Config,
+    owner: &str,
+    repo: &str,
+) -> Result<ComplianceReport> {
     let client = GitHubClient::new(config);
 
     // Load repo-specific configuration
@@ -497,7 +627,11 @@ pub async fn check_compliance_with_policy(
                 name: check_def.name.to_string(),
                 category: check_def.category,
                 severity,
-                status: if exists { CheckStatus::Pass } else { CheckStatus::Skip },
+                status: if exists {
+                    CheckStatus::Pass
+                } else {
+                    CheckStatus::Skip
+                },
                 points: 0,
                 max_points: 0,
                 message: if exists {
@@ -545,7 +679,10 @@ pub async fn check_compliance_with_policy(
                 status,
                 points: 0,
                 max_points: check_def.points,
-                message: format!("{} missing - expected at {}{}", check_def.description, check_def.name, accepted),
+                message: format!(
+                    "{} missing - expected at {}{}",
+                    check_def.description, check_def.name, accepted
+                ),
             });
         }
     }
@@ -613,8 +750,16 @@ pub async fn check_compliance_with_policy(
             category: CheckCategory::Structure,
             severity: workflow_severity,
             status: CheckStatus::Pass,
-            points: if workflow_severity != Severity::Optional { 5 } else { 0 },
-            max_points: if workflow_severity != Severity::Optional { 5 } else { 0 },
+            points: if workflow_severity != Severity::Optional {
+                5
+            } else {
+                0
+            },
+            max_points: if workflow_severity != Severity::Optional {
+                5
+            } else {
+                0
+            },
             message: "GitHub Actions workflows found".to_string(),
         });
     } else {
@@ -633,7 +778,11 @@ pub async fn check_compliance_with_policy(
             severity: workflow_severity,
             status,
             points: 0,
-            max_points: if workflow_severity != Severity::Optional { 5 } else { 0 },
+            max_points: if workflow_severity != Severity::Optional {
+                5
+            } else {
+                0
+            },
             message: "No GitHub Actions workflows".to_string(),
         });
     }
@@ -678,8 +827,16 @@ pub async fn check_compliance_with_policy(
                     category: CheckCategory::Structure,
                     severity: wf_check_severity,
                     status: CheckStatus::Pass,
-                    points: if wf_check_severity != Severity::Optional { 2 } else { 0 },
-                    max_points: if wf_check_severity != Severity::Optional { 2 } else { 0 },
+                    points: if wf_check_severity != Severity::Optional {
+                        2
+                    } else {
+                        0
+                    },
+                    max_points: if wf_check_severity != Severity::Optional {
+                        2
+                    } else {
+                        0
+                    },
                     message: format!("{} workflow found", wf_desc),
                 });
             } else {
@@ -698,7 +855,11 @@ pub async fn check_compliance_with_policy(
                     severity: wf_check_severity,
                     status,
                     points: 0,
-                    max_points: if wf_check_severity != Severity::Optional { 2 } else { 0 },
+                    max_points: if wf_check_severity != Severity::Optional {
+                        2
+                    } else {
+                        0
+                    },
                     message: format!("{} workflow missing", wf_desc),
                 });
             }
@@ -733,7 +894,8 @@ pub async fn check_compliance_with_policy(
                     status,
                     points: 0,
                     max_points: 0,
-                    message: "Cargo.toml uses 'hyperpolymath' as author instead of real name".to_string(),
+                    message: "Cargo.toml uses 'hyperpolymath' as author instead of real name"
+                        .to_string(),
                 });
             } else {
                 checks.push(Check {
@@ -759,9 +921,13 @@ pub async fn check_compliance_with_policy(
         max_score += 5;
         if let Some(license) = repo_info.license {
             let approved_licenses = [
-                "pmpl-1.0", "pmpl-1.0-or-later",
-                "apache-2.0", "mit", "mpl-2.0", "lgpl-3.0",
-                "agpl-3.0",  // Legacy: kept for backwards compatibility
+                "pmpl-1.0",
+                "pmpl-1.0-or-later",
+                "apache-2.0",
+                "mit",
+                "mpl-2.0",
+                "lgpl-3.0",
+                "agpl-3.0", // Legacy: kept for backwards compatibility
             ];
             if approved_licenses.contains(&license.key.as_str()) {
                 total_score += 5;
@@ -820,7 +986,10 @@ pub async fn check_compliance_with_policy(
     } else if percentage >= 50.0 {
         format!("Partial RSR compliance ({}) - improvements needed", policy)
     } else {
-        format!("Poor RSR compliance ({}) - significant work required", policy)
+        format!(
+            "Poor RSR compliance ({}) - significant work required",
+            policy
+        )
     };
 
     Ok(ComplianceReport {
@@ -845,14 +1014,10 @@ pub fn policy_summary(policy: PolicyPack) -> &'static str {
         PolicyPack::Standard => {
             "Standard policy: Core files required, security and structure recommended."
         }
-        PolicyPack::Strict => {
-            "Strict policy: Most files required, language policy enforced."
-        }
+        PolicyPack::Strict => "Strict policy: Most files required, language policy enforced.",
         PolicyPack::Enterprise => {
             "Enterprise policy: All checks required, full compliance mandatory."
         }
-        PolicyPack::Custom => {
-            "Custom policy: Defined by repository .rsr.toml configuration."
-        }
+        PolicyPack::Custom => "Custom policy: Defined by repository .rsr.toml configuration.",
     }
 }

@@ -11,13 +11,13 @@
 //! - User-controlled content is sanitized before inclusion in markdown output.
 
 use anyhow::Result;
-use hmac::{Hmac, Mac, KeyInit};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
 use tracing::{info, warn};
 
 use crate::config::Config;
-use crate::github::{CreateCheckRun, CheckRunOutput, GitHubClient};
+use crate::github::{CheckRunOutput, CreateCheckRun, GitHubClient};
 use crate::rsr;
 use crate::sanitize;
 
@@ -49,10 +49,7 @@ pub async fn handle_push(config: &Config, body: &str) -> Result<()> {
     let repo_name = &event.repository.name;
     sanitize::validate_owner_repo(owner, repo_name)?;
 
-    info!(
-        "Push to {}/{} on branch {}",
-        owner, repo_name, event.r#ref
-    );
+    info!("Push to {}/{} on branch {}", owner, repo_name, event.r#ref);
 
     // Only check on default branch pushes
     let default_branch = format!("refs/heads/{}", event.repository.default_branch);
@@ -63,12 +60,7 @@ pub async fn handle_push(config: &Config, body: &str) -> Result<()> {
 
     // Run compliance check
     let client = GitHubClient::new(config);
-    let report = rsr::check_compliance(
-        config,
-        owner,
-        repo_name,
-    )
-    .await?;
+    let report = rsr::check_compliance(config, owner, repo_name).await?;
 
     // Create check run - fail if required checks didn't pass
     let conclusion = if !report.required_passed {
@@ -94,11 +86,7 @@ pub async fn handle_push(config: &Config, body: &str) -> Result<()> {
     };
 
     client
-        .create_check_run(
-            owner,
-            repo_name,
-            &check_run,
-        )
+        .create_check_run(owner, repo_name, &check_run)
         .await?;
 
     info!("Created check run for push (policy: {})", report.policy);
@@ -117,10 +105,7 @@ pub async fn handle_pull_request(config: &Config, body: &str) -> Result<()> {
 
     info!(
         "Pull request #{} {} on {}/{}",
-        event.pull_request.number,
-        event.action,
-        owner,
-        repo_name
+        event.pull_request.number, event.action, owner, repo_name
     );
 
     // Only check on opened/synchronized
@@ -130,12 +115,7 @@ pub async fn handle_pull_request(config: &Config, body: &str) -> Result<()> {
 
     // Run compliance check
     let client = GitHubClient::new(config);
-    let report = rsr::check_compliance(
-        config,
-        owner,
-        repo_name,
-    )
-    .await?;
+    let report = rsr::check_compliance(config, owner, repo_name).await?;
 
     // Create check run - fail if required checks didn't pass
     let conclusion = if !report.required_passed {
@@ -161,11 +141,7 @@ pub async fn handle_pull_request(config: &Config, body: &str) -> Result<()> {
     };
 
     client
-        .create_check_run(
-            owner,
-            repo_name,
-            &check_run,
-        )
+        .create_check_run(owner, repo_name, &check_run)
         .await?;
 
     info!("Created check run for PR (policy: {})", report.policy);
@@ -182,10 +158,7 @@ pub async fn handle_repository(config: &Config, body: &str) -> Result<()> {
     let repo_name = &event.repository.name;
     sanitize::validate_owner_repo(owner, repo_name)?;
 
-    info!(
-        "Repository {} {}/{}",
-        event.action, owner, repo_name
-    );
+    info!("Repository {} {}/{}", event.action, owner, repo_name);
 
     // On repository creation, create an issue with RSR checklist
     if event.action == "created" {
@@ -253,11 +226,7 @@ pub async fn handle_installation(_config: &Config, body: &str) -> Result<()> {
     let account_login = &event.installation.account.login;
     sanitize::validate_github_name(account_login, "account login")?;
 
-    info!(
-        "Installation {} for {}",
-        event.action,
-        account_login
-    );
+    info!("Installation {} for {}", event.action, account_login);
 
     Ok(())
 }
@@ -285,11 +254,7 @@ fn format_report_text(report: &rsr::ComplianceReport) -> String {
     ];
 
     for (cat_name, cat) in categories {
-        let cat_checks: Vec<_> = report
-            .checks
-            .iter()
-            .filter(|c| c.category == cat)
-            .collect();
+        let cat_checks: Vec<_> = report.checks.iter().filter(|c| c.category == cat).collect();
 
         if cat_checks.is_empty() {
             continue;

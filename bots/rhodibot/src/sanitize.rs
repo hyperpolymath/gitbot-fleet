@@ -11,7 +11,7 @@
 //! - File paths are checked for path traversal sequences (`..`, absolute paths)
 //! - Markdown output sanitizes user-controlled content to prevent injection
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 /// Maximum allowed length for GitHub owner/repo names.
 /// GitHub allows up to 100 characters for org/user names and 100 for repo names.
@@ -98,10 +98,7 @@ pub fn validate_file_path(file_path: &str) -> Result<()> {
     // Check for path traversal sequences
     for component in file_path.split('/') {
         if component == ".." {
-            bail!(
-                "File path contains traversal sequence: '{}'",
-                file_path
-            );
+            bail!("File path contains traversal sequence: '{}'", file_path);
         }
     }
 
@@ -249,12 +246,18 @@ mod tests {
 
     #[test]
     fn test_sanitize_html_tags() {
-        assert_eq!(sanitize_markdown("<script>alert(1)</script>"), "&lt;script&gt;alert(1)&lt;/script&gt;");
+        assert_eq!(
+            sanitize_markdown("<script>alert(1)</script>"),
+            "&lt;script&gt;alert(1)&lt;/script&gt;"
+        );
     }
 
     #[test]
     fn test_sanitize_markdown_links() {
-        assert_eq!(sanitize_markdown("[click](http://evil.com)"), "\\[click\\](http://evil.com)");
+        assert_eq!(
+            sanitize_markdown("[click](http://evil.com)"),
+            "\\[click\\](http://evil.com)"
+        );
     }
 
     #[test]
@@ -275,9 +278,6 @@ mod tests {
         // Backticks should be backslash-escaped
         assert!(output.contains("\\`"), "should escape '`'");
         // Verify the full output
-        assert_eq!(
-            output,
-            "&lt;b&gt;bold&lt;/b&gt; \\[link\\](url) \\`code\\`"
-        );
+        assert_eq!(output, "&lt;b&gt;bold&lt;/b&gt; \\[link\\](url) \\`code\\`");
     }
 }
