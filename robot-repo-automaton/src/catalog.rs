@@ -155,6 +155,10 @@ impl ErrorCatalog {
         })
     }
 
+    /// Extract catalogue entries from a quoted `define` form or an already
+    /// unwrapped list.
+    ///
+    /// Returns a catalogue-parse error when `value` is not a non-empty list.
     fn find_catalog_content(value: &Value) -> Result<Vec<&Value>> {
         // Handle (define error-catalog '(...)) structure
         if let Some(cons) = value.as_cons() {
