@@ -48,7 +48,7 @@ jobs:
 
       # Explicitly allowed by repository policy; actions.lock pins its commit.
       - name: Select tested Haskell toolchain
-        uses: haskell-actions/setup@v2.12.0
+        uses: haskell-actions/setup@v2.12.1
         with:
           ghc-version: '9.6.6'
           cabal-version: '3.10.3.0'
