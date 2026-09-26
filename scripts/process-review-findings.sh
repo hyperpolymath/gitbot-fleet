@@ -41,6 +41,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Publishing issues is a repository mutation too, not implicit permission.
+if [[ "$DRY_RUN" != "true" ]]; then
+    printf '%s\n' 'BLOCKED: repository directive enforcement is not qualified; issue publication is quarantined. See docs/AUTOMATION-QUARANTINE.adoc.' >&2
+    exit 78
+fi
+
 if [[ ! -d "$PENDING_DIR" ]]; then
     echo "No pending findings at: $PENDING_DIR"
     exit 0

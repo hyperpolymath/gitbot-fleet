@@ -199,6 +199,10 @@ run_panicbot_scan() {
 }
 
 process_findings() {
+    # Do not generate false success evidence or acknowledge pending work.
+    log_error "BLOCKED: repository directive enforcement is not qualified; findings processing is quarantined. See docs/AUTOMATION-QUARANTINE.adoc."
+    return 78
+
     log_info "Processing pending findings..."
 
     # Load confidence thresholds
@@ -722,6 +726,9 @@ PR_BODY
 }
 
 deploy_bots() {
+    log_error "BLOCKED: deployment readiness is not verified; deployment is quarantined. See docs/AUTOMATION-QUARANTINE.adoc."
+    return 78
+
     log_info "Deploying gitbot-fleet bots..."
 
     # Create deployment status
@@ -752,6 +759,10 @@ EOF
 }
 
 generate_rules() {
+    # This path can publish rule PRs and enable auto-merge in CI.
+    log_error "BLOCKED: repository directive enforcement is not qualified; rule generation/publication is quarantined. See docs/AUTOMATION-QUARANTINE.adoc."
+    return 78
+
     log_info "Analyzing observed patterns for rule generation..."
 
     local patterns_file="$SHARED_CONTEXT/learning/observed-patterns.jsonl"

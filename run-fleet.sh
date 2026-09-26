@@ -289,6 +289,11 @@ cmd_fix() {
         esac
     done
 
+    if [[ "$dry_run" != "true" ]]; then
+        log_error "BLOCKED: repository directive enforcement is not qualified; --apply is quarantined. See docs/AUTOMATION-QUARANTINE.adoc."
+        return 78
+    fi
+
     preflight
     log_head "Auto-Fix Pipeline"
 

@@ -148,9 +148,29 @@ enum HookAction {
     },
 }
 
+/// Temporary interlock, not a directive parser. Mutation commands are blocked
+/// before config loading or repository access; dry-run is not an escape hatch.
+fn enforce_automation_quarantine(command: &Commands) -> anyhow::Result<()> {
+    match command {
+        Commands::Scan { .. }
+        | Commands::ScanOrg { .. }
+        | Commands::Catalog { .. }
+        | Commands::Hooks {
+            action: HookAction::Status { .. },
+        }
+        | Commands::Skeleton {
+            action: SkeletonAction::Check { .. },
+        } => Ok(()),
+        _ => anyhow::bail!(
+            "BLOCKED: repository directive enforcement is not qualified; mutation commands are quarantined. See docs/AUTOMATION-QUARANTINE.adoc."
+        ),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    enforce_automation_quarantine(&cli.command)?;
 
     // Initialise structured logging with tracing
     let filter = if cli.verbose {
@@ -796,4 +816,37 @@ fn resolve_repo_path(repo: &str) -> anyhow::Result<PathBuf> {
         repo,
         candidate.display()
     ))
+}
+
+#[cfg(test)]
+mod quarantine_tests {
+    use super::*;
+
+    #[test]
+    fn mutation_commands_are_blocked_even_with_dry_run() {
+        for args in [
+            vec!["rra", "fix", "fixture"],
+            vec!["rra", "--dry-run", "fix", "fixture"],
+            vec!["rra", "hooks", "install", "fixture"],
+            vec!["rra", "hooks", "remove", "fixture"],
+            vec!["rra", "skeleton", "emit", "fixture"],
+        ] {
+            let cli = Cli::try_parse_from(args).expect("valid command");
+            assert!(enforce_automation_quarantine(&cli.command).is_err());
+        }
+    }
+
+    #[test]
+    fn inspection_commands_remain_available() {
+        for args in [
+            vec!["rra", "scan", "fixture"],
+            vec!["rra", "scan-org", "fixture"],
+            vec!["rra", "catalog"],
+            vec!["rra", "hooks", "status", "fixture"],
+            vec!["rra", "skeleton", "check", "fixture"],
+        ] {
+            let cli = Cli::try_parse_from(args).expect("valid command");
+            assert!(enforce_automation_quarantine(&cli.command).is_ok());
+        }
+    }
 }

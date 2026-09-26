@@ -1,0 +1,113 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Automation quarantine — directives before execution
+:toc:
+
+== Status (2026-09-26)
+
+This branch contains a temporary, unconditional interlock on the main fleet
+mutation entry points. It does NOT implement a directive interpreter and is NOT
+an estate-wide shutdown. Nothing has been deployed, pushed, or enabled by this
+change. Existing deployments continue using their existing code.
+
+No environment variable, confidence score, finding payload, or missing directive
+can authorize these quarantined entry points. Removing the interlock requires a
+reviewed code change after the release criteria below are satisfied.
+
+== Protected entry points
+
+* `scripts/dispatch-runner.sh`: all dispatch, including `--dry-run`. The existing
+  dry-run path can write outcome/heartbeat state, so it is not a policy-only audit.
+* `run-fleet.sh fix --apply`: blocked before preflight; dry-run preview remains
+  available but is NOT an authorization decision.
+* `fleet-coordinator.sh process-findings`: blocked before generating scripts,
+  recording synthetic success, or acknowledging findings. This also blocks the
+  processing phase of `scan-supervised --process`.
+* `fleet-coordinator.sh generate-rules`: blocked, including its CI path that can
+  publish PRs and enable auto-merge.
+* `fleet-coordinator.sh deploy-bots`: blocked instead of writing fake readiness.
+* `scripts/process-review-findings.sh`: live issue publication blocked; preview
+  remains available. Comments/issues/PRs are writes, not permission-free reporting.
+* Rust `fleet run`: simulation removed, now returns an explicit error.
+* Robot-repo-automaton CLI: fix (including dry-run), hook install/remove, and
+  skeleton emission blocked before config loading. Inspection commands remain.
+  Newly added command variants default to blocked until explicitly classified.
+
+Shell interlocks return 78 with `BLOCKED`; Rust CLI interlocks return errors.
+Help remains available. Local reports/scans are not certified side-effect-free;
+scanners may create caches or reports. Do not launch estate scans as a workaround.
+Scheduled learning workflows will fail visibly rather than claim success when
+using this version. That is intentional until policy enforcement is qualified.
+
+== Limits — do not mistake this for a sandbox
+
+Direct invocation of `fix-*.sh`, library APIs, standalone bot binaries, maintenance
+runners, external workflows/apps, old images/binaries and existing deployments are
+NOT covered by these CLI interlocks. Other repositories and scheduled jobs have
+not been changed. Anyone with source-write access can change the interlock.
+The containment tests certify the listed shell entry points, not every possible
+mutation path in this repository or elsewhere.
+
+Before deploying repairs, inventory and disable/pause unauthorized mutators at
+the actual scheduler/service/App layer under owner control. Use token scope and
+branch protection as independent enforcement, not just shell conventions. Do not
+increase credential scope to make quarantined work run.
+
+== Why presence checks are insufficient
+
+`robot-repo-automaton/src/confidence.rs` reads one SCM file for thresholds;
+missing, unreadable or malformed files fall back to defaults. That is not a
+permission decision. This fallback remains legacy code behind the CLI interlock;
+it must not be reused as authorization by a library caller.
+
+Here, `.machine_readable/descriptiles/AGENTIC.a2ml` declares permissions and
+constraints, while `.machine_readable/bot_directives/` contains methodology,
+coverage and debt. Other repositories may contain bot-specific SCM directives or
+older layouts. Constraints can also be prose/comments. Do not discard them just
+because they are not in a parser's supported schema.
+
+An old directive is NOT permission to ignore its restrictions. Staleness may
+invalidate a grant, never turn a denial into an allowance. Date/mtime alone cannot
+establish that guidance reflects the owner's current intent.
+
+== Required work before unlocking
+
+. *Read-only inventory*: discover canonical and legacy directive locations,
+  AGENTIC, repo instructions and relevant contracts in each explicitly enrolled
+  target. Record repository identity, source revision, file paths and content
+  hashes. Do not create replacement defaults, relocate originals, or template
+  over local guidance. Missing/inaccessible repositories are unknown, not clean.
+. *Policy semantics*: review existing formats before selecting a schema. Separate
+  permissions from methodology and confidence. Specify bot identity, operation,
+  protected paths, generated/vendor exclusions and human-approval requirements.
+  Record unsupported prose as unresolved, not ignored. Never execute directives
+  as shell or Scheme code to interpret them.
+. *Precedence*: grants must satisfy every applicable restriction; a global grant
+  cannot override a local deny. Conflicting, missing, malformed, unsupported or
+  stale grants block mutation pending owner review. No automatic policy repair.
+. *Approval binding*: approve a specific repo, bot, operation, target revision and
+  policy-content digest; expire approvals. Recheck before writing/publishing,
+  including nested scopes and symlink boundaries. Policy changes invalidate the
+  approval; a job cannot authorize its own changes to directives.
+. *One execution boundary*: gate every fixer, library/service adapter, hook,
+  scheduler, issue/PR publisher and review path. Preserve existing licence and
+  third-party exclusions. Confidence is evidence, never authority.
+. *Adversarial tests*: missing/malformed/old/conflicting directives, legacy-only
+  directives, local denies, unsupported rules, protected paths, changed policies
+  after planning, symlink escapes, absent credentials and direct-entry bypasses.
+  Denied jobs must produce no target changes or fake success/acknowledgement.
+. *Shadow evaluation*: publish proposed decisions and exact policy reasons without
+  fixes. Owners review representative repositories, especially unusual ones.
+. *Canary only*: one explicitly approved disposable target and a harmless fix,
+  with before/after evidence and a targeted verification. No auto-merge. Then
+  per-repo opt-in, bounded concurrency and an independently operable kill switch.
+
+Do not infer that all repositories consent because one canary passes.
+
+== Validation
+
+Run `bash tests/automation-quarantine-test.sh`. It uses isolated script copies and
+external-command sentinels; it does not contact GitHub or apply fixes. Rust
+quarantine tests are in `robot-repo-automaton/src/main.rs`; run
+`cargo test --manifest-path robot-repo-automaton/Cargo.toml --bin robot-repo-automaton quarantine_tests`
+in a Rust-enabled environment. These tests are not a substitute for full policy
+conformance testing.

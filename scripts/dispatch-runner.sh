@@ -118,6 +118,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Temporary fail-closed quarantine. Even --dry-run writes outcome/heartbeat
+# state below, so it is not an authorized policy-only inspection mode.
+# No environment override: removal requires reviewed directive enforcement.
+printf '%s\n' 'BLOCKED: repository directive enforcement is not qualified; dispatch is quarantined (including --dry-run). See docs/AUTOMATION-QUARANTINE.adoc.' >&2
+exit 78
+
 # --- Validate ---
 if [[ ! -f "$MANIFEST_PATH" ]]; then
     echo "No manifest found at: $MANIFEST_PATH"
