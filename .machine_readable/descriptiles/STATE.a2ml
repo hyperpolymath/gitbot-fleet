@@ -45,3 +45,11 @@ actions = [
 [maintenance-status]
 last-run-utc = "2026-04-05T22:00:00ZT00:00:00Z"
 last-result = "unknown"  # unknown | pass | warn | fail
+
+[automation-quarantine-2026-09-26]
+status = "local-branch-only-not-deployed"
+reason = "Main paths do not reliably enforce repo-local directives; audit reproduced false fix success and zero-coverage scan success. Earlier operational claims above are historical, not current verification."
+changes = "Main shell mutation paths blocked with exit 78; Rust fleet simulation removed; RRA CLI mutations blocked pending policy qualification."
+validation = "Shell containment tests passed; existing E2E 36 passed after supplying PyYAML. Rust tests not run: toolchain unavailable."
+next = "Read-only estate directive inventory and explicit policy contract. Do not enable execution or increase permissions before local restrictions are enforced."
+evidence = "docs/AUTOMATION-QUARANTINE.adoc; audits/fleet-wiring-2026-09-26.md"

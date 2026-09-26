@@ -60,3 +60,13 @@ coverage-percent = 0
 # easy-low-completed = 2
 # hard-low-deferred = 4
 # assessment = "Correctly prioritised — all MUST items addressed before COULDs"
+
+[coverage.visited.automation-quarantine]
+date = "2026-09-26"
+ring = 1
+notes = "Audited main fleet execution paths and local directives. Added unconditional quarantine to main mutation entry points; no deployment or external repository changes. Shell containment tests and 36 existing E2E checks passed. Rust tests added but not run: cargo/rustc unavailable. This is not a complete estate policy audit."
+
+[coverage.skipped-musts.directive-enforcement]
+priority = "P0"
+issue = "Inventory existing per-repo directives read-only; implement policy semantics and gate every mutator before lifting quarantine. Direct scripts, library APIs and deployed services remain outside these CLI interlocks."
+discovered = "2026-09-26"

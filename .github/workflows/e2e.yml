@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - name: Install PyYAML (for workflow YAML validation)
         run: pip install pyyaml --quiet
+      - name: Verify automation quarantine
+        run: bash tests/automation-quarantine-test.sh
       - name: Run E2E tests
         run: bash tests/e2e.sh
       - name: Verify canonical descriptile policy repair

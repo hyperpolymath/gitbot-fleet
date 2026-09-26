@@ -145,63 +145,12 @@ async fn main() -> Result<()> {
 }
 
 async fn run_bots(
-    repo_path: &PathBuf,
-    repo_name: &str,
-    bot_names: Vec<String>,
-    continue_on_error: bool,
+    _repo_path: &PathBuf,
+    _repo_name: &str,
+    _bot_names: Vec<String>,
+    _continue_on_error: bool,
 ) -> Result<()> {
-    println!(
-        "{} {}",
-        "Running fleet on:".bold(),
-        repo_name.bright_blue()
-    );
-
-    let mut ctx = FleetContext::new(repo_name, repo_path);
-    ctx.register_all_bots();
-
-    let bots_to_run = if bot_names.is_empty() {
-        BotId::all()
-    } else {
-        bot_names
-            .iter()
-            .filter_map(|name| parse_bot_id(name))
-            .collect()
-    };
-
-    let mut success_count = 0;
-    let mut error_count = 0;
-
-    for bot in bots_to_run {
-        print!("  {} {:?}... ", "→".bright_green(), bot);
-
-        match ctx.start_bot(bot) {
-            Ok(_) => {
-                println!("{}", "started".green());
-
-                // Simulate bot execution (would call actual bot here)
-                ctx.complete_bot(bot, 0, 0, 0)?;
-                success_count += 1;
-            }
-            Err(e) => {
-                println!("{}: {}", "failed".red(), e);
-                error_count += 1;
-
-                if !continue_on_error {
-                    return Err(e.into());
-                }
-            }
-        }
-    }
-
-    println!();
-    println!(
-        "{} {} succeeded, {} failed",
-        "Summary:".bold(),
-        success_count.to_string().green(),
-        error_count.to_string().red()
-    );
-
-    Ok(())
+    anyhow::bail!("BLOCKED: fleet execution is simulated and repository directive enforcement is not qualified. See docs/AUTOMATION-QUARANTINE.adoc.")
 }
 
 async fn show_status(repo_path: &PathBuf, repo_name: &str, detailed: bool) -> Result<()> {
