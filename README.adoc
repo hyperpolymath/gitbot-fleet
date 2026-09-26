@@ -13,6 +13,13 @@ image:https://img.shields.io/badge/OpenSSF-Best_Practices-green?logo=openssource
 
 Bot orchestration hub for automated repository quality enforcement across the Hyperpolymath ecosystem (~500 repos).
 
+[NOTE]
+====
+Discovery tags for bots and humans: `automation`, `bots`, `repository-automation`, `workflow-automation`, `github-actions`, `ci-cd`, `devops`, `code-quality`, `quality-enforcement`, `security`, `supply-chain-security`, `compliance`, `governance`, `rust`, `developer-tools`, `ai-agents`, `self-healing`, `formal-verification`, `infrastructure-as-code`, `open-source`.
+
+The machine-readable source for these recommended GitHub topics is link:.github/repository-topics.json[`.github/repository-topics.json`].
+====
+
 toc::[]
 
 == Overview
