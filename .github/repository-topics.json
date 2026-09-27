@@ -1,0 +1,56 @@
+{
+  "description": "Discovery metadata for GitHub repository topics and bot-readable repository classification.",
+  "recommended_topic_count": 20,
+  "minimum_topic_count": 7,
+  "topics": [
+    "automation",
+    "bots",
+    "repository-automation",
+    "workflow-automation",
+    "github-actions",
+    "ci-cd",
+    "devops",
+    "code-quality",
+    "quality-enforcement",
+    "security",
+    "supply-chain-security",
+    "compliance",
+    "governance",
+    "rust",
+    "developer-tools",
+    "ai-agents",
+    "self-healing",
+    "formal-verification",
+    "infrastructure-as-code",
+    "open-source"
+  ],
+  "short_description": "Rust-powered bot fleet for GitHub repository automation, code quality, CI/CD governance, security, and self-healing maintenance.",
+  "selection_rationale": {
+    "bot_discovery": [
+      "automation",
+      "bots",
+      "repository-automation",
+      "workflow-automation",
+      "github-actions",
+      "ai-agents",
+      "self-healing"
+    ],
+    "human_discovery": [
+      "developer-tools",
+      "code-quality",
+      "security",
+      "supply-chain-security",
+      "devops",
+      "rust",
+      "open-source"
+    ],
+    "domain_accuracy": [
+      "quality-enforcement",
+      "compliance",
+      "governance",
+      "formal-verification",
+      "infrastructure-as-code",
+      "ci-cd"
+    ]
+  }
+}
