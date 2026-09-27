@@ -155,11 +155,18 @@ scan_supervised_repos() {
     fi
 
     local -a repo_paths
-    mapfile -t repo_paths < <("$list_script" "${args[@]}")
+    local resolved_repos
+    if ! resolved_repos=$("$list_script" "${args[@]}"); then
+        log_error "Failed to resolve supervised repository inventory"
+        return 1
+    fi
+    if [[ -n "$resolved_repos" ]]; then
+        mapfile -t repo_paths <<< "$resolved_repos"
+    fi
 
     if [[ "${#repo_paths[@]}" -eq 0 ]]; then
-        log_warn "No supervised repositories resolved"
-        return 0
+        log_error "No supervised repositories resolved; refusing a false-green scan"
+        return 1
     fi
 
     log_info "Scanning ${#repo_paths[@]} supervised repos"
@@ -175,6 +182,11 @@ scan_supervised_repos() {
     done
 
     log_info "Supervised scan complete: scanned=$scanned failed=$failed"
+
+    if [[ "$failed" -gt 0 ]]; then
+        log_error "Supervised scan incomplete: $failed of ${#repo_paths[@]} repositories failed"
+        return 1
+    fi
 
     if [[ "$process_after" == true ]]; then
         process_findings
