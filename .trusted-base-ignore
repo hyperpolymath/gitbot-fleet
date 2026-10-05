@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# .trusted-base-ignore — path-fragment exemptions for the estate
+# Trusted-Base Reduction Policy enforcer
+# (hyperpolymath/standards/scripts/check-trusted-base.sh).
+#
+# Each non-comment line is a substring matched against the path of a
+# detected escape hatch.
+
+# Pinned sync of hyperpolymath/echidnabot (bots/echidnabot/FLEET-SYNC.json).
+# proofs/ holds deliberate admitted/sorry stubs: fixtures that echidnabot's
+# protocol-contract tests must detect as unsound. They are not trusted base.
+bots/echidnabot/proofs/
