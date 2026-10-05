@@ -1,0 +1,24 @@
+{
+  "_comment": "SPDX-License-Identifier: MPL-2.0",
+  "_description": "Seam-test fixture: minimal GitHub push webhook payload simulating a push event that touches a .v (Coq) file. Used by tests/seam_test.rs to exercise the 7a mode-routing + 7b corpus-bridge path without a live platform API.",
+  "ref": "refs/heads/main",
+  "after": "cafecafecafecafecafecafecafecafe12345678",
+  "before": "0000000000000000000000000000000000000000",
+  "commits": [
+    {
+      "id": "cafecafecafecafecafecafecafecafe12345678",
+      "message": "Add trivial Coq identity theorem",
+      "added": ["proofs/coq/trivial_ok.v"],
+      "removed": [],
+      "modified": []
+    }
+  ],
+  "repository": {
+    "full_name": "test-owner/coq-proof-repo",
+    "id": 12346,
+    "name": "coq-proof-repo",
+    "private": false
+  },
+  "_prover": "coq",
+  "_expected_corpus_prover": "Coq"
+}

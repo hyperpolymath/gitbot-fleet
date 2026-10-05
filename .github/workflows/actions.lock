@@ -15,7 +15,7 @@ workflows:
         - 'haskell-actions/setup@v2.12.1'
     '.github/workflows/codeql.yml':
         - 'actions/checkout@v7.0.1'
-        - 'github/codeql-action@1c5b675653bb5c22dbe9b12b556ec555138e09fd'
+        - 'github/codeql-action@v4.38.2'
     '.github/workflows/dogfood-gate.yml':
         - 'actions/checkout@v7.0.1'
         - 'hyperpolymath/deed-ecosystem@main'
@@ -48,7 +48,7 @@ workflows:
         - 'actions/checkout@v7.0.1'
         - 'actions/upload-artifact@v7.0.1'
         - 'dtolnay/rust-toolchain@v1'
-        - 'Swatinem/rust-cache@v2.9.2'
+        - 'swatinem/rust-cache@v2.9.2'
     '.github/workflows/push-email-notify.yml':
         - 'hyperpolymath/smtp-notify-action@v0.3.0'
     '.github/workflows/repo-integrity-guard.yml':
@@ -61,12 +61,9 @@ workflows:
         - 'hyperpolymath/standards@571cc734cd69fb846032ec77a662aa8ee4fc32cd'
     '.github/workflows/supervised-fleet-scan.yml':
         - 'actions/checkout@v7.0.1'
+    '.github/workflows/vendored-bot-drift.yml':
+        - 'actions/checkout@v7.0.1'
 dependencies:
-    'Swatinem/rust-cache@v2.9.2':
-        ref: 'v2.9.2'
-        commit: 'sha1-6323deb102c322ba6fcbdcafc7e3dddab59af2b6'
-        owner_id: 580492
-        repo_id: 298565987
     'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9':
         ref: '55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         commit: 'sha1-55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
@@ -144,36 +141,16 @@ dependencies:
         commit: 'sha1-54075bcc5e249e4758d363f27d099f55d843f124'
         owner_id: 47606891
         repo_id: 331103973
-    'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63':
-        ref: 'b96794f015dfd88f77b49b1c93e0fa7110f94c63'
-        commit: 'sha1-b96794f015dfd88f77b49b1c93e0fa7110f94c63'
-        owner_id: 9919
-        repo_id: 259445878
-    'github/codeql-action@1c5b675653bb5c22dbe9b12b556ec555138e09fd':
-        ref: '1c5b675653bb5c22dbe9b12b556ec555138e09fd'
-        commit: 'sha1-1c5b675653bb5c22dbe9b12b556ec555138e09fd'
-        owner_id: 9919
-        repo_id: 259445878
     'github/codeql-action@cdf488f595d80d6e07e03d4674febd5ab45fa938':
         ref: 'cdf488f595d80d6e07e03d4674febd5ab45fa938'
         commit: 'sha1-cdf488f595d80d6e07e03d4674febd5ab45fa938'
         owner_id: 9919
         repo_id: 259445878
-    'github/codeql-action@v4.37.8':
-        ref: 'v4.37.8'
-        commit: 'sha1-db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28'
+    'github/codeql-action@v4.38.2':
+        ref: 'v4.38.2'
+        commit: 'sha1-2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2'
         owner_id: 9919
         repo_id: 259445878
-    'github/codeql-action@v4.38.0':
-        ref: 'v4.38.0'
-        commit: 'sha1-b96794f015dfd88f77b49b1c93e0fa7110f94c63'
-        owner_id: 9919
-        repo_id: 259445878
-    'haskell-actions/setup@v2.12.0':
-        ref: 'v2.12.0'
-        commit: 'sha1-6037f33647c3f17758a2356c80fc4a53d7e0685d'
-        owner_id: 75048950
-        repo_id: 623796603
     'haskell-actions/setup@v2.12.1':
         ref: 'v2.12.1'
         commit: 'sha1-0f7370ccbc65f22514ec3e094f6601b8d61fbbf7'
@@ -218,11 +195,6 @@ dependencies:
             - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'
     'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc':
         ref: '2d1146689b8cda280b9bc96326124645441f03bc'
-        commit: 'sha1-2d1146689b8cda280b9bc96326124645441f03bc'
-        owner_id: 67707773
-        repo_id: 421101922
-    'ossf/scorecard-action@v2.4.4':
-        ref: 'v2.4.4'
         commit: 'sha1-2d1146689b8cda280b9bc96326124645441f03bc'
         owner_id: 67707773
         repo_id: 421101922

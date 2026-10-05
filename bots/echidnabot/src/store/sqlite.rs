@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! SQLite store implementation
 
@@ -6,8 +7,7 @@ use async_trait::async_trait;
 use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 use uuid::Uuid;
 
-use super::{models::{ProofJobRecord, ProofObligationRecord, ProofResultRecord, Repository}, Store};
-// Local row types (RepoRow, JobRow, ResultRow, ObligationRow) are defined below.
+use super::{models::*, Store};
 use crate::adapters::Platform;
 use crate::dispatcher::ProverKind;
 use crate::error::{Error, Result};
@@ -32,6 +32,27 @@ impl SqliteStore {
         Ok(store)
     }
 
+    /// Gracefully close the underlying connection pool.
+    ///
+    /// Called during shutdown to drain outstanding queries and release
+    /// SQLite file handles cleanly. After `close()`, all `Store`
+    /// operations on this instance return an error. Safe to call once;
+    /// subsequent calls are no-ops because `Pool::close()` is idempotent.
+    ///
+    /// See `crate::shutdown::ShutdownCoordinator` for the orchestrated
+    /// call site (DB close runs after the scheduler drains, so no
+    /// in-flight job tries to write after the pool is closed).
+    pub async fn close(&self) {
+        self.pool.close().await;
+    }
+
+    /// Borrow the underlying pool. Exposed for shutdown coordination
+    /// (e.g. wiring `pool.close()` into the shutdown sequence without
+    /// taking ownership of the `SqliteStore`).
+    pub fn pool(&self) -> &Pool<Sqlite> {
+        &self.pool
+    }
+
     /// Run database migrations
     async fn run_migrations(&self) -> Result<()> {
         sqlx::query(
@@ -50,6 +71,8 @@ impl SqliteStore {
                 last_checked_commit TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'verifier',
+                regulator_coverage_threshold INTEGER NOT NULL DEFAULT 100,
                 UNIQUE(platform, owner, name)
             )
             "#,
@@ -70,12 +93,35 @@ impl SqliteStore {
                 queued_at TEXT NOT NULL,
                 started_at TEXT,
                 completed_at TEXT,
-                error_message TEXT
+                error_message TEXT,
+                pr_number INTEGER,
+                delivery_id TEXT
             )
             "#,
         )
         .execute(&self.pool)
         .await?;
+
+        // Idempotent migrations for older databases. SQLite returns
+        // "duplicate column" when the column already exists; we treat that
+        // as success.
+        for ddl in [
+            "ALTER TABLE proof_jobs ADD COLUMN pr_number INTEGER",
+            "ALTER TABLE proof_jobs ADD COLUMN delivery_id TEXT",
+            "ALTER TABLE repositories ADD COLUMN mode TEXT NOT NULL DEFAULT 'verifier'",
+            "ALTER TABLE repositories ADD COLUMN regulator_coverage_threshold INTEGER NOT NULL DEFAULT 100",
+        ] {
+            match sqlx::query(ddl).execute(&self.pool).await {
+                Ok(_) => {}
+                Err(sqlx::Error::Database(e))
+                    if e.message().contains("duplicate column") =>
+                {
+                    // Column already exists — fresh DB created above already
+                    // had it, or an earlier migration added it. Either is fine.
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
 
         sqlx::query(
             r#"
@@ -111,20 +157,20 @@ impl SqliteStore {
         .execute(&self.pool)
         .await?;
 
-        // Proof obligations — added in H2a (replaces file_paths hack from H2-B)
+        // Tactic-outcome table — feedback-loop substrate (Package 7b).
+        // `job_id` is nullable so outcomes recorded via MCP / CLI (no webhook
+        // job) can still be ingested.
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS proof_obligations (
-                id              TEXT PRIMARY KEY,
-                repo_id         TEXT NOT NULL,
-                claim           TEXT NOT NULL,
-                context         TEXT NOT NULL,
-                prover_hint     TEXT,
-                status          TEXT NOT NULL DEFAULT 'pending',
-                proof_job_id    TEXT,
-                created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                completed_at    TEXT,
-                FOREIGN KEY (repo_id) REFERENCES repositories(id)
+            CREATE TABLE IF NOT EXISTS tactic_outcomes (
+                id TEXT PRIMARY KEY,
+                job_id TEXT REFERENCES proof_jobs(id),
+                prover TEXT NOT NULL,
+                goal_fingerprint TEXT NOT NULL,
+                tactic TEXT NOT NULL,
+                succeeded INTEGER NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                created_at TEXT NOT NULL
             )
             "#,
         )
@@ -133,8 +179,8 @@ impl SqliteStore {
 
         sqlx::query(
             r#"
-            CREATE INDEX IF NOT EXISTS idx_proof_obligations_status
-                ON proof_obligations(status);
+            CREATE INDEX IF NOT EXISTS idx_tactic_outcomes_prover_fp
+                ON tactic_outcomes(prover, goal_fingerprint);
             "#,
         )
         .execute(&self.pool)
@@ -142,8 +188,8 @@ impl SqliteStore {
 
         sqlx::query(
             r#"
-            CREATE INDEX IF NOT EXISTS idx_proof_obligations_repo
-                ON proof_obligations(repo_id);
+            CREATE INDEX IF NOT EXISTS idx_tactic_outcomes_prover_tactic
+                ON tactic_outcomes(prover, tactic);
             "#,
         )
         .execute(&self.pool)
@@ -163,8 +209,9 @@ impl Store for SqliteStore {
             INSERT INTO repositories (
                 id, platform, owner, name, webhook_secret, enabled_provers,
                 check_on_push, check_on_pr, auto_comment, enabled,
-                last_checked_commit, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_checked_commit, created_at, updated_at, mode,
+                regulator_coverage_threshold
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(repo.id.to_string())
@@ -180,6 +227,12 @@ impl Store for SqliteStore {
         .bind(&repo.last_checked_commit)
         .bind(repo.created_at.to_rfc3339())
         .bind(repo.updated_at.to_rfc3339())
+        .bind(
+            serde_json::to_value(repo.mode)?
+                .as_str()
+                .unwrap_or("verifier"),
+        )
+        .bind(repo.regulator_coverage_threshold as i64)
         .execute(&self.pool)
         .await?;
 
@@ -187,12 +240,10 @@ impl Store for SqliteStore {
     }
 
     async fn get_repository(&self, id: Uuid) -> Result<Option<Repository>> {
-        let row: Option<RepoRow> = sqlx::query_as(
-            "SELECT * FROM repositories WHERE id = ?",
-        )
-        .bind(id.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<RepoRow> = sqlx::query_as("SELECT * FROM repositories WHERE id = ?")
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
 
         row.map(|r| r.try_into()).transpose()
     }
@@ -218,10 +269,12 @@ impl Store for SqliteStore {
     async fn list_repositories(&self, platform: Option<Platform>) -> Result<Vec<Repository>> {
         let rows: Vec<RepoRow> = match platform {
             Some(p) => {
-                sqlx::query_as("SELECT * FROM repositories WHERE platform = ? ORDER BY created_at DESC")
-                    .bind(format!("{:?}", p))
-                    .fetch_all(&self.pool)
-                    .await?
+                sqlx::query_as(
+                    "SELECT * FROM repositories WHERE platform = ? ORDER BY created_at DESC",
+                )
+                .bind(format!("{:?}", p))
+                .fetch_all(&self.pool)
+                .await?
             }
             None => {
                 sqlx::query_as("SELECT * FROM repositories ORDER BY created_at DESC")
@@ -280,8 +333,9 @@ impl Store for SqliteStore {
             r#"
             INSERT INTO proof_jobs (
                 id, repo_id, commit_sha, prover, file_paths,
-                status, priority, queued_at, started_at, completed_at, error_message
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, priority, queued_at, started_at, completed_at, error_message,
+                pr_number, delivery_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(job.id.to_string())
@@ -295,6 +349,8 @@ impl Store for SqliteStore {
         .bind(job.started_at.map(|t| t.to_rfc3339()))
         .bind(job.completed_at.map(|t| t.to_rfc3339()))
         .bind(&job.error_message)
+        .bind(job.pr_number.map(|n| n as i64))
+        .bind(&job.delivery_id)
         .execute(&self.pool)
         .await?;
 
@@ -302,12 +358,10 @@ impl Store for SqliteStore {
     }
 
     async fn get_job(&self, id: JobId) -> Result<Option<ProofJobRecord>> {
-        let row: Option<JobRow> = sqlx::query_as(
-            "SELECT * FROM proof_jobs WHERE id = ?",
-        )
-        .bind(id.0.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<JobRow> = sqlx::query_as("SELECT * FROM proof_jobs WHERE id = ?")
+            .bind(id.0.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
 
         row.map(|r| r.try_into()).transpose()
     }
@@ -385,67 +439,109 @@ impl Store for SqliteStore {
     }
 
     async fn get_result_for_job(&self, job_id: JobId) -> Result<Option<ProofResultRecord>> {
-        let row: Option<ResultRow> = sqlx::query_as(
-            "SELECT * FROM proof_results WHERE job_id = ?",
-        )
-        .bind(job_id.0.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<ResultRow> = sqlx::query_as("SELECT * FROM proof_results WHERE job_id = ?")
+            .bind(job_id.0.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
 
         row.map(|r| r.try_into()).transpose()
     }
 
-    async fn create_obligation(&self, obligation: &ProofObligationRecord) -> Result<()> {
-        sqlx::query(
+    async fn commit_coverage(
+        &self,
+        repo_id: Uuid,
+        commit_sha: &str,
+    ) -> Result<super::CommitCoverage> {
+        // LEFT JOIN proof_results onto proof_jobs so jobs without results
+        // (still running) are counted as not-proven. Coverage is a
+        // running tally — Regulator runs at each finalize_job, so the
+        // last job to finalize for a commit gets the final say.
+        let row: (i64, i64) = sqlx::query_as(
             r#"
-            INSERT INTO proof_obligations (
-                id, repo_id, claim, context, prover_hint,
-                status, proof_job_id, created_at, completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SELECT
+                COUNT(*) as total,
+                COALESCE(SUM(CASE WHEN pr.success = 1 THEN 1 ELSE 0 END), 0) as proven
+            FROM proof_jobs pj
+            LEFT JOIN proof_results pr ON pr.job_id = pj.id
+            WHERE pj.repo_id = ? AND pj.commit_sha = ?
             "#,
         )
-        .bind(obligation.id.to_string())
-        .bind(obligation.repo_id.to_string())
-        .bind(&obligation.claim)
-        .bind(&obligation.context)
-        .bind(&obligation.prover_hint)
-        .bind(&obligation.status)
-        .bind(&obligation.proof_job_id)
-        .bind(obligation.created_at.to_rfc3339())
-        .bind(obligation.completed_at.map(|t| t.to_rfc3339()))
-        .execute(&self.pool)
+        .bind(repo_id.to_string())
+        .bind(commit_sha)
+        .fetch_one(&self.pool)
         .await?;
 
-        Ok(())
+        Ok(super::CommitCoverage {
+            total: row.0.max(0) as u64,
+            proven: row.1.max(0) as u64,
+        })
     }
 
-    async fn get_obligation(&self, obligation_id: &str) -> Result<Option<ProofObligationRecord>> {
-        let row: Option<ObligationRow> = sqlx::query_as(
-            "SELECT * FROM proof_obligations WHERE id = ?",
-        )
-        .bind(obligation_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(|r| r.try_into()).transpose()
-    }
-
-    async fn link_obligation_to_job(&self, obligation_id: &str, job_id: &str) -> Result<()> {
+    async fn record_tactic_outcome(&self, outcome: &TacticOutcomeRecord) -> Result<()> {
         sqlx::query(
-            "UPDATE proof_obligations SET proof_job_id = ?, status = 'processing' WHERE id = ?",
+            r#"
+            INSERT INTO tactic_outcomes (
+                id, job_id, prover, goal_fingerprint, tactic,
+                succeeded, duration_ms, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
         )
-        .bind(job_id)
-        .bind(obligation_id)
+        .bind(outcome.id.to_string())
+        .bind(outcome.job_id.map(|id| id.to_string()))
+        .bind(format!("{:?}", outcome.prover))
+        .bind(&outcome.goal_fingerprint)
+        .bind(&outcome.tactic)
+        .bind(outcome.succeeded)
+        .bind(outcome.duration_ms)
+        .bind(outcome.created_at.to_rfc3339())
         .execute(&self.pool)
         .await?;
 
         Ok(())
+    }
+
+    async fn list_tactic_outcomes_by_fingerprint(
+        &self,
+        prover: ProverKind,
+        goal_fingerprint: &str,
+        limit: usize,
+    ) -> Result<Vec<TacticOutcomeRecord>> {
+        let rows: Vec<OutcomeRow> = sqlx::query_as(
+            "SELECT * FROM tactic_outcomes \
+             WHERE prover = ? AND goal_fingerprint = ? \
+             ORDER BY created_at DESC LIMIT ?",
+        )
+        .bind(format!("{:?}", prover))
+        .bind(goal_fingerprint)
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(|r| r.try_into()).collect()
+    }
+
+    async fn list_tactic_outcomes_by_tactic(
+        &self,
+        prover: ProverKind,
+        tactic: &str,
+        limit: usize,
+    ) -> Result<Vec<TacticOutcomeRecord>> {
+        let rows: Vec<OutcomeRow> = sqlx::query_as(
+            "SELECT * FROM tactic_outcomes \
+             WHERE prover = ? AND tactic = ? \
+             ORDER BY created_at DESC LIMIT ?",
+        )
+        .bind(format!("{:?}", prover))
+        .bind(tactic)
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(|r| r.try_into()).collect()
     }
 
     async fn health_check(&self) -> Result<bool> {
-        let result: (i32,) = sqlx::query_as("SELECT 1")
-            .fetch_one(&self.pool)
-            .await?;
+        let result: (i32,) = sqlx::query_as("SELECT 1").fetch_one(&self.pool).await?;
         Ok(result.0 == 1)
     }
 }
@@ -469,6 +565,10 @@ struct RepoRow {
     last_checked_commit: Option<String>,
     created_at: String,
     updated_at: String,
+    #[sqlx(default)]
+    mode: Option<String>,
+    #[sqlx(default)]
+    regulator_coverage_threshold: Option<i64>,
 }
 
 impl TryFrom<RepoRow> for Repository {
@@ -480,10 +580,28 @@ impl TryFrom<RepoRow> for Repository {
             "GitLab" => Platform::GitLab,
             "Bitbucket" => Platform::Bitbucket,
             "Codeberg" => Platform::Codeberg,
-            _ => return Err(Error::Internal(format!("Unknown platform: {}", row.platform))),
+            _ => {
+                return Err(Error::Internal(format!(
+                    "Unknown platform: {}",
+                    row.platform
+                )))
+            }
         };
 
         let enabled_provers: Vec<ProverKind> = serde_json::from_str(&row.enabled_provers)?;
+
+        // Parse mode via serde, falling back to Verifier if the column was
+        // null (older DB pre-migration) or contained an unrecognised value.
+        let mode = row
+            .mode
+            .as_deref()
+            .and_then(|s| {
+                serde_json::from_value::<crate::modes::BotMode>(serde_json::Value::String(
+                    s.to_string(),
+                ))
+                .ok()
+            })
+            .unwrap_or_default();
 
         Ok(Repository {
             id: Uuid::parse_str(&row.id).map_err(|e| Error::Internal(e.to_string()))?,
@@ -503,6 +621,11 @@ impl TryFrom<RepoRow> for Repository {
             updated_at: chrono::DateTime::parse_from_rfc3339(&row.updated_at)
                 .map_err(|e| Error::Internal(e.to_string()))?
                 .with_timezone(&chrono::Utc),
+            mode,
+            regulator_coverage_threshold: row
+                .regulator_coverage_threshold
+                .map(|v| v.clamp(0, 100) as u8)
+                .unwrap_or(100),
         })
     }
 }
@@ -520,6 +643,10 @@ struct JobRow {
     started_at: Option<String>,
     completed_at: Option<String>,
     error_message: Option<String>,
+    #[sqlx(default)]
+    pr_number: Option<i64>,
+    #[sqlx(default)]
+    delivery_id: Option<String>,
 }
 
 impl TryFrom<JobRow> for ProofJobRecord {
@@ -557,15 +684,23 @@ impl TryFrom<JobRow> for ProofJobRecord {
             queued_at: chrono::DateTime::parse_from_rfc3339(&row.queued_at)
                 .map_err(|e| Error::Internal(e.to_string()))?
                 .with_timezone(&chrono::Utc),
-            started_at: row.started_at.map(|s| {
-                chrono::DateTime::parse_from_rfc3339(&s)
-                    .map(|t| t.with_timezone(&chrono::Utc))
-            }).transpose().map_err(|e| Error::Internal(e.to_string()))?,
-            completed_at: row.completed_at.map(|s| {
-                chrono::DateTime::parse_from_rfc3339(&s)
-                    .map(|t| t.with_timezone(&chrono::Utc))
-            }).transpose().map_err(|e| Error::Internal(e.to_string()))?,
+            started_at: row
+                .started_at
+                .map(|s| {
+                    chrono::DateTime::parse_from_rfc3339(&s).map(|t| t.with_timezone(&chrono::Utc))
+                })
+                .transpose()
+                .map_err(|e| Error::Internal(e.to_string()))?,
+            completed_at: row
+                .completed_at
+                .map(|s| {
+                    chrono::DateTime::parse_from_rfc3339(&s).map(|t| t.with_timezone(&chrono::Utc))
+                })
+                .transpose()
+                .map_err(|e| Error::Internal(e.to_string()))?,
             error_message: row.error_message,
+            pr_number: row.pr_number.map(|n| n as u64),
+            delivery_id: row.delivery_id,
         })
     }
 }
@@ -607,55 +742,193 @@ impl TryFrom<ResultRow> for ProofResultRecord {
 }
 
 #[derive(sqlx::FromRow)]
-struct ObligationRow {
+struct OutcomeRow {
     id: String,
-    repo_id: String,
-    claim: String,
-    context: String,
-    prover_hint: Option<String>,
-    status: String,
-    proof_job_id: Option<String>,
+    job_id: Option<String>,
+    prover: String,
+    goal_fingerprint: String,
+    tactic: String,
+    succeeded: bool,
+    duration_ms: i64,
     created_at: String,
-    completed_at: Option<String>,
 }
 
-impl TryFrom<ObligationRow> for ProofObligationRecord {
+impl TryFrom<OutcomeRow> for TacticOutcomeRecord {
     type Error = Error;
 
-    fn try_from(row: ObligationRow) -> Result<Self> {
-        Ok(ProofObligationRecord {
+    fn try_from(row: OutcomeRow) -> Result<Self> {
+        let prover = parse_prover(&row.prover)?;
+        let job_id = row
+            .job_id
+            .map(|s| Uuid::parse_str(&s).map_err(|e| Error::Internal(e.to_string())))
+            .transpose()?;
+
+        Ok(TacticOutcomeRecord {
             id: Uuid::parse_str(&row.id).map_err(|e| Error::Internal(e.to_string()))?,
-            repo_id: Uuid::parse_str(&row.repo_id).map_err(|e| Error::Internal(e.to_string()))?,
-            claim: row.claim,
-            context: row.context,
-            prover_hint: row.prover_hint,
-            status: row.status,
-            proof_job_id: row.proof_job_id,
+            job_id,
+            prover,
+            goal_fingerprint: row.goal_fingerprint,
+            tactic: row.tactic,
+            succeeded: row.succeeded,
+            duration_ms: row.duration_ms,
             created_at: chrono::DateTime::parse_from_rfc3339(&row.created_at)
                 .map_err(|e| Error::Internal(e.to_string()))?
                 .with_timezone(&chrono::Utc),
-            completed_at: row.completed_at.map(|s| {
-                chrono::DateTime::parse_from_rfc3339(&s)
-                    .map(|t| t.with_timezone(&chrono::Utc))
-            }).transpose().map_err(|e| Error::Internal(e.to_string()))?,
         })
     }
 }
 
 fn parse_prover(s: &str) -> Result<ProverKind> {
     match s {
-        "Agda" => Ok(ProverKind::Agda),
-        "Coq" => Ok(ProverKind::Coq),
-        "Lean" => Ok(ProverKind::Lean),
-        "Isabelle" => Ok(ProverKind::Isabelle),
-        "Z3" => Ok(ProverKind::Z3),
-        "Cvc5" => Ok(ProverKind::Cvc5),
-        "Metamath" => Ok(ProverKind::Metamath),
-        "HolLight" => Ok(ProverKind::HolLight),
-        "Mizar" => Ok(ProverKind::Mizar),
-        "Pvs" => Ok(ProverKind::Pvs),
-        "Acl2" => Ok(ProverKind::Acl2),
-        "Hol4" => Ok(ProverKind::Hol4),
-        _ => Err(Error::InvalidProver(s.to_string())),
+        "Agda" => Ok(ProverKind::new("agda")),
+        "Coq" => Ok(ProverKind::new("coq")),
+        "Lean" => Ok(ProverKind::new("lean")),
+        "Isabelle" => Ok(ProverKind::new("isabelle")),
+        "Z3" => Ok(ProverKind::new("z3")),
+        "Cvc5" => Ok(ProverKind::new("cvc5")),
+        "Metamath" => Ok(ProverKind::new("metamath")),
+        "HolLight" => Ok(ProverKind::new("hol-light")),
+        "Mizar" => Ok(ProverKind::new("mizar")),
+        "Pvs" => Ok(ProverKind::new("pvs")),
+        "Acl2" => Ok(ProverKind::new("acl2")),
+        "Hol4" => Ok(ProverKind::new("hol4")),
+        _ => Ok(ProverKind::new(s)), // Support all 113 provers dynamically
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::models::{goal_fingerprint, TacticOutcomeRecord};
+
+    async fn fresh_store() -> (SqliteStore, std::path::PathBuf) {
+        let path =
+            std::env::temp_dir().join(format!("echidnabot-store-test-{}.db", Uuid::new_v4()));
+        let url = format!("sqlite://{}?mode=rwc", path.display());
+        let store = SqliteStore::new(&url).await.expect("open store");
+        (store, path)
+    }
+
+    #[tokio::test]
+    async fn tactic_outcome_insert_then_lookup_by_fingerprint() {
+        let (store, path) = fresh_store().await;
+        let fp = goal_fingerprint("forall x : Nat, x = x");
+
+        let first = TacticOutcomeRecord::new(
+            None,
+            ProverKind::new("coq"),
+            fp.clone(),
+            "reflexivity".into(),
+            true,
+            12,
+        );
+        let second = TacticOutcomeRecord::new(
+            None,
+            ProverKind::new("coq"),
+            fp.clone(),
+            "auto".into(),
+            false,
+            30,
+        );
+        store.record_tactic_outcome(&first).await.unwrap();
+        store.record_tactic_outcome(&second).await.unwrap();
+
+        let found = store
+            .list_tactic_outcomes_by_fingerprint(ProverKind::new("coq"), &fp, 10)
+            .await
+            .unwrap();
+        assert_eq!(found.len(), 2);
+        // DESC by created_at — second row (auto) is newer
+        assert_eq!(found[0].tactic, "auto");
+        assert!(!found[0].succeeded);
+        assert_eq!(found[1].tactic, "reflexivity");
+        assert!(found[1].succeeded);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn tactic_outcome_filters_by_prover() {
+        let (store, path) = fresh_store().await;
+        let fp = goal_fingerprint("P /\\ Q -> P");
+
+        store
+            .record_tactic_outcome(&TacticOutcomeRecord::new(
+                None,
+                ProverKind::new("coq"),
+                fp.clone(),
+                "split".into(),
+                true,
+                5,
+            ))
+            .await
+            .unwrap();
+        store
+            .record_tactic_outcome(&TacticOutcomeRecord::new(
+                None,
+                ProverKind::new("lean"),
+                fp.clone(),
+                "exact".into(),
+                true,
+                5,
+            ))
+            .await
+            .unwrap();
+
+        let coq_hits = store
+            .list_tactic_outcomes_by_fingerprint(ProverKind::new("coq"), &fp, 10)
+            .await
+            .unwrap();
+        let lean_hits = store
+            .list_tactic_outcomes_by_fingerprint(ProverKind::new("lean"), &fp, 10)
+            .await
+            .unwrap();
+        assert_eq!(coq_hits.len(), 1);
+        assert_eq!(coq_hits[0].tactic, "split");
+        assert_eq!(lean_hits.len(), 1);
+        assert_eq!(lean_hits[0].tactic, "exact");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn tactic_outcome_lookup_by_tactic() {
+        let (store, path) = fresh_store().await;
+        let fp1 = goal_fingerprint("goal 1");
+        let fp2 = goal_fingerprint("goal 2");
+
+        store
+            .record_tactic_outcome(&TacticOutcomeRecord::new(
+                None,
+                ProverKind::new("coq"),
+                fp1,
+                "intros".into(),
+                true,
+                3,
+            ))
+            .await
+            .unwrap();
+        store
+            .record_tactic_outcome(&TacticOutcomeRecord::new(
+                None,
+                ProverKind::new("coq"),
+                fp2,
+                "intros".into(),
+                false,
+                99,
+            ))
+            .await
+            .unwrap();
+
+        let hits = store
+            .list_tactic_outcomes_by_tactic(ProverKind::new("coq"), "intros", 10)
+            .await
+            .unwrap();
+        assert_eq!(hits.len(), 2);
+        // Both rows share the tactic name but have different fingerprints
+        let successes = hits.iter().filter(|h| h.succeeded).count();
+        assert_eq!(successes, 1);
+
+        let _ = std::fs::remove_file(&path);
     }
 }

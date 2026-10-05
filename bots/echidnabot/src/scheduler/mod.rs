@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Job scheduler for proof verification tasks
 
@@ -8,13 +9,16 @@ pub mod retry; // Exponential backoff for transient failures
 
 pub use job_queue::JobScheduler;
 pub use limiter::{JobLimiter, LimiterConfig};
-pub use retry::{CircuitBreaker, CircuitState, RetryConfig, RetryPolicy, retry, retry_with_backoff};
+pub use retry::{
+    retry, retry_with_backoff, CircuitBreaker, CircuitState, RetryConfig, RetryPolicy,
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::dispatcher::ProverKind;
+use crate::trust::{axiom_tracker::AxiomReport, confidence::ConfidenceReport};
 
 /// Unique job identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -52,10 +56,25 @@ pub struct ProofJob {
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
     pub result: Option<JobResult>,
+    /// PR number that triggered this job (None for direct push events).
+    /// Plumbed through so the result-reporter (Phase 3) can comment on
+    /// the originating PR rather than the commit page.
+    #[serde(default)]
+    pub pr_number: Option<u64>,
+    /// Webhook delivery ID for traceability — `X-GitHub-Delivery` header
+    /// for GitHub, equivalent for GitLab/Bitbucket. Lets us correlate a
+    /// proof outcome back to the exact webhook that triggered it.
+    #[serde(default)]
+    pub delivery_id: Option<String>,
 }
 
 impl ProofJob {
-    pub fn new(repo_id: Uuid, commit_sha: String, prover: ProverKind, file_paths: Vec<String>) -> Self {
+    pub fn new(
+        repo_id: Uuid,
+        commit_sha: String,
+        prover: ProverKind,
+        file_paths: Vec<String>,
+    ) -> Self {
         Self {
             id: JobId::new(),
             repo_id,
@@ -68,12 +87,21 @@ impl ProofJob {
             started_at: None,
             completed_at: None,
             result: None,
+            pr_number: None,
+            delivery_id: None,
         }
     }
 
     /// Create a high-priority job (e.g., for PR checks)
     pub fn with_priority(mut self, priority: JobPriority) -> Self {
         self.priority = priority;
+        self
+    }
+
+    /// Attach PR + delivery context (for jobs originating from webhooks).
+    pub fn with_context(mut self, pr_number: Option<u64>, delivery_id: Option<String>) -> Self {
+        self.pr_number = pr_number;
+        self.delivery_id = delivery_id;
         self
     }
 
@@ -102,9 +130,7 @@ impl ProofJob {
     /// Get duration in milliseconds (if completed)
     pub fn duration_ms(&self) -> Option<u64> {
         match (self.started_at, self.completed_at) {
-            (Some(start), Some(end)) => {
-                Some((end - start).num_milliseconds().max(0) as u64)
-            }
+            (Some(start), Some(end)) => Some((end - start).num_milliseconds().max(0) as u64),
             _ => None,
         }
     }
@@ -129,7 +155,7 @@ pub enum JobPriority {
     Critical = 3, // Manual triggers
 }
 
-/// Result of a completed job
+/// Result of a completed job, including trust-bridge data propagated from ECHIDNA.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobResult {
     pub success: bool,
@@ -138,4 +164,10 @@ pub struct JobResult {
     pub duration_ms: u64,
     pub verified_files: Vec<String>,
     pub failed_files: Vec<String>,
+    /// Confidence level assessed over the aggregated prover output.
+    #[serde(default)]
+    pub confidence: Option<ConfidenceReport>,
+    /// Axiom usage flags found in the aggregated prover output.
+    #[serde(default)]
+    pub axioms: Option<AxiomReport>,
 }

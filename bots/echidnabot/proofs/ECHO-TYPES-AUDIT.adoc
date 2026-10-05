@@ -1,0 +1,76 @@
+== Echo-types audit (2026-06-01)
+
+Per the estate-wide standing directive: every proof in any sibling repo
+with an echo-types link must first audit `+hyperpolymath/echo-types+`,
+reuse if applicable, extend upstream WITH proofs if not, then
+cross-document. L3 (echo) obligations are load-bearing; L1/L4-only
+obligations audit-and-record-as-not-relevant.
+
+Echo-types layer scheme: *L1* regions / *L2* modality / *L3* echo
+(structured residue / fibre shape) / *L4* dyadic (orders, products,
+predicates, exhaustivity, monotonicity).
+
+=== Surface audited
+
+Four files under `+proofs/+`:
+
+* `+proofs/coq/trivial_ok.v+` —
+`+Theorem identity : forall (A : Prop), A -> A+`.
+* `+proofs/coq/admitted_stub.v+` — `+Theorem unproven+` left
+`+Admitted.+`, intentionally — fixture for the axiom-scanner CI path.
+* `+proofs/lean/trivial_ok.lean+` —
+`+theorem identity (A : Prop) (h : A) : A := h+`.
+* `+proofs/lean/sorry_stub.lean+` — body `+:= sorry+`, intentionally —
+fixture for the Regulator-mode `+sorry+` detection path.
+
+JSON test fixtures under `+proofs/test_fixtures/+` are CI test inputs,
+not obligations.
+
+`+src/abi/+` (Idris2) is owner-intentional broken (RSR template
+scaffold; see estate memo `+echidna_src_abi_namespace_intentional+`) and
+out of scope.
+
+=== Classification
+
+All four files are *CI dogfood fixtures*, not proof obligations. Two are
+trivial L4 identity proofs; two are deliberately incomplete to exercise
+the axiom-tracker / Regulator-mode detection of `+Admitted.+` and
+`+sorry+` respectively.
+
+[width="100%",cols="33%,31%,36%",options="header",]
+|===
+|Layer |Count |Status
+|L1 (regions) |0 |n/a — echidnabot is a CI bot, not a typed-substrate
+project
+
+|L2 (modality) |0 |n/a
+
+|L3 (echo) |0 |n/a — no fibre / residue / image-factorisation content
+
+|L4 (dyadic) |2 |trivial identities; fixture purpose only
+
+|Negative fixtures |2 |`+Admitted.+` / `+sorry+` traps, not obligations
+|===
+
+=== Echo-types relevance
+
+*None.* Echidnabot’s proof surface is dogfood for its own proof-aware CI
+runners; there is no content that could reuse or extend echo-types’ echo
+/ loss-taxonomy / residue / image- factorisation / canonical-identity
+stack.
+
+Audit-and-record-as-not-relevant is discharged by this file.
+
+=== Cross-doc echo
+
+* Echidnabot → echo-types: this file.
+* Echo-types → echidnabot: not owed (no proof-relevant content flows
+back upstream).
+
+=== Related obligation
+
+Sibling repo `+echidna+` carries the substantive proof surface; its
+echo-types audit lives at `+echidna/docs/PROOF-NEEDS.md+` § "`Echo-types
+audit (2026-06-01)`". Two L3-shape obligations are cross-referenced
+there (`+ProofStateSerialisation+` roundtrip = EQUIV;
+`+ProverKindInjectivity+` = INJ); none flow through echidnabot.

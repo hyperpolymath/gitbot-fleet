@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 //! GitLab platform adapter (minimal clone support)
 
 use async_trait::async_trait;
-use std::path::PathBuf;
 
 use super::{
     CheckConclusion, CheckRun, CheckRunId, CheckStatus, CommentId, IssueId, NewIssue,
-    PlatformAdapter, PrId, RepoId,
+    PlatformAdapter, PrId, RepoId, ReviewCommentLocation,
 };
 use crate::error::{Error, Result};
 
@@ -42,73 +42,16 @@ impl GitLabAdapter {
 
 #[async_trait]
 impl PlatformAdapter for GitLabAdapter {
-    async fn clone_repo(&self, repo: &RepoId, commit: &str) -> Result<PathBuf> {
-        let temp_dir = tempfile::tempdir().map_err(Error::Io)?;
-        let clone_path = temp_dir.keep();
-        let clone_path_str = clone_path.to_str().ok_or_else(|| {
-            Error::GitHub("Temporary clone path is not valid UTF-8".to_string())
-        })?;
-
+    async fn clone_repo(&self, repo: &RepoId, commit: &str) -> Result<tempfile::TempDir> {
         let url = self.repo_url(repo);
-
-        let status = if commit == "HEAD" {
-            tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path_str])
-                .status()
-                .await
-                .map_err(Error::Io)?
-        } else {
-            tokio::process::Command::new("git")
-                .args([
-                    "clone",
-                    "--depth",
-                    "1",
-                    "--branch",
-                    commit,
-                    &url,
-                    clone_path_str,
-                ])
-                .status()
-                .await
-                .map_err(Error::Io)?
-        };
-
-        if !status.success() && commit != "HEAD" {
-            let status = tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path_str])
-                .status()
-                .await
-                .map_err(Error::Io)?;
-
-            if !status.success() {
-                return Err(Error::GitHub(format!(
-                    "Failed to clone {}",
-                    repo.full_name()
-                )));
-            }
-
-            tokio::process::Command::new("git")
-                .current_dir(&clone_path)
-                .args(["fetch", "--depth", "1", "origin", commit])
-                .status()
-                .await
-                .map_err(Error::Io)?;
-
-            tokio::process::Command::new("git")
-                .current_dir(&clone_path)
-                .args(["checkout", commit])
-                .status()
-                .await
-                .map_err(Error::Io)?;
-        }
-
-        Ok(clone_path)
+        super::clone_revision(&url, commit).await
     }
 
     async fn create_check_run(&self, repo: &RepoId, check: CheckRun) -> Result<CheckRunId> {
-        let token = self.token.as_ref().ok_or_else(|| {
-            Error::Config("GITLAB_TOKEN not set".to_string())
-        })?;
+        let token = self
+            .token
+            .as_ref()
+            .ok_or_else(|| Error::Config("GITLAB_TOKEN not set".to_string()))?;
 
         let project_path = self.project_path(repo);
         let encoded_project = urlencoding::encode(&project_path);
@@ -120,7 +63,10 @@ impl PlatformAdapter for GitLabAdapter {
         );
 
         let (state, description) = match &check.status {
-            CheckStatus::Completed { conclusion, summary } => {
+            CheckStatus::Completed {
+                conclusion,
+                summary,
+            } => {
                 let state = match conclusion {
                     CheckConclusion::Success => "success",
                     CheckConclusion::Failure => "failed",
@@ -167,9 +113,10 @@ impl PlatformAdapter for GitLabAdapter {
     }
 
     async fn create_comment(&self, repo: &RepoId, pr: PrId, body: &str) -> Result<CommentId> {
-        let token = self.token.as_ref().ok_or_else(|| {
-            Error::Config("GITLAB_TOKEN not set".to_string())
-        })?;
+        let token = self
+            .token
+            .as_ref()
+            .ok_or_else(|| Error::Config("GITLAB_TOKEN not set".to_string()))?;
 
         let project_path = self.project_path(repo);
         let encoded_project = urlencoding::encode(&project_path);
@@ -207,17 +154,14 @@ impl PlatformAdapter for GitLabAdapter {
     }
 
     async fn create_issue(&self, repo: &RepoId, issue: NewIssue) -> Result<IssueId> {
-        let token = self.token.as_ref().ok_or_else(|| {
-            Error::Config("GITLAB_TOKEN not set".to_string())
-        })?;
+        let token = self
+            .token
+            .as_ref()
+            .ok_or_else(|| Error::Config("GITLAB_TOKEN not set".to_string()))?;
 
         let project_path = self.project_path(repo);
         let encoded_project = urlencoding::encode(&project_path);
-        let url = format!(
-            "{}/projects/{}/issues",
-            self.api_url(),
-            encoded_project
-        );
+        let url = format!("{}/projects/{}/issues", self.api_url(), encoded_project);
 
         let payload = serde_json::json!({
             "title": issue.title,
@@ -248,17 +192,14 @@ impl PlatformAdapter for GitLabAdapter {
     }
 
     async fn get_default_branch(&self, repo: &RepoId) -> Result<String> {
-        let token = self.token.as_ref().ok_or_else(|| {
-            Error::Config("GITLAB_TOKEN not set".to_string())
-        })?;
+        let token = self
+            .token
+            .as_ref()
+            .ok_or_else(|| Error::Config("GITLAB_TOKEN not set".to_string()))?;
 
         let project_path = self.project_path(repo);
         let encoded_project = urlencoding::encode(&project_path);
-        let url = format!(
-            "{}/projects/{}",
-            self.api_url(),
-            encoded_project
-        );
+        let url = format!("{}/projects/{}", self.api_url(), encoded_project);
 
         let response = self
             .client
@@ -277,5 +218,70 @@ impl PlatformAdapter for GitLabAdapter {
             .as_str()
             .ok_or_else(|| Error::GitHub("Missing default_branch in response".to_string()))?
             .to_string())
+    }
+
+    async fn get_file_contents(
+        &self,
+        repo: &RepoId,
+        branch: Option<&str>,
+        path: &str,
+    ) -> Result<Option<String>> {
+        // GitLab Repository Files API — raw variant skips the JSON
+        // base64 envelope:
+        //   GET /api/v4/projects/:id/repository/files/:filepath/raw?ref=:branch
+        // The :id can be the URL-encoded `owner/name` path, skipping
+        // a numeric project-id resolution round-trip. :filepath also
+        // URL-encoded per the GitLab spec.
+        // Token auth via PRIVATE-TOKEN header when configured.
+        let project_path = self.project_path(repo);
+        let project = urlencoding::encode(&project_path);
+        let file_path = urlencoding::encode(path);
+        let r#ref = branch.unwrap_or("HEAD");
+        let url = format!(
+            "{}/projects/{}/repository/files/{}/raw?ref={}",
+            self.api_url(),
+            project,
+            file_path,
+            urlencoding::encode(r#ref),
+        );
+        let mut req = self.client.get(&url);
+        if let Some(token) = self.token.as_ref() {
+            req = req.header("PRIVATE-TOKEN", token);
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| Error::GitHub(format!("GitLab files API: {}", e)))?;
+        let status = resp.status();
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !status.is_success() {
+            return Err(Error::GitHub(format!(
+                "GitLab files API returned {}",
+                status
+            )));
+        }
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| Error::GitHub(format!("GitLab files response: {}", e)))?;
+        Ok(Some(body))
+    }
+
+    async fn create_review_comment(
+        &self,
+        repo: &RepoId,
+        pr: PrId,
+        body: &str,
+        _location: ReviewCommentLocation,
+    ) -> Result<CommentId> {
+        // GitLab inline review comments require the Discussions API which
+        // is not yet implemented in this adapter. Fall back to a general
+        // MR note so Consultant mode always posts something useful.
+        tracing::debug!(
+            "GitLab create_review_comment: falling back to general MR note (Discussions API not wired)"
+        );
+        self.create_comment(repo, pr, body).await
     }
 }

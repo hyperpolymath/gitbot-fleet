@@ -1,43 +1,63 @@
 # SPDX-License-Identifier: MPL-2.0
-version: 2
-updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    groups:
-      actions:
-        patterns:
-          - "*"
-    open-pull-requests-limit: 2
-
-  # Rust dependencies. Keep every Cargo project in one update entry so the
-  # open-PR limit applies to the fleet as a whole, rather than once per bot.
-  # Grouping by dependency name updates a shared crate across every affected
-  # project in one PR instead of opening one PR per Cargo.lock.
-    ignore:
-      # HOLD: github/codeql-action at v4.38.0 (SHA-pinned). v4.38.1 fails
-      # GitHub workflow-startup validation estate-wide (nexia-list#100;
-      # SHA-form re-bump bypassed versions-scoped ignores - nexia-list#101).
-      # Hold until upstream clears 4.38.1 or a new release verifies green.
-      - dependency-name: "github/codeql-action"
-
-  - package-ecosystem: "cargo"
-    directories:
-      - "/robot-repo-automaton"
-      - "/shared-context"
-      - "/bots/echidnabot"
-      - "/bots/glambot"
-      - "/bots/rhodibot"
-      - "/bots/seambot"
-      - "/bots/sustainabot"
-      - "/bots/finishingbot"
-      - "/bots/accessibilitybot"
-      - "/bots/cipherbot"
-      - "/bots/panicbot"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 3
-    groups:
-      fleet-dependencies:
-        group-by: dependency-name
+{
+  version: 2,
+  updates: [
+    {
+      package-ecosystem: "github-actions",
+      directory: "/",
+      schedule: {
+        interval: "daily",
+      },
+      groups: {
+        actions: {
+          patterns: [
+            "*",
+          ],
+        },
+      },
+      open-pull-requests-limit: 2,
+      ignore: [
+        # HOLD: github/codeql-action at v4.38.0 (SHA-pinned). v4.38.1 fails
+        # GitHub workflow-startup validation estate-wide (nexia-list#100;
+        # SHA-form re-bump bypassed versions-scoped ignores - nexia-list#101).
+        # Hold until upstream clears 4.38.1 or a new release verifies green.
+        {
+          dependency-name: "github/codeql-action",
+        },
+      ],
+    },
+    # Rust dependencies. Keep every Cargo project in one update entry so the
+    # open-PR limit applies to the fleet as a whole, rather than once per bot.
+    # Grouping by dependency name updates a shared crate across every affected
+    # project in one PR instead of opening one PR per Cargo.lock.
+    #
+    # /bots/echidnabot is deliberately absent: it is a pinned sync of
+    # hyperpolymath/echidnabot (bots/echidnabot/FLEET-SYNC.json). Its dependencies
+    # are bumped upstream and arrive here by a pin bump, never independently;
+    # the Vendored bot drift workflow fails on any local edit.
+    {
+      package-ecosystem: "cargo",
+      directories: [
+        "/robot-repo-automaton",
+        "/shared-context",
+        "/bots/glambot",
+        "/bots/rhodibot",
+        "/bots/seambot",
+        "/bots/sustainabot",
+        "/bots/finishingbot",
+        "/bots/accessibilitybot",
+        "/bots/cipherbot",
+        "/bots/panicbot",
+      ],
+      schedule: {
+        interval: "weekly",
+      },
+      open-pull-requests-limit: 3,
+      groups: {
+        fleet-dependencies: {
+          group-by: "dependency-name",
+        },
+      },
+    },
+  ],
+}

@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! GitHub platform adapter using Octocrab
 
 use async_trait::async_trait;
-use std::path::PathBuf;
 
 use super::{
     CheckConclusion, CheckRun, CheckRunId, CheckStatus, CommentId, IssueId, NewIssue,
-    PlatformAdapter, PrId, RepoId,
+    PlatformAdapter, PrId, RepoId, ReviewCommentLocation,
 };
 use crate::error::{Error, Result};
 
 /// GitHub adapter using Octocrab
 pub struct GitHubAdapter {
     client: octocrab::Octocrab,
+    /// Raw HTTP client for APIs not covered by Octocrab (e.g. inline review comments).
+    http: reqwest::Client,
+    token: String,
 }
 
 impl GitHubAdapter {
@@ -24,7 +27,16 @@ impl GitHubAdapter {
             .build()
             .map_err(|e| Error::GitHub(e.to_string()))?;
 
-        Ok(Self { client })
+        let http = reqwest::Client::builder()
+            .user_agent("echidnabot/0.1.0")
+            .build()
+            .map_err(|e| Error::GitHub(e.to_string()))?;
+
+        Ok(Self {
+            client,
+            http,
+            token: token.to_string(),
+        })
     }
 
     /// Create adapter from environment variable
@@ -37,84 +49,17 @@ impl GitHubAdapter {
 
 #[async_trait]
 impl PlatformAdapter for GitHubAdapter {
-    async fn clone_repo(&self, repo: &RepoId, commit: &str) -> Result<PathBuf> {
-        // Create a temporary directory for the clone
-        let temp_dir = tempfile::tempdir().map_err(Error::Io)?;
-        let clone_path = temp_dir.keep();
-        let clone_path_str = clone_path.to_str().ok_or_else(|| {
-            Error::GitHub("Temporary clone path is not valid UTF-8".to_string())
-        })?;
-
-        // Use git to clone (shallow, specific commit)
+    async fn clone_repo(&self, repo: &RepoId, commit: &str) -> Result<tempfile::TempDir> {
         let url = format!("https://github.com/{}/{}.git", repo.owner, repo.name);
-
-        let status = if commit == "HEAD" {
-            tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path_str])
-                .status()
-                .await
-                .map_err(Error::Io)?
-        } else {
-            tokio::process::Command::new("git")
-                .args([
-                    "clone",
-                    "--depth",
-                    "1",
-                    "--branch",
-                    commit,
-                    &url,
-                    clone_path_str,
-                ])
-                .status()
-                .await
-                .map_err(Error::Io)?
-        };
-
-        if !status.success() && commit != "HEAD" {
-            // Try fetching the specific commit instead
-            let status = tokio::process::Command::new("git")
-                .args(["clone", "--depth", "1", &url, clone_path_str])
-                .status()
-                .await
-                .map_err(Error::Io)?;
-
-            if !status.success() {
-                return Err(Error::GitHub(format!(
-                    "Failed to clone {}",
-                    repo.full_name()
-                )));
-            }
-
-            // Fetch and checkout specific commit
-            tokio::process::Command::new("git")
-                .current_dir(&clone_path)
-                .args(["fetch", "--depth", "1", "origin", commit])
-                .status()
-                .await
-                .map_err(Error::Io)?;
-
-            tokio::process::Command::new("git")
-                .current_dir(&clone_path)
-                .args(["checkout", commit])
-                .status()
-                .await
-                .map_err(Error::Io)?;
-        }
-
-        Ok(clone_path)
+        super::clone_revision(&url, commit).await
     }
 
     async fn create_check_run(&self, repo: &RepoId, check: CheckRun) -> Result<CheckRunId> {
-        let full = format!("{}/{}", repo.owner, repo.name);
-        gitbot_shared_context::registry_guard::check_github_write(
-            &full,
-            gitbot_shared_context::ExclusionAction::CreateCheckRun,
-        )
-        .map_err(|e| Error::GitHub(e.to_string()))?;
-
         let checks = self.client.checks(&repo.owner, &repo.name);
 
-        use octocrab::params::checks::{CheckRunConclusion as OctoConclusion, CheckRunStatus as OctoStatus};
+        use octocrab::params::checks::{
+            CheckRunConclusion as OctoConclusion, CheckRunStatus as OctoStatus,
+        };
 
         let (status, conclusion) = match check.status {
             CheckStatus::Queued => (OctoStatus::Queued, None),
@@ -146,7 +91,10 @@ impl PlatformAdapter for GitHubAdapter {
             builder = builder.details_url(url);
         }
 
-        let result = builder.send().await.map_err(|e| Error::GitHub(e.to_string()))?;
+        let result = builder
+            .send()
+            .await
+            .map_err(|e| Error::GitHub(e.to_string()))?;
 
         Ok(CheckRunId(result.id.to_string()))
     }
@@ -159,14 +107,9 @@ impl PlatformAdapter for GitHubAdapter {
     }
 
     async fn create_comment(&self, repo: &RepoId, pr: PrId, body: &str) -> Result<CommentId> {
-        let full = format!("{}/{}", repo.owner, repo.name);
-        gitbot_shared_context::registry_guard::check_github_write(
-            &full,
-            gitbot_shared_context::ExclusionAction::CreateCheckRun,
-        )
-        .map_err(|e| Error::GitHub(e.to_string()))?;
-
-        let pr_num: u64 = pr.0.parse().map_err(|_| Error::GitHub("Invalid PR ID".to_string()))?;
+        let pr_num: u64 =
+            pr.0.parse()
+                .map_err(|_| Error::GitHub("Invalid PR ID".to_string()))?;
 
         let comment = self
             .client
@@ -179,13 +122,6 @@ impl PlatformAdapter for GitHubAdapter {
     }
 
     async fn create_issue(&self, repo: &RepoId, issue: NewIssue) -> Result<IssueId> {
-        let full = format!("{}/{}", repo.owner, repo.name);
-        gitbot_shared_context::registry_guard::check_github_write(
-            &full,
-            gitbot_shared_context::ExclusionAction::CreateIssue,
-        )
-        .map_err(|e| Error::GitHub(e.to_string()))?;
-
         let created = self
             .client
             .issues(&repo.owner, &repo.name)
@@ -207,8 +143,106 @@ impl PlatformAdapter for GitHubAdapter {
             .await
             .map_err(|e| Error::GitHub(e.to_string()))?;
 
-        repo_info
+        Ok(repo_info
             .default_branch
-            .ok_or_else(|| Error::GitHub("Missing default_branch in repository response".to_string()))
+            .unwrap_or_else(|| "main".to_string()))
+    }
+
+    async fn get_file_contents(
+        &self,
+        repo: &RepoId,
+        branch: Option<&str>,
+        path: &str,
+    ) -> Result<Option<String>> {
+        // Bind the `repos(...)` call to a local; `get_content()` borrows
+        // from it, so without the binding the temp drops mid-expression.
+        let repo_handle = self.client.repos(&repo.owner, &repo.name);
+        let mut req = repo_handle.get_content().path(path);
+        if let Some(r) = branch {
+            req = req.r#ref(r);
+        }
+        match req.send().await {
+            Ok(mut content) => {
+                // For a file path the response has a single item; directories
+                // return many. We only call with file paths.
+                if let Some(item) = content.items.pop() {
+                    Ok(item.decoded_content())
+                } else {
+                    Ok(None)
+                }
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                // Map missing-file (404 / NotFound) to Ok(None) so callers
+                // can cascade through the directive resolver. Real
+                // failures (auth, rate-limit, network) bubble up.
+                if msg.contains("404") || msg.to_lowercase().contains("not found") {
+                    Ok(None)
+                } else {
+                    Err(Error::GitHub(msg))
+                }
+            }
+        }
+    }
+
+    async fn create_review_comment(
+        &self,
+        repo: &RepoId,
+        pr: PrId,
+        body: &str,
+        location: ReviewCommentLocation,
+    ) -> Result<CommentId> {
+        let pr_num: u64 =
+            pr.0.parse()
+                .map_err(|_| Error::GitHub("Invalid PR ID".to_string()))?;
+
+        // GitHub API: POST /repos/{owner}/{repo}/pulls/{pull_number}/comments
+        // Requires commit_id, path, side, and line (or position for legacy diffs).
+        let url = format!(
+            "https://api.github.com/repos/{}/{}/pulls/{}/comments",
+            repo.owner, repo.name, pr_num
+        );
+
+        let payload = serde_json::json!({
+            "body": body,
+            "commit_id": location.commit_sha,
+            "path": location.path,
+            "side": "RIGHT",
+            "line": location.line,
+        });
+
+        let response = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Accept", "application/vnd.github.v3+json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| Error::GitHub(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            // 422 = file not in diff; callers fall back to create_comment.
+            return Err(Error::GitHub(format!(
+                "Review comment rejected by GitHub ({}): {}",
+                status, text
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| Error::GitHub(e.to_string()))?;
+
+        Ok(CommentId(
+            data["id"]
+                .as_u64()
+                .map(|id| id.to_string())
+                .ok_or_else(|| {
+                    Error::GitHub("Missing id in review comment response".to_string())
+                })?,
+        ))
     }
 }

@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MPL-2.0
+# Fixture: valence-shell (Coq + Idris2 mix, exploratory).
+# Media-Type: application/vnd.bot-directive+a2ml
+#
+# Shape: Advisor mode (not Regulator) — valence-shell carries OWED
+# annotations and the Idris2 oracle is still maturing. Surfaces
+# suggestions without gating merges.
+
+schema_version = "2.0"
+directive_type = "bot-directive"
+target_bot = "echidnabot"
+project = "valence-shell"
+
+[bot]
+mode = "advisor"
+enabled = true
+
+[provers]
+enabled = ["coq", "idris2"]
+
+[provers.coq]
+flags = ["-R", "formal", "ValenceShell"]
+timeout_seconds = 300
+
+[provers.idris2]
+# Idris2 0.8.0 oracle; build only via chez.boot (see hypatia WF024).
+flags = ["--check"]
+timeout_seconds = 900
+
+[proofs]
+include = [
+  "formal/**/*.v",
+  "src/**/*.idr",
+]
+exclude = [
+  "src/Model.idr.bak",
+  "build/**",
+]
+
+[axioms]
+# valence-shell legitimately uses `admit` during Phase 1 + `believe_me`
+# in Idris2 — these are informational, not blocking.
+forbid = ["sorry"]
+severity = "info"
+
+[merge_block]
+# Advisor mode ignores merge_block; the gate is documented here for
+# future Regulator-mode promotion.
+min_confidence = 3
+
+[blocked_on]
+labels = [
+  "blocked-on:valence-shell#60",
+  "blocked-on:valence-shell#61",
+]

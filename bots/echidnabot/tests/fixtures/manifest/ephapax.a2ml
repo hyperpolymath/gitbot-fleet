@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MPL-2.0
+# Fixture: ephapax (Coq-heavy four-layer redesign).
+# Media-Type: application/vnd.bot-directive+a2ml
+#
+# Shape: Regulator mode + narrow Coq globs + Admitted/sorry forbidden.
+# Mirrors the four-layer redesign in formal/PRESERVATION-DESIGN.md
+# where preservation_l1/_l2/_l3 are derived per-layer; legacy Semantics.v
+# admits remain (provably false) and are excluded from the include set.
+
+schema_version = "2.0"
+directive_type = "bot-directive"
+target_bot = "echidnabot"
+project = "ephapax"
+
+[bot]
+mode = "regulator"
+enabled = true
+
+[provers]
+enabled = ["coq"]
+
+[provers.coq]
+flags = ["-R", "formal", "Ephapax"]
+timeout_seconds = 600
+
+[proofs]
+include = ["formal/**/*.v"]
+# Legacy Semantics.v has provably-false `preservation` (see Counterexample.v);
+# excluded from the gate per owner directive (see ephapax CLAUDE.md root).
+exclude = [
+  "formal/Semantics.v",
+  "formal/_build/**",
+  "third_party/**",
+]
+
+[axioms]
+forbid = ["Admitted", "admit", "sorry"]
+severity = "error"
+
+[merge_block]
+min_confidence = 4
+axiom_severity = "error"
+
+[blocked_on]
+labels = [
+  "blocked-on:verisimdb#3",
+]

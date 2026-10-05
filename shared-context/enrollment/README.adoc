@@ -24,3 +24,12 @@ into repos that already have `+.machine_readable/+`.
 
 Use `+just maintenance-hard-pass <repo-path>+` to run release-gate
 maintenance with fail-on-warn behavior.
+
+=== Discovery scope
+
+`scripts/enroll-hypatia-fleet.sh` lists every clone (a directory holding a
+`.git` directory) at depth 1 to 3 under the repos root, matching the estate's
+star-list layout `hyper-repos/<LIST>/[<sub>/]<repo>`. It does not descend into
+a clone, and it skips worktrees (whose `.git` is a file). Override the depth with
+`ENROLL_MAX_DEPTH`. `tests/enroll-discovery-test.sh` checks this against a
+fixture, with a depth-1 planted control.

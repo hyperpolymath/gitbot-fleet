@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Proof confidence level assessment
 //!
@@ -83,7 +84,7 @@ pub struct ConfidenceReport {
 /// * `has_certificate` - Whether a proof certificate (Alethe, DRAT/LRAT, etc.) was provided
 /// * `checker_count` - Number of independent checkers that confirmed the result
 pub fn assess_confidence(
-    prover: ProverKind,
+    prover: &ProverKind,
     status: ProofStatus,
     has_certificate: bool,
     checker_count: usize,
@@ -92,7 +93,7 @@ pub fn assess_confidence(
     if status != ProofStatus::Verified {
         return ConfidenceReport {
             level: ConfidenceLevel::Level1,
-            prover,
+            prover: prover.clone(),
             has_certificate: false,
             checker_count: 0,
             small_kernel: is_small_kernel(prover),
@@ -109,7 +110,7 @@ pub fn assess_confidence(
     if checker_count >= 2 && small_kernel {
         return ConfidenceReport {
             level: ConfidenceLevel::Level5,
-            prover,
+            prover: prover.clone(),
             has_certificate,
             checker_count,
             small_kernel,
@@ -125,7 +126,7 @@ pub fn assess_confidence(
     if small_kernel && has_certificate {
         return ConfidenceReport {
             level: ConfidenceLevel::Level4,
-            prover,
+            prover: prover.clone(),
             has_certificate,
             checker_count,
             small_kernel,
@@ -140,7 +141,7 @@ pub fn assess_confidence(
     if has_certificate {
         return ConfidenceReport {
             level: ConfidenceLevel::Level3,
-            prover,
+            prover: prover.clone(),
             has_certificate,
             checker_count,
             small_kernel,
@@ -155,7 +156,7 @@ pub fn assess_confidence(
     if small_kernel {
         return ConfidenceReport {
             level: ConfidenceLevel::Level2,
-            prover,
+            prover: prover.clone(),
             has_certificate,
             checker_count,
             small_kernel,
@@ -169,7 +170,7 @@ pub fn assess_confidence(
     // Level 1: Large-TCB or stub prover
     ConfidenceReport {
         level: ConfidenceLevel::Level1,
-        prover,
+        prover: prover.clone(),
         has_certificate: false,
         checker_count,
         small_kernel: false,
@@ -184,25 +185,38 @@ pub fn assess_confidence(
 ///
 /// Small-kernel provers have a minimal trusted code base for proof checking,
 /// making their results more trustworthy.
-pub fn is_small_kernel(prover: ProverKind) -> bool {
-    match prover {
+pub fn is_small_kernel(prover: &ProverKind) -> bool {
+    match prover.as_str() {
         // Tier 1 small-kernel systems
-        ProverKind::Coq => true,      // Gallina kernel
-        ProverKind::Lean => true,      // Lean4 kernel
-        ProverKind::Isabelle => true,  // Isabelle/Pure kernel
-        ProverKind::Agda => true,      // Dependent type checker
-        ProverKind::Metamath => true,  // Extremely small kernel
+        "coq" => true,      // Gallina kernel
+        "lean" => true,     // Lean4 kernel
+        "isabelle" => true, // Isabelle/Pure kernel
+        "agda" => true,     // Dependent type checker
+        "metamath" => true, // Extremely small kernel
 
         // SAT/SMT solvers -- large TCB but produce certificates
-        ProverKind::Z3 => false,
-        ProverKind::Cvc5 => false,
+        "z3" => false,
+        "cvc5" => false,
 
         // Other provers
-        ProverKind::HolLight => true,  // Small OCaml kernel
-        ProverKind::Mizar => false,    // Large checker
-        ProverKind::Pvs => false,      // Large TCB
-        ProverKind::Acl2 => false,     // Built on Common Lisp
-        ProverKind::Hol4 => true,      // Small ML kernel
+        "hol-light" => true, // Small OCaml kernel
+        "mizar" => false,    // Large checker
+        "pvs" => false,      // Large TCB
+        "acl2" => false,     // Built on Common Lisp
+        "hol4" => true,      // Small ML kernel
+
+        // Tier-3 small-kernel systems
+        "idris2" | "idris" => true, // Dependent-type kernel
+        "fstar" => true,            // F* type-theory kernel
+
+        // Tier-3 large-TCB systems
+        "vampire" | "eprover" | "spass" => false, // Large first-order ATPs
+        "dafny" | "why3" | "alt-ergo" => false,   // VC-based tools
+        "tamarin" | "proverif" => false,          // Protocol model checkers
+        "dreal" | "abc" => false,                 // Numerical / hardware checkers
+
+        // Unknown provers: assume false (conservative estimate)
+        _ => false,
     }
 }
 
@@ -235,25 +249,38 @@ mod tests {
 
     #[test]
     fn test_small_kernel_provers() {
-        assert!(is_small_kernel(ProverKind::Coq));
-        assert!(is_small_kernel(ProverKind::Lean));
-        assert!(is_small_kernel(ProverKind::Isabelle));
-        assert!(is_small_kernel(ProverKind::Agda));
-        assert!(is_small_kernel(ProverKind::Metamath));
-        assert!(is_small_kernel(ProverKind::HolLight));
-        assert!(is_small_kernel(ProverKind::Hol4));
+        assert!(is_small_kernel(&ProverKind::new("coq")));
+        assert!(is_small_kernel(&ProverKind::new("lean")));
+        assert!(is_small_kernel(&ProverKind::new("isabelle")));
+        assert!(is_small_kernel(&ProverKind::new("agda")));
+        assert!(is_small_kernel(&ProverKind::new("metamath")));
+        assert!(is_small_kernel(&ProverKind::new("hol-light")));
+        assert!(is_small_kernel(&ProverKind::new("hol4")));
 
-        assert!(!is_small_kernel(ProverKind::Z3));
-        assert!(!is_small_kernel(ProverKind::Cvc5));
-        assert!(!is_small_kernel(ProverKind::Mizar));
-        assert!(!is_small_kernel(ProverKind::Pvs));
-        assert!(!is_small_kernel(ProverKind::Acl2));
+        assert!(!is_small_kernel(&ProverKind::new("z3")));
+        assert!(!is_small_kernel(&ProverKind::new("cvc5")));
+        assert!(!is_small_kernel(&ProverKind::new("mizar")));
+        assert!(!is_small_kernel(&ProverKind::new("pvs")));
+        assert!(!is_small_kernel(&ProverKind::new("acl2")));
+
+        // Tier-3 small-kernel
+        assert!(is_small_kernel(&ProverKind::new("idris2")));
+        assert!(is_small_kernel(&ProverKind::new("fstar")));
+
+        // Tier-3 large-TCB
+        assert!(!is_small_kernel(&ProverKind::new("vampire")));
+        assert!(!is_small_kernel(&ProverKind::new("eprover")));
+        assert!(!is_small_kernel(&ProverKind::new("dafny")));
+        assert!(!is_small_kernel(&ProverKind::new("why3")));
+        assert!(!is_small_kernel(&ProverKind::new("tamarin")));
+        assert!(!is_small_kernel(&ProverKind::new("proverif")));
+        assert!(!is_small_kernel(&ProverKind::new("dreal")));
     }
 
     #[test]
     fn test_assess_level5_cross_checked() {
         let report = assess_confidence(
-            ProverKind::Lean,
+            &ProverKind::new("lean"),
             ProofStatus::Verified,
             true,
             3, // 3 independent checkers
@@ -265,19 +292,14 @@ mod tests {
 
     #[test]
     fn test_assess_level4_small_kernel_with_cert() {
-        let report = assess_confidence(
-            ProverKind::Coq,
-            ProofStatus::Verified,
-            true,
-            1,
-        );
+        let report = assess_confidence(&ProverKind::new("coq"), ProofStatus::Verified, true, 1);
         assert_eq!(report.level, ConfidenceLevel::Level4);
     }
 
     #[test]
     fn test_assess_level3_cert_no_small_kernel() {
         let report = assess_confidence(
-            ProverKind::Z3,
+            &ProverKind::new("z3"),
             ProofStatus::Verified,
             true, // Has DRAT/LRAT certificate
             1,
@@ -287,34 +309,19 @@ mod tests {
 
     #[test]
     fn test_assess_level2_small_kernel_no_cert() {
-        let report = assess_confidence(
-            ProverKind::Lean,
-            ProofStatus::Verified,
-            false,
-            1,
-        );
+        let report = assess_confidence(&ProverKind::new("lean"), ProofStatus::Verified, false, 1);
         assert_eq!(report.level, ConfidenceLevel::Level2);
     }
 
     #[test]
     fn test_assess_level1_large_tcb() {
-        let report = assess_confidence(
-            ProverKind::Pvs,
-            ProofStatus::Verified,
-            false,
-            1,
-        );
+        let report = assess_confidence(&ProverKind::new("pvs"), ProofStatus::Verified, false, 1);
         assert_eq!(report.level, ConfidenceLevel::Level1);
     }
 
     #[test]
     fn test_assess_failed_proof_always_level1() {
-        let report = assess_confidence(
-            ProverKind::Coq,
-            ProofStatus::Failed,
-            true,
-            3,
-        );
+        let report = assess_confidence(&ProverKind::new("coq"), ProofStatus::Failed, true, 3);
         assert_eq!(report.level, ConfidenceLevel::Level1);
     }
 

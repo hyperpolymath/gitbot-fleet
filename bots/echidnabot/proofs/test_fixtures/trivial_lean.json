@@ -1,0 +1,24 @@
+{
+  "_comment": "SPDX-License-Identifier: MPL-2.0",
+  "_description": "Seam-test fixture: minimal GitHub push webhook payload simulating a push event that touches a .lean file. Used by tests/seam_test.rs to exercise the 7a mode-routing + 7b corpus-bridge path without a live platform API.",
+  "ref": "refs/heads/main",
+  "after": "deadbeefdeadbeefdeadbeefdeadbeef12345678",
+  "before": "0000000000000000000000000000000000000000",
+  "commits": [
+    {
+      "id": "deadbeefdeadbeefdeadbeefdeadbeef12345678",
+      "message": "Add trivial identity theorem",
+      "added": ["proofs/lean/trivial_ok.lean"],
+      "removed": [],
+      "modified": []
+    }
+  ],
+  "repository": {
+    "full_name": "test-owner/lean-proof-repo",
+    "id": 12345,
+    "name": "lean-proof-repo",
+    "private": false
+  },
+  "_prover": "lean",
+  "_expected_corpus_prover": "Lean"
+}

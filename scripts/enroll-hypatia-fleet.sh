@@ -77,6 +77,15 @@ if [[ -f "$old_registry" ]]; then
     done < <(jq -r '.repos[]?.name' "$old_registry" 2>/dev/null || true)
 fi
 
+# Print every clone under the repos root, one path per line, sorted.
+# The estate files clones by star list (hyper-repos/<LIST>/[<sub>/]<repo>),
+# so a clone sits at depth 1 to 3. Descent stops at the first directory that
+# holds a .git directory, so nested sub-projects of a clone are not listed.
+discover_repos() {
+    find "$1" -mindepth 1 -maxdepth "${ENROLL_MAX_DEPTH:-3}" -type d \
+        \( -name .git -prune -o -exec test -d '{}/.git' ';' -print -prune \) | sort
+}
+
 enrolled_count=0
 applied_count=0
 
@@ -161,7 +170,7 @@ DIRECTIVE
                 hypatia_signal: $has_hypatia_signal
             }
         }' >> "$tmp_objects"
-done < <(find "$repos_root" -mindepth 1 -maxdepth 1 -type d -exec test -d '{}/.git' ';' -print | sort)
+done < <(discover_repos "$repos_root")
 
 jq -s \
     --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \

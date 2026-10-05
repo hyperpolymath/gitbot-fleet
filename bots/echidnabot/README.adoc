@@ -1,416 +1,140 @@
-image:https://img.shields.io/badge/License-MPL--2.0-blue.svg[License: MPL-2.0,link="https://github.com/hyperpolymath/palimpsest-license"]
-image:https://img.shields.io/github/v/release/hyperpolymath/echidnabot?include_prereleases[GitHub Release]
+SPDX-License-Identifier: CC-BY-SA-4.0 SPDX-FileCopyrightText: 2025-2026
+Jonathan D.A. Jewell (hyperpolymath) –>
 
-// SPDX-License-Identifier: CC-BY-SA-4.0
-// Copyright (c) 2025-2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+== echidnabot — Proof-Aware CI Bot
 
-= echidnabot: Proof-Aware CI Bot
+https://github.com/sponsors/hyperpolymath[image:https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=github[Sponsor]]
+https://github.com/hyperpolymath/palimpsest-license[image:https://img.shields.io/badge/License-MPL--2.0-blue.svg[License:
+PMPL-1.0]]
+https://github.com/hyperpolymath/echidnabot/releases[image:https://img.shields.io/github/v/release/hyperpolymath/echidnabot?include_prereleases[GitHub
+Release]]
 
-:toc: macro
-:toclevels: 3
-:icons: font
-:source-highlighter: pygments
+____
+*The canonical README is link:README.adoc[`+README.adoc+`].* This
+Markdown file exists for renderers that prefer `+.md+` (some package
+indexes, some doc tooling); it is a thin summary that links into the
+AsciiDoc version for the full story.
+____
 
-_Formal verification CI bot that orchestrates ECHIDNA for automatic theorem proof verification on every push._
+'''''
 
-NOTE: Echidnabot exists in two trees by design — this **fleet copy** (deployed production bot) and the **standalone** repo at `hyperpolymath/echidnabot` (SDK / library / reference implementation). See link:CANONICAL_SOURCE.md[CANONICAL_SOURCE.md] for the file-class canonical map and contributor decision tree.
+=== What is it?
 
-toc::[]
+A formal-verification CI bot that orchestrates the
+https://github.com/hyperpolymath/echidna[ECHIDNA] theorem-proving
+platform for automatic proof verification on every push and pull
+request. Written in Rust on Tokio/Axum.
 
-== Overview
+Part of the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet]
+(Tier-1 Verifier role), coordinated by
+https://github.com/hyperpolymath/hypatia[Hypatia].
 
-**echidnabot** bridges code platforms (GitHub, GitLab, Bitbucket) and the ECHIDNA theorem proving platform.
-Every push, every PR -- proofs get verified automatically and results appear in your CI checks.
+=== Why does it exist?
 
-It is part of the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet] ecosystem,
-coordinated by https://github.com/hyperpolymath/hypatia[Hypatia].
+You’re writing formally verified software — proofs in Coq, Lean, Agda,
+or Isabelle. But your CI pipeline doesn’t understand proofs:
 
-=== The Problem
+* Tests pass, but *proofs are broken*.
+* PRs merge with *unverified theorems*.
+* No one notices until a dependent build fails.
+* Manual verification is *slow and error-prone*.
 
-You are writing formally verified software -- proofs in Coq, Lean, Agda, or Isabelle.
-But your CI pipeline does not understand proofs:
+echidnabot bridges the gap. Push proof files; get verified.
 
-* Tests pass, but **proofs are broken**
-* PRs merge with **unverified theorems**
-* No one notices until a dependent build fails
-* Manual verification is **slow and error-prone**
+=== Features (high-level)
 
-=== The Solution
+* *12 provers via ECHIDNA* — Coq, Lean 4, Agda, Isabelle/HOL, Z3, CVC5,
+Metamath, HOL Light, Mizar, PVS, ACL2, HOL4 (see
+link:wiki/Supported-Provers.md[`+wiki/Supported-Provers.md+`]; upstream
+supports 113, drift documented in
+link:EXPLAINME.adoc[`+EXPLAINME.adoc+`]).
+* *3 platforms* — GitHub, GitLab, Bitbucket (Codeberg planned).
+* *4 bot modes* — Verifier / Advisor / Consultant / Regulator
+(configured via `+.machine_readable/bot_directives/echidnabot.a2ml+`).
+* *Container isolation* — podman rootless with bwrap fallback; fail-safe
+(refuses to run proofs without isolation).
+* *Trust bridge* — 5-level confidence, SHA-256 solver-integrity
+verification, axiom-usage tracking.
+* *Retry + circuit breaker* — exponential backoff, opens after 5
+failures, auto-resets after 5 minutes.
+* *184 tests* (137 lib + 17 lifecycle + 32 integration + 12 property
+** 15 seam + 8 smoke).
 
-[source]
-----
-  GitHub/GitLab/Bitbucket
-           |
-           | webhook (push/PR)
-           v
-   +-------------------+
-   |    echidnabot      |  <-- Rust, Tokio, Axum
-   |  +--------------+  |
-   |  | Scheduler    |--+---> ECHIDNA Core (Agda, Coq, Lean, Z3...)
-   |  | Bot Modes    |  |
-   |  | Trust Bridge |  |
-   |  | GraphQL API  |  |
-   |  +--------------+  |
-   +-------------------+
-           |
-           | Check Runs / Comments
-           v
-       v Proof verified
-       x Proof failed (line 42: goal not discharged)
-----
-
-== Current Status (v0.1.0)
-
-**Overall completion: ~90%** -- Core infrastructure, platform adapters, ECHIDNA integration, container isolation, bot modes, retry/circuit breaker, and trust bridge are implemented. 129 automated tests across unit and integration suites. Production hardening (observability, rate limiting, deployment automation) remains.
-
-=== What Is Implemented
-
-[cols="2,1,3"]
-|===
-|Component |Status |Details
-
-|Core Infrastructure
-|Complete
-|Axum HTTP server, webhook signature verification (HMAC-SHA256), GraphQL API (async-graphql), SQLite/PostgreSQL persistence (sqlx), configuration system, structured error handling
-
-|Platform Adapters
-|Complete
-|`PlatformAdapter` trait with GitHub (octocrab), GitLab, and Bitbucket implementations; webhook receivers for all three; check run/commit status creation; PR/MR comments
-
-|ECHIDNA Integration
-|Complete
-|HTTP client (reqwest) for ECHIDNA REST API, 12-prover enumeration with tier classification, job dispatch, result parsing, prover health checking
-
-|Job Scheduler
-|Complete
-|Priority queue, PostgreSQL/SQLite persistence, job status tracking, retry logic with exponential backoff and jitter, circuit breaker (opens after 5 failures, auto-resets after 5 min), concurrent job limits via semaphores (global + per-repo)
-
-|Container Isolation
-|Complete
-|Podman rootless containers with bwrap fallback; `--network=none`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, `--read-only` filesystem (writable `/tmp`), CPU/memory/pids limits, timeout enforcement with SIGKILL; fail-safe policy (refuses to run proofs if no isolation backend available)
-
-|Bot Modes
-|Complete
-|Four modes: Verifier (silent pass/fail), Advisor (tactic suggestions via ECHIDNA ML), Consultant (interactive Q&A on explicit `@echidnabot check` mention), Regulator (merge blocking); mode parsing from `.bot_directives/echidnabot.scm`; mode-dependent auto-trigger logic; result formatting bridge
-
-|ECHIDNA Trust Bridge
-|Complete
-|5-level proof confidence assessment (cross-checked small-kernel = Level 5, large-TCB = Level 1); solver integrity verification against SHA-256 manifest with constant-time comparison; axiom usage tracking (sorry, Admitted, postulate, oops, type-in-type, axiom of choice, classical axioms) with 3-tier severity
-
-|CLI
-|Complete
-|Subcommands: `serve`, `register`, `check`, `status`, `init-db`; auto-detection of prover from file extension
-
-|Tests
-|Complete
-|129 tests (30 integration, 99 unit) covering webhook verification, ECHIDNA client, bot modes, job lifecycle, database models, circuit breaker, container executor, trust bridge, axiom tracking, result formatting
-|===
-
-=== What Is Not Yet Implemented
-
-* **Observability** -- No Prometheus metrics endpoint or OpenTelemetry tracing
-* **Rate limiting** -- Webhook endpoints accept unlimited requests
-* **Deployment automation** -- No Docker Compose, Kubernetes manifests, or Helm charts
-* **Pre-built prover images** -- Container startup requires prover binaries in the image
-* **Trust bridge not wired into main pipeline** -- Trust modules exist but are not yet called from the scheduler loop
-
-== Features
-
-=== Multi-Prover Support (12 Provers via ECHIDNA)
-
-[cols="1,1,2"]
-|===
-|Tier |Provers |Notes
-
-|**Tier 1**
-|Coq, Lean 4, Agda, Isabelle/HOL, Z3, CVC5
-|Small-kernel systems (except Z3/CVC5) with highest trust
-
-|**Tier 2**
-|Metamath, HOL Light, Mizar
-|Stable provers
-
-|**Tier 3**
-|PVS, ACL2, HOL4
-|Supported via ECHIDNA
-|===
-
-All proof verification is delegated to ECHIDNA. echidnabot is an orchestrator, not a prover.
-
-=== Multi-Platform Integration
-
-* **GitHub** -- Check Runs, PR comments, webhook receiver (octocrab)
-* **GitLab** -- Commit statuses, MR notes, webhook receiver
-* **Bitbucket** -- Build statuses, PR comments, webhook receiver
-* **Codeberg** -- Platform enum defined, adapter not yet implemented
-
-All platforms use a unified `PlatformAdapter` trait for consistent behavior.
-
-=== Bot Modes
-
-[cols="1,2,1"]
-|===
-|Mode |Behavior |Auto-triggers?
-
-|**Verifier**
-|Silent pass/fail on proof files (minimal output)
-|Yes
-
-|**Advisor**
-|Detailed failure output with tactic suggestions via ECHIDNA ML
-|Yes
-
-|**Consultant**
-|Interactive Q&A; responds only to `@echidnabot check` mentions
-|No
-
-|**Regulator**
-|Blocks PR merges when proofs fail; enforcement mode
-|Yes
-|===
-
-Mode is configured per-repository via `.bot_directives/echidnabot.scm`:
-
-[source,scheme]
-----
-(echidnabot (mode "advisor"))
-----
-
-Default mode is Verifier.
-
-=== Container Isolation
-
-Proof verification runs in isolated environments to prevent arbitrary code execution:
-
-* **Primary:** Podman rootless containers
-* **Fallback:** bubblewrap (bwrap) lightweight sandbox
-* **Fail-safe:** Refuses to run proofs if neither is available
-
-Security controls:
-
-* `--network=none` (no network access)
-* `--cap-drop=ALL` (drop all capabilities)
-* `--security-opt=no-new-privileges`
-* `--read-only` root filesystem (writable `/tmp` only)
-* CPU, memory, and PID limits
-* Timeout enforcement with SIGKILL
-
-=== Retry Logic and Circuit Breaker
-
-* **Exponential backoff** with jitter: 1s, 2s, 4s (configurable)
-* **Transient vs permanent** error classification (timeouts retry, config errors do not)
-* **Circuit breaker** for ECHIDNA API protection: opens after 5 consecutive failures, auto-resets after 5 minutes, half-open state for recovery testing
-
-=== ECHIDNA Trust Bridge
-
-Three trust mechanisms:
-
-1. **Confidence Levels (1-5):** Assess proof trust based on prover kernel size, certificate presence, and cross-checking count
-2. **Solver Integrity:** SHA-256 manifest verification of solver binaries with constant-time comparison
-3. **Axiom Tracking:** Detects `sorry`, `Admitted`, `postulate`, `oops`, `--type-in-type`, axiom of choice, classical axioms; 3-tier severity (unsound / warning / informational)
-
-== Installation
-
-=== Prerequisites
-
-* Rust 1.75+
-* SQLite (development) or PostgreSQL (production)
-* Podman or bubblewrap for container isolation
-* Access to an ECHIDNA instance (or run locally)
-
-=== From Source
+=== Install / configure / run
 
 [source,bash]
 ----
-git clone https://github.com/hyperpolymath/echidnabot.git
-cd echidnabot
+# Build (requires gitbot-fleet layout — see CONTRIBUTING.md)
 cargo build --release
-----
 
-=== Database Setup
-
-[source,bash]
-----
-# Initialize SQLite (development)
+# Initialise database
 echidnabot init-db
 
-# Or use PostgreSQL (production)
-export DATABASE_URL=postgres://localhost/echidnabot
-----
-
-== Usage
-
-=== Server Mode (Webhook Receiver)
-
-[source,bash]
-----
-# Set environment variables
+# Start the webhook server
 export DATABASE_URL=sqlite:echidnabot.db
 export ECHIDNA_URL=http://localhost:8080
-
-# Start the server
 echidnabot serve --port 8080
 ----
 
-==== API Endpoints
+Full instructions:
+link:wiki/Getting-Started.md[`+wiki/Getting-Started.md+`] and
+link:docs/content/configuration.md[`+docs/content/configuration.md+`].
 
-* `GET /` -- Service info and endpoint listing
-* `GET /health` -- Health check
-* `GET /graphql` -- GraphQL Playground
-* `POST /graphql` -- GraphQL API for queries and mutations
-* `POST /webhooks/github` -- GitHub webhook receiver
-* `POST /webhooks/gitlab` -- GitLab webhook receiver
-* `POST /webhooks/bitbucket` -- Bitbucket webhook receiver
+=== Documentation map
 
-=== CLI Mode (Manual Verification)
+[width="100%",cols="21%,79%",options="header",]
+|===
+|Audience |File
+|Users (overview) |link:README.adoc[`+README.adoc+`] — full canonical
+README
 
-[source,bash]
-----
-# Register a repository
-echidnabot register --repo owner/name --platform github --provers lean,coq
+|Users (setup)
+|link:wiki/Getting-Started.md[`+wiki/Getting-Started.md+`]
 
-# Verify a specific proof file
-echidnabot check --repo ./path/to/proof.lean --prover lean
+|Users (config)
+|link:docs/content/configuration.md[`+docs/content/configuration.md+`]
 
-# Check status
-echidnabot status --target job-uuid-here
-echidnabot status --target owner/name
-----
+|Users (FAQ) |link:wiki/FAQ.md[`+wiki/FAQ.md+`]
 
-=== GraphQL API
+|Devs (architecture)
+|link:wiki/Architecture.md[`+wiki/Architecture.md+`]
 
-Query verification job status:
+|Devs (contrib) |link:CONTRIBUTING.md[`+CONTRIBUTING.md+`]
 
-[source,graphql]
-----
-query {
-  verificationJob(id: "job-123") {
-    id
-    status
-    prover
-    repository
-    commitSha
-    results {
-      theorem
-      status
-      message
-    }
-  }
-}
-----
+|Devs (ABI/FFI) |link:ABI-FFI-README.md[`+ABI-FFI-README.md+`]
 
-Submit a verification job:
+|Devs (roadmap) |link:ROADMAP.adoc[`+ROADMAP.adoc+`]
 
-[source,graphql]
-----
-mutation {
-  submitVerification(
-    repository: "owner/repo"
-    commitSha: "abc123"
-    prover: LEAN4
-    files: ["src/Theorems.lean"]
-  ) {
-    id
-    status
-  }
-}
-----
+|Devs (claims) |link:EXPLAINME.adoc[`+EXPLAINME.adoc+`] — receipts
+behind README claims
 
-== Configuration
+|AI assistants |link:.claude/CLAUDE.md[`+.claude/CLAUDE.md+`] +
+link:0-AI-MANIFEST.a2ml[`+0-AI-MANIFEST.a2ml+`]
 
-See `echidnabot.example.toml` for a complete configuration reference.
+|Security |link:SECURITY.md[`+SECURITY.md+`] +
+link:.well-known/security.txt[`+.well-known/security.txt+`]
 
-Key environment variables:
+|Releases |link:RELEASE_CHECKLIST.md[`+RELEASE_CHECKLIST.md+`]
 
-[source,bash]
-----
-# Database
-DATABASE_URL=sqlite:echidnabot.db  # or postgres://...
+|Compliance |link:RSR_COMPLIANCE.adoc[`+RSR_COMPLIANCE.adoc+`]
+|===
 
-# GitHub App
-GITHUB_APP_ID=123456
-GITHUB_PRIVATE_KEY_PATH=/path/to/key.pem
-GITHUB_WEBHOOK_SECRET=your-secret
+=== License
 
-# ECHIDNA
-ECHIDNA_URL=http://localhost:8080
+MPL-2.0 (Palimpsest License). See link:LICENSE[`+LICENSE+`] and
+link:PALIMPSEST.adoc[`+PALIMPSEST.adoc+`].
 
-# Server
-PORT=8080
-RUST_LOG=info
-----
+=== Contributing
 
-== Development
+See link:CONTRIBUTING.md[`+CONTRIBUTING.md+`] and
+link:CODE_OF_CONDUCT.md[`+CODE_OF_CONDUCT.md+`].
 
-=== Building and Testing
+=== Security
 
-[source,bash]
-----
-cargo build
-cargo test          # Run all 129 tests
-cargo test -- --nocapture  # With output
-----
+Vulnerabilities → link:SECURITY.md[`+SECURITY.md+`]. *Do not* open
+public issues for security reports.
 
-=== Architecture
+'''''
 
-Key modules:
-
-* `src/main.rs` -- Server entry point, CLI, webhook routes, scheduler loop
-* `src/lib.rs` -- Crate root, module declarations
-* `src/adapters/` -- `PlatformAdapter` trait + GitHub/GitLab/Bitbucket implementations
-* `src/api/` -- GraphQL schema and webhook handlers
-* `src/dispatcher/` -- ECHIDNA HTTP client, prover enumeration
-* `src/scheduler/` -- Job queue, retry policy, circuit breaker, concurrency limiter
-* `src/executor/` -- Container isolation (Podman + bubblewrap)
-* `src/modes/` -- Bot modes (Verifier/Advisor/Consultant/Regulator)
-* `src/trust/` -- Trust bridge (confidence levels, solver integrity, axiom tracking)
-* `src/result_formatter.rs` -- Result formatting bridge between dispatcher and bot modes
-* `src/store/` -- Database models (SQLite/PostgreSQL)
-* `src/config.rs` -- Configuration system (TOML + environment)
-* `src/error.rs` -- Error types
-
-== Integration with Gitbot Fleet
-
-echidnabot is part of the https://github.com/hyperpolymath/gitbot-fleet[Gitbot Fleet]:
-
-* **https://github.com/hyperpolymath/rhodibot[rhodibot]** -- RSR structural compliance
-* **https://github.com/hyperpolymath/seambot[seambot]** -- Architectural seam hygiene
-* **echidnabot** (this bot) -- Formal verification orchestration
-* **https://github.com/hyperpolymath/finishingbot[finishingbot]** -- Release readiness
-* **glambot** -- Presentation quality
-
-Bots coordinate through a shared context layer managed by https://github.com/hyperpolymath/hypatia[hypatia].
-
-== Security
-
-=== Webhook Verification
-
-All incoming webhooks are verified:
-
-* **GitHub** -- HMAC-SHA256 signature verification
-* **GitLab** -- Secret token verification
-* **Bitbucket** -- HMAC-SHA256 signature verification
-
-=== Proof Isolation
-
-Proof verification runs in isolated containers (see <<Container Isolation>>).
-
-=== Solver Integrity
-
-Before dispatching proofs, solver binaries can be verified against a SHA-256 manifest to detect tampering.
-
-== License
-
-This project is licensed under MPL-2.0 (Palimpsest License).
-
-See link:LICENSE[LICENSE] for details.
-
-**Author:** Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
-
-== Contributing
-
-Contributions welcome! Please see link:../../.github/CONTRIBUTING.md[../../.github/CONTRIBUTING.md] for guidelines.
-
-== Security
-
-For security issues, please see link:SECURITY.md[SECURITY.md].
+*Maintainer:* Jonathan D.A. Jewell —
+https://github.com/hyperpolymath[hyperpolymath]

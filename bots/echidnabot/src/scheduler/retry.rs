@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Retry logic with exponential backoff and circuit breaker
 //!
@@ -508,7 +509,9 @@ mod tests {
 
         // Non-transient errors
         assert!(!is_transient_error(&Error::InvalidInput("bad".to_string())));
-        assert!(!is_transient_error(&Error::Config("bad config".to_string())));
+        assert!(!is_transient_error(&Error::Config(
+            "bad config".to_string()
+        )));
         assert!(!is_transient_error(&Error::Timeout)); // Proof timeout -- don't retry
         assert!(!is_transient_error(&Error::Internal("panic".to_string())));
     }

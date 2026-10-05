@@ -1,5 +1,4 @@
 # echidnabot Configuration Example
-# hypatia: allow security_errors/secret_detected -- example-template placeholders ("ghp_xxx...", "your-webhook-secret"), not real credentials
 # Copy to echidnabot.toml and customize
 
 [server]
@@ -39,16 +38,40 @@ queue_size = 100
 # private_key_path = "/path/to/private-key.pem"
 #
 # # Option 2: Personal Access Token (simpler for testing)
-# token = "ghp_xxxxxxxxxxxxxxxxxxxx"
+# Load the GitHub token from your local credential store.
 #
 # # Webhook secret for signature verification
-# webhook_secret = "your-webhook-secret"
+# webhook_secret = "" # Supply your webhook signing secret locally.
 
 # GitLab Integration (optional)
 # [gitlab]
 # url = "https://gitlab.com"
-# token = "glpat-xxxxxxxxxxxxxxxxxxxx"
-# webhook_secret = "your-webhook-secret"
+# token = "" # Supply a token from your credential store locally.
+# webhook_secret = "" # Supply your webhook signing secret locally.
+
+# Bot operating mode (daemon-wide default)
+# Per-repo directives (.machine_readable/bot_directives/echidnabot.a2ml) and
+# the per-repo mode registered via `echidnabot register --mode` take precedence.
+# This is the final fallback before the built-in default (verifier).
+#
+# [bot]
+# mode = "verifier"   # verifier | advisor | consultant | regulator
+#
+# verifier  — silent pass/fail via check run only (default)
+# advisor   — check run + PR comment with ML tactic suggestions on failure
+# consultant — check run + inline review comment on offending lines; responds to @echidnabot mentions
+# regulator  — check run + PR comment; sets check to failure + blocks merge on coverage drop
+
+# Lifecycle / graceful-shutdown settings
+# On SIGTERM/SIGINT the daemon stops accepting new webhook requests, waits
+# (up to `shutdown_timeout_secs`) for in-flight proof jobs to drain, closes
+# the DB connection pool, and flushes observability before exiting.
+#
+# [lifecycle]
+# shutdown_timeout_secs = 30   # default; range 1..=300 is sensible
+#
+# Env override (wins over the TOML value, no restart needed):
+#   ECHIDNABOT_SHUTDOWN_TIMEOUT_SECS=60
 
 # Environment variables can override any setting:
 # ECHIDNABOT__SERVER__PORT=9090
@@ -57,3 +80,4 @@ queue_size = 100
 # ECHIDNABOT__ECHIDNA__REST_ENDPOINT=http://...
 # ECHIDNABOT__ECHIDNA__MODE=rest
 # ECHIDNABOT__GITHUB__TOKEN=ghp_...
+# ECHIDNABOT_SHUTDOWN_TIMEOUT_SECS=30   # graceful-shutdown deadline (seconds)
