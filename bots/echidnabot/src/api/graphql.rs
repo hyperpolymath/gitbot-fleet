@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! GraphQL schema and resolvers
 
@@ -7,14 +8,14 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::dispatcher::{
-    EchidnaClient,
-    ProverKind as CoreProverKind,
-    TacticSuggestion as CoreSuggestion,
-};
 use crate::dispatcher::echidna_client::ProverStatus as CoreProverStatus;
+use crate::dispatcher::{
+    EchidnaClient, ProverKind as CoreProverKind, TacticSuggestion as CoreSuggestion,
+};
 use crate::scheduler::{JobPriority, JobScheduler};
-use crate::store::models::{ProofJobRecord, ProofObligationRecord, Repository as StoreRepository};
+use crate::store::models::{
+    goal_fingerprint, ProofJobRecord, Repository as StoreRepository, TacticOutcomeRecord,
+};
 use crate::store::Store;
 
 /// GraphQL schema type
@@ -145,6 +146,49 @@ pub struct TacticSuggestion {
     pub explanation: Option<String>,
 }
 
+/// A recorded tactic outcome (double-loop feedback store)
+#[derive(SimpleObject, Clone)]
+pub struct TacticOutcome {
+    pub id: ID,
+    pub prover: ProverKind,
+    pub goal_fingerprint: String,
+    pub tactic: String,
+    pub succeeded: bool,
+    pub duration_ms: i64,
+    pub recorded_at: DateTime<Utc>,
+}
+
+impl From<TacticOutcomeRecord> for TacticOutcome {
+    fn from(r: TacticOutcomeRecord) -> Self {
+        Self {
+            id: ID::from(r.id.to_string()),
+            prover: map_prover_kind(r.prover),
+            goal_fingerprint: r.goal_fingerprint,
+            tactic: r.tactic,
+            succeeded: r.succeeded,
+            duration_ms: r.duration_ms,
+            recorded_at: r.created_at,
+        }
+    }
+}
+
+/// Input for recording a tactic outcome from an external agent
+#[derive(async_graphql::InputObject)]
+pub struct RecordTacticOutcomeInput {
+    /// Which prover was used
+    pub prover: ProverKind,
+    /// The proof goal / context (used to compute a fingerprint)
+    pub goal_state: String,
+    /// The tactic that was attempted
+    pub tactic: String,
+    /// Whether the tactic succeeded
+    pub succeeded: bool,
+    /// How long the attempt took (milliseconds)
+    pub duration_ms: i64,
+    /// Job ID this outcome belongs to (optional)
+    pub job_id: Option<ID>,
+}
+
 // =============================================================================
 // Query Root
 // =============================================================================
@@ -171,11 +215,7 @@ impl QueryRoot {
     }
 
     /// List all registered repositories
-    async fn repositories(
-        &self,
-        ctx: &Context<'_>,
-        platform: Option<Platform>,
-    ) -> Vec<Repository> {
+    async fn repositories(&self, ctx: &Context<'_>, platform: Option<Platform>) -> Vec<Repository> {
         let state = match ctx.data::<GraphQLState>() {
             Ok(state) => state,
             Err(_) => return vec![],
@@ -232,15 +272,19 @@ impl QueryRoot {
         };
         let mut provers = Vec::new();
         for kind in CoreProverKind::all() {
-            let status = match state.echidna.prover_status(kind).await {
+            let status = match state.echidna.prover_status(&kind).await {
                 Ok(status) => map_prover_status(status),
                 Err(_) => ProverStatus::Unknown,
             };
             provers.push(ProverInfo {
-                kind: map_prover_kind(kind),
+                kind: map_prover_kind(kind.clone()),
                 name: kind.display_name().to_string(),
                 tier: kind.tier() as i32,
-                file_extensions: kind.file_extensions().iter().map(|s| s.to_string()).collect(),
+                file_extensions: kind
+                    .file_extensions()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 status,
             });
         }
@@ -254,10 +298,64 @@ impl QueryRoot {
             Err(_) => return ProverStatus::Unknown,
         };
         let kind = map_prover_kind_to_core(prover);
-        match state.echidna.prover_status(kind).await {
+        match state.echidna.prover_status(&kind).await {
             Ok(status) => map_prover_status(status),
             Err(_) => ProverStatus::Unknown,
         }
+    }
+
+    /// List recorded tactic outcomes for a (prover, goal_fingerprint) pair.
+    ///
+    /// Used by LLM agents to inspect historical success rates before suggesting
+    /// a tactic, and by operators to audit the feedback store.
+    async fn tactic_outcomes(
+        &self,
+        ctx: &Context<'_>,
+        prover: ProverKind,
+        goal_fingerprint: String,
+        limit: Option<i32>,
+    ) -> Vec<TacticOutcome> {
+        let state = match ctx.data::<GraphQLState>() {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        let limit = limit.unwrap_or(50).max(1) as usize;
+        state
+            .store
+            .list_tactic_outcomes_by_fingerprint(
+                map_prover_kind_to_core(prover),
+                &goal_fingerprint,
+                limit,
+            )
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(TacticOutcome::from)
+            .collect()
+    }
+
+    /// List recorded tactic outcomes for a specific (prover, tactic) pair
+    /// across all goal fingerprints. Useful for global win-rate queries.
+    async fn tactic_outcomes_by_tactic(
+        &self,
+        ctx: &Context<'_>,
+        prover: ProverKind,
+        tactic: String,
+        limit: Option<i32>,
+    ) -> Vec<TacticOutcome> {
+        let state = match ctx.data::<GraphQLState>() {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        let limit = limit.unwrap_or(200).max(1) as usize;
+        state
+            .store
+            .list_tactic_outcomes_by_tactic(map_prover_kind_to_core(prover), &tactic, limit)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(TacticOutcome::from)
+            .collect()
     }
 }
 
@@ -275,36 +373,6 @@ pub struct RegisterRepoInput {
     pub name: String,
     pub webhook_secret: Option<String>,
     pub enabled_provers: Option<Vec<ProverKind>>,
-}
-
-/// Input for submitting a proof obligation from an external scanner (e.g. hypatia)
-#[derive(async_graphql::InputObject)]
-pub struct ProofObligationInput {
-    /// Repository in "owner/name" format
-    pub repo: String,
-    /// Human-readable claim that must be proved
-    pub claim: String,
-    /// Original context/description from pattern detection
-    pub context: String,
-    /// Optional prover hint. When supplied (e.g. by hypatia's proof-strategy
-    /// rule picking the historically-best prover for this obligation class),
-    /// it overrides the default. Omitted → default Lean.
-    pub prover: Option<ProverKind>,
-    /// When `true`, treat `claim` as the proof content itself and verify it
-    /// directly against echidna, skipping the clone-first pipeline. Useful
-    /// for batch drivers and test harnesses that hold proofs in-memory and
-    /// don't want echidnabot to git-clone a whole repo just to read one file.
-    /// When omitted or false, the legacy clone+walk pipeline is used.
-    pub inline: Option<bool>,
-}
-
-/// Result of submitting a proof obligation
-#[derive(SimpleObject, Clone)]
-pub struct ProofObligationResult {
-    /// Whether the obligation was successfully recorded
-    pub success: bool,
-    /// Scheduler job ID assigned to this obligation (UUID string), or empty on failure
-    pub proof_id: String,
 }
 
 /// Input for repository settings
@@ -327,11 +395,7 @@ impl MutationRoot {
     ) -> async_graphql::Result<Repository> {
         let state = ctx.data::<GraphQLState>()?;
 
-        let mut repo = StoreRepository::new(
-            map_platform(input.platform),
-            input.owner,
-            input.name,
-        );
+        let mut repo = StoreRepository::new(map_platform(input.platform), input.owner, input.name);
         repo.webhook_secret = input.webhook_secret;
         if let Some(provers) = input.enabled_provers {
             repo.enabled_provers = provers.into_iter().map(map_prover_kind_to_core).collect();
@@ -367,7 +431,7 @@ impl MutationRoot {
         let provers = provers.unwrap_or_else(|| {
             repo.enabled_provers
                 .iter()
-                .copied()
+                .cloned()
                 .map(map_prover_kind)
                 .collect()
         });
@@ -380,7 +444,7 @@ impl MutationRoot {
                 map_prover_kind_to_core(prover),
                 Vec::new(),
             )
-                .with_priority(JobPriority::Critical);
+            .with_priority(JobPriority::Critical);
             let record = ProofJobRecord::from(job.clone());
             state
                 .store
@@ -401,121 +465,6 @@ impl MutationRoot {
         Ok(ProofJobRecord::from(job).into())
     }
 
-    /// Record a proof obligation submitted by an external tool (e.g. hypatia fleet_dispatcher).
-    ///
-    /// This mutation RECORDS the obligation as a pending scheduler job — it does NOT immediately
-    /// invoke a prover. The scheduler will pick it up on its normal cycle. The repo must already
-    /// be registered with echidnabot; if it is not, this returns `success: false`.
-    ///
-    /// The `repo` argument must be in "owner/name" format. The mutation searches all platforms
-    /// for a matching registered repository and uses the first match found.
-    async fn submit_proof_obligation(
-        &self,
-        ctx: &Context<'_>,
-        input: ProofObligationInput,
-    ) -> async_graphql::Result<ProofObligationResult> {
-        let state = ctx.data::<GraphQLState>()?;
-
-        // Parse "owner/name" format
-        let (owner, name) = {
-            let parts: Vec<&str> = input.repo.splitn(2, '/').collect();
-            if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
-                return Ok(ProofObligationResult {
-                    success: false,
-                    proof_id: String::new(),
-                });
-            }
-            (parts[0].to_string(), parts[1].to_string())
-        };
-
-        // Find a matching registered repository across all platforms
-        let repos = state
-            .store
-            .list_repositories(None)
-            .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        let repo = repos
-            .into_iter()
-            .find(|r| r.owner == owner && r.name == name);
-
-        let repo = match repo {
-            Some(r) => r,
-            None => {
-                return Ok(ProofObligationResult {
-                    success: false,
-                    proof_id: String::new(),
-                });
-            }
-        };
-
-        let chosen_prover = input
-            .prover
-            .map(map_prover_kind_to_core)
-            .unwrap_or(CoreProverKind::Lean);
-
-        // Derive a human-readable hint string from the chosen prover so that
-        // the obligation row is self-contained (e.g. a future query can show
-        // "which prover was requested" without joining proof_jobs).
-        let prover_hint = Some(format!("{:?}", chosen_prover).to_lowercase());
-
-        // 1. Persist the obligation FIRST — it is the source of truth for claim/context.
-        let obligation = ProofObligationRecord::new(
-            repo.id,
-            input.claim,
-            input.context,
-            prover_hint,
-        );
-        state
-            .store
-            .create_obligation(&obligation)
-            .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        // 2. Create a scheduler job whose file_paths carry an opaque reference to the
-        //    obligation row.  Nothing in file_paths encodes claim/context strings.
-        //    When `inline` is set, prefix the sentinel so process_job skips the
-        //    clone pipeline and verifies the obligation's claim directly.
-        let sentinel = if input.inline.unwrap_or(false) {
-            format!("inline:{}", obligation.id)
-        } else {
-            format!("obligation:{}", obligation.id)
-        };
-        let job = crate::scheduler::ProofJob::new(
-            repo.id,
-            "manual-obligation".to_string(),
-            chosen_prover,
-            vec![sentinel],
-        )
-        .with_priority(JobPriority::Normal);
-
-        // 3. Persist job record, then enqueue.
-        let record = ProofJobRecord::from(job.clone());
-        state
-            .store
-            .create_job(&record)
-            .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        let _ = state
-            .scheduler
-            .enqueue(job.clone())
-            .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        // 4. Back-fill the job ID onto the obligation row so it can be followed.
-        state
-            .store
-            .link_obligation_to_job(&obligation.id.to_string(), &job.id.0.to_string())
-            .await
-            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
-
-        Ok(ProofObligationResult {
-            success: true,
-            proof_id: job.id.0.to_string(),
-        })
-    }
-
     /// Request ML-powered tactic suggestions
     async fn request_suggestions(
         &self,
@@ -527,7 +476,7 @@ impl MutationRoot {
         let state = ctx.data::<GraphQLState>()?;
         let suggestions = state
             .echidna
-            .suggest_tactics(map_prover_kind_to_core(prover), &context, &goal_state)
+            .suggest_tactics(&map_prover_kind_to_core(prover), &context, &goal_state)
             .await
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(suggestions.into_iter().map(map_suggestion).collect())
@@ -600,6 +549,42 @@ impl MutationRoot {
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(repo.into())
     }
+
+    /// Record the outcome of a tactic attempt (double-loop feedback).
+    ///
+    /// Called by LLM agents (via MCP or direct GraphQL) when they observe a
+    /// tactic being applied in a proof session. The outcome feeds the local
+    /// Reranker store so future suggestions for the same goal fingerprint are
+    /// ranked by historical success rate.
+    async fn record_tactic_outcome(
+        &self,
+        ctx: &Context<'_>,
+        input: RecordTacticOutcomeInput,
+    ) -> async_graphql::Result<TacticOutcome> {
+        let state = ctx.data::<GraphQLState>()?;
+        let prover = map_prover_kind_to_core(input.prover);
+        let fingerprint = goal_fingerprint(&input.goal_state);
+
+        let job_uuid = input
+            .job_id
+            .as_deref()
+            .and_then(|id| Uuid::parse_str(id).ok());
+
+        let record = TacticOutcomeRecord::new(
+            job_uuid,
+            prover,
+            fingerprint,
+            input.tactic,
+            input.succeeded,
+            input.duration_ms,
+        );
+        state
+            .store
+            .record_tactic_outcome(&record)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+        Ok(TacticOutcome::from(record))
+    }
 }
 
 impl From<StoreRepository> for Repository {
@@ -609,7 +594,11 @@ impl From<StoreRepository> for Repository {
             platform: map_platform_to_graphql(repo.platform),
             owner: repo.owner,
             name: repo.name,
-            enabled_provers: repo.enabled_provers.into_iter().map(map_prover_kind).collect(),
+            enabled_provers: repo
+                .enabled_provers
+                .into_iter()
+                .map(map_prover_kind)
+                .collect(),
             last_checked_commit: repo.last_checked_commit,
         }
     }
@@ -649,37 +638,38 @@ fn map_platform_to_graphql(platform: crate::adapters::Platform) -> Platform {
 }
 
 fn map_prover_kind(kind: CoreProverKind) -> ProverKind {
-    match kind {
-        CoreProverKind::Agda => ProverKind::Agda,
-        CoreProverKind::Coq => ProverKind::Coq,
-        CoreProverKind::Lean => ProverKind::Lean,
-        CoreProverKind::Isabelle => ProverKind::Isabelle,
-        CoreProverKind::Z3 => ProverKind::Z3,
-        CoreProverKind::Cvc5 => ProverKind::Cvc5,
-        CoreProverKind::Metamath => ProverKind::Metamath,
-        CoreProverKind::HolLight => ProverKind::HolLight,
-        CoreProverKind::Mizar => ProverKind::Mizar,
-        CoreProverKind::Pvs => ProverKind::Pvs,
-        CoreProverKind::Acl2 => ProverKind::Acl2,
-        CoreProverKind::Hol4 => ProverKind::Hol4,
+    match kind.as_str() {
+        "agda" => ProverKind::Agda,
+        "coq" => ProverKind::Coq,
+        "lean" => ProverKind::Lean,
+        "isabelle" => ProverKind::Isabelle,
+        "z3" => ProverKind::Z3,
+        "cvc5" => ProverKind::Cvc5,
+        "metamath" => ProverKind::Metamath,
+        "hol-light" => ProverKind::HolLight,
+        "mizar" => ProverKind::Mizar,
+        "pvs" => ProverKind::Pvs,
+        "acl2" => ProverKind::Acl2,
+        "hol4" => ProverKind::Hol4,
+        _ => ProverKind::Coq, // fallback for non-classic slugs
     }
 }
 
 fn map_prover_kind_to_core(kind: ProverKind) -> CoreProverKind {
-    match kind {
-        ProverKind::Agda => CoreProverKind::Agda,
-        ProverKind::Coq => CoreProverKind::Coq,
-        ProverKind::Lean => CoreProverKind::Lean,
-        ProverKind::Isabelle => CoreProverKind::Isabelle,
-        ProverKind::Z3 => CoreProverKind::Z3,
-        ProverKind::Cvc5 => CoreProverKind::Cvc5,
-        ProverKind::Metamath => CoreProverKind::Metamath,
-        ProverKind::HolLight => CoreProverKind::HolLight,
-        ProverKind::Mizar => CoreProverKind::Mizar,
-        ProverKind::Pvs => CoreProverKind::Pvs,
-        ProverKind::Acl2 => CoreProverKind::Acl2,
-        ProverKind::Hol4 => CoreProverKind::Hol4,
-    }
+    CoreProverKind::new(match kind {
+        ProverKind::Agda => "agda",
+        ProverKind::Coq => "coq",
+        ProverKind::Lean => "lean",
+        ProverKind::Isabelle => "isabelle",
+        ProverKind::Z3 => "z3",
+        ProverKind::Cvc5 => "cvc5",
+        ProverKind::Metamath => "metamath",
+        ProverKind::HolLight => "hol-light",
+        ProverKind::Mizar => "mizar",
+        ProverKind::Pvs => "pvs",
+        ProverKind::Acl2 => "acl2",
+        ProverKind::Hol4 => "hol4",
+    })
 }
 
 fn map_job_status(status: crate::scheduler::JobStatus) -> JobStatus {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Client for communicating with ECHIDNA Core
 
@@ -9,6 +10,7 @@ use std::time::Duration;
 use super::{ProofResult, ProofStatus, ProverKind, TacticSuggestion};
 use crate::config::{EchidnaApiMode, EchidnaConfig};
 use crate::error::{Error, Result};
+use crate::trust::{axiom_tracker::AxiomTracker, confidence::assess_confidence};
 use tracing::warn;
 
 /// Client for ECHIDNA Core GraphQL API
@@ -38,7 +40,16 @@ impl EchidnaClient {
     }
 
     /// Verify a proof using ECHIDNA Core
-    pub async fn verify_proof(&self, prover: ProverKind, content: &str) -> Result<ProofResult> {
+    #[tracing::instrument(
+        name = "echidna.verify",
+        skip(self, content),
+        fields(
+            prover = %prover,
+            content_bytes = content.len(),
+            api_mode = ?self.mode,
+        )
+    )]
+    pub async fn verify_proof(&self, prover: &ProverKind, content: &str) -> Result<ProofResult> {
         match self.mode {
             EchidnaApiMode::Graphql => self.verify_proof_graphql(prover, content).await,
             EchidnaApiMode::Rest => self.verify_proof_rest(prover, content).await,
@@ -53,15 +64,26 @@ impl EchidnaClient {
     }
 
     /// Request tactic suggestions from ECHIDNA's Julia ML component
+    #[tracing::instrument(
+        name = "echidna.suggest",
+        skip(self, context, goal_state),
+        fields(
+            prover = %prover,
+            context_bytes = context.len(),
+            goal_state_bytes = goal_state.len(),
+            api_mode = ?self.mode,
+        )
+    )]
     pub async fn suggest_tactics(
         &self,
-        prover: ProverKind,
+        prover: &ProverKind,
         context: &str,
         goal_state: &str,
     ) -> Result<Vec<TacticSuggestion>> {
         match self.mode {
             EchidnaApiMode::Graphql => {
-                self.suggest_tactics_graphql(prover, context, goal_state).await
+                self.suggest_tactics_graphql(prover, context, goal_state)
+                    .await
             }
             EchidnaApiMode::Rest => self.suggest_tactics_rest(prover, context, goal_state).await,
             EchidnaApiMode::Auto => {
@@ -92,14 +114,22 @@ impl EchidnaClient {
     }
 
     /// Check prover availability
-    pub async fn prover_status(&self, prover: ProverKind) -> Result<ProverStatus> {
+    #[tracing::instrument(
+        name = "echidna.status",
+        skip(self),
+        fields(prover = %prover, api_mode = ?self.mode)
+    )]
+    pub async fn prover_status(&self, prover: &ProverKind) -> Result<ProverStatus> {
         match self.mode {
             EchidnaApiMode::Graphql => self.prover_status_graphql(prover).await,
             EchidnaApiMode::Rest => self.prover_status_rest(prover).await,
             EchidnaApiMode::Auto => match self.prover_status_graphql(prover).await {
                 Ok(result) => Ok(result),
                 Err(err) => {
-                    warn!("GraphQL prover_status failed, falling back to REST: {}", err);
+                    warn!(
+                        "GraphQL prover_status failed, falling back to REST: {}",
+                        err
+                    );
                     self.prover_status_rest(prover).await
                 }
             },
@@ -113,7 +143,7 @@ impl EchidnaClient {
 
     async fn verify_proof_graphql(
         &self,
-        prover: ProverKind,
+        prover: &ProverKind,
         content: &str,
     ) -> Result<ProofResult> {
         let query = GraphQLRequest {
@@ -130,7 +160,7 @@ impl EchidnaClient {
             "#
             .to_string(),
             variables: serde_json::json!({
-                "prover": format!("{:?}", prover).to_lowercase(),
+                "prover": prover.as_str(),
                 "content": content
             }),
         };
@@ -156,7 +186,11 @@ impl EchidnaClient {
 
         if let Some(errors) = gql_response.errors {
             return Err(Error::Echidna(
-                errors.into_iter().map(|e| e.message).collect::<Vec<_>>().join(", "),
+                errors
+                    .into_iter()
+                    .map(|e| e.message)
+                    .collect::<Vec<_>>()
+                    .join(", "),
             ));
         }
 
@@ -164,18 +198,31 @@ impl EchidnaClient {
             .data
             .ok_or_else(|| Error::Echidna("No data in response".to_string()))?;
 
+        let status = parse_proof_status(&data.verify_proof.status);
+        let prover_output = data.verify_proof.prover_output;
+        let artifacts = data.verify_proof.artifacts;
+        let has_cert = artifacts.iter().any(|a| {
+            a.ends_with(".alethe")
+                || a.ends_with(".lrat")
+                || a.ends_with(".drat")
+                || a.ends_with(".tstp")
+        });
+        let axioms = AxiomTracker::scan(prover, &prover_output);
+        let confidence = assess_confidence(prover, status, has_cert, 1);
         Ok(ProofResult {
-            status: parse_proof_status(&data.verify_proof.status),
+            status,
             message: data.verify_proof.message,
-            prover_output: data.verify_proof.prover_output,
+            prover_output,
             duration_ms: data.verify_proof.duration_ms,
-            artifacts: data.verify_proof.artifacts,
+            artifacts,
+            confidence: Some(confidence),
+            axioms: Some(axioms),
         })
     }
 
     async fn suggest_tactics_graphql(
         &self,
-        prover: ProverKind,
+        prover: &ProverKind,
         context: &str,
         goal_state: &str,
     ) -> Result<Vec<TacticSuggestion>> {
@@ -191,7 +238,7 @@ impl EchidnaClient {
             "#
             .to_string(),
             variables: serde_json::json!({
-                "prover": format!("{:?}", prover).to_lowercase(),
+                "prover": prover.as_str(),
                 "context": context,
                 "goalState": goal_state
             }),
@@ -218,7 +265,11 @@ impl EchidnaClient {
 
         if let Some(errors) = gql_response.errors {
             return Err(Error::Echidna(
-                errors.into_iter().map(|e| e.message).collect::<Vec<_>>().join(", "),
+                errors
+                    .into_iter()
+                    .map(|e| e.message)
+                    .collect::<Vec<_>>()
+                    .join(", "),
             ));
         }
 
@@ -257,7 +308,7 @@ impl EchidnaClient {
         }
     }
 
-    async fn prover_status_graphql(&self, prover: ProverKind) -> Result<ProverStatus> {
+    async fn prover_status_graphql(&self, prover: &ProverKind) -> Result<ProverStatus> {
         let query = GraphQLRequest {
             query: r#"
                 query ProverStatus($prover: String!) {
@@ -269,7 +320,7 @@ impl EchidnaClient {
             "#
             .to_string(),
             variables: serde_json::json!({
-                "prover": format!("{:?}", prover).to_lowercase()
+                "prover": prover.as_str()
             }),
         };
 
@@ -296,7 +347,7 @@ impl EchidnaClient {
         }
     }
 
-    async fn verify_proof_rest(&self, prover: ProverKind, content: &str) -> Result<ProofResult> {
+    async fn verify_proof_rest(&self, prover: &ProverKind, content: &str) -> Result<ProofResult> {
         let request = RestVerifyRequest {
             prover: prover_to_echidna_name(prover),
             content: content.to_string(),
@@ -319,26 +370,33 @@ impl EchidnaClient {
         }
 
         let data: RestVerifyResponse = response.json().await.map_err(Error::Http)?;
+        let status = if data.valid {
+            ProofStatus::Verified
+        } else {
+            ProofStatus::Failed
+        };
+        // REST endpoint returns no raw output; axiom scan over empty string = clean.
+        let prover_output = String::new();
+        let axioms = AxiomTracker::scan(prover, &prover_output);
+        let confidence = assess_confidence(prover, status, false, 1);
         Ok(ProofResult {
-            status: if data.valid {
-                ProofStatus::Verified
-            } else {
-                ProofStatus::Failed
-            },
+            status,
             message: if data.valid {
                 "Proof verified successfully".to_string()
             } else {
                 "Proof verification failed".to_string()
             },
-            prover_output: String::new(),
+            prover_output,
             duration_ms: 0,
             artifacts: Vec::new(),
+            confidence: Some(confidence),
+            axioms: Some(axioms),
         })
     }
 
     async fn suggest_tactics_rest(
         &self,
-        prover: ProverKind,
+        prover: &ProverKind,
         context: &str,
         goal_state: &str,
     ) -> Result<Vec<TacticSuggestion>> {
@@ -396,7 +454,7 @@ impl EchidnaClient {
         }
     }
 
-    async fn prover_status_rest(&self, prover: ProverKind) -> Result<ProverStatus> {
+    async fn prover_status_rest(&self, prover: &ProverKind) -> Result<ProverStatus> {
         let response = self
             .client
             .get(self.rest_url("/api/provers"))
@@ -469,20 +527,13 @@ struct RestProverInfo {
     complexity: u8,
 }
 
-fn prover_to_echidna_name(prover: ProverKind) -> String {
-    match prover {
-        ProverKind::Agda => "Agda",
-        ProverKind::Coq => "Coq",
-        ProverKind::Lean => "Lean",
-        ProverKind::Isabelle => "Isabelle",
-        ProverKind::Z3 => "Z3",
-        ProverKind::Cvc5 => "CVC5",
-        ProverKind::Metamath => "Metamath",
-        ProverKind::HolLight => "HOLLight",
-        ProverKind::Mizar => "Mizar",
-        ProverKind::Pvs => "PVS",
-        ProverKind::Acl2 => "ACL2",
-        ProverKind::Hol4 => "HOL4",
+fn prover_to_echidna_name(prover: &ProverKind) -> String {
+    // These are ECHIDNA's serde enum names, not presentation labels.
+    match prover.as_str() {
+        "lean" => "Lean",
+        "isabelle" => "Isabelle",
+        "hol-light" => "HOLLight",
+        _ => prover.display_name(),
     }
     .to_string()
 }
@@ -576,22 +627,30 @@ mod tests {
 
     #[test]
     fn test_prover_file_extensions() {
-        assert!(ProverKind::Metamath.file_extensions().contains(&".mm"));
-        assert!(ProverKind::Lean.file_extensions().contains(&".lean"));
-        assert!(ProverKind::Coq.file_extensions().contains(&".v"));
+        assert!(ProverKind::new("metamath")
+            .file_extensions()
+            .contains(&".mm"));
+        assert!(ProverKind::new("lean").file_extensions().contains(&".lean"));
+        assert!(ProverKind::new("coq").file_extensions().contains(&".v"));
     }
 
     #[test]
     fn test_prover_from_extension() {
-        assert_eq!(ProverKind::from_extension(".mm"), Some(ProverKind::Metamath));
-        assert_eq!(ProverKind::from_extension("lean"), Some(ProverKind::Lean));
+        assert_eq!(
+            ProverKind::from_extension(".mm"),
+            Some(ProverKind::new("metamath"))
+        );
+        assert_eq!(
+            ProverKind::from_extension("lean"),
+            Some(ProverKind::new("lean"))
+        );
         assert_eq!(ProverKind::from_extension(".xyz"), None);
     }
 
     #[test]
     fn test_prover_tier() {
-        assert_eq!(ProverKind::Metamath.tier(), 2);
-        assert_eq!(ProverKind::Lean.tier(), 1);
-        assert_eq!(ProverKind::Hol4.tier(), 3);
+        assert_eq!(ProverKind::new("metamath").tier(), 2);
+        assert_eq!(ProverKind::new("lean").tier(), 1);
+        assert_eq!(ProverKind::new("hol4").tier(), 3);
     }
 }

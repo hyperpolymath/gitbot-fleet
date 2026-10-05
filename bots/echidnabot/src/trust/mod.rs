@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! ECHIDNA Trust Bridge
 //!
@@ -17,10 +18,8 @@
 
 pub mod axiom_tracker;
 pub mod confidence;
-pub mod migration_scanner;
 pub mod solver_integrity;
 
 pub use axiom_tracker::{AxiomFlag, AxiomReport, AxiomTracker};
 pub use confidence::{ConfidenceLevel, ConfidenceReport};
-pub use migration_scanner::{MigrationScanReport, MigrationScanner, MigrationSeverity};
 pub use solver_integrity::{IntegrityReport, IntegrityStatus, SolverIntegrity};

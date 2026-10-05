@@ -7,7 +7,7 @@ description = "Proof-aware CI bot that orchestrates ECHIDNA for theorem proof ve
 repository = "https://github.com/hyperpolymath/echidnabot"
 keywords = ["theorem-prover", "formal-verification", "ci", "bot", "echidna"]
 categories = ["development-tools", "science"]
-authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
+authors = ["Jonathan D.A. Jewell <jonathan.jewell@open.ac.uk>"]
 readme = "README.adoc"
 
 [lib]
@@ -18,71 +18,102 @@ path = "src/lib.rs"
 name = "echidnabot"
 path = "src/main.rs"
 
+# Note: the previous `echidnabot-mcp` standalone bin was retired
+# 2026-04-25 when the BoJ-only-MCP exception was sunset (BoJ revived,
+# cartridge `consultant_qa` activated). MCP traffic now routes through
+# `boj-server/cartridges/echidna-llm-mcp`; see echidnabot Phase 6
+# (commit 4a7871c) for the BoJ-routed call path.
+
 [dependencies]
 # Fleet coordination
-gitbot-shared-context = { path = "../../shared-context" }
+gitbot-shared-context = { version = "0.1.0", git = "https://github.com/hyperpolymath/gitbot-fleet", rev = "40ef6bf1a43813948476d33c764e3405adc950c2" }
 
 # Async runtime
-tokio = { version = "1.52.3", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 # HTTP framework
-axum = { version = "0.8.9", features = ["macros"] }
-tower = "0.5.3"
-tower-http = { version = "0.7.0", features = ["cors", "trace", "request-id"] }
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.7", features = ["cors", "trace", "request-id"] }
 
 # GraphQL
-async-graphql = { version = "7.2.1", features = ["uuid", "chrono"] }
-async-graphql-axum = "7.2.1"
+async-graphql = { version = "7", features = ["uuid", "chrono"] }
+async-graphql-axum = "7"
 
 # Serialization
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
-toml = "1.1.2+spec-1.1.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1.1"
 
 # Database
-sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite", "postgres", "uuid", "chrono"] }
+# NOTE: `default-features = false` + explicit re-add of `macros`/`migrate`
+# mirrors echidnabot#46 (chore(deps): trim sqlx default-features) —
+# preserve forward-compat so a #46/#OTel merge doesn't churn this line.
+sqlx = { version = "0.8.1", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "postgres", "uuid", "chrono", "macros", "migrate"] }
 
-# GitHub API
-octocrab = "0.54.0"
+# GitHub API. Use Octocrab's AWS-LC JWT backend instead of its default
+# `rust_crypto` backend, which currently pulls the unfixed rsa 0.9 timing
+# advisory (RUSTSEC-2023-0071).
+octocrab = { version = "0.54", default-features = false, features = [
+    "default-client",
+    "follow-redirect",
+    "jwt-aws-lc-rs",
+    "retry",
+    "rustls",
+    "rustls-ring",
+    "timeout",
+    "tracing",
+] }
 
 # HTTP client (for ECHIDNA communication)
-reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Utilities
-async-trait = "0.1.89"
-uuid = { version = "1.23.2", features = ["v4", "serde"] }
-chrono = { version = "0.4.45", features = ["serde"] }
-thiserror = "2.0.18"
-anyhow = "1.0.102"
-tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
-rand = "0.10.1"
+async-trait = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# OpenTelemetry distributed tracing — exports span data via OTLP/gRPC
+# to any OTel-compatible collector (Jaeger, Tempo, Honeycomb, etc.).
+# Enable by setting `OTEL_EXPORTER_OTLP_ENDPOINT` or [observability]
+# `otlp_endpoint` in echidnabot.toml. When unset, only the fmt layer
+# is installed, so logs continue to work without a collector.
+opentelemetry = { version = "0.33", features = ["trace"] }
+opentelemetry-otlp = { version = "0.33", features = ["grpc-tonic", "trace"] }
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio", "trace"] }
+tracing-opentelemetry = "0.34"
+
+rand = "0.10"
 
 # Crypto for webhook verification
-hmac = "0.13.0"
-sha2 = "0.11.0"
-hex = "0.4.3"
+hmac = "0.13"
+sha2 = "0.11"
+hex = "0.4"
 
 # CLI
-clap = { version = "4.6.1", features = ["derive", "env"] }
+clap = { version = "4", features = ["derive", "env"] }
 
 # Config
-config = "0.15.23"
+config = "0.15"
 
 # Filesystem utilities
-tempfile = "3.27.0"
+tempfile = "3"
 
 # URL encoding for GitLab/Bitbucket APIs
-urlencoding = "2.1.3"
+urlencoding = "2"
 
 [dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports"] }
-tokio-test = "0.4.5"
-axum-test = "21.0.0"
-mockall = "0.15.0"
-tempfile = "3.27.0"
-wiremock = "0.6.5"
-bytes = "1.11.1"
+criterion = { version = "0.8", features = ["html_reports"] }
+tokio-test = "0.4"
+axum-test = "21"
+mockall = "0.15"
+tempfile = "3"
+wiremock = "0.6"
+proptest = "1"
 
 [profile.release]
 lto = true
@@ -93,7 +124,7 @@ strip = true
 [package.metadata.deb]
 maintainer = "hyperpolymath <packages@hyperpolymath.dev>"
 copyright = "2025, hyperpolymath"
-license-MPL-2.0 = ["LICENSE", "0"]
+license-PMPL--1.0 = ["LICENSE", "0"]
 extended-description = """
 ECHIDNABOT is a proof-aware CI bot that orchestrates ECHIDNA for theorem
 proof verification. It integrates with GitHub to automatically verify

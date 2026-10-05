@@ -26,3 +26,5 @@ jobs:
         run: bash tests/e2e.sh
       - name: Verify canonical descriptile policy repair
         run: bash tests/retired-descriptile-policy-test.sh
+      - name: Verify star-list enrollment discovery
+        run: bash tests/enroll-discovery-test.sh

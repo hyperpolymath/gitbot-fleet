@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Container isolation for prover execution
 //!
@@ -89,7 +90,7 @@ impl Default for PodmanExecutor {
             timeout: Duration::from_secs(300), // 5 minutes
             memory_limit: "512m".to_string(),
             cpu_limit: 2.0,
-            network: false, // No network for proof checking
+            network: false,                  // No network for proof checking
             backend: IsolationBackend::None, // Detect on init
         }
     }
@@ -212,6 +213,15 @@ impl PodmanExecutor {
     ///
     /// # Returns
     /// `ExecutionResult` with stdout/stderr and exit status
+    #[tracing::instrument(
+        name = "executor.run",
+        skip(self, proof_content, _additional_files),
+        fields(
+            prover = %prover,
+            backend = ?self.backend,
+            proof_bytes = proof_content.len(),
+        )
+    )]
     pub async fn execute_proof(
         &self,
         prover: ProverKind,
@@ -219,20 +229,16 @@ impl PodmanExecutor {
         _additional_files: Option<HashMap<String, String>>,
     ) -> Result<ExecutionResult> {
         match self.backend {
-            IsolationBackend::Podman => {
-                self.execute_with_podman(prover, proof_content).await
-            }
+            IsolationBackend::Podman => self.execute_with_podman(prover, proof_content).await,
             IsolationBackend::Bubblewrap => {
                 self.execute_with_bubblewrap(prover, proof_content).await
             }
-            IsolationBackend::None => {
-                Err(Error::Internal(
-                    "No isolation backend available. Install podman or bubblewrap (bwrap) \
+            IsolationBackend::None => Err(Error::Internal(
+                "No isolation backend available. Install podman or bubblewrap (bwrap) \
                      to enable proof execution. Refusing to run proofs without isolation \
                      (fail-safe policy)."
-                        .to_string(),
-                ))
-            }
+                    .to_string(),
+            )),
         }
     }
 
@@ -245,8 +251,7 @@ impl PodmanExecutor {
         let start = std::time::Instant::now();
 
         let mut cmd = Command::new("podman");
-        cmd.arg("run")
-            .arg("--rm"); // Remove container after execution
+        cmd.arg("run").arg("--rm"); // Remove container after execution
 
         // Network isolation
         if !self.network {
@@ -272,7 +277,7 @@ impl PodmanExecutor {
 
         // Environment variables
         cmd.arg("-e")
-            .arg(format!("PROVER={}", prover_to_env_name(prover)));
+            .arg(format!("PROVER={}", prover_to_env_name(&prover)));
 
         // Write proof content via stdin
         cmd.arg("-i") // Interactive mode for stdin
@@ -283,8 +288,8 @@ impl PodmanExecutor {
         // Command to execute inside container: save proof, run prover
         let container_cmd = format!(
             "cat > /tmp/proof{ext} && {cmd} /tmp/proof{ext}",
-            ext = prover_extension(prover),
-            cmd = prover_command(prover),
+            ext = prover_extension(&prover),
+            cmd = prover_command(&prover),
         );
         cmd.arg(&container_cmd);
 
@@ -301,9 +306,9 @@ impl PodmanExecutor {
             self.cpu_limit,
         );
 
-        let mut child = cmd.spawn().map_err(|e| {
-            Error::Internal(format!("Failed to spawn Podman container: {}", e))
-        })?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| Error::Internal(format!("Failed to spawn Podman container: {}", e)))?;
 
         // Write proof content to stdin
         if let Some(mut stdin) = child.stdin.take() {
@@ -317,9 +322,11 @@ impl PodmanExecutor {
         }
 
         // Wait for completion with timeout
-        let wait_result =
-            tokio::time::timeout(self.timeout + Duration::from_secs(5), child.wait_with_output())
-                .await;
+        let wait_result = tokio::time::timeout(
+            self.timeout + Duration::from_secs(5),
+            child.wait_with_output(),
+        )
+        .await;
 
         let duration = start.elapsed();
 
@@ -364,10 +371,7 @@ impl PodmanExecutor {
                 Ok(ExecutionResult {
                     success: false,
                     stdout: String::new(),
-                    stderr: format!(
-                        "Execution timed out after {}s",
-                        self.timeout.as_secs()
-                    ),
+                    stderr: format!("Execution timed out after {}s", self.timeout.as_secs()),
                     exit_code: None,
                     duration_ms: duration.as_millis() as u64,
                     timed_out: true,
@@ -390,17 +394,16 @@ impl PodmanExecutor {
         let start = std::time::Instant::now();
 
         // Create a temp directory for the proof file
-        let temp_dir = tempfile::tempdir().map_err(|e| {
-            Error::Internal(format!("Failed to create temp directory: {}", e))
-        })?;
+        let temp_dir = tempfile::tempdir()
+            .map_err(|e| Error::Internal(format!("Failed to create temp directory: {}", e)))?;
         let proof_path = temp_dir
             .path()
-            .join(format!("proof{}", prover_extension(prover)));
+            .join(format!("proof{}", prover_extension(&prover)));
 
         // Write proof content to temp file
-        tokio::fs::write(&proof_path, proof_content).await.map_err(|e| {
-            Error::Internal(format!("Failed to write proof file: {}", e))
-        })?;
+        tokio::fs::write(&proof_path, proof_content)
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to write proof file: {}", e)))?;
 
         // Build bwrap command
         let mut cmd = Command::new("bwrap");
@@ -437,17 +440,15 @@ impl PodmanExecutor {
         // Set environment
         cmd.arg("--setenv")
             .arg("PROVER")
-            .arg(prover_to_env_name(prover));
+            .arg(prover_to_env_name(&prover));
 
         // Command to run inside sandbox
-        let prover_cmd = prover_command(prover);
-        cmd.arg("sh")
-            .arg("-c")
-            .arg(format!(
-                "cp /workspace/proof{ext} /tmp/proof{ext} && {cmd} /tmp/proof{ext}",
-                ext = prover_extension(prover),
-                cmd = prover_cmd,
-            ));
+        let prover_cmd = prover_command(&prover);
+        cmd.arg("sh").arg("-c").arg(format!(
+            "cp /workspace/proof{ext} /tmp/proof{ext} && {cmd} /tmp/proof{ext}",
+            ext = prover_extension(&prover),
+            cmd = prover_cmd,
+        ));
 
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
@@ -457,14 +458,13 @@ impl PodmanExecutor {
             self.timeout.as_secs(),
         );
 
-        let mut child = cmd.spawn().map_err(|e| {
-            Error::Internal(format!("Failed to spawn bubblewrap sandbox: {}", e))
-        })?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| Error::Internal(format!("Failed to spawn bubblewrap sandbox: {}", e)))?;
 
         // Wait with timeout. We use wait() instead of wait_with_output()
         // so we can kill the child on timeout.
-        let wait_result =
-            tokio::time::timeout(self.timeout, child.wait()).await;
+        let wait_result = tokio::time::timeout(self.timeout, child.wait()).await;
 
         let duration = start.elapsed();
 
@@ -473,10 +473,7 @@ impl PodmanExecutor {
                 let success = status.success();
                 let exit_code = status.code();
 
-                debug!(
-                    "Bubblewrap sandbox finished: exit={:?}",
-                    exit_code,
-                );
+                debug!("Bubblewrap sandbox finished: exit={:?}", exit_code,);
 
                 Ok(ExecutionResult {
                     success,
@@ -503,10 +500,7 @@ impl PodmanExecutor {
                 Ok(ExecutionResult {
                     success: false,
                     stdout: String::new(),
-                    stderr: format!(
-                        "Execution timed out after {}s",
-                        self.timeout.as_secs()
-                    ),
+                    stderr: format!("Execution timed out after {}s", self.timeout.as_secs()),
                     exit_code: None,
                     duration_ms: duration.as_millis() as u64,
                     timed_out: true,
@@ -565,10 +559,7 @@ impl PodmanExecutor {
     ///
     /// Returns the full argument list that would be passed to Podman.
     pub fn build_podman_args(&self, prover: ProverKind) -> Vec<String> {
-        let mut args = vec![
-            "run".to_string(),
-            "--rm".to_string(),
-        ];
+        let mut args = vec!["run".to_string(), "--rm".to_string()];
 
         if !self.network {
             args.push("--network=none".to_string());
@@ -585,7 +576,7 @@ impl PodmanExecutor {
         args.push("-w".to_string());
         args.push("/workspace".to_string());
         args.push("-e".to_string());
-        args.push(format!("PROVER={}", prover_to_env_name(prover)));
+        args.push(format!("PROVER={}", prover_to_env_name(&prover)));
         args.push("-i".to_string());
         args.push(self.image.clone());
         args.push("sh".to_string());
@@ -593,8 +584,8 @@ impl PodmanExecutor {
 
         let container_cmd = format!(
             "cat > /tmp/proof{ext} && {cmd} /tmp/proof{ext}",
-            ext = prover_extension(prover),
-            cmd = prover_command(prover),
+            ext = prover_extension(&prover),
+            cmd = prover_command(&prover),
         );
         args.push(container_cmd);
 
@@ -607,56 +598,69 @@ impl PodmanExecutor {
 // =============================================================================
 
 /// Get environment variable name for a prover backend.
-fn prover_to_env_name(prover: ProverKind) -> &'static str {
-    match prover {
-        ProverKind::Coq => "COQ",
-        ProverKind::Lean => "LEAN",
-        ProverKind::Isabelle => "ISABELLE",
-        ProverKind::Agda => "AGDA",
-        ProverKind::Z3 => "Z3",
-        ProverKind::Cvc5 => "CVC5",
-        ProverKind::Metamath => "METAMATH",
-        ProverKind::HolLight => "HOL_LIGHT",
-        ProverKind::Mizar => "MIZAR",
-        ProverKind::Pvs => "PVS",
-        ProverKind::Acl2 => "ACL2",
-        ProverKind::Hol4 => "HOL4",
+fn prover_to_env_name(prover: &ProverKind) -> String {
+    match prover.as_str() {
+        "coq" => "COQ".to_string(),
+        "lean" => "LEAN".to_string(),
+        "isabelle" => "ISABELLE".to_string(),
+        "agda" => "AGDA".to_string(),
+        "z3" => "Z3".to_string(),
+        "cvc5" => "CVC5".to_string(),
+        "metamath" => "METAMATH".to_string(),
+        "hol-light" => "HOL_LIGHT".to_string(),
+        "mizar" => "MIZAR".to_string(),
+        "pvs" => "PVS".to_string(),
+        "acl2" => "ACL2".to_string(),
+        "hol4" => "HOL4".to_string(),
+        _ => prover.as_str().to_uppercase(),
     }
 }
 
 /// Get the file extension for proof files of a given prover.
-fn prover_extension(prover: ProverKind) -> &'static str {
-    match prover {
-        ProverKind::Coq => ".v",
-        ProverKind::Lean => ".lean",
-        ProverKind::Isabelle => ".thy",
-        ProverKind::Agda => ".agda",
-        ProverKind::Z3 => ".smt2",
-        ProverKind::Cvc5 => ".smt2",
-        ProverKind::Metamath => ".mm",
-        ProverKind::HolLight => ".ml",
-        ProverKind::Mizar => ".miz",
-        ProverKind::Pvs => ".pvs",
-        ProverKind::Acl2 => ".lisp",
-        ProverKind::Hol4 => ".sml",
+fn prover_extension(prover: &ProverKind) -> String {
+    match prover.as_str() {
+        "coq" => ".v".to_string(),
+        "lean" => ".lean".to_string(),
+        "isabelle" => ".thy".to_string(),
+        "agda" => ".agda".to_string(),
+        "z3" => ".smt2".to_string(),
+        "cvc5" => ".smt2".to_string(),
+        "metamath" => ".mm".to_string(),
+        "hol-light" => ".ml".to_string(),
+        "mizar" => ".miz".to_string(),
+        "pvs" => ".pvs".to_string(),
+        "acl2" => ".lisp".to_string(),
+        "hol4" => ".sml".to_string(),
+        // Tier-3 dependent-type / VC / ATP / protocol-checker systems
+        "idris2" | "idris" => ".idr".to_string(),
+        "fstar" => ".fst".to_string(),
+        "dafny" => ".dfy".to_string(),
+        "why3" => ".mlw".to_string(),
+        "vampire" | "eprover" | "spass" => ".p".to_string(),
+        "tamarin" => ".spthy".to_string(),
+        "proverif" => ".pv".to_string(),
+        "dreal" | "alt-ergo" => ".smt2".to_string(),
+        "abc" => ".aig".to_string(),
+        _ => ".txt".to_string(), // Default for unknown provers
     }
 }
 
 /// Get the shell command to invoke a prover.
-fn prover_command(prover: ProverKind) -> &'static str {
-    match prover {
-        ProverKind::Coq => "coqc",
-        ProverKind::Lean => "lean",
-        ProverKind::Isabelle => "isabelle build",
-        ProverKind::Agda => "agda",
-        ProverKind::Z3 => "z3",
-        ProverKind::Cvc5 => "cvc5",
-        ProverKind::Metamath => "metamath",
-        ProverKind::HolLight => "ocaml",
-        ProverKind::Mizar => "mizf",
-        ProverKind::Pvs => "pvs",
-        ProverKind::Acl2 => "acl2",
-        ProverKind::Hol4 => "Holmake",
+fn prover_command(prover: &ProverKind) -> String {
+    match prover.as_str() {
+        "coq" => "coqc".to_string(),
+        "lean" => "lean".to_string(),
+        "isabelle" => "isabelle build".to_string(),
+        "agda" => "agda".to_string(),
+        "z3" => "z3".to_string(),
+        "cvc5" => "cvc5".to_string(),
+        "metamath" => "metamath".to_string(),
+        "hol-light" => "ocaml".to_string(),
+        "mizar" => "mizf".to_string(),
+        "pvs" => "pvs".to_string(),
+        "acl2" => "acl2".to_string(),
+        "hol4" => "Holmake".to_string(),
+        _ => prover.as_str().to_string(), // Default: use prover slug as command
     }
 }
 
@@ -670,25 +674,40 @@ mod tests {
 
     #[test]
     fn test_prover_extensions() {
-        assert_eq!(prover_extension(ProverKind::Coq), ".v");
-        assert_eq!(prover_extension(ProverKind::Lean), ".lean");
-        assert_eq!(prover_extension(ProverKind::Metamath), ".mm");
-        assert_eq!(prover_extension(ProverKind::Z3), ".smt2");
-        assert_eq!(prover_extension(ProverKind::Agda), ".agda");
+        assert_eq!(prover_extension(&ProverKind::new("coq")), ".v");
+        assert_eq!(prover_extension(&ProverKind::new("lean")), ".lean");
+        assert_eq!(prover_extension(&ProverKind::new("metamath")), ".mm");
+        assert_eq!(prover_extension(&ProverKind::new("z3")), ".smt2");
+        assert_eq!(prover_extension(&ProverKind::new("agda")), ".agda");
+
+        // Tier-3
+        assert_eq!(prover_extension(&ProverKind::new("idris2")), ".idr");
+        assert_eq!(prover_extension(&ProverKind::new("fstar")), ".fst");
+        assert_eq!(prover_extension(&ProverKind::new("dafny")), ".dfy");
+        assert_eq!(prover_extension(&ProverKind::new("why3")), ".mlw");
+        assert_eq!(prover_extension(&ProverKind::new("vampire")), ".p");
+        assert_eq!(prover_extension(&ProverKind::new("eprover")), ".p");
+        assert_eq!(prover_extension(&ProverKind::new("tamarin")), ".spthy");
+        assert_eq!(prover_extension(&ProverKind::new("proverif")), ".pv");
+        assert_eq!(prover_extension(&ProverKind::new("dreal")), ".smt2");
+        assert_eq!(prover_extension(&ProverKind::new("abc")), ".aig");
     }
 
     #[test]
     fn test_prover_env_names() {
-        assert_eq!(prover_to_env_name(ProverKind::Coq), "COQ");
-        assert_eq!(prover_to_env_name(ProverKind::HolLight), "HOL_LIGHT");
-        assert_eq!(prover_to_env_name(ProverKind::Cvc5), "CVC5");
+        assert_eq!(prover_to_env_name(&ProverKind::new("coq")), "COQ");
+        assert_eq!(
+            prover_to_env_name(&ProverKind::new("hol-light")),
+            "HOL_LIGHT"
+        );
+        assert_eq!(prover_to_env_name(&ProverKind::new("cvc5")), "CVC5");
     }
 
     #[test]
     fn test_prover_commands() {
-        assert_eq!(prover_command(ProverKind::Coq), "coqc");
-        assert_eq!(prover_command(ProverKind::Lean), "lean");
-        assert_eq!(prover_command(ProverKind::Z3), "z3");
+        assert_eq!(prover_command(&ProverKind::new("coq")), "coqc");
+        assert_eq!(prover_command(&ProverKind::new("lean")), "lean");
+        assert_eq!(prover_command(&ProverKind::new("z3")), "z3");
     }
 
     #[test]
@@ -722,10 +741,9 @@ mod tests {
 
     #[test]
     fn test_podman_args_contain_security_flags() {
-        let executor = PodmanExecutor::default()
-            .with_backend(IsolationBackend::Podman);
+        let executor = PodmanExecutor::default().with_backend(IsolationBackend::Podman);
 
-        let args = executor.build_podman_args(ProverKind::Coq);
+        let args = executor.build_podman_args(ProverKind::new("coq"));
 
         assert!(args.contains(&"--rm".to_string()));
         assert!(args.contains(&"--network=none".to_string()));
@@ -740,13 +758,12 @@ mod tests {
 
     #[test]
     fn test_podman_args_contain_prover_env() {
-        let executor = PodmanExecutor::default()
-            .with_backend(IsolationBackend::Podman);
+        let executor = PodmanExecutor::default().with_backend(IsolationBackend::Podman);
 
-        let args = executor.build_podman_args(ProverKind::Lean);
+        let args = executor.build_podman_args(ProverKind::new("lean"));
         assert!(args.contains(&"PROVER=LEAN".to_string()));
 
-        let args = executor.build_podman_args(ProverKind::Coq);
+        let args = executor.build_podman_args(ProverKind::new("coq"));
         assert!(args.contains(&"PROVER=COQ".to_string()));
     }
 
@@ -756,17 +773,16 @@ mod tests {
             .with_network(true)
             .with_backend(IsolationBackend::Podman);
 
-        let args = executor.build_podman_args(ProverKind::Z3);
+        let args = executor.build_podman_args(ProverKind::new("z3"));
         assert!(!args.contains(&"--network=none".to_string()));
     }
 
     #[tokio::test]
     async fn test_no_backend_fails_safe() {
-        let executor = PodmanExecutor::default()
-            .with_backend(IsolationBackend::None);
+        let executor = PodmanExecutor::default().with_backend(IsolationBackend::None);
 
         let result = executor
-            .execute_proof(ProverKind::Coq, "Theorem test : True.", None)
+            .execute_proof(ProverKind::new("coq"), "Theorem test : True.", None)
             .await;
 
         assert!(result.is_err());

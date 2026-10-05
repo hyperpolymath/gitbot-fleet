@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 //! Fleet integration for gitbot-fleet coordination
 //!
 //! This module provides the bridge between echidnabot and the gitbot-fleet
@@ -11,9 +12,9 @@
 
 use crate::error::{Error, Result};
 use crate::scheduler::{JobResult, ProofJob};
-use gitbot_shared_context::{BotId, Context, ContextStorage, Finding, Severity};
+use gitbot_shared_context::{BotId, Context, Finding, Severity};
 use std::path::PathBuf;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Fleet coordinator for echidnabot
 pub struct FleetCoordinator {
@@ -45,27 +46,27 @@ impl FleetCoordinator {
     }
 
     /// Disconnect from fleet (mark echidnabot as complete)
-    pub fn disconnect(&mut self, findings_count: usize, errors_count: usize, files_analyzed: usize) -> Result<()> {
+    pub fn disconnect(
+        &mut self,
+        findings_count: usize,
+        errors_count: usize,
+        files_analyzed: usize,
+    ) -> Result<()> {
         if let Some(ref mut ctx) = self.context {
-            info!("Disconnecting from gitbot-fleet (findings: {}, errors: {}, files: {})",
-                  findings_count, errors_count, files_analyzed);
+            info!(
+                "Disconnecting from gitbot-fleet (findings: {}, errors: {}, files: {})",
+                findings_count, errors_count, files_analyzed
+            );
 
-            ctx.complete_bot(BotId::Echidnabot, findings_count, errors_count, files_analyzed)
-                .map_err(|e| Error::Internal(format!("Failed to complete bot: {}", e)))?;
+            ctx.complete_bot(
+                BotId::Echidnabot,
+                findings_count,
+                errors_count,
+                files_analyzed,
+            )
+            .map_err(|e| Error::Internal(format!("Failed to complete bot: {}", e)))?;
 
-            // Persist context to ~/.gitbot-fleet/sessions/<session_id>.json so the
-            // fleet-coordinator and other bots can pick up echidnabot findings after
-            // this bot's process has exited. Persistence failure is logged but does
-            // NOT fail disconnect — losing a session log is less bad than crashing
-            // a running bot. Callers that need strict durability should call the
-            // persistence API directly.
-            match ContextStorage::default() {
-                Ok(storage) => match storage.save_context(ctx) {
-                    Ok(path) => info!(path = %path.display(), "Persisted session context"),
-                    Err(e) => warn!("Failed to persist session context: {}", e),
-                },
-                Err(e) => warn!("Failed to open session storage: {}", e),
-            }
+            // TODO: Persist context to ~/.gitbot-fleet/sessions/
         }
 
         self.context = None;
@@ -196,7 +197,7 @@ mod tests {
             id: JobId::new(),
             repo_id: Uuid::new_v4(),
             commit_sha: "abc123".to_string(),
-            prover: ProverKind::Coq,
+            prover: ProverKind::new("coq"),
             file_paths: vec!["test.v".to_string()],
             status: crate::scheduler::JobStatus::Completed,
             priority: crate::scheduler::JobPriority::Normal,
@@ -204,6 +205,8 @@ mod tests {
             started_at: Some(Utc::now()),
             completed_at: Some(Utc::now()),
             result: None,
+            pr_number: None,
+            delivery_id: None,
         };
 
         let result = JobResult {
@@ -213,6 +216,8 @@ mod tests {
             duration_ms: 1234,
             verified_files: vec!["test.v".to_string()],
             failed_files: vec![],
+            confidence: None,
+            axioms: None,
         };
 
         coordinator.publish_finding(&job, &result).unwrap();
@@ -232,7 +237,7 @@ mod tests {
             id: JobId::new(),
             repo_id: Uuid::new_v4(),
             commit_sha: "abc123".to_string(),
-            prover: ProverKind::Lean,
+            prover: ProverKind::new("lean"),
             file_paths: vec!["test.lean".to_string()],
             status: crate::scheduler::JobStatus::Failed,
             priority: crate::scheduler::JobPriority::High,
@@ -240,6 +245,8 @@ mod tests {
             started_at: Some(Utc::now()),
             completed_at: Some(Utc::now()),
             result: None,
+            pr_number: None,
+            delivery_id: None,
         };
 
         let result = JobResult {
@@ -249,6 +256,8 @@ mod tests {
             duration_ms: 567,
             verified_files: vec![],
             failed_files: vec!["test.lean".to_string()],
+            confidence: None,
+            axioms: None,
         };
 
         coordinator.publish_finding(&job, &result).unwrap();
@@ -267,7 +276,7 @@ mod tests {
             id: JobId::new(),
             repo_id: Uuid::new_v4(),
             commit_sha: "abc123".to_string(),
-            prover: ProverKind::Z3,
+            prover: ProverKind::new("z3"),
             file_paths: vec!["test.smt2".to_string()],
             status: crate::scheduler::JobStatus::Completed,
             priority: crate::scheduler::JobPriority::Normal,
@@ -275,6 +284,8 @@ mod tests {
             started_at: Some(Utc::now()),
             completed_at: Some(Utc::now()),
             result: None,
+            pr_number: None,
+            delivery_id: None,
         };
 
         let result = JobResult {
@@ -284,6 +295,8 @@ mod tests {
             duration_ms: 100,
             verified_files: vec!["test.smt2".to_string()],
             failed_files: vec![],
+            confidence: None,
+            axioms: None,
         };
 
         // Should not error when not connected

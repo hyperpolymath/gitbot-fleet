@@ -1,0 +1,58 @@
+# This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
+# Vendored bot drift — bots/<bot>/ copies of standalone repositories are pinned
+# syncs, not forks. This fails when a vendored copy differs from the upstream
+# commit pinned in bots/<bot>/FLEET-SYNC.json (see scripts/sync-vendored-bot.sh
+# and bots/echidnabot/CANONICAL_SOURCE.adoc).
+name: Vendored bot drift
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ['**']
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tool-tests:
+    name: sync-vendored-bot tests (planted controls)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/tests/sync-vendored-bot.sh
+
+  drift:
+    name: echidnabot pinned to hyperpolymath/echidnabot
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fleet copy equals pinned upstream rev
+        run: bash scripts/sync-vendored-bot.sh echidnabot --check
+      - name: Report how far upstream main is ahead of the pin (informational)
+        run: |
+          set -euo pipefail
+          lock=bots/echidnabot/FLEET-SYNC.json
+          repo="$(jq -r .repo "$lock")"
+          rev="$(jq -r .rev "$lock")"
+          branch="$(jq -r .upstream_branch "$lock")"
+          tmp="$(mktemp -d)"
+          git init -q --bare "$tmp/up.git"
+          git -C "$tmp/up.git" fetch -q --no-tags --filter=blob:none "$repo" "+refs/heads/$branch:refs/heads/$branch"
+          ahead="$(git -C "$tmp/up.git" rev-list --count "$rev..refs/heads/$branch")"
+          head="$(git -C "$tmp/up.git" rev-parse "refs/heads/$branch")"
+          if [ "$ahead" -gt 0 ]; then
+            echo "::notice::echidnabot upstream $branch is $ahead commit(s) ahead of the pin ($rev -> $head). Bump with: scripts/sync-vendored-bot.sh echidnabot --sync --rev $head"
+          else
+            echo "Pin is at upstream $branch head ($head)."
+          fi

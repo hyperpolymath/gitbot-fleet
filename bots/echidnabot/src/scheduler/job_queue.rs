@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Job queue management
 
@@ -47,7 +48,11 @@ impl JobScheduler {
     }
 
     /// Connect to fleet for a repository session
-    pub async fn connect_to_fleet(&self, repo_name: &str, repo_path: impl Into<std::path::PathBuf>) -> Result<()> {
+    pub async fn connect_to_fleet(
+        &self,
+        repo_name: &str,
+        repo_path: impl Into<std::path::PathBuf>,
+    ) -> Result<()> {
         let mut fleet = self.fleet.lock().await;
         fleet.connect(repo_name, repo_path)
     }
@@ -86,9 +91,7 @@ impl JobScheduler {
 
         // Check for duplicates
         let is_duplicate = queue.iter().any(|j| {
-            j.repo_id == job.repo_id
-                && j.commit_sha == job.commit_sha
-                && j.prover == job.prover
+            j.repo_id == job.repo_id && j.commit_sha == job.commit_sha && j.prover == job.prover
         });
 
         if is_duplicate {
@@ -206,11 +209,14 @@ impl JobScheduler {
         {
             let mut queue = self.queue.lock().await;
             if let Some(pos) = queue.iter().position(|j| j.id == job_id) {
-                if let Some(mut job) = queue.remove(pos) {
-                    job.cancel();
-                    tracing::info!("Cancelled queued job {}", job_id);
-                    return true;
-                }
+                // Safe: pos came from position() while we hold the lock,
+                // so the index is guaranteed in-bounds for VecDeque::remove.
+                let mut job = queue
+                    .remove(pos)
+                    .expect("position() guarantees in-bounds index");
+                job.cancel();
+                tracing::info!("Cancelled queued job {}", job_id);
+                return true;
             }
         }
 
@@ -236,6 +242,24 @@ impl JobScheduler {
     pub fn has_capacity(&self) -> bool {
         self.active_count.load(Ordering::Relaxed) < self.max_concurrent
     }
+
+    /// Current number of running jobs (lock-free snapshot for metrics).
+    pub fn running_count(&self) -> usize {
+        self.active_count.load(Ordering::Relaxed)
+    }
+
+    /// Approximate queue depth (lock-free via active count heuristic).
+    /// For an exact count use `stats().await`; this is cheap enough for
+    /// the `/metrics` scrape path where blocking on an async lock is undesirable.
+    pub fn queue_depth(&self) -> usize {
+        // We don't store a separate atomic for pending count, so approximate
+        // via the difference between active_count and max_concurrent clamped
+        // at 0. Under light load this is 0; under saturation it reflects backpressure.
+        // The `/metrics` handler documents this as an approximation.
+        self.active_count
+            .load(Ordering::Relaxed)
+            .saturating_sub(self.max_concurrent)
+    }
 }
 
 /// Queue statistics
@@ -260,14 +284,14 @@ mod tests {
         let job1 = ProofJob::new(
             Uuid::new_v4(),
             "abc123".to_string(),
-            ProverKind::Metamath,
+            ProverKind::new("metamath"),
             vec!["test.mm".to_string()],
         );
 
         let job2 = ProofJob::new(
             Uuid::new_v4(),
             "def456".to_string(),
-            ProverKind::Metamath,
+            ProverKind::new("metamath"),
             vec!["test2.mm".to_string()],
         );
 
@@ -294,14 +318,14 @@ mod tests {
         let job1 = ProofJob::new(
             repo_id,
             "abc123".to_string(),
-            ProverKind::Metamath,
+            ProverKind::new("metamath"),
             vec!["test.mm".to_string()],
         );
 
         let job2 = ProofJob::new(
             repo_id,
-            "abc123".to_string(), // Same commit
-            ProverKind::Metamath,  // Same prover
+            "abc123".to_string(),        // Same commit
+            ProverKind::new("metamath"), // Same prover
             vec!["test.mm".to_string()],
         );
 
@@ -320,7 +344,7 @@ mod tests {
         let low_priority = ProofJob::new(
             repo_id,
             "low".to_string(),
-            ProverKind::Metamath,
+            ProverKind::new("metamath"),
             vec!["low.mm".to_string()],
         )
         .with_priority(JobPriority::Low);
@@ -328,7 +352,7 @@ mod tests {
         let high_priority = ProofJob::new(
             repo_id,
             "high".to_string(),
-            ProverKind::Lean,
+            ProverKind::new("lean"),
             vec!["high.lean".to_string()],
         )
         .with_priority(JobPriority::High);

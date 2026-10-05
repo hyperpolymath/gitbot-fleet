@@ -111,3 +111,14 @@ quarantine tests are in `robot-repo-automaton/src/main.rs`; run
 `cargo test --manifest-path robot-repo-automaton/Cargo.toml --bin robot-repo-automaton quarantine_tests`
 in a Rust-enabled environment. These tests are not a substitute for full policy
 conformance testing.
+
+The `Dispatch path and outcome contracts` CI job
+(`scripts/tests/dispatch-paths.sh`) behaves as follows while the interlock is in
+place. It first asserts that the production `scripts/dispatch-runner.sh` exits 78
+with the `BLOCKED` message and writes no outcome state. It then builds a
+test-only copy of the runner inside its throwaway fixture with exactly the
+interlock lines removed. The path and outcome contracts run against that copy.
+A planted control checks that the copy is not refused, and the test fails
+outright once the production runner no longer carries the interlock, so the seam
+cannot outlive the quarantine unnoticed. The seam copy is never reachable from a
+production entry point.

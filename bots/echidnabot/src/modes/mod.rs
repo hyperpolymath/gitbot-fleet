@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+// Copyright (c) Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 //! Bot operating modes for different verification workflows
 //!
 //! Echidnabot supports four operating modes that control how verification
@@ -9,8 +10,42 @@
 //! - **Consultant**: Interactive Q&A about proof state
 //! - **Regulator**: Blocks PR merges when proofs fail
 
+pub mod directives;
+pub mod manifest;
+pub use directives::{
+    fetch_directive_via_adapter, parse_a2ml_directive, resolve_mode,
+    resolve_mode_with_daemon_default,
+};
+pub use manifest::{
+    AxiomSeverity, AxiomsSection, BlockedOnSection, BotSection, MergeBlockSection, ProofsSection,
+    ProverConfig, ProversSection, RepoManifest,
+};
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
+
+/// Daemon-wide mode selector — the final fallback in the resolution cascade.
+///
+/// Stored in `AppState` so webhook handlers can read the configured daemon
+/// default without an async DB lookup. Wraps the `[bot] mode` value from
+/// the TOML config.
+///
+/// Resolution priority (highest → lowest):
+///   1. Target-repo `.machine_readable/bot_directives/echidnabot.a2ml`
+///   2. Per-repo `repositories.mode` DB column (if non-default)
+///   3. Daemon-wide `ModeSelector.default_mode` (this struct)
+///   4. `BotMode::default()` = Verifier (last resort)
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ModeSelector {
+    /// The daemon-wide fallback mode, read from `[bot] mode` in the TOML config.
+    pub default_mode: BotMode,
+}
+
+impl ModeSelector {
+    pub fn new(mode: BotMode) -> Self {
+        Self { default_mode: mode }
+    }
+}
 
 /// Bot operating mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -78,7 +113,6 @@ impl BotMode {
         }
     }
 }
-
 
 impl fmt::Display for BotMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -201,8 +235,7 @@ impl BotMode {
     }
 }
 
-/// Parse a bot mode from a `.machine_readable/bot_directives/echidnabot.scm`
-/// file content (legacy format supported by callers).
+/// Parse a bot mode from a `.bot_directives/echidnabot.scm` file content.
 ///
 /// Looks for `(mode ...)` S-expression in the directive file.
 /// Returns `BotMode::Verifier` (default) if parsing fails or mode not found.
@@ -249,14 +282,46 @@ pub fn should_auto_trigger(mode: BotMode, _is_pr: bool) -> bool {
     }
 }
 
-/// Check if a comment body contains an explicit echidnabot mention.
+/// Check if a comment body contains an explicit echidnabot trigger
+/// command (Consultant mode bypass for direct invocation).
 ///
-/// Looks for `@echidnabot check` or `@echidnabot verify` patterns.
+/// Looks for `@echidnabot check` / `@echidnabot verify` / `@echidnabot run`.
 pub fn is_explicit_mention(comment_body: &str) -> bool {
     let lower = comment_body.to_lowercase();
     lower.contains("@echidnabot check")
         || lower.contains("@echidnabot verify")
         || lower.contains("@echidnabot run")
+}
+
+/// Check if a comment body mentions the bot at all.
+///
+/// Used by Consultant mode where ANY @echidnabot mention is a question
+/// the bot should respond to (vs. `is_explicit_mention` which only fires
+/// on specific trigger commands).
+pub fn is_any_mention(comment_body: &str) -> bool {
+    comment_body.to_lowercase().contains("@echidnabot")
+}
+
+/// Strip an `@echidnabot` mention from a comment, returning the rest as
+/// the user's question. The mention can appear anywhere; multiple
+/// mentions collapse. Empty result means "they pinged with no question".
+pub fn extract_question(comment_body: &str) -> String {
+    // Replace case-insensitively with empty, preserving surrounding text.
+    let mut out = String::with_capacity(comment_body.len());
+    let mut i = 0;
+    let bytes = comment_body.as_bytes();
+    let needle = "@echidnabot";
+    let needle_lower = needle.to_lowercase();
+    let lower = comment_body.to_lowercase();
+    while i < bytes.len() {
+        if lower[i..].starts_with(&needle_lower) {
+            i += needle.len();
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out.trim().to_string()
 }
 
 #[cfg(test)]
@@ -304,12 +369,7 @@ mod tests {
     #[test]
     fn test_format_result_success() {
         let mode = BotMode::Advisor;
-        let result = mode.format_result(
-            true,
-            "Coq",
-            "Proof complete",
-            vec!["tactic1".to_string()],
-        );
+        let result = mode.format_result(true, "Coq", "Proof complete", vec!["tactic1".to_string()]);
         assert_eq!(result.check_status, CheckStatus::Success);
         assert!(!result.should_block);
     }
