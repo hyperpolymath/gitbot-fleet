@@ -63,6 +63,21 @@ jobs:
           done
           exit $status
 
+      - name: Source files must not be patch fragments
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r -d '' file; do
+            first_content=$(sed -n '/[^[:space:]]/{p;q;}' "$file")
+            case "$first_content" in
+              '@@ '*|'*** Begin Patch'*|'diff --git '*)
+                echo "::error file=${file}::Source file begins with patch syntax: ${first_content}"
+                status=1
+                ;;
+            esac
+          done < <(git ls-files -z -- '*.rs' '*.ex' '*.exs' '*.res' '*.js' '*.ts' '*.py' '*.sh')
+          exit "$status"
+
       - name: Mass-deletion tripwire
         env:
           EVENT: ${{ github.event_name }}
