@@ -153,7 +153,7 @@ dependencies:
         repo_id: 259445878
     'haskell-actions/setup@v2.12.1':
         ref: 'v2.12.1'
-        commit: 'sha1-0f7370ccbc65f22514ec3e094f6601b8d61fbbf7'
+        commit: 'sha1-0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
         owner_id: 75048950
         repo_id: 623796603
     'hyperpolymath/deed-ecosystem@main':
