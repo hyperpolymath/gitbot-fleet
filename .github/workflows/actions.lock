@@ -50,7 +50,7 @@ workflows:
         - 'dtolnay/rust-toolchain@v1'
         - 'swatinem/rust-cache@v2.9.2'
     '.github/workflows/push-email-notify.yml':
-        - 'hyperpolymath/smtp-notify-action@v0.3.0'
+        - 'hyperpolymath/smtp-notify-action@v0.5.0'
     '.github/workflows/repo-integrity-guard.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/rust.yml':
@@ -166,9 +166,9 @@ dependencies:
         commit: 'sha1-c1a34884054fabf0e9de81dbf68f4ba7874e85f1'
         owner_id: 6759885
         repo_id: 1275650185
-    'hyperpolymath/smtp-notify-action@v0.3.0':
-        ref: 'v0.3.0'
-        commit: 'sha1-22e7bdb322c430c1d0dac6b3bb307f4bb139d0be'
+    'hyperpolymath/smtp-notify-action@v0.5.0':
+        ref: 'v0.5.0'
+        commit: 'sha1-c1c9fa07992a02c1fd3d67a0dc1b08cccb852aef'
         owner_id: 6759885
         repo_id: 1352485172
     'hyperpolymath/standards@571cc734cd69fb846032ec77a662aa8ee4fc32cd':
