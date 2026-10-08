@@ -141,11 +141,12 @@ impl Reranker {
 mod tests {
     use super::*;
     use crate::store::SqliteStore;
-    use uuid::Uuid;
 
     async fn fresh_store() -> (Arc<dyn Store>, std::path::PathBuf) {
-        let path =
-            std::env::temp_dir().join(format!("echidnabot-rerank-test-{}.db", Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "echidnabot-rerank-test-{}.db",
+            crate::ids::new_record_id()
+        ));
         let url = format!("sqlite://{}?mode=rwc", path.display());
         let store = SqliteStore::new(&url).await.unwrap();
         (Arc::new(store) as Arc<dyn Store>, path)

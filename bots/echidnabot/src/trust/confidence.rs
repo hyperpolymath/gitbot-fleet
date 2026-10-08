@@ -3,30 +3,40 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Proof confidence level assessment
 //!
-//! Maps ECHIDNA verification results to a 5-level trust scale based on:
-//! - Prover kernel size (small-kernel = higher trust)
-//! - Number of independent checkers used
-//! - Presence of proof certificates
-//! - Prover tier within ECHIDNA
+//! The trust-level *algorithm* is ECHIDNA's, not echidnabot's: every call
+//! goes through [`echidna_core_spark::compute_trust_level`] (the Creusot-
+//! annotated kernel shared with ECHIDNA). This module only translates
+//! echidnabot's inputs (prover slug, status, artefacts, axiom scan) into
+//! ECHIDNA's [`TrustFactors`] and wraps the answer in a report.
+//!
+//! Epistemic note (pattern from `hyperpolymath/epistemic-types`, not a
+//! dependency): a level computed here is a *warrant* — echidnabot's own
+//! reading of ECHIDNA's output. When ECHIDNA itself supplies trust data in an
+//! `echidna.prove.result/1` object, that is the *receipt* and is preferred;
+//! see [`crate::dispatcher::TrustSource`].
 
+use echidna_core_spark::axiom_tracker::DangerLevel;
+use echidna_core_spark::{compute_trust_level, ProverClass, TrustFactors, TrustLevel};
 use serde::{Deserialize, Serialize};
 
 use crate::dispatcher::{ProofStatus, ProverKind};
 
 /// Confidence level for a proof verification result.
 ///
-/// Higher levels indicate stronger trust in the result.
+/// Mirrors ECHIDNA's [`TrustLevel`] one-to-one (see the `From` impls); it is
+/// kept as a local type only so echidnabot can attach presentation methods
+/// (`label`, `Display`) to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ConfidenceLevel {
-    /// Large-TCB system or unchecked result
+    /// Large-TCB system, unchecked result, or dangerous axioms present
     Level1 = 1,
-    /// Single prover result without certificate
+    /// Single prover result without a verified certificate
     Level2 = 2,
-    /// Single prover with proof certificate (Alethe, DRAT/LRAT)
+    /// Verified certificate, or cross-checked by 2+ provers
     Level3 = 3,
-    /// Checked by small-kernel system (Lean4, Coq, Isabelle) with certificate
+    /// Small-kernel system with a verified certificate
     Level4 = 4,
-    /// Cross-checked by 2+ independent small-kernel systems
+    /// Cross-checked by 2+ small-kernel systems with verified certificates
     Level5 = 5,
 }
 
@@ -39,11 +49,11 @@ impl ConfidenceLevel {
     /// Human-readable label
     pub fn label(&self) -> &'static str {
         match self {
-            Self::Level1 => "Minimal (large-TCB / unchecked)",
-            Self::Level2 => "Low (single prover, no certificate)",
-            Self::Level3 => "Moderate (single prover + certificate)",
-            Self::Level4 => "High (small-kernel + certificate)",
-            Self::Level5 => "Maximum (cross-checked by 2+ systems)",
+            Self::Level1 => "Minimal (large-TCB / unchecked / dangerous axioms)",
+            Self::Level2 => "Low (single prover, no verified certificate)",
+            Self::Level3 => "Moderate (verified certificate or cross-checked)",
+            Self::Level4 => "High (small-kernel + verified certificate)",
+            Self::Level5 => "Maximum (cross-checked by 2+ small-kernel systems)",
         }
     }
 
@@ -53,7 +63,34 @@ impl ConfidenceLevel {
     }
 }
 
+impl From<TrustLevel> for ConfidenceLevel {
+    /// Translate ECHIDNA's trust level into the local presentation type.
+    fn from(level: TrustLevel) -> Self {
+        match level {
+            TrustLevel::Level1 => Self::Level1,
+            TrustLevel::Level2 => Self::Level2,
+            TrustLevel::Level3 => Self::Level3,
+            TrustLevel::Level4 => Self::Level4,
+            TrustLevel::Level5 => Self::Level5,
+        }
+    }
+}
+
+impl From<ConfidenceLevel> for TrustLevel {
+    /// Translate the local presentation type back into ECHIDNA's trust level.
+    fn from(level: ConfidenceLevel) -> Self {
+        match level {
+            ConfidenceLevel::Level1 => Self::Level1,
+            ConfidenceLevel::Level2 => Self::Level2,
+            ConfidenceLevel::Level3 => Self::Level3,
+            ConfidenceLevel::Level4 => Self::Level4,
+            ConfidenceLevel::Level5 => Self::Level5,
+        }
+    }
+}
+
 impl std::fmt::Display for ConfidenceLevel {
+    /// Render as `Level N (label)`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Level {} ({})", self.value(), self.label())
     }
@@ -76,7 +113,10 @@ pub struct ConfidenceReport {
     pub justification: String,
 }
 
-/// Assess the confidence level of a proof verification result.
+/// Assess the confidence level of a proof verification result with no
+/// axiom information (treated as no dangerous axioms found).
+///
+/// Prefer [`assess_confidence_with_axioms`] whenever an axiom scan exists.
 ///
 /// # Arguments
 /// * `prover` - Which prover produced the result
@@ -89,6 +129,37 @@ pub fn assess_confidence(
     has_certificate: bool,
     checker_count: usize,
 ) -> ConfidenceReport {
+    assess_confidence_with_axioms(
+        prover,
+        status,
+        has_certificate,
+        checker_count,
+        DangerLevel::Safe,
+    )
+}
+
+/// Assess the confidence level of a proof result using ECHIDNA's canonical
+/// trust algorithm.
+///
+/// echidnabot never verifies certificates itself, so `certificate_verified`
+/// is always passed as `false`: a certificate artefact raises nothing above
+/// Level 2 on its own. Solver integrity is checked elsewhere
+/// ([`crate::trust::SolverIntegrity`]) and is assumed here.
+///
+/// `checker_count` is the number of independent checkers that confirmed the
+/// result; values above `u32::MAX` are capped for assessment but retained in
+/// the report. `worst_axiom_danger` is the highest danger found in the proof.
+/// A status other than `Verified` returns Level 1 with no certificate and
+/// zero checkers, regardless of the supplied values.
+pub fn assess_confidence_with_axioms(
+    prover: &ProverKind,
+    status: ProofStatus,
+    has_certificate: bool,
+    checker_count: usize,
+    worst_axiom_danger: DangerLevel,
+) -> ConfidenceReport {
+    let small_kernel = is_small_kernel(prover);
+
     // Only verified proofs get meaningful confidence levels
     if status != ProofStatus::Verified {
         return ConfidenceReport {
@@ -96,7 +167,7 @@ pub fn assess_confidence(
             prover: prover.clone(),
             has_certificate: false,
             checker_count: 0,
-            small_kernel: is_small_kernel(prover),
+            small_kernel,
             justification: format!(
                 "Proof status is {:?} (not Verified) -- confidence is minimal",
                 status
@@ -104,80 +175,45 @@ pub fn assess_confidence(
         };
     }
 
-    let small_kernel = is_small_kernel(prover);
+    let factors = TrustFactors {
+        prover_class: prover_class(prover),
+        confirming_provers: u32::try_from(checker_count).unwrap_or(u32::MAX),
+        has_certificate,
+        certificate_verified: false,
+        worst_axiom_danger,
+        solver_integrity_ok: true,
+    };
+    let level = ConfidenceLevel::from(compute_trust_level(&factors));
 
-    // Level 5: Cross-checked by 2+ independent small-kernel systems
-    if checker_count >= 2 && small_kernel {
-        return ConfidenceReport {
-            level: ConfidenceLevel::Level5,
-            prover: prover.clone(),
-            has_certificate,
-            checker_count,
-            small_kernel,
-            justification: format!(
-                "Cross-checked by {} independent small-kernel systems ({})",
-                checker_count,
-                prover.display_name()
-            ),
-        };
-    }
-
-    // Level 4: Small-kernel system with certificate
-    if small_kernel && has_certificate {
-        return ConfidenceReport {
-            level: ConfidenceLevel::Level4,
-            prover: prover.clone(),
-            has_certificate,
-            checker_count,
-            small_kernel,
-            justification: format!(
-                "Verified by small-kernel system ({}) with proof certificate",
-                prover.display_name()
-            ),
-        };
-    }
-
-    // Level 3: Single prover with proof certificate (e.g., Z3 with DRAT/LRAT)
-    if has_certificate {
-        return ConfidenceReport {
-            level: ConfidenceLevel::Level3,
-            prover: prover.clone(),
-            has_certificate,
-            checker_count,
-            small_kernel,
-            justification: format!(
-                "Verified by {} with proof certificate",
-                prover.display_name()
-            ),
-        };
-    }
-
-    // Level 2: Single prover without certificate but with small kernel
-    if small_kernel {
-        return ConfidenceReport {
-            level: ConfidenceLevel::Level2,
-            prover: prover.clone(),
-            has_certificate,
-            checker_count,
-            small_kernel,
-            justification: format!(
-                "Verified by small-kernel system ({}) without proof certificate",
-                prover.display_name()
-            ),
-        };
-    }
-
-    // Level 1: Large-TCB or stub prover
     ConfidenceReport {
-        level: ConfidenceLevel::Level1,
+        level,
         prover: prover.clone(),
-        has_certificate: false,
+        has_certificate,
         checker_count,
-        small_kernel: false,
+        small_kernel,
         justification: format!(
-            "Verified by large-TCB system ({}) -- consider cross-checking",
-            prover.display_name()
+            "ECHIDNA trust kernel: {} ({}, {} checker(s), certificate {}, worst axiom danger {})",
+            TrustLevel::from(level).description(),
+            prover.display_name(),
+            checker_count,
+            if has_certificate {
+                "present but not independently verified"
+            } else {
+                "absent"
+            },
+            worst_axiom_danger
         ),
+    }
+}
+
+/// Classify a prover slug into ECHIDNA's coarse [`ProverClass`].
+pub fn prover_class(prover: &ProverKind) -> ProverClass {
+    if is_small_kernel(prover) {
+        return ProverClass::SmallKernel;
+    }
+    match prover.as_str() {
+        "z3" | "cvc5" | "alt-ergo" | "vampire" | "eprover" | "spass" => ProverClass::SmtOrAtp,
+        _ => ProverClass::Other,
     }
 }
 
@@ -278,45 +314,58 @@ mod tests {
     }
 
     #[test]
-    fn test_assess_level5_cross_checked() {
-        let report = assess_confidence(
-            &ProverKind::new("lean"),
-            ProofStatus::Verified,
-            true,
-            3, // 3 independent checkers
-        );
-        assert_eq!(report.level, ConfidenceLevel::Level5);
+    fn test_assess_cross_checked_without_verified_cert_is_level3() {
+        // ECHIDNA's kernel needs a *verified* certificate for Level 5; two or
+        // more agreeing provers without one earn Level 3.
+        let report = assess_confidence(&ProverKind::new("lean"), ProofStatus::Verified, true, 3);
+        assert_eq!(report.level, ConfidenceLevel::Level3);
         assert!(report.small_kernel);
         assert_eq!(report.checker_count, 3);
     }
 
     #[test]
-    fn test_assess_level4_small_kernel_with_cert() {
-        let report = assess_confidence(&ProverKind::new("coq"), ProofStatus::Verified, true, 1);
-        assert_eq!(report.level, ConfidenceLevel::Level4);
+    fn test_assess_single_prover_with_unverified_cert_is_level2() {
+        // echidnabot never verifies certificates, so a cert artefact alone
+        // does not lift a single result above Level 2.
+        for slug in ["coq", "z3"] {
+            let report = assess_confidence(&ProverKind::new(slug), ProofStatus::Verified, true, 1);
+            assert_eq!(report.level, ConfidenceLevel::Level2, "{slug}");
+        }
     }
 
     #[test]
-    fn test_assess_level3_cert_no_small_kernel() {
-        let report = assess_confidence(
-            &ProverKind::new("z3"),
-            ProofStatus::Verified,
-            true, // Has DRAT/LRAT certificate
-            1,
-        );
-        assert_eq!(report.level, ConfidenceLevel::Level3);
+    fn test_assess_single_prover_no_cert_is_level2() {
+        for slug in ["lean", "pvs"] {
+            let report = assess_confidence(&ProverKind::new(slug), ProofStatus::Verified, false, 1);
+            assert_eq!(report.level, ConfidenceLevel::Level2, "{slug}");
+        }
     }
 
     #[test]
-    fn test_assess_level2_small_kernel_no_cert() {
-        let report = assess_confidence(&ProverKind::new("lean"), ProofStatus::Verified, false, 1);
-        assert_eq!(report.level, ConfidenceLevel::Level2);
+    fn test_assess_dangerous_axioms_cap_at_level1() {
+        for danger in [DangerLevel::Warning, DangerLevel::Reject] {
+            let report = assess_confidence_with_axioms(
+                &ProverKind::new("lean"),
+                ProofStatus::Verified,
+                true,
+                3,
+                danger,
+            );
+            assert_eq!(report.level, ConfidenceLevel::Level1);
+        }
     }
 
     #[test]
-    fn test_assess_level1_large_tcb() {
-        let report = assess_confidence(&ProverKind::new("pvs"), ProofStatus::Verified, false, 1);
-        assert_eq!(report.level, ConfidenceLevel::Level1);
+    fn test_level_round_trips_through_echidna() {
+        for level in [
+            ConfidenceLevel::Level1,
+            ConfidenceLevel::Level2,
+            ConfidenceLevel::Level3,
+            ConfidenceLevel::Level4,
+            ConfidenceLevel::Level5,
+        ] {
+            assert_eq!(ConfidenceLevel::from(TrustLevel::from(level)), level);
+        }
     }
 
     #[test]

@@ -153,6 +153,7 @@ mod tests {
             artifacts: vec![],
             confidence: None,
             axioms: None,
+            trust_source: Default::default(),
         }
     }
 
@@ -165,6 +166,7 @@ mod tests {
             artifacts: vec![],
             confidence: None,
             axioms: None,
+            trust_source: Default::default(),
         }
     }
 

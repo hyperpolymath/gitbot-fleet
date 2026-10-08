@@ -195,6 +195,26 @@ impl SqliteStore {
         .execute(&self.pool)
         .await?;
 
+        // Proof obligations from `submitProofObligation`. `repo_id` is nullable:
+        // the sender names a repo slug that need not be registered here.
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS proof_obligations (
+                id TEXT PRIMARY KEY,
+                repo_slug TEXT NOT NULL,
+                repo_id TEXT REFERENCES repositories(id),
+                claim TEXT NOT NULL,
+                context TEXT NOT NULL,
+                prover TEXT,
+                inline_requested INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            "#,
+        )
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 }
@@ -540,6 +560,42 @@ impl Store for SqliteStore {
         rows.into_iter().map(|r| r.try_into()).collect()
     }
 
+    /// Insert-or-ignore on the content id; `true` only for a new row.
+    async fn record_proof_obligation(&self, obligation: &ProofObligationRecord) -> Result<bool> {
+        let done = sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO proof_obligations (
+                id, repo_slug, repo_id, claim, context, prover,
+                inline_requested, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(obligation.id.to_string())
+        .bind(&obligation.repo_slug)
+        .bind(obligation.repo_id.map(|id| id.to_string()))
+        .bind(&obligation.claim)
+        .bind(&obligation.context)
+        .bind(obligation.prover.as_ref().map(|p| p.to_string()))
+        .bind(obligation.inline_requested)
+        .bind(&obligation.status)
+        .bind(obligation.created_at.to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(done.rows_affected() == 1)
+    }
+
+    /// Look up one obligation by content id.
+    async fn get_proof_obligation(&self, id: Uuid) -> Result<Option<ProofObligationRecord>> {
+        let row: Option<ObligationRow> =
+            sqlx::query_as("SELECT * FROM proof_obligations WHERE id = ?")
+                .bind(id.to_string())
+                .fetch_optional(&self.pool)
+                .await?;
+
+        row.map(|r| r.try_into()).transpose()
+    }
+
     async fn health_check(&self) -> Result<bool> {
         let result: (i32,) = sqlx::query_as("SELECT 1").fetch_one(&self.pool).await?;
         Ok(result.0 == 1)
@@ -778,6 +834,41 @@ impl TryFrom<OutcomeRow> for TacticOutcomeRecord {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct ObligationRow {
+    id: String,
+    repo_slug: String,
+    repo_id: Option<String>,
+    claim: String,
+    context: String,
+    prover: Option<String>,
+    inline_requested: bool,
+    status: String,
+    created_at: String,
+}
+
+impl TryFrom<ObligationRow> for ProofObligationRecord {
+    type Error = Error;
+
+    /// Decode a stored row; the prover column holds the slug (`Display`).
+    fn try_from(row: ObligationRow) -> Result<Self> {
+        let parse = |s: &str| Uuid::parse_str(s).map_err(|e| Error::Internal(e.to_string()));
+        Ok(ProofObligationRecord {
+            id: parse(&row.id)?,
+            repo_slug: row.repo_slug,
+            repo_id: row.repo_id.as_deref().map(parse).transpose()?,
+            claim: row.claim,
+            context: row.context,
+            prover: row.prover.map(|s| ProverKind::new(s.as_str())),
+            inline_requested: row.inline_requested,
+            status: row.status,
+            created_at: chrono::DateTime::parse_from_rfc3339(&row.created_at)
+                .map_err(|e| Error::Internal(e.to_string()))?
+                .with_timezone(&chrono::Utc),
+        })
+    }
+}
+
 fn parse_prover(s: &str) -> Result<ProverKind> {
     match s {
         "Agda" => Ok(ProverKind::new("agda")),
@@ -802,8 +893,10 @@ mod tests {
     use crate::store::models::{goal_fingerprint, TacticOutcomeRecord};
 
     async fn fresh_store() -> (SqliteStore, std::path::PathBuf) {
-        let path =
-            std::env::temp_dir().join(format!("echidnabot-store-test-{}.db", Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "echidnabot-store-test-{}.db",
+            crate::ids::new_record_id()
+        ));
         let url = format!("sqlite://{}?mode=rwc", path.display());
         let store = SqliteStore::new(&url).await.expect("open store");
         (store, path)
@@ -928,6 +1021,33 @@ mod tests {
         // Both rows share the tactic name but have different fingerprints
         let successes = hits.iter().filter(|h| h.succeeded).count();
         assert_eq!(successes, 1);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn proof_obligation_round_trips_and_resubmission_is_idempotent() {
+        use crate::store::models::ProofObligationRecord;
+        let (store, path) = fresh_store().await;
+
+        let ob = ProofObligationRecord::new(
+            "hyperpolymath/requeue".into(),
+            None,
+            "requeue-of-1".into(),
+            "strategy-shift".into(),
+            Some(ProverKind::new("hol-light")),
+            true,
+        );
+        assert_eq!(ob.id.get_version_num(), 8);
+        assert!(store.record_proof_obligation(&ob).await.unwrap());
+        assert!(!store.record_proof_obligation(&ob).await.unwrap());
+
+        let back = store.get_proof_obligation(ob.id).await.unwrap().unwrap();
+        assert_eq!(back.claim, "requeue-of-1");
+        assert_eq!(back.prover, Some(ProverKind::new("hol-light")));
+        assert!(back.inline_requested);
+        assert_eq!(back.status, "PENDING");
+        assert!(back.repo_id.is_none());
 
         let _ = std::fs::remove_file(&path);
     }
