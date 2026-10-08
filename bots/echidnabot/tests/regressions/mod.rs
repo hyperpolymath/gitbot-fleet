@@ -42,7 +42,7 @@ fn regression_prover_key_debug_format_bug_42e7bde() {
 #[tokio::test]
 async fn regression_duplicate_detection_respects_prover() {
     let sched = JobScheduler::new(4, 20);
-    let repo = Uuid::new_v4();
+    let repo = echidnabot::ids::new_record_id();
 
     let j1 = ProofJob::new(repo, "sha_dup".to_string(), ProverKind::new("coq"), vec![]);
     let j2 = ProofJob::new(repo, "sha_dup".to_string(), ProverKind::new("lean"), vec![]); // diff prover
@@ -71,7 +71,7 @@ fn regression_goal_fingerprint_always_64_chars() {
 #[tokio::test]
 async fn regression_priority_queue_ordering() {
     let sched = JobScheduler::new(1, 10);
-    let repo = Uuid::new_v4();
+    let repo = echidnabot::ids::new_record_id();
 
     let low = ProofJob::new(repo, "low_sha".to_string(), ProverKind::new("coq"), vec![])
         .with_priority(JobPriority::Low);

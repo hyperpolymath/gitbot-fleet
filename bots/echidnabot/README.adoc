@@ -72,7 +72,7 @@ echidnabot init-db
 
 # Start the webhook server
 export DATABASE_URL=sqlite:echidnabot.db
-export ECHIDNA_URL=http://localhost:8080
+export ECHIDNA_URL=http://127.0.0.1:8081
 echidnabot serve --port 8080
 ----
 

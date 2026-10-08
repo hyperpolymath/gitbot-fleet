@@ -374,12 +374,16 @@ impl Default for EchidnaConfig {
     }
 }
 
+/// Default ECHIDNA GraphQL endpoint: the separate `echidna-graphql` binary,
+/// which serves GraphQL at `/` on 127.0.0.1:8081 (`echidna server` has no
+/// GraphQL route; in `auto` mode the REST fallback reaches it instead).
 fn default_echidna_endpoint() -> String {
-    "http://localhost:8080/graphql".to_string()
+    "http://127.0.0.1:8081/".to_string()
 }
 
+/// Default ECHIDNA REST base URL (same `echidna server`, port 8081).
 fn default_echidna_rest_endpoint() -> String {
-    "http://localhost:8080".to_string()
+    "http://127.0.0.1:8081".to_string()
 }
 
 fn default_echidna_mode() -> EchidnaApiMode {
@@ -390,7 +394,7 @@ fn default_timeout() -> u64 {
     300 // 5 minutes
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct GitHubConfig {
     /// GitHub App ID
     pub app_id: Option<u64>,
@@ -405,7 +409,7 @@ pub struct GitHubConfig {
     pub webhook_secret: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct GitLabConfig {
     /// GitLab instance URL
     pub url: String,
@@ -435,7 +439,7 @@ pub struct GitLabConfig {
 /// (statuses, comments, issues) require a token; the adapter
 /// returns `Error::Config("CODEBERG_TOKEN not set")` when missing.
 /// The `CODEBERG_TOKEN` env var also works as a fallback.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct CodebergConfig {
     /// Codeberg / Forgejo / Gitea instance URL.
     pub url: String,
@@ -497,5 +501,82 @@ impl Config {
         let parsed: Config = config.try_deserialize()?;
 
         Ok(parsed)
+    }
+}
+
+/// Render a secret-bearing field for `Debug` without its value.
+/// Returns `"<redacted>"` for `Some` and `"<unset>"` for `None`.
+///
+/// Pattern from the types fit map (secret-types is not yet a usable
+/// library): tokens and webhook secrets never reach logs through `{:?}`.
+pub fn redacted<T>(value: &Option<T>) -> &'static str {
+    if value.is_some() {
+        "<redacted>"
+    } else {
+        "<unset>"
+    }
+}
+
+impl std::fmt::Debug for GitHubConfig {
+    /// Debug output with `token` and `webhook_secret` redacted.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitHubConfig")
+            .field("app_id", &self.app_id)
+            .field("private_key_path", &self.private_key_path)
+            .field("token", &redacted(&self.token))
+            .field("webhook_secret", &redacted(&self.webhook_secret))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for GitLabConfig {
+    /// Debug output with `token` and `webhook_secret` redacted.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitLabConfig")
+            .field("url", &self.url)
+            .field("token", &"<redacted>")
+            .field("webhook_secret", &redacted(&self.webhook_secret))
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for CodebergConfig {
+    /// Debug output with `token` and `webhook_secret` redacted.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CodebergConfig")
+            .field("url", &self.url)
+            .field("token", &redacted(&self.token))
+            .field("webhook_secret", &redacted(&self.webhook_secret))
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod redaction_tests {
+    use super::*;
+
+    /// Secrets never appear in `Debug` output; their presence still does.
+    #[test]
+    fn forge_configs_redact_secrets_in_debug() {
+        let gh = GitHubConfig {
+            app_id: Some(1),
+            private_key_path: None,
+            token: Some("ghp_SECRET".into()),
+            webhook_secret: Some("whsec_SECRET".into()),
+        };
+        let gl = GitLabConfig {
+            url: "https://gitlab.com".into(),
+            token: "glpat_SECRET".into(),
+            webhook_secret: None,
+        };
+        let cb = CodebergConfig {
+            url: "https://codeberg.org".into(),
+            token: Some("cb_SECRET".into()),
+            webhook_secret: Some("cbwh_SECRET".into()),
+        };
+        for out in [format!("{gh:?}"), format!("{gl:?}"), format!("{cb:?}")] {
+            assert!(!out.contains("SECRET"), "{out}");
+            assert!(out.contains("<redacted>"), "{out}");
+        }
     }
 }
