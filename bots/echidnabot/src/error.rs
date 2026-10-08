@@ -41,6 +41,11 @@ pub enum Error {
     #[error("ECHIDNA communication error: {0}")]
     Echidna(String),
 
+    /// The ECHIDNA server answered but is not one echidnabot can talk to
+    /// (too old, no version, or an unexpected REST shape). Never transient.
+    #[error("ECHIDNA server incompatible: {0}")]
+    EchidnaIncompatible(String),
+
     #[error("Webhook verification failed: {0}")]
     WebhookVerification(String),
 

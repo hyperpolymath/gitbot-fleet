@@ -1,0 +1,248 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= AFFIRMATION — gitbot-fleet, as of 2026-10-07
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+:status: DRAFT — agent-authored, NOT affirmed by the owner
+:toc:
+:icons: font
+
+[WARNING]
+====
+*DRAFT.* An AI agent wrote this file and did not commit it. It becomes an
+affirmation only when the owner lands it with a signed commit whose parent is
+the anchor SHA below
+(`5daf3a1585c2b418c149eed7f0a2849ddcb489c4`). Until then, read it as a draft.
+====
+
+== What this is, and how it works
+
+gitbot-fleet is the orchestration hub for the estate's repository bots. Shell
+scripts (`fleet-coordinator.sh`, `scripts/dispatch-runner.sh` and others) take
+Hypatia scanner findings and dispatch them to bots. Several standalone Rust
+crates do the work: `robot-repo-automaton` (detectors and fixers),
+`shared-context` (the coordination layer), `dashboard`, and one crate per bot
+under `bots/`. There is no Cargo workspace at the root; each crate builds on
+its own. This file reports the repo's shell test suites and the five Rust
+crates that the `rust.yml` workflow builds and tests.
+
+== The epistemic contract
+
+You may conclude that, at the anchor commit and at the stated time, each
+command below produced the stated exit code and count on the stated toolchain.
+
+You may *not* conclude that the fleet dispatches correctly against live
+GitHub repositories, that any bot is deployed, or that the eight bot crates
+outside the CI matrix (accessibilitybot, cipherbot, echidnabot, finishingbot,
+glambot, panicbot, seambot, the-hotchocolabot) build. Those eight were not
+run.
+
+== Verifiable anchor
+
+[cols="1,3", options="header"]
+|===
+| Field | Value
+
+| Repo
+| `hyperpolymath/gitbot-fleet`
+
+| Branch
+| `main` (worktree branch `docs/affirmation-2026-10-07` at `origin/main`)
+
+| Commit (HEAD)
+| `5daf3a1585c2b418c149eed7f0a2849ddcb489c4`
+
+| Permalink
+| https://github.com/hyperpolymath/gitbot-fleet/tree/5daf3a1585c2b418c149eed7f0a2849ddcb489c4
+
+| Verified (UTC)
+| 2026-10-07T10:48:25Z (first shell suite) to 2026-10-07T11:03:15Z
+  (last clippy run)
+
+| Working-tree delta at verification
+| `clean`. `git status --porcelain` was empty before and after the runs.
+  Cargo output went to a target directory outside the tree.
+
+| Toolchain
+| rustc 1.99.0 (b940084d7 2026-09-28), cargo 1.99.0 (5f94df478 2026-08-27),
+  OpenSSL 3.5.7 (system, `OPENSSL_NO_VENDOR=1`), GNU bash 5.2.37,
+  Python 3.14.6 with PyYAML (used by `tests/e2e.sh`; see below), curl 8.14.1,
+  git 2.47.3. Debian 13 on WSL2.
+|===
+
+[IMPORTANT]
+====
+If you are reading this at a later commit, the claims may have drifted. Re-run
+the reproduction steps and write a fresh affirmation; do not trust a stale one.
+====
+
+== Companion documents and repo metadata (cross-check)
+
+* `README.adoc` says the fleet "coordinates 9 specialised bots". `bots/` holds
+  11 bot directories; 10 have a `Cargo.toml` and `sustainabot` is a reserved
+  adapter slot with none. The README count and the tree do not agree.
+* `.github/workflows/rust.yml` defines the Rust gate: build, test, clippy with
+  `-D warnings`, and an informational `cargo fmt --check` for four crates,
+  plus a separate `gsbot` job that tests and runs `cargo deny`. The runs below
+  repeat that gate locally, except `cargo deny`. No CI result is cited here.
+* `Justfile` target `test` runs only `robot-repo-automaton`'s tests.
+* `PROOF-NEEDS.adoc`, `TEST-NEEDS.adoc` and `READINESS.adoc` exist. This file
+  does not take any claim from them.
+
+== The honest state (one breath)
+
+All nine shell suites and all five CI-covered Rust crates pass their tests.
+Clippy with `-D warnings` is clean in the four crates CI lints. One of the
+shell suites only checks workflow YAML because Python happens to be
+installed, and it reports a pass when Python is missing.
+
+=== What is solid (and how we checked)
+
+[cols="2,3,1", options="header"]
+|===
+| Claim | Command | Result
+
+| `robot-repo-automaton` tests pass
+| `cargo test --locked` in `robot-repo-automaton/`
+| exit 0; 116 passed, 0 failed, 1 ignored (a doc-test), 6 suites
+
+| `shared-context` tests pass
+| `cargo test --locked` in `shared-context/`
+| exit 0; 84 passed, 0 failed, 2 ignored (doc-tests), 6 suites
+
+| `rhodibot` tests pass
+| `cargo test --locked` in `bots/rhodibot/`
+| exit 0; 195 passed, 0 failed, 0 ignored, 5 suites
+
+| `gsbot` tests pass
+| `cargo test --locked` in `bots/gsbot/`
+| exit 0; 18 passed, 0 failed, 0 ignored, 8 suites
+
+| `dashboard` compiles and its test harness runs
+| `cargo test --locked` in `dashboard/`
+| exit 0; 0 tests (1 empty suite)
+
+| Clippy, as CI runs it
+| `cargo clippy --locked --all-targets -- -D warnings` in the four matrix
+  crates
+| exit 0 in all 4 (no lint findings; rhodibot shows only its manifest
+  warning)
+
+| Formatting
+| `cargo fmt --all --check` in each of the five crates
+| exit 0 for four; exit 1 for `gsbot` (24 diff hunks)
+
+| rhodibot's canon pin matches upstream
+| `bash scripts/check-canon-drift.sh`
+| exit 0; criteria and gates hashes unchanged, `canon.lock` agrees
+
+| End-to-end shell suite
+| `bash tests/e2e.sh`
+| exit 0; PASS=36, FAIL=0, SKIP=0
+
+| Dispatch path contracts
+| `bash scripts/tests/dispatch-paths.sh`
+| exit 0; 5 sections each `Failed: 0`
+
+| Other shell suites
+| `bash` on each of `tests/automation-quarantine-test.sh`,
+  `retired-descriptile-policy-test.sh`, `enroll-discovery-test.sh`,
+  `directive-census-test.sh`, `fix-session-detritus-smoke.sh`,
+  `hypatia-record-outcome-smoke.sh`, `propagate-sha-bump-smoke.sh`
+| exit 0 for all 7; counts 8 PASS, 1 PASS, 2 `ok` (one a planted
+  control), 1 PASS, 1 PASS, 5 of 5, 13 of 13
+|===
+
+=== The honest nuance you must not lose
+
+* `dashboard` has no tests. Its exit 0 shows only that it compiles.
+* `rhodibot`'s manifest warns that the `toml` requirement
+  `1.1.2+spec-1.1.0` carries semver metadata that Cargo ignores. It is a
+  warning, not a failure.
+* `check-canon-drift.sh` downloads the canon files from
+  `raw.githubusercontent.com` at run time. Its result describes upstream at
+  about 2026-10-07T10:59Z, not only this commit. The canon it pins is
+  `0-canon/rsr/rsr-criteria-v2.a2ml` in standards, a file in a format the
+  estate has retired.
+* `enroll-discovery-test.sh` prints `ok` lines rather than PASS lines; one
+  of its 2 is a planted negative control.
+
+=== Known-incomplete but honestly fenced
+
+* The eight bot crates outside `rust.yml` were not built or tested here; CI
+  does not build them either.
+* `cargo deny` (the `gsbot` job's advisory check) was not run; it would need
+  `cargo-deny` installed.
+
+=== Outstanding / weak / refuted (no spin)
+
+* *A silent pass in `tests/e2e.sh`.* Section 5 parses each workflow with
+  `python3 -c "import yaml; ..."` only `if command -v python3`. When
+  `python3` is absent, no file is parsed, the failure counter stays 0, and
+  the suite still prints `PASS: all 24 workflow YAML files parse
+  successfully` (lines 167-187). On this machine Python was present, so the
+  parse did run. The estate bans Python, so on a policy-conformant machine
+  this check would pass without checking anything.
+* `.github/workflows/e2e.yml` runs `pip install pyyaml` to feed that check,
+  which brings Python into CI.
+* `mise.toml` declares `python`, `denojs`, `node`, `go`, `java`, `pip`,
+  `black`, `ruff` and `pytest`, among others. The estate bans Python and Deno
+  and uses Bun. On this machine `mise.toml` is untrusted, and the `mise`
+  cargo shim and the `mise` hook in `tools/env.sh` both refuse to run in the
+  tree. The runs above therefore used the cargo binaries directly, without
+  sourcing `tools/env.sh`. `just test` fails here for the same reason.
+* `bots/gsbot` is not `rustfmt`-clean (24 diff hunks). The `gsbot` CI job
+  does not run `cargo fmt`, so nothing catches it.
+* `0-AI-MANIFEST.a2ml` sits at the root, in the retired A2ML format.
+
+== Reproduce it yourself
+
+Run from the repository root at the anchor commit, with `OPENSSL_NO_VENDOR=1`
+and a system OpenSSL.
+
+[source,bash]
+----
+export OPENSSL_NO_VENDOR=1
+for d in robot-repo-automaton shared-context dashboard \
+         bots/rhodibot bots/gsbot; do
+  (cd "$d" && cargo test --locked); echo "$d rc=$?"
+done            # 116, 84, 0, 195, 18 passed; 0 failed in each
+for d in robot-repo-automaton shared-context dashboard bots/rhodibot; do
+  (cd "$d" && cargo clippy --locked --all-targets -- -D warnings)
+  echo "$d clippy rc=$?"
+done            # rc=0 for all 4
+(cd bots/gsbot && cargo fmt --all --check)   # exit 1, 24 hunks
+bash scripts/check-canon-drift.sh            # exit 0 (network)
+bash tests/e2e.sh                            # PASS=36 FAIL=0 SKIP=0
+bash scripts/tests/dispatch-paths.sh         # Failed: 0 (x5)
+for t in tests/automation-quarantine-test.sh \
+         tests/retired-descriptile-policy-test.sh \
+         tests/enroll-discovery-test.sh tests/directive-census-test.sh \
+         tests/fix-session-detritus-smoke.sh \
+         tests/hypatia-record-outcome-smoke.sh \
+         tests/propagate-sha-bump-smoke.sh; do
+  bash "$t" >/dev/null; echo "$t rc=$?"      # rc=0 each
+done
+----
+
+== One-line characterisation (quote this)
+
+At `5daf3a15`, gitbot-fleet's five CI-covered Rust crates pass 413 tests with
+0 failures and its nine shell suites exit 0, but its e2e workflow-YAML check
+depends on banned Python and passes vacuously without it.
+
+== Joint attestation
+
+*Engineering party (AI).* `claude-opus-5-5` ran every command in this file
+between 2026-10-07T10:48:25Z and 2026-10-07T11:03:15Z, in a git worktree
+checked out at the anchor commit. The wording above is a faithful report of
+those runs. No claim was copied from an earlier document.
+
+*Owner / maintainer.* Jonathan D.A. Jewell signs by landing this file:
+
+[source,bash]
+----
+git commit -S -s -m "docs: affirm state at 5daf3a15"
+git log --show-signature -1
+----
+
+The affirmation is anchored only if the parent of that commit is
+`5daf3a1585c2b418c149eed7f0a2849ddcb489c4` and the signature verifies.

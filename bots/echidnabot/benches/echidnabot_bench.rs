@@ -24,7 +24,6 @@ use sha2::Sha256;
 // one; CI runs clippy with `-D warnings`, so the re-export is an error here.
 use std::hint::black_box;
 use std::net::{IpAddr, Ipv4Addr};
-use uuid::Uuid;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // HMAC-SHA256 webhook signature verification
@@ -158,7 +157,7 @@ fn bench_goal_fingerprint(c: &mut Criterion) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 fn bench_proof_job_new(c: &mut Criterion) {
-    let repo = Uuid::new_v4();
+    let repo = echidnabot::ids::new_record_id();
     let prover = ProverKind::new("coq");
     let files = vec![
         "theories/Main.v".to_string(),

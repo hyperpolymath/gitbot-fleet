@@ -14,7 +14,8 @@ use crate::dispatcher::{
 };
 use crate::scheduler::{JobPriority, JobScheduler};
 use crate::store::models::{
-    goal_fingerprint, ProofJobRecord, Repository as StoreRepository, TacticOutcomeRecord,
+    goal_fingerprint, ProofJobRecord, ProofObligationRecord, Repository as StoreRepository,
+    TacticOutcomeRecord,
 };
 use crate::store::Store;
 
@@ -385,6 +386,41 @@ pub struct RepoSettingsInput {
     pub auto_comment: Option<bool>,
 }
 
+/// Upper bound on `claim` and `context`, in bytes. The endpoint has no auth,
+/// so a cap keeps one request from writing an unbounded row.
+pub const MAX_OBLIGATION_FIELD_BYTES: usize = 64 * 1024;
+
+/// Input for submitting a proof obligation (hypatia's wire contract)
+#[derive(async_graphql::InputObject)]
+pub struct SubmitProofObligationInput {
+    /// Repository slug `owner/name`; it need not be registered here
+    pub repo: String,
+    /// The claim to be proved, as prover-agnostic text
+    pub claim: String,
+    /// Free-text context for the claim
+    pub context: String,
+    /// Prover hint; absent means "echidnabot chooses"
+    pub prover: Option<ProverKind>,
+    /// Sender asks for inline verification. Recorded, NOT acted on yet
+    pub inline: Option<bool>,
+}
+
+/// Result of `submitProofObligation`
+#[derive(SimpleObject, Clone)]
+pub struct ProofObligationPayload {
+    /// `true` means the obligation is persisted. It does NOT mean proved:
+    /// failures are GraphQL errors, never `success: false`
+    pub success: bool,
+    /// UUIDv8 content id of the obligation (stable across resubmission)
+    pub proof_id: ID,
+    /// Always `PENDING` today: no dispatcher consumes obligations yet
+    pub status: String,
+    /// `false` when an identical obligation was already stored
+    pub newly_recorded: bool,
+    /// Whether `repo` matched a repository registered on GitHub here
+    pub repo_registered: bool,
+}
+
 #[Object]
 impl MutationRoot {
     /// Register a repository for monitoring
@@ -584,6 +620,69 @@ impl MutationRoot {
             .await
             .map_err(|e| async_graphql::Error::new(e.to_string()))?;
         Ok(TacticOutcome::from(record))
+    }
+
+    /// Accept a proof obligation from hypatia and persist it as `PENDING`.
+    ///
+    /// Accepted is not proved: nothing dispatches stored obligations to a
+    /// prover yet, and `inline: true` is recorded but not honoured. Invalid
+    /// input or a store failure is returned as a GraphQL error, because one of
+    /// the two senders reads only `errors` and ignores `success`.
+    async fn submit_proof_obligation(
+        &self,
+        ctx: &Context<'_>,
+        input: SubmitProofObligationInput,
+    ) -> async_graphql::Result<ProofObligationPayload> {
+        let state = ctx.data::<GraphQLState>()?;
+
+        let (owner, name) = match input.repo.split_once('/') {
+            Some((o, n)) if !o.is_empty() && !n.is_empty() && !n.contains('/') => (o, n),
+            _ => {
+                return Err(async_graphql::Error::new(format!(
+                    "repo must be an owner/name slug, got {:?}",
+                    input.repo
+                )))
+            }
+        };
+        if input.claim.trim().is_empty() {
+            return Err(async_graphql::Error::new("claim must not be empty"));
+        }
+        for (field, value) in [("claim", &input.claim), ("context", &input.context)] {
+            if value.len() > MAX_OBLIGATION_FIELD_BYTES {
+                return Err(async_graphql::Error::new(format!(
+                    "{field} exceeds {MAX_OBLIGATION_FIELD_BYTES} bytes"
+                )));
+            }
+        }
+
+        let repo_id = state
+            .store
+            .get_repository_by_name(crate::adapters::Platform::GitHub, owner, name)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?
+            .map(|r| r.id);
+
+        let record = ProofObligationRecord::new(
+            input.repo.clone(),
+            repo_id,
+            input.claim,
+            input.context,
+            input.prover.map(map_prover_kind_to_core),
+            input.inline.unwrap_or(false),
+        );
+        let newly_recorded = state
+            .store
+            .record_proof_obligation(&record)
+            .await
+            .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+        Ok(ProofObligationPayload {
+            success: true,
+            proof_id: ID::from(record.id.to_string()),
+            status: record.status,
+            newly_recorded,
+            repo_registered: repo_id.is_some(),
+        })
     }
 }
 
