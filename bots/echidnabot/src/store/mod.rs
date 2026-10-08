@@ -15,7 +15,9 @@ use crate::adapters::Platform;
 use crate::dispatcher::ProverKind;
 use crate::error::Result;
 use crate::scheduler::JobId;
-use models::{ProofJobRecord, ProofResultRecord, Repository, TacticOutcomeRecord};
+use models::{
+    ProofJobRecord, ProofObligationRecord, ProofResultRecord, Repository, TacticOutcomeRecord,
+};
 
 /// Per-commit coverage view — total proof attempts vs successful ones.
 /// Empty results means no jobs run yet for that commit.
@@ -85,6 +87,13 @@ pub trait Store: Send + Sync {
         tactic: &str,
         limit: usize,
     ) -> Result<Vec<TacticOutcomeRecord>>;
+
+    // Proof obligations (submitProofObligation)
+    /// Persist an obligation; returns `false` if one with the same content id
+    /// already existed (resubmission is idempotent, the first row is kept).
+    async fn record_proof_obligation(&self, obligation: &ProofObligationRecord) -> Result<bool>;
+    /// Fetch one obligation by its content id.
+    async fn get_proof_obligation(&self, id: Uuid) -> Result<Option<ProofObligationRecord>>;
 
     // Utility
     async fn health_check(&self) -> Result<bool>;

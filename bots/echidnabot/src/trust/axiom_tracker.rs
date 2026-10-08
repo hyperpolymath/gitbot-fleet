@@ -15,7 +15,20 @@
 //! - `axiom` (Lean4) -- user-declared axiom
 //! - `assume` (Metamath) -- hypothesis without proof
 //! - Classical logic axioms (excluded middle, double negation elimination)
+//!
+//! Two scanners live here and they read different things:
+//!
+//! - [`AxiomTracker::scan_source`] reads the **proof source** and delegates to
+//!   ECHIDNA's canonical scanner (`echidna_core_spark::axiom_tracker`), which
+//!   skips comment lines and ECHIDNA's own scaffold markers. This is the
+//!   primary signal and is shared with ECHIDNA, not re-implemented.
+//! - [`AxiomTracker::scan`] reads the **prover's output text** (for example
+//!   Lean's "declaration uses 'sorry'"). ECHIDNA has no equivalent, so this
+//!   stays local, as a fallback for when the source is unavailable.
 
+use echidna_core_spark::axiom_tracker::{
+    AxiomTracker as EchidnaAxiomTracker, AxiomUsage, DangerLevel,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::dispatcher::ProverKind;
@@ -79,6 +92,46 @@ impl AxiomFlag {
     pub fn is_unsound(&self) -> bool {
         self.severity() >= 3
     }
+
+    /// The ECHIDNA danger level this flag corresponds to.
+    ///
+    /// `--type-in-type` can manufacture false theorems, so it is `Reject`;
+    /// `Sorry`, `Admitted`, `Oops` and `Postulate` are `Warning`;
+    /// everything else is `Noted`.
+    pub fn danger_level(&self) -> DangerLevel {
+        match self {
+            Self::TypeInType => DangerLevel::Reject,
+            Self::Sorry | Self::Admitted | Self::Oops | Self::Postulate => DangerLevel::Warning,
+            _ => DangerLevel::Noted,
+        }
+    }
+
+    /// Map one ECHIDNA source-scan finding onto the local flag vocabulary.
+    fn from_usage(usage: &AxiomUsage) -> Self {
+        Self::from_name(&usage.construct)
+    }
+
+    /// Map an axiom / construct name onto the local flag vocabulary.
+    ///
+    /// Used for both ECHIDNA source-scan findings and the names ECHIDNA
+    /// reports in `echidna.prove.result/1` `trust.axioms` (which may use the
+    /// kernel names, e.g. Lean's `sorryAx` from `#print axioms`).
+    /// Surrounding whitespace is trimmed; unrecognised names become `Other`.
+    pub fn from_name(name: &str) -> Self {
+        match name.trim() {
+            "sorry" | "sorryAx" => Self::Sorry,
+            "Admitted" | "admit" | "admitted" => Self::Admitted,
+            "postulate" | "{!!}" => Self::Postulate,
+            "believe_me" | "assert_total" | "idris_crash" => Self::Postulate,
+            "--type-in-type" | "OPTIONS --type-in-type" | "type-in-type" => Self::TypeInType,
+            "oops" => Self::Oops,
+            "axiom" | "Axiom" => Self::UserAxiom,
+            "assume" => Self::UndischargedAssumption,
+            "Classical.choice" | "choice" => Self::AxiomOfChoice,
+            "Classical.em" | "propext" | "Quot.sound" | "excluded_middle" => Self::ClassicalAxiom,
+            other => Self::Other(other.to_string()),
+        }
+    }
 }
 
 impl std::fmt::Display for AxiomFlag {
@@ -100,6 +153,15 @@ pub struct AxiomReport {
     pub warning_count: usize,
     /// Overall assessment
     pub clean: bool,
+    /// Worst ECHIDNA danger level found, the input to the trust kernel.
+    /// Older stored reports lack the field and deserialise as `Safe`.
+    #[serde(default = "safe")]
+    pub worst_danger: DangerLevel,
+}
+
+/// Serde default for [`AxiomReport::worst_danger`].
+fn safe() -> DangerLevel {
+    DangerLevel::Safe
 }
 
 impl AxiomReport {
@@ -114,6 +176,51 @@ impl AxiomReport {
             .iter()
             .filter(|f| f.severity() >= min_severity)
             .collect()
+    }
+
+    /// Combine two reports on the same proof (for example a source scan and
+    /// an output scan): the union of the flags and the worse danger level.
+    /// Retains this report's prover without checking that the other matches,
+    /// deduplicates flags and recalculates counts.
+    pub fn merge(mut self, other: AxiomReport) -> AxiomReport {
+        let worst = DangerLevel::max_danger(self.worst_danger, other.worst_danger);
+        self.flags.extend(other.flags);
+        let mut report = AxiomReport::from_flags(self.prover, self.flags);
+        report.worst_danger = DangerLevel::max_danger(report.worst_danger, worst);
+        report
+    }
+
+    /// Build a report from axiom names ECHIDNA reported (the
+    /// `echidna.prove.result/1` `trust.axioms` list).
+    pub fn from_reported(prover: ProverKind, flags: impl IntoIterator<Item = AxiomFlag>) -> Self {
+        AxiomReport::from_flags(prover, flags.into_iter().collect())
+    }
+
+    /// Build a report from raw flags, deduplicating and counting them.
+    fn from_flags(prover: ProverKind, mut flags: Vec<AxiomFlag>) -> AxiomReport {
+        // Sort by severity, then by identity, so equal flags are adjacent and
+        // `dedup` removes every duplicate (not only neighbouring ones).
+        flags.sort_by(|a, b| {
+            b.severity()
+                .cmp(&a.severity())
+                .then_with(|| a.description().cmp(&b.description()))
+        });
+        flags.dedup();
+        let unsound_count = flags.iter().filter(|f| f.severity() >= 3).count();
+        let warning_count = flags.iter().filter(|f| f.severity() == 2).count();
+        let clean = flags.is_empty();
+        let worst_danger = flags
+            .iter()
+            .map(AxiomFlag::danger_level)
+            .fold(DangerLevel::Safe, DangerLevel::max_danger);
+        AxiomReport {
+            prover,
+            flags,
+            unsound_count,
+            warning_count,
+            clean,
+            worst_danger,
+        }
     }
 
     /// Format as a human-readable summary
@@ -166,21 +273,34 @@ impl AxiomTracker {
         // Universal patterns (apply to all provers)
         scan_universal(&output_lower, &mut flags);
 
-        // Deduplicate flags
-        flags.sort_by_key(|f| std::cmp::Reverse(f.severity()));
-        flags.dedup();
+        AxiomReport::from_flags(prover.clone(), flags)
+    }
 
-        let unsound_count = flags.iter().filter(|f| f.severity() >= 3).count();
-        let warning_count = flags.iter().filter(|f| f.severity() == 2).count();
-        let clean = flags.is_empty();
+    /// Scan proof **source** with ECHIDNA's canonical axiom scanner.
+    ///
+    /// Provers ECHIDNA has no pattern table for yield a clean report; the
+    /// slug is normalised (`hol-light` → `hollight`, `lean4` → `lean`) to
+    /// ECHIDNA's keys first.
+    pub fn scan_source(prover: &ProverKind, source: &str) -> AxiomReport {
+        let usages = EchidnaAxiomTracker::new().scan(&echidna_scanner_key(prover), source);
+        let flags = usages.iter().map(AxiomFlag::from_usage).collect();
+        let mut report = AxiomReport::from_flags(prover.clone(), flags);
+        report.worst_danger = usages
+            .iter()
+            .map(|u| u.danger_level)
+            .fold(report.worst_danger, DangerLevel::max_danger);
+        report
+    }
+}
 
-        AxiomReport {
-            prover: prover.clone(),
-            flags,
-            unsound_count,
-            warning_count,
-            clean,
-        }
+/// ECHIDNA's scanner-table key for an echidnabot prover slug.
+fn echidna_scanner_key(prover: &ProverKind) -> String {
+    match prover.as_str() {
+        "lean4" => "lean".to_string(),
+        "rocq" => "coq".to_string(),
+        "idris" => "idris2".to_string(),
+        "f*" | "f-star" => "fstar".to_string(),
+        other => other.replace(['-', '_'], ""),
     }
 }
 
@@ -407,5 +527,66 @@ mod tests {
         assert_eq!(critical.len(), 1); // Only sorry
         let warnings = report.flags_at_severity(2);
         assert!(warnings.len() >= 2); // sorry + axiom
+    }
+
+    #[test]
+    fn test_source_scan_uses_echidna_patterns() {
+        let report = AxiomTracker::scan_source(
+            &ProverKind::new("lean"),
+            "theorem t : 1 = 1 := by\n  sorry\n",
+        );
+        assert!(report.flags.contains(&AxiomFlag::Sorry));
+        assert_eq!(report.worst_danger, DangerLevel::Warning);
+    }
+
+    #[test]
+    fn test_source_scan_skips_comments_and_scaffold() {
+        let report = AxiomTracker::scan_source(
+            &ProverKind::new("lean"),
+            "-- sorry in a comment is documentation\ntheorem t : True := trivial\n",
+        );
+        assert!(report.clean, "{:?}", report.flags);
+        assert_eq!(report.worst_danger, DangerLevel::Safe);
+    }
+
+    #[test]
+    fn test_source_scan_idris_believe_me_is_reject() {
+        let report = AxiomTracker::scan_source(&ProverKind::new("idris2"), "f = believe_me x\n");
+        assert_eq!(report.worst_danger, DangerLevel::Reject);
+    }
+
+    #[test]
+    fn test_from_flags_dedups_non_adjacent_duplicates() {
+        let report = AxiomReport::from_reported(
+            ProverKind::new("lean"),
+            [
+                AxiomFlag::Sorry,
+                AxiomFlag::Admitted,
+                AxiomFlag::Sorry,
+                AxiomFlag::Other("x".into()),
+                AxiomFlag::AxiomOfChoice,
+                AxiomFlag::Other("x".into()),
+            ],
+        );
+        assert_eq!(report.flags.len(), 4, "{:?}", report.flags);
+    }
+
+    #[test]
+    fn test_from_name_maps_kernel_names() {
+        assert_eq!(AxiomFlag::from_name("sorryAx"), AxiomFlag::Sorry);
+        assert_eq!(
+            AxiomFlag::from_name("believe_me").danger_level(),
+            DangerLevel::Warning
+        );
+        assert_eq!(AxiomFlag::from_name("propext"), AxiomFlag::ClassicalAxiom);
+    }
+
+    #[test]
+    fn test_merge_keeps_worst_danger() {
+        let output = AxiomTracker::scan(&ProverKind::new("lean"), "All goals discharged");
+        let source = AxiomTracker::scan_source(&ProverKind::new("lean"), "  sorry\n");
+        let merged = output.merge(source);
+        assert!(merged.has_unsound());
+        assert_eq!(merged.worst_danger, DangerLevel::Warning);
     }
 }

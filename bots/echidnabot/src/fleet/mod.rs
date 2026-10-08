@@ -171,7 +171,6 @@ mod tests {
     use crate::dispatcher::ProverKind;
     use crate::scheduler::JobId;
     use chrono::Utc;
-    use uuid::Uuid;
 
     #[test]
     fn test_fleet_coordinator_lifecycle() {
@@ -195,7 +194,7 @@ mod tests {
 
         let job = ProofJob {
             id: JobId::new(),
-            repo_id: Uuid::new_v4(),
+            repo_id: crate::ids::new_record_id(),
             commit_sha: "abc123".to_string(),
             prover: ProverKind::new("coq"),
             file_paths: vec!["test.v".to_string()],
@@ -218,6 +217,7 @@ mod tests {
             failed_files: vec![],
             confidence: None,
             axioms: None,
+            trust_source: Default::default(),
         };
 
         coordinator.publish_finding(&job, &result).unwrap();
@@ -235,7 +235,7 @@ mod tests {
 
         let job = ProofJob {
             id: JobId::new(),
-            repo_id: Uuid::new_v4(),
+            repo_id: crate::ids::new_record_id(),
             commit_sha: "abc123".to_string(),
             prover: ProverKind::new("lean"),
             file_paths: vec!["test.lean".to_string()],
@@ -258,6 +258,7 @@ mod tests {
             failed_files: vec!["test.lean".to_string()],
             confidence: None,
             axioms: None,
+            trust_source: Default::default(),
         };
 
         coordinator.publish_finding(&job, &result).unwrap();
@@ -274,7 +275,7 @@ mod tests {
 
         let job = ProofJob {
             id: JobId::new(),
-            repo_id: Uuid::new_v4(),
+            repo_id: crate::ids::new_record_id(),
             commit_sha: "abc123".to_string(),
             prover: ProverKind::new("z3"),
             file_paths: vec!["test.smt2".to_string()],
@@ -297,6 +298,7 @@ mod tests {
             failed_files: vec![],
             confidence: None,
             axioms: None,
+            trust_source: Default::default(),
         };
 
         // Should not error when not connected

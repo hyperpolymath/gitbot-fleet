@@ -17,9 +17,9 @@ max_connections = 5
 
 [echidna]
 # ECHIDNA Core GraphQL endpoint
-endpoint = "http://localhost:8080/graphql"
+endpoint = "http://127.0.0.1:8081/"
 # ECHIDNA Core REST endpoint
-rest_endpoint = "http://localhost:8080"
+rest_endpoint = "http://127.0.0.1:8081"
 # API mode: auto, graphql, rest
 mode = "auto"
 # Timeout for proof verification (seconds)

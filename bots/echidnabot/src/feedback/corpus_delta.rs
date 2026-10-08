@@ -333,10 +333,9 @@ pub struct RefreshStatus {
 mod tests {
     use super::*;
     use tokio::io::AsyncReadExt;
-    use uuid::Uuid;
 
     fn tmp_dir() -> PathBuf {
-        std::env::temp_dir().join(format!("echidnabot-corpus-{}", Uuid::new_v4()))
+        std::env::temp_dir().join(format!("echidnabot-corpus-{}", crate::ids::new_record_id()))
     }
 
     fn sample_row(succeeded: bool) -> DeltaRow {

@@ -282,14 +282,14 @@ mod tests {
         let scheduler = JobScheduler::new(2, 10);
 
         let job1 = ProofJob::new(
-            Uuid::new_v4(),
+            crate::ids::new_record_id(),
             "abc123".to_string(),
             ProverKind::new("metamath"),
             vec!["test.mm".to_string()],
         );
 
         let job2 = ProofJob::new(
-            Uuid::new_v4(),
+            crate::ids::new_record_id(),
             "def456".to_string(),
             ProverKind::new("metamath"),
             vec!["test2.mm".to_string()],
@@ -313,7 +313,7 @@ mod tests {
     #[tokio::test]
     async fn test_duplicate_detection() {
         let scheduler = JobScheduler::new(2, 10);
-        let repo_id = Uuid::new_v4();
+        let repo_id = crate::ids::new_record_id();
 
         let job1 = ProofJob::new(
             repo_id,
@@ -339,7 +339,7 @@ mod tests {
     #[tokio::test]
     async fn test_priority_ordering() {
         let scheduler = JobScheduler::new(1, 10);
-        let repo_id = Uuid::new_v4();
+        let repo_id = crate::ids::new_record_id();
 
         let low_priority = ProofJob::new(
             repo_id,

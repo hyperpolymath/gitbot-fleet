@@ -25,8 +25,9 @@ use crate::trust::{axiom_tracker::AxiomReport, confidence::ConfidenceReport};
 pub struct JobId(pub Uuid);
 
 impl JobId {
+    /// Mint a fresh job id (UUIDv7 via [`crate::ids::new_record_id`]).
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        Self(crate::ids::new_record_id())
     }
 }
 
@@ -167,7 +168,10 @@ pub struct JobResult {
     /// Confidence level assessed over the aggregated prover output.
     #[serde(default)]
     pub confidence: Option<ConfidenceReport>,
-    /// Axiom usage flags found in the aggregated prover output.
+    /// Axiom usage flags found in the proof sources and prover output.
     #[serde(default)]
     pub axioms: Option<AxiomReport>,
+    /// Provenance of `confidence` / `axioms`.
+    #[serde(default)]
+    pub trust_source: crate::dispatcher::TrustSource,
 }
