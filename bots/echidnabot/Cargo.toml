@@ -28,6 +28,19 @@ path = "src/main.rs"
 # Fleet coordination
 gitbot-shared-context = { version = "0.1.0", git = "https://github.com/hyperpolymath/gitbot-fleet", rev = "40ef6bf1a43813948476d33c764e3405adc950c2" }
 
+# ECHIDNA trust kernel. Canonical trust-level algorithm and source-level
+# axiom scanner, shared with ECHIDNA so echidnabot no longer re-implements
+# them. Pinned by full rev (immutable). At this rev the crate is still named
+# `echidna-core-spark`; it is being renamed `echidna-core-creusot` upstream,
+# and the trust types are meant to move into `echidna-core` proper. Follow-up:
+# re-point this line once that lands on echidna `main` (see
+# docs/ECHIDNA-INTEGRATION.adoc).
+echidna-core-spark = { git = "https://github.com/hyperpolymath/echidna", rev = "b761b3a832981be51d4e88076ef1b90fe5037e9c" }
+
+# Minimum-version handshake with the ECHIDNA server.
+semver = "1"
+
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
@@ -70,7 +83,12 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 
 # Utilities
 async-trait = "0.1"
-uuid = { version = "1", features = ["v4", "serde"] }
+# v7 for records, v8 for content ids; minted only in src/ids.rs.
+uuid = { version = "1.10", features = ["v7", "v8", "serde"] }
+# RFC 8785 (JCS) canonical bytes for src/ids.rs content ids. The estate
+# crate hyperpolymath/ijson-jcs is not public, so a public build cannot
+# depend on it; swap once it is (docs/ECHIDNA-INTEGRATION.adoc).
+serde_json_canonicalizer = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 anyhow = "1"

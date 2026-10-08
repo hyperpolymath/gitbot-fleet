@@ -4,8 +4,10 @@
 //! Prover dispatcher - communicates with ECHIDNA Core
 
 pub mod echidna_client;
+pub mod prove_result;
 
-pub use echidna_client::EchidnaClient;
+pub use echidna_client::{EchidnaClient, EchidnaHandshake, MIN_ECHIDNA_VERSION};
+pub use prove_result::{ProveResult, PROVE_RESULT_SCHEMA};
 
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +29,37 @@ pub struct ProofResult {
     /// Axiom usage flags scanned from prover output.
     #[serde(default)]
     pub axioms: Option<AxiomReport>,
+    /// Where `confidence` and `axioms` came from. Results stored before this
+    /// field existed deserialise as [`TrustSource::LocalFallback`].
+    #[serde(default)]
+    pub trust_source: TrustSource,
+}
+
+/// Provenance of the trust data attached to a [`ProofResult`].
+///
+/// Pattern from `hyperpolymath/epistemic-types` (receipt vs warrant), adopted
+/// as a plain enum; there is no Rust port of those types to depend on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrustSource {
+    /// ECHIDNA reported the axiom data itself (an `echidna.prove.result/1`
+    /// `trust` object). echidnabot transports it unchanged (a receipt); the
+    /// level is still computed by ECHIDNA's trust kernel, linked in.
+    Echidna,
+    /// echidnabot computed the trust data from what ECHIDNA returned, using
+    /// ECHIDNA's trust kernel and source scanner: a warrant, not a receipt.
+    #[default]
+    LocalFallback,
+}
+
+impl TrustSource {
+    /// Short label used in check-run summaries and PR comments.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Echidna => "axioms reported by ECHIDNA",
+            Self::LocalFallback => "derived locally by echidnabot (ECHIDNA did not report trust)",
+        }
+    }
 }
 
 /// Proof verification status

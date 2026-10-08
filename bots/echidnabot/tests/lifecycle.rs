@@ -50,6 +50,7 @@ fn make_job_result(success: bool) -> JobResult {
         },
         confidence: None,
         axioms: None,
+        trust_source: Default::default(),
     }
 }
 
@@ -68,7 +69,7 @@ fn make_job(repo: Uuid, commit: &str, prover: &str) -> ProofJob {
 
 #[test]
 fn lifecycle_job_starts_queued() {
-    let job = make_job(Uuid::new_v4(), "abc123", "coq");
+    let job = make_job(echidnabot::ids::new_record_id(), "abc123", "coq");
     assert_eq!(job.status, JobStatus::Queued);
     assert!(job.started_at.is_none());
     assert!(job.completed_at.is_none());
@@ -76,7 +77,7 @@ fn lifecycle_job_starts_queued() {
 
 #[test]
 fn lifecycle_job_transitions_queued_to_running() {
-    let mut job = make_job(Uuid::new_v4(), "abc123", "lean");
+    let mut job = make_job(echidnabot::ids::new_record_id(), "abc123", "lean");
     job.start();
     assert_eq!(job.status, JobStatus::Running);
     assert!(
@@ -87,7 +88,7 @@ fn lifecycle_job_transitions_queued_to_running() {
 
 #[test]
 fn lifecycle_job_transitions_running_to_completed() {
-    let mut job = make_job(Uuid::new_v4(), "def456", "coq");
+    let mut job = make_job(echidnabot::ids::new_record_id(), "def456", "coq");
     job.start();
     job.complete(make_job_result(true));
     assert_eq!(job.status, JobStatus::Completed);
@@ -99,7 +100,7 @@ fn lifecycle_job_transitions_running_to_completed() {
 
 #[test]
 fn lifecycle_job_transitions_running_to_failed() {
-    let mut job = make_job(Uuid::new_v4(), "fail001", "lean");
+    let mut job = make_job(echidnabot::ids::new_record_id(), "fail001", "lean");
     job.start();
     job.complete(make_job_result(false));
     assert_eq!(job.status, JobStatus::Failed);
@@ -107,14 +108,14 @@ fn lifecycle_job_transitions_running_to_failed() {
 
 #[test]
 fn lifecycle_job_cancel_from_queued() {
-    let mut job = make_job(Uuid::new_v4(), "ghi789", "metamath");
+    let mut job = make_job(echidnabot::ids::new_record_id(), "ghi789", "metamath");
     job.cancel();
     assert_eq!(job.status, JobStatus::Cancelled);
 }
 
 #[test]
 fn lifecycle_job_duration_ms_after_completion() {
-    let mut job = make_job(Uuid::new_v4(), "abc", "lean");
+    let mut job = make_job(echidnabot::ids::new_record_id(), "abc", "lean");
     job.start();
     job.complete(make_job_result(true));
     let dur = job.duration_ms();
@@ -123,7 +124,7 @@ fn lifecycle_job_duration_ms_after_completion() {
 
 #[test]
 fn lifecycle_job_result_attached_after_completion() {
-    let mut job = make_job(Uuid::new_v4(), "res_check", "coq");
+    let mut job = make_job(echidnabot::ids::new_record_id(), "res_check", "coq");
     job.start();
     job.complete(make_job_result(true));
     assert!(
@@ -150,7 +151,7 @@ async fn lifecycle_scheduler_empty_at_start() {
 #[tokio::test]
 async fn lifecycle_scheduler_full_job_cycle() {
     let sched = JobScheduler::new(2, 10);
-    let repo = Uuid::new_v4();
+    let repo = echidnabot::ids::new_record_id();
 
     let job = make_job(repo, "sha001", "coq");
     let job_id = sched
@@ -178,7 +179,7 @@ async fn lifecycle_scheduler_full_job_cycle() {
 #[tokio::test]
 async fn lifecycle_scheduler_cancel_queued_job() {
     let sched = JobScheduler::new(1, 10);
-    let repo = Uuid::new_v4();
+    let repo = echidnabot::ids::new_record_id();
 
     // Fill the single concurrent slot
     let blocker = make_job(repo, "sha_blocker", "lean");
@@ -201,7 +202,7 @@ async fn lifecycle_scheduler_cancel_queued_job() {
 #[tokio::test]
 async fn lifecycle_scheduler_max_concurrent_enforced() {
     let sched = JobScheduler::new(1, 10);
-    let repo = Uuid::new_v4();
+    let repo = echidnabot::ids::new_record_id();
 
     sched.enqueue(make_job(repo, "sha1", "coq")).await.unwrap();
     sched.enqueue(make_job(repo, "sha2", "lean")).await.unwrap();
@@ -217,7 +218,7 @@ async fn lifecycle_scheduler_max_concurrent_enforced() {
 #[tokio::test]
 async fn lifecycle_scheduler_get_job_by_id() {
     let sched = JobScheduler::new(2, 10);
-    let job = make_job(Uuid::new_v4(), "get_me", "z3");
+    let job = make_job(echidnabot::ids::new_record_id(), "get_me", "z3");
     let job_id = sched.enqueue(job).await.unwrap().unwrap();
 
     let found = sched.get_job(job_id).await;
@@ -232,8 +233,8 @@ async fn lifecycle_scheduler_get_job_by_id() {
 #[tokio::test]
 async fn lifecycle_scheduler_jobs_for_repo() {
     let sched = JobScheduler::new(4, 20);
-    let repo_a = Uuid::new_v4();
-    let repo_b = Uuid::new_v4();
+    let repo_a = echidnabot::ids::new_record_id();
+    let repo_b = echidnabot::ids::new_record_id();
 
     sched.enqueue(make_job(repo_a, "a1", "coq")).await.unwrap();
     sched.enqueue(make_job(repo_a, "a2", "lean")).await.unwrap();
@@ -423,7 +424,7 @@ async fn lifecycle_shutdown_timeout_fires_with_warning_when_drain_exceeds_deadli
     // active_count; do that via the normal enqueue+try_start_next flow.
     let sched = Arc::new(JobScheduler::new(2, 10));
     let job = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "deadlock_sha".to_string(),
         ProverKind::new("coq"),
         vec!["slow.v".to_string()],

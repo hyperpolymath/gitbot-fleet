@@ -420,8 +420,11 @@ mod tests {
         hook().await;
     }
 
-    #[test]
-    fn into_coordinator_hook_drains_provider_idempotent_with_shutdown() {
+    /// After `into_coordinator_hook` takes the provider, `shutdown` is a no-op.
+    /// Runs inside a Tokio runtime: building the tonic exporter needs a
+    /// reactor since the hyper-util 0.1.20 / tracing-opentelemetry 0.34 bump.
+    #[tokio::test]
+    async fn into_coordinator_hook_drains_provider_idempotent_with_shutdown() {
         // Idempotency contract: after into_coordinator_hook() has taken
         // the provider, calling shutdown() consumes self without
         // touching anything (provider is None, branch elided).
