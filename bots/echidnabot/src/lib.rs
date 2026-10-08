@@ -21,7 +21,8 @@ pub mod dispatcher;
 pub mod error;
 pub mod executor; // Container isolation for secure prover execution
 pub mod feedback; // Double-loop: proof-history reranker + corpus delta (Package 7b)
-pub mod fleet; // gitbot-fleet coordination layer
+pub mod fleet;
+pub mod ids; // The single ID-minting module (UUIDv7 records, UUIDv8 content ids) // gitbot-fleet coordination layer
 pub mod llm; // BoJ-mediated LLM client (Consultant-mode Q&A)
 pub mod modes; // Bot operating modes (Verifier/Advisor/Consultant/Regulator)
 pub mod observability; // Structured logging + OpenTelemetry distributed tracing (OTLP)

@@ -238,6 +238,13 @@ type TracerFlushHook = Box<
         + 'static,
 >;
 
+/// Initialise storage and the scheduler, then serve HTTP on `host:port`.
+/// On shutdown, drain jobs within the configured timeout, close storage and
+/// run `tracer_hook` if supplied.
+///
+/// Propagates storage initialisation, incompatible ECHIDNA handshake and
+/// listener-binding errors. HTTP serving errors trigger shutdown and are
+/// consumed; other handshake failures allow start-up to continue.
 async fn serve(
     config: &Config,
     host: &str,
@@ -288,6 +295,7 @@ async fn serve(
         config.scheduler.queue_size,
     ));
     let echidna = Arc::new(EchidnaClient::new(&config.echidna));
+    startup_handshake(&echidna).await?;
 
     let graphql_state = GraphQLState {
         store: store.clone(),
@@ -717,6 +725,11 @@ async fn init_db(config: &Config) -> Result<()> {
     Ok(())
 }
 
+/// Process queued jobs sequentially, persist outcomes and report them to the
+/// originating platform. Job errors become unsuccessful results; persistence,
+/// feedback and reporting failures do not stop the loop.
+///
+/// Checks `shutdown` while waiting for work, without interrupting an active job.
 async fn run_scheduler_loop(
     scheduler: Arc<JobScheduler>,
     store: Arc<dyn Store>,
@@ -751,6 +764,7 @@ async fn run_scheduler_loop(
                         failed_files: vec![],
                         confidence: None,
                         axioms: None,
+                        trust_source: echidnabot::dispatcher::TrustSource::LocalFallback,
                     }
                 }
             };
@@ -796,17 +810,18 @@ async fn run_scheduler_loop(
 ///
 /// Cascade:
 ///   1. Look up the repository row to recover platform + bot mode.
-///   2. Resolve the effective mode via `modes::resolve_mode` (directive
-///      content is None until the executor lands a clone-and-read step).
+///   2. Resolve the effective mode from the fetched repository directive,
+///      repository settings and daemon default.
 ///   3. Build the platform-appropriate adapter.
 ///   4. Translate the `JobResult` into a `ProofResult` for the formatter,
 ///      then format per-mode.
-///   5. Always create a check run; comment on the originating PR for
+///   5. Attempt a check run; comment on the originating PR for
 ///      modes that opt in (Advisor / Consultant / Regulator).
 ///
-/// All steps are best-effort. Errors are surfaced to the caller (which
-/// logs but does not propagate them), so a 503 from GitHub or a missing
-/// token never blocks the scheduler.
+/// A missing repository is a no-op. Repository lookup and final adapter
+/// construction errors reach the caller. Directive, suggestion, reranking,
+/// coverage lookup and posting failures are handled locally. Failed inline
+/// review comments fall back to general PR comments.
 async fn report_to_platform(
     store: Arc<dyn Store>,
     echidna: &EchidnaClient,
@@ -852,6 +867,7 @@ async fn report_to_platform(
         artifacts: vec![],
         confidence: job_result.confidence.clone(),
         axioms: job_result.axioms.clone(),
+        trust_source: job_result.trust_source,
     };
 
     // Tactic suggestions for Advisor / Consultant / Regulator. Verifier
@@ -1177,6 +1193,52 @@ async fn record_feedback(
     }
 }
 
+/// Minimum-version handshake at start-up.
+///
+/// Propagates `Error::EchidnaIncompatible` and converts all other handshake
+/// errors to success, allowing start-up to continue. Delegated REST jobs
+/// retry when no successful handshake is cached (see `process_job`).
+/// GraphQL-only deployments skip the REST handshake.
+async fn startup_handshake(echidna: &EchidnaClient) -> Result<()> {
+    if !echidna.uses_rest() {
+        tracing::info!("ECHIDNA mode is graphql: REST version handshake skipped");
+        return Ok(());
+    }
+    match echidna.handshake().await {
+        Ok(h) => {
+            tracing::info!(
+                "ECHIDNA {} handshake ok ({} provers listed; minimum {})",
+                h.version,
+                h.provers.len(),
+                echidnabot::dispatcher::MIN_ECHIDNA_VERSION
+            );
+            Ok(())
+        }
+        Err(echidnabot::Error::EchidnaIncompatible(msg)) => Err(
+            echidnabot::Error::EchidnaIncompatible(format!("ECHIDNA handshake failed: {msg}")),
+        ),
+        Err(other) => {
+            tracing::warn!(
+                "ECHIDNA not reachable at start-up ({other}); jobs will retry the handshake"
+            );
+            Ok(())
+        }
+    }
+}
+
+/// Run one proof job and aggregate file verdicts, axioms and confidence.
+///
+/// Checks ECHIDNA health and prover availability even for local execution;
+/// delegated REST jobs also ensure a cached version handshake. Clones the
+/// requested revision, discovers proof files when none were supplied and
+/// stores the discovered paths. Duration includes these steps, in milliseconds.
+/// No proof files yields an unsuccessful result without trust data.
+///
+/// Propagates database, checkout, file-reading and ECHIDNA errors, and returns
+/// a configuration error if local isolation has no available backend. Local
+/// execution errors become failed file verdicts. File-discovery task failures
+/// become an empty file list. Confidence is computed locally; trust provenance
+/// is `Echidna` only when every delegated result reports that provenance.
 async fn process_job(
     job: &ProofJob,
     store: &dyn Store,
@@ -1189,6 +1251,9 @@ async fn process_job(
         return Err(echidnabot::Error::Echidna(
             "ECHIDNA core reported unhealthy status".to_string(),
         ));
+    }
+    if !config.executor.local_isolation && echidna.uses_rest() {
+        echidna.ensure_handshake().await?;
     }
 
     let status = echidna.prover_status(&job.prover).await?;
@@ -1243,6 +1308,7 @@ async fn process_job(
             failed_files: vec![],
             confidence: None,
             axioms: None,
+            trust_source: echidnabot::dispatcher::TrustSource::LocalFallback,
         });
     }
 
@@ -1251,6 +1317,11 @@ async fn process_job(
     let mut verified = Vec::new();
     let mut failed = Vec::new();
     let mut prover_output = String::new();
+    // Source-level axiom scan (ECHIDNA's canonical scanner) over every file,
+    // merged with whatever ECHIDNA itself reported per file.
+    let mut source_axioms: Option<echidnabot::trust::axiom_tracker::AxiomReport> = None;
+    // `Echidna` only if ECHIDNA reported trust for every file it verified.
+    let mut all_trust_from_echidna = true;
 
     // Build the local sandboxed executor once (only when configured).
     // When `executor.local_isolation = false` (default), proofs delegate
@@ -1297,6 +1368,12 @@ async fn process_job(
             repo_path.join(path)
         };
         let content = fs::read_to_string(&full_path).await?;
+        let file_axioms =
+            echidnabot::trust::axiom_tracker::AxiomTracker::scan_source(&job.prover, &content);
+        source_axioms = Some(match source_axioms.take() {
+            Some(acc) => acc.merge(file_axioms),
+            None => file_axioms,
+        });
 
         let (verified_ok, output_chunk) = if let Some(ref ex) = local_executor {
             // Local sandboxed path. ExecutionResult is success on
@@ -1318,6 +1395,15 @@ async fn process_job(
         } else {
             // ECHIDNA-delegated path (default).
             let result = echidna.verify_proof(&job.prover, &content).await?;
+            if result.trust_source != echidnabot::dispatcher::TrustSource::Echidna {
+                all_trust_from_echidna = false;
+            }
+            if let Some(reported) = result.axioms {
+                source_axioms = Some(match source_axioms.take() {
+                    Some(acc) => acc.merge(reported),
+                    None => reported,
+                });
+            }
             (
                 result.status == echidnabot::dispatcher::ProofStatus::Verified,
                 result.prover_output,
@@ -1349,9 +1435,26 @@ async fn process_job(
     } else {
         echidnabot::dispatcher::ProofStatus::Failed
     };
-    let axioms = echidnabot::trust::axiom_tracker::AxiomTracker::scan(&job.prover, &prover_output);
-    let confidence =
-        echidnabot::trust::confidence::assess_confidence(&job.prover, final_status, false, 1);
+    let output_axioms =
+        echidnabot::trust::axiom_tracker::AxiomTracker::scan(&job.prover, &prover_output);
+    let axioms = match source_axioms {
+        Some(src) => src.merge(output_axioms),
+        None => output_axioms,
+    };
+    let confidence = echidnabot::trust::confidence::assess_confidence_with_axioms(
+        &job.prover,
+        final_status,
+        false,
+        1,
+        axioms.worst_danger,
+    );
+    // The level is always computed by ECHIDNA's trust kernel (linked in);
+    // `Echidna` here means every file's axiom data was reported by ECHIDNA.
+    let trust_source = if local_executor.is_none() && all_trust_from_echidna {
+        echidnabot::dispatcher::TrustSource::Echidna
+    } else {
+        echidnabot::dispatcher::TrustSource::LocalFallback
+    };
     Ok(echidnabot::scheduler::JobResult {
         success,
         message,
@@ -1361,6 +1464,7 @@ async fn process_job(
         failed_files: failed,
         confidence: Some(confidence),
         axioms: Some(axioms),
+        trust_source,
     })
 }
 

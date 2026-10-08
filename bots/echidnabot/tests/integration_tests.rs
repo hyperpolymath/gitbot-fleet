@@ -29,7 +29,6 @@ use axum::http::HeaderMap;
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::time::Duration;
-use uuid::Uuid;
 
 // =============================================================================
 // Webhook Signature Verification Tests
@@ -146,6 +145,7 @@ fn test_proof_result_parsing() {
         artifacts: vec!["proof.cert".to_string()],
         confidence: None,
         axioms: None,
+        trust_source: Default::default(),
     };
 
     assert_eq!(result.status, ProofStatus::Verified);
@@ -214,6 +214,7 @@ fn test_result_formatter_truncates_long_output() {
         artifacts: vec![],
         confidence: None,
         axioms: None,
+        trust_source: Default::default(),
     };
 
     let formatted = format_proof_result(
@@ -264,7 +265,7 @@ fn test_check_run_conclusion_values() {
 
 #[test]
 fn test_job_creation() {
-    let repo_id = Uuid::new_v4();
+    let repo_id = echidnabot::ids::new_record_id();
     let job = ProofJob::new(
         repo_id,
         "abc123def".to_string(),
@@ -284,7 +285,7 @@ fn test_job_creation() {
 #[test]
 fn test_job_start_sets_running() {
     let mut job = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "abc123".to_string(),
         ProverKind::new("coq"),
         vec![],
@@ -298,7 +299,7 @@ fn test_job_start_sets_running() {
 #[test]
 fn test_job_complete_success() {
     let mut job = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "abc123".to_string(),
         ProverKind::new("z3"),
         vec![],
@@ -314,6 +315,7 @@ fn test_job_complete_success() {
         failed_files: vec![],
         confidence: None,
         axioms: None,
+        trust_source: Default::default(),
     };
 
     job.complete(result);
@@ -325,7 +327,7 @@ fn test_job_complete_success() {
 #[test]
 fn test_job_complete_failure() {
     let mut job = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "abc123".to_string(),
         ProverKind::new("lean"),
         vec![],
@@ -341,6 +343,7 @@ fn test_job_complete_failure() {
         failed_files: vec!["test.lean".to_string()],
         confidence: None,
         axioms: None,
+        trust_source: Default::default(),
     };
 
     job.complete(result);
@@ -350,7 +353,7 @@ fn test_job_complete_failure() {
 #[test]
 fn test_job_cancel() {
     let mut job = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "abc123".to_string(),
         ProverKind::new("agda"),
         vec![],
@@ -388,7 +391,7 @@ fn test_repository_model() {
 #[test]
 fn test_proof_job_record_from_job() {
     let job = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "sha256hash".to_string(),
         ProverKind::new("metamath"),
         vec!["proof.mm".to_string()],
@@ -413,6 +416,7 @@ fn test_proof_result_record() {
         failed_files: vec![],
         confidence: None,
         axioms: None,
+        trust_source: Default::default(),
     };
 
     let record = ProofResultRecord::new(job_id, &result);
@@ -480,7 +484,7 @@ async fn test_executor_no_backend_refuses_proofs() {
 #[tokio::test]
 async fn test_scheduler_enqueue_dequeue_cycle() {
     let scheduler = JobScheduler::new(2, 10);
-    let repo_id = Uuid::new_v4();
+    let repo_id = echidnabot::ids::new_record_id();
 
     // Enqueue a job
     let job = ProofJob::new(
@@ -511,6 +515,7 @@ async fn test_scheduler_enqueue_dequeue_cycle() {
         failed_files: vec![],
         confidence: None,
         axioms: None,
+        trust_source: Default::default(),
     };
 
     scheduler.complete_job(job_id, result).await;
@@ -530,7 +535,10 @@ async fn test_tactic_outcome_roundtrip_via_store() {
     use echidnabot::store::models::{goal_fingerprint, TacticOutcomeRecord};
     use echidnabot::store::{SqliteStore, Store};
 
-    let path = std::env::temp_dir().join(format!("echidnabot-test-outcomes-{}.db", Uuid::new_v4()));
+    let path = std::env::temp_dir().join(format!(
+        "echidnabot-test-outcomes-{}.db",
+        echidnabot::ids::new_record_id()
+    ));
     let url = format!("sqlite://{}?mode=rwc", path.display());
     let store = SqliteStore::new(&url).await.unwrap();
 
@@ -574,7 +582,7 @@ async fn test_scheduler_metrics_methods() {
     assert_eq!(scheduler.queue_depth(), 0);
 
     // Enqueue some jobs and verify they become visible via stats
-    let repo_id = Uuid::new_v4();
+    let repo_id = echidnabot::ids::new_record_id();
     for i in 0..3 {
         let job = ProofJob::new(
             repo_id,
@@ -594,13 +602,13 @@ async fn test_scheduler_respects_max_concurrent() {
 
     // Enqueue two jobs
     let job1 = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "commit1".to_string(),
         ProverKind::new("coq"),
         vec![],
     );
     let job2 = ProofJob::new(
-        Uuid::new_v4(),
+        echidnabot::ids::new_record_id(),
         "commit2".to_string(),
         ProverKind::new("lean"),
         vec![],
