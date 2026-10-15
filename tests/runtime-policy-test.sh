@@ -22,11 +22,16 @@ if [[ -z "$allowed" || -z "$banned" ]]; then
     exit 1
 fi
 if [[ "$(grep -cE '^\| \*\*Deno\*\* \|' <<< "$allowed")" != 1 ]] ||
-    ! grep -Eq '^\| \*\*Deno\*\* \| JS runtime & package management \(tier 2\) \| Secondary to Bun; runs compiled ESM/JS\.' <<< "$allowed"; then
+    ! grep -Eq '^\| \*\*Deno\*\* \| JS runtime only \(tier 2\) \| Secondary to Bun; limited to running compiled ESM/JS\.' <<< "$allowed"; then
     echo 'FAIL: Deno must be allowed once as the secondary tier 2 runtime' >&2
     exit 1
 fi
 echo 'PASS: Deno is allowed as the secondary tier 2 runtime'
+if ! grep -Eq '^\| \*\*Deno\*\* \|[^|]*\|[^|]*Use Bun for all JavaScript dependency installation and management\.' <<< "$allowed"; then
+    echo 'FAIL: Deno must delegate JavaScript dependency installation and management to Bun' >&2
+    exit 1
+fi
+echo 'PASS: JavaScript dependency installation and management remain with Bun'
 if ! grep -Eq '^\| \*\*Bun\*\* \| JS runtime & package management \(tier 1\) \|' <<< "$allowed"; then
     echo 'FAIL: Bun must remain the primary tier 1 runtime' >&2
     exit 1
