@@ -88,6 +88,45 @@ Findings → observed-patterns.jsonl → threshold (5+) → propose_new_rule()
   → Human reviews PR → Approved rule deployed to hypatia
 ....
 
+==== Review-Thread Stewardship (metarule)
+
+Reviewer bots (CodeRabbit, Codeac, and friends) post review threads on
+PRs; a finding addressed by a fix commit is not *closed* until the thread
+carries the fix and is resolved. 2026-10-15's estate sweep addressed
+seven such threads by hand — reply + resolve are fleet actions, and the
+permissions for them live in link:TOKEN-ARCHITECTURE.adoc[`echidnabot`].
+
+The metarule:
+
+....
+1. Use the same PR and file/line class only to filter candidate unresolved
+   review threads for a Hypatia finding (or a fleet fix). Verify the
+   finding-to-thread match and require exactly one match before replying
+   or resolving. Leave all threads unchanged if zero or multiple matches
+   remain.
+2. The fix lands on the PR branch (robot-repo-automaton; identity-class
+   findings like HYP-S010 are auto_fixable=false — the bot proposes and
+   replies, the owner rules on direction).
+3. echidnabot replies to the thread with the fix commit and reasoning:
+   POST /repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies
+   where {id} is the top-level review-comment ID.
+4. echidnabot resolves an addressed finding's thread only after the
+   required fix lands and Step 3's reply is posted:
+   GraphQL mutation resolveReviewThread (thread id from the PR's
+   reviewThreads).
+   Identity-class findings such as HYP-S010 stay open until the owner
+   directs and approves a fix and that fix lands. For verified-invalid
+   findings, follow Step 5 instead.
+5. Never resolve a thread whose finding is not addressed. For findings
+   verified as no-longer-valid, post a "skipped with a brief reason"
+   reply explaining why and leave the thread unresolved.
+....
+
+Corollary learned the hard way (odraz #19): when a reviewer bot's finding
+says "align X to the declared Y", check which side is the residue before
+automating — a reviewer bot can confidently align to template residue.
+Auto-remediation of identity-class findings stays owner-ruled.
+
 ==== Maintenance Release Gate Routing
 
 Use this routing model for repository maintenance and release
