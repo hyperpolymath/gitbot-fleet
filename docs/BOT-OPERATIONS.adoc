@@ -99,19 +99,27 @@ permissions for them live in link:TOKEN-ARCHITECTURE.adoc[`echidnabot`].
 The metarule:
 
 ....
-1. A Hypatia finding (or a fleet fix) matches an unresolved review thread
-   on the same PR (same file/line class).
+1. Use the same PR and file/line class only to filter candidate unresolved
+   review threads for a Hypatia finding (or a fleet fix). Verify the
+   finding-to-thread match and require exactly one match before replying
+   or resolving. Leave all threads unchanged if zero or multiple matches
+   remain.
 2. The fix lands on the PR branch (robot-repo-automaton; identity-class
    findings like HYP-S010 are auto_fixable=false — the bot proposes and
    replies, the owner rules on direction).
 3. echidnabot replies to the thread with the fix commit and reasoning:
    POST /repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies
-4. echidnabot resolves the thread:
+   where {id} is the top-level review-comment ID.
+4. echidnabot resolves an addressed finding's thread only after the
+   required fix lands and Step 3's reply is posted:
    GraphQL mutation resolveReviewThread (thread id from the PR's
    reviewThreads).
-5. Never resolve a thread whose finding is not addressed; a "skipped
-   with a brief reason" reply is the honest close for findings verified
-   as no-longer-valid.
+   Identity-class findings such as HYP-S010 stay open until the owner
+   directs and approves a fix and that fix lands. For verified-invalid
+   findings, follow Step 5 instead.
+5. Never resolve a thread whose finding is not addressed. For findings
+   verified as no-longer-valid, post a "skipped with a brief reason"
+   reply explaining why and leave the thread unresolved.
 ....
 
 Corollary learned the hard way (odraz #19): when a reviewer bot's finding

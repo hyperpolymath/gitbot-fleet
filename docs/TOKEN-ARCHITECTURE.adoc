@@ -165,7 +165,7 @@ This bot triggers Echidna workflows for proof execution, which requires the
 | Trigger Echidna workflow | `POST /repos/{owner}/{repo}/actions/workflows/echidna-scan.yml/dispatches`
 | Read ProofTrace data | `GET /repos/{owner}/{repo}/contents/.prooftrace/`
 | Write ProofTrace data | `PUT /repos/{owner}/{repo}/contents/.prooftrace/`
-| Reply to a review thread | `POST /repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies` — review-thread stewardship (BOT-OPERATIONS.adoc); no new scope, `repo` covers it
+| Reply to a review thread | `POST /repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies` — `{comment_id}` is the top-level review-comment ID, distinct from the GraphQL review-thread ID used by `resolveReviewThread`; review-thread stewardship (BOT-OPERATIONS.adoc); no new scope, `repo` covers it
 | Resolve a review thread | GraphQL `mutation resolveReviewThread(input: {threadId})` — same stewardship; resolves only threads whose finding the fleet addressed, with the fix-commit reply posted first
 |===
 
