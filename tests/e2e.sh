@@ -211,6 +211,20 @@ done
 
 echo ""
 
+# ─── Section 7: Documentation policy contracts ──────────────────────
+bold "Section 7: Documentation policy contracts"
+
+for policy_test in review-thread-stewardship-test.sh runtime-policy-test.sh; do
+    if bash "$SCRIPT_DIR/$policy_test"; then
+        PASS=$((PASS + 1))
+    else
+        red "  FAIL: $policy_test"
+        FAIL=$((FAIL + 1))
+    fi
+done
+
+echo ""
+
 # ═══════════════════════════════════════════════════════════════════════
 # Summary
 # ═══════════════════════════════════════════════════════════════════════
