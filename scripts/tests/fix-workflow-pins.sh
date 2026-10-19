@@ -9,6 +9,8 @@ set -euo pipefail
 fleet="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fx="$(mktemp -d)"
 trap 'rm -rf "$fx"' EXIT
+# Keep the fixers' own temporary files inside the fixture, including failures.
+export TMPDIR="$fx"
 pass=0; fail=0
 
 # Increment the pass count and print assertion label $1 to stdout.
@@ -19,6 +21,8 @@ bad()  { fail=$((fail + 1)); echo "  FAIL $1" >&2; }
 
 # Evaluate trusted fixture assertion $2 and record its result under label $1.
 check(){ if eval "$2"; then ok "$1"; else bad "$1"; fi; }
+# Capture both channels and the exit status, including expected failures.
+run_fix() { rc=0; out=$("$@" 2>&1) || rc=$?; }
 
 # ── 1. fix-rust-toolchain-input.sh ───────────────────────────────────────────
 mkdir -p "$fx/tc/.github/workflows"
@@ -285,6 +289,62 @@ set -e
 check "a flow-style step is UNSUPPORTED: named with its line, file untouched, exit 2, never OK" \
   "[ \$rc_tc4 -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 4' <<<\"\$out4\" && ! grep -q '^OK' <<<\"\$out4\" && cmp -s '$fx/tc4-before.yml' '$fx/tc4/.github/workflows/x.yml'"
 
+# Custom toolchains must work with empty mappings, quoted keys, reordered
+# inputs, .yaml files and paths containing spaces. Existing expressions stay.
+tc_custom="$fx/tc custom/.github/workflows"
+mkdir -p "$tc_custom"
+cat > "$tc_custom/rust.yaml" <<'YML'
+jobs:
+  check:
+    steps:
+      - 'uses': 'dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        'with': { }
+      - uses: dtolnay/rust-toolchain@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        with: # intentionally empty
+      - uses: dtolnay/rust-toolchain@cccccccccccccccccccccccccccccccccccccccc
+        with:
+          toolchain: ${{ matrix.rust }}
+      - with: {}
+        uses: dtolnay/rust-toolchain@dddddddddddddddddddddddddddddddddddddddd
+YML
+cat > "$fx/tc-custom-expected.yaml" <<'YML'
+jobs:
+  check:
+    steps:
+      - 'uses': 'dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        'with': { toolchain: 1.85.0 }
+      - uses: dtolnay/rust-toolchain@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        with: # intentionally empty
+          toolchain: 1.85.0
+      - uses: dtolnay/rust-toolchain@cccccccccccccccccccccccccccccccccccccccc
+        with:
+          toolchain: ${{ matrix.rust }}
+      - with: { toolchain: 1.85.0 }
+        uses: dtolnay/rust-toolchain@dddddddddddddddddddddddddddddddddddddddd
+YML
+run_fix env TOOLCHAIN=1.85.0 bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc custom"
+check "custom toolchain fills empty inputs and preserves expressions, quotes and comments exactly" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc-custom-expected.yaml' '$tc_custom/rust.yaml'"
+run_fix env TOOLCHAIN=beta bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$tc_custom/rust.yaml"
+check "direct-file mode preserves existing inputs even when the requested toolchain changes" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc-custom-expected.yaml' '$tc_custom/rust.yaml'"
+
+# An unsupported file must not prevent a supported sibling from being fixed,
+# and a sibling's success must not hide the overall error. Nested files and
+# files without a YAML extension are outside repository-mode discovery.
+tc_mixed="$fx/tc-mixed/.github/workflows"
+mkdir -p "$tc_mixed/nested"
+cp "$fx/tc4-before.yml" "$tc_mixed/a-unsupported.yml"
+printf 'jobs:\n  check:\n    steps:\n      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' > "$tc_mixed/z-supported.yaml"
+cp "$tc_mixed/z-supported.yaml" "$tc_mixed/nested/ignored.yml"
+cp "$tc_mixed/z-supported.yaml" "$tc_mixed/ignored.txt"
+cp "$tc_mixed/z-supported.yaml" "$fx/tc-mixed-before.yaml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc-mixed"
+check "repository mode fixes a supported .yaml sibling while returning UNSUPPORTED for another file" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*a-unsupported.yml' <<<\"\$out\" && grep -q '^          toolchain: stable$' '$tc_mixed/z-supported.yaml' && cmp -s '$fx/tc4-before.yml' '$tc_mixed/a-unsupported.yml'"
+check "repository mode leaves nested workflows and non-YAML files byte-identical" \
+  "cmp -s '$fx/tc-mixed-before.yaml' '$tc_mixed/nested/ignored.yml' && cmp -s '$fx/tc-mixed-before.yaml' '$tc_mixed/ignored.txt'"
+
 # ── 2. fix-stale-reusable-pin.sh ─────────────────────────────────────────────
 STALE_A=d135b05bfc647d0c0fbfedc7e80f37ea50f49236   # Window A (table row for rust-ci-reusable only)
 STALE_B=8f2ee50841e216cd8c192eeb68953118190f105c   # Window B (table row for every standards reusable)
@@ -525,6 +585,96 @@ check "only the job-level call moves; the env: copy and the run: | fixture line 
 check "the lock follows the call: edge and record at the replacement, stale gone, exit 3" \
   "[ \$rc_sp9 -eq 3 ] && grep -q \"hyperpolymath/standards@$GOOD\" '$fx/sp9/.github/workflows/actions.lock' && ! grep -q \"$STALE_B\" '$fx/sp9/.github/workflows/actions.lock'"
 
+# A private table selects the replacement, independent of the shipped estate
+# history. A wildcard is scoped to its repository and unknown SHAs stay put.
+sp_custom="$fx/sp custom/.github/workflows"
+mkdir -p "$sp_custom"
+printf '# fixture table\n\nhyperpolymath/example/.github/workflows/*\t%s\t%s\tfixture replacement\n' \
+  "$STALE_A" "$GOOD" > "$fx/custom-pins.tsv"
+cat > "$sp_custom/ci.yaml" <<YML
+jobs:
+  first:
+    'uses': 'hyperpolymath/example/.github/workflows/check.yaml@$STALE_A' # retain me
+  second:
+    uses: hyperpolymath/example/.github/workflows/audit.yml@$STALE_A
+  unknown:
+    uses: hyperpolymath/example/.github/workflows/check.yaml@1111111111111111111111111111111111111111
+  other:
+    uses: hyperpolymath/example-other/.github/workflows/check.yaml@$STALE_A
+YML
+cat > "$fx/sp-custom-expected.yaml" <<YML
+jobs:
+  first:
+    'uses': 'hyperpolymath/example/.github/workflows/check.yaml@$GOOD' # retain me
+  second:
+    uses: hyperpolymath/example/.github/workflows/audit.yml@$GOOD
+  unknown:
+    uses: hyperpolymath/example/.github/workflows/check.yaml@1111111111111111111111111111111111111111
+  other:
+    uses: hyperpolymath/example-other/.github/workflows/check.yaml@$STALE_A
+YML
+run_fix env PINS_TABLE="$fx/custom-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp custom"
+check "custom wildcard table fixes both matching .yaml callers and preserves unrelated pins and comments" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp-custom-expected.yaml' '$sp_custom/ci.yaml' && ! grep -q 'Exit 3' <<<\"\$out\""
+run_fix env PINS_TABLE="$fx/custom-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp custom"
+check "custom-table migration without a lock is byte-identical on the second run" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp-custom-expected.yaml' '$sp_custom/ci.yaml' && ! grep -q '^FIXED' <<<\"\$out\""
+
+# Tag refs cannot appear in a full-SHA replacement table. Encountering one
+# must be a successful no-op, not an error from the SHA extraction pipeline.
+mkdir -p "$fx/sp-tag/.github/workflows"
+printf 'jobs:\n  check:\n    uses: hyperpolymath/example/.github/workflows/check.yaml@v1\n' > "$fx/sp-tag/.github/workflows/ci.yaml"
+cp "$fx/sp-tag/.github/workflows/ci.yaml" "$fx/sp-tag-before.yaml"
+run_fix env PINS_TABLE="$fx/custom-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-tag"
+check "a tag-pinned reusable is a successful no-op (observed exit $rc)" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp-tag-before.yaml' '$fx/sp-tag/.github/workflows/ci.yaml'"
+
+# Invalid configuration must fail before either the caller or its lock moves.
+sp_invalid="$fx/sp-invalid/.github/workflows"
+mkdir -p "$sp_invalid"
+cp "$fx/sp0/.github/workflows/rust-ci.yml" "$sp_invalid/rust-ci.yml"
+cp "$fx/sp5/.github/workflows/actions.lock" "$sp_invalid/actions.lock"
+cp "$sp_invalid/actions.lock" "$fx/sp-invalid-before.lock"
+run_fix env PINS_TABLE="$fx/missing-table.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-invalid"
+check "a missing table exits 2 with a diagnostic and preserves the workflow and lock" \
+  "[ \$rc -eq 2 ] && grep -q 'table not readable' <<<\"\$out\" && cmp -s '$fx/sp0/.github/workflows/rust-ci.yml' '$sp_invalid/rust-ci.yml' && cmp -s '$fx/sp-invalid-before.lock' '$sp_invalid/actions.lock'"
+for replacement in 123456789012345678901234567890123456789 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA stable; do
+    printf 'hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml\t%s\t%s\tinvalid replacement\n' \
+      "$STALE_A" "$replacement" > "$fx/invalid-pins.tsv"
+    run_fix env PINS_TABLE="$fx/invalid-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-invalid"
+    check "invalid replacement $replacement exits 2 without changing caller or lock" \
+      "[ \$rc -eq 2 ] && grep -q 'bad replacement SHA' <<<\"\$out\" && cmp -s '$fx/sp0/.github/workflows/rust-ci.yml' '$sp_invalid/rust-ci.yml' && cmp -s '$fx/sp-invalid-before.lock' '$sp_invalid/actions.lock'"
+done
+run_fix env PINS_TABLE="$fx/empty.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/no-workflows"
+check "a repository without workflows is a successful no-op" \
+  "[ \$rc -eq 0 ] && grep -q 'OK (no workflows)' <<<\"\$out\" && [ ! -e '$fx/no-workflows' ]"
+
+# Exit 2 takes precedence over the exit 3 warning from a successfully repaired
+# sibling's lock. The unsupported workflow and its stale edge must survive.
+sp_mixed="$fx/sp-mixed/.github/workflows"
+mkdir -p "$sp_mixed"
+cp "$fx/sp7-before.yml" "$sp_mixed/ci.yml"
+cp "$fx/sp0/.github/workflows/rust-ci.yml" "$sp_mixed/rust-ci.yaml"
+cat > "$sp_mixed/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+    '.github/workflows/rust-ci.yaml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 6759885
+        repo_id: 1116521501
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-mixed"
+check "unsupported stale-pin callers take exit-code precedence over a repaired sibling's lock" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED' <<<\"\$out\" && grep -q 'nested uses: list was NOT recomputed' <<<\"\$out\" && cmp -s '$fx/sp7-before.yml' '$sp_mixed/ci.yml' && grep -q \"rust-ci-reusable.yml@$GOOD\" '$sp_mixed/rust-ci.yaml'"
+check "mixed migration preserves the unsupported caller's edge and adds the supported .yaml caller's replacement" \
+  "grep -A1 \"'.github/workflows/ci.yml':\" '$sp_mixed/actions.lock' | grep -q \"standards@$STALE_A\" && grep -A1 \"'.github/workflows/rust-ci.yaml':\" '$sp_mixed/actions.lock' | grep -q \"standards@$GOOD\" && grep -q \"^    'hyperpolymath/standards@$STALE_A':\" '$sp_mixed/actions.lock' && grep -q \"^    'hyperpolymath/standards@$GOOD':\" '$sp_mixed/actions.lock'"
+
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
 cat > "$fx/ls/.github/workflows/actions.lock" <<'LOCK'
@@ -639,6 +789,117 @@ set -e
 check "a tag with characters the fixer will not write is UNRESOLVED, the record untouched, exit 1" \
   "[ \$rc7 -eq 1 ] && grep -q 'carries characters' '$fx/ls7.out' && cmp -s '$fx/ls7-before.lock' '$fx/ls7/.github/workflows/actions.lock'"
 
+# Exercise tag resolution through a local Git stub: even the online branch
+# stays offline, and the call log proves when a lookup did or did not occur.
+write_action_lock() { # <lock-path> <repository> <sha> <ref>
+    cat > "$1" <<LOCK
+version: 'v0.0.3'
+workflows: {}
+dependencies:
+    '$2@$3':
+        ref: '$4'
+        commit: 'sha1-$3'
+        owner_id: 1
+        repo_id: 2
+LOCK
+}
+lookup_repo="$fx/tag lookup"
+lookup_lock="$lookup_repo/.github/workflows/actions.lock"
+mkdir -p "$lookup_repo/.github/workflows" "$fx/git-bin"
+cat > "$fx/git-bin/git" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$PIN_TEST_GIT_LOG"
+if [ "$#" -ne 3 ] || [ "$1" != ls-remote ] || [ "$2" != --tags ] || [ "$3" != https://github.com/fixture/action ]; then
+    exit 99
+fi
+cat "$PIN_TEST_GIT_RESPONSE"
+exit "${PIN_TEST_GIT_STATUS:-0}"
+SH
+chmod +x "$fx/git-bin/git"
+: > "$fx/git-calls"
+cat > "$fx/git-response" <<TAGS
+$SHA_A	refs/tags/v2
+$SHA_A	refs/tags/v2.4
+$SHA_B	refs/tags/v2.4.7
+$SHA_A	refs/tags/v2.4.7^{}
+$SHA_A	refs/tags/release-with-a-longer-name
+$SHA_C	refs/tags/v99.99.99
+TAGS
+# Wrong repository and wrong revision rows must not shadow the exact match.
+printf 'other/action\t%s\tv9.9.9\nfixture/action\t%s\tv8.8.8\nfixture/action\t%s\trelease/v3.2.1+build-4\n' \
+  "$SHA_A" "$SHA_B" "$SHA_A" > "$fx/lookup-tags.tsv"
+write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_A"
+write_action_lock "$fx/lookup-expected.lock" fixture/action "$SHA_A" release/v3.2.1+build-4
+run_lookup() {
+    run_fix env PATH="$fx/git-bin:$PATH" PIN_TEST_GIT_LOG="$fx/git-calls" \
+      PIN_TEST_GIT_RESPONSE="$fx/git-response" TAG_MAP="$fx/lookup-tags.tsv" "$@" \
+      bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$lookup_repo" "${lookup_mode[@]}"
+}
+lookup_mode=()
+run_lookup
+check "tag map matches repository and revision exactly, accepts safe punctuation and avoids Git" \
+  "[ \$rc -eq 0 ] && [ ! -s '$fx/git-calls' ] && cmp -s '$fx/lookup-expected.lock' '$lookup_lock'"
+
+# Empty map: --offline refuses the unresolved record without consulting Git.
+: > "$fx/lookup-tags.tsv"
+write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_A"
+cp "$lookup_lock" "$fx/lookup-before.lock"
+lookup_mode=(--offline)
+run_lookup
+check "offline mode never calls Git, leaves an unknown record byte-identical and exits 1" \
+  "[ \$rc -eq 1 ] && grep -q 'UNRESOLVED  fixture/action' <<<\"\$out\" && [ ! -s '$fx/git-calls' ] && cmp -s '$fx/lookup-before.lock' '$lookup_lock'"
+
+# The highest specificity wins before length; an annotated tag resolves via
+# its peeled commit, and unrelated commits must not influence the choice.
+lookup_mode=()
+write_action_lock "$fx/lookup-expected.lock" fixture/action "$SHA_A" v2.4.7
+run_lookup
+check "Git fallback chooses the most specific matching tag including peeled annotated tags" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/lookup-expected.lock' '$lookup_lock'"
+printf '%s\n' 'ls-remote --tags https://github.com/fixture/action' > "$fx/expected-git-calls"
+check "Git fallback requests only the action repository's tags, once" \
+  "cmp -s '$fx/expected-git-calls' '$fx/git-calls'"
+: > "$fx/git-calls"
+run_lookup
+check "resolved lock is idempotent and does not perform another Git lookup" \
+  "[ \$rc -eq 0 ] && [ ! -s '$fx/git-calls' ] && cmp -s '$fx/lookup-expected.lock' '$lookup_lock'"
+
+# A transport failure and a successful response containing no matching commit
+# both leave the lock unchanged and explicitly unresolved.
+printf '%s\trefs/tags/v99.99.99\n' "$SHA_C" > "$fx/git-response"
+for git_status in 0 128; do
+    write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_A"
+    : > "$fx/git-calls"
+    run_lookup PIN_TEST_GIT_STATUS="$git_status"
+    check "Git response with no usable tag (status $git_status) exits 1 and preserves the lock" \
+      "[ \$rc -eq 1 ] && grep -q 'UNRESOLVED  fixture/action' <<<\"\$out\" && cmp -s '$fx/expected-git-calls' '$fx/git-calls' && cmp -s '$fx/lookup-before.lock' '$lookup_lock'"
+done
+
+# Sed/YAML metacharacters must never enter a lock, even from a local map.
+lookup_mode=(--offline)
+: > "$fx/git-calls"
+for unsafe_tag in 'release|stable' "release'candidate" 'release"candidate' 'release&stable'; do
+    write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_A"
+    printf 'fixture/action\t%s\t%s\n' "$SHA_A" "$unsafe_tag" > "$fx/lookup-tags.tsv"
+    run_lookup
+    check "unsafe mapped tag $unsafe_tag is refused without changing the lock" \
+      "[ \$rc -eq 1 ] && grep -q 'carries characters' <<<\"\$out\" && [ ! -s '$fx/git-calls' ] && cmp -s '$fx/lookup-before.lock' '$lookup_lock'"
+done
+
+# Similar-looking records are non-defects: a 41-digit key and a full SHA key
+# whose ref names another SHA are not self-SHA action records.
+write_action_lock "$lookup_lock" fixture/action "${SHA_A}a" "${SHA_A}a"
+cp "$lookup_lock" "$fx/non-self-before.lock"
+run_lookup
+check "a 41-hex record key is untouched and never reported unresolved" \
+  "[ \$rc -eq 0 ] && ! grep -q UNRESOLVED <<<\"\$out\" && [ ! -s '$fx/git-calls' ] && cmp -s '$fx/non-self-before.lock' '$lookup_lock'"
+write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_B"
+cp "$lookup_lock" "$fx/non-self-before.lock"
+run_lookup
+check "a ref different from its record's SHA is untouched" \
+  "[ \$rc -eq 0 ] && ! grep -q UNRESOLVED <<<\"\$out\" && [ ! -s '$fx/git-calls' ] && cmp -s '$fx/non-self-before.lock' '$lookup_lock'"
+
 # Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
 # fixture through mawk when it is installed, and refuse a lock the parser
 # cannot read instead of reporting OK.
@@ -665,6 +926,25 @@ PATH="$fx/noawk-bin:$PATH" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/
 set -e
 check "a parser failure exits 2, says so, and leaves the lock untouched (never OK)" \
   "[ \$rc3 -eq 2 ] && grep -q 'could not parse' '$fx/ls3.out' && ! grep -q '^OK' '$fx/ls3.out' && cmp -s '$fx/ls3.lock' '$fx/ls3/.github/workflows/actions.lock'"
+
+# ── 4. Registry routes for the three new fixers ─────────────────────────────
+# jq is also used by dispatch-paths.sh in the same CI job. Assert only the
+# routes introduced here so unrelated registry maintenance stays independent.
+while IFS=$'\t' read -r section key expected; do
+    check "registry $section/$key selects $expected" \
+      "jq -e --arg section '$section' --arg key '$key' --arg expected '$expected' '.registry[\$section][\$key] == \$expected' '$fleet/scripts/fix-script-registry.json' >/dev/null"
+done <<'TSV'
+by_category	ToolchainInputMissing	fix-rust-toolchain-input.sh
+by_category	StaleReusablePin	fix-stale-reusable-pin.sh
+by_category	LockSelfShaRef	fix-lock-self-sha-refs.sh
+by_recipe	WF026	fix-rust-toolchain-input.sh
+by_recipe	workflow_audit/sha_pinned_toolchain_without_input	fix-rust-toolchain-input.sh
+by_recipe	WF027	fix-stale-reusable-pin.sh
+by_recipe	workflow_audit/known_broken_reusable_revision	fix-stale-reusable-pin.sh
+by_recipe	PIN-003	fix-stale-reusable-pin.sh
+by_recipe	PI006	fix-lock-self-sha-refs.sh
+by_recipe	pin_integrity/self_sha_lock_record	fix-lock-self-sha-refs.sh
+TSV
 
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
