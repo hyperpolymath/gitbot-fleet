@@ -111,7 +111,7 @@ apply_to_file() {
         }
         # Emit the buffered step, patched if it is a SHA-pinned dtolnay step
         # whose `with:` names no toolchain.
-        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item) {
+        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_nested, m, pre, post, delim, comment) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` the indentation of the first plain line under it.
@@ -134,12 +134,16 @@ apply_to_file() {
             }
             if (!uses_i) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
             has_with = 0; with_bad = 0; with_i = 0; with_flow = 0; with_indent = -1; in_with = 0; in_flow = 0; child_indent = -1; has_tc = 0
+            tc_empty_i = 0; tc_empty_flow = 0; tc_nested = 0
             for (i = 1; i <= n; i++) {
                 line = buf[i]; ind = indent_of(line)
                 if (in_flow) {
                     # A flow `with: {` spread over several lines: every entry up to
-                    # the brace that closes it is an input.
-                    if (line ~ TC_RE || line ~ TC_FLOW_RE) has_tc = 1
+                    # the brace that closes it is an input. An EMPTY `toolchain:`
+                    # entry (`toolchain: ,` / `toolchain: null`) is the key with no
+                    # value: it is given one in place, never duplicated.
+                    if (line ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                    else if (line ~ TC_RE || line ~ TC_FLOW_RE) has_tc = 1
                     flow_depth += brace_delta(line)
                     if (flow_depth <= 0) in_flow = 0
                     continue
@@ -150,7 +154,11 @@ apply_to_file() {
                         # Only a DIRECT child of `with:` is an input: the contents of
                         # another input'"'"'s block scalar (`components: |`) sit deeper.
                         if (child_indent < 0) child_indent = ind
-                        if (ind == child_indent && line ~ TC_RE) has_tc = 1
+                        if (ind == child_indent && line ~ TC_EMPTY_RE) tc_empty_i = i
+                        else if (ind == child_indent && line ~ TC_RE) has_tc = 1
+                        # An empty `toolchain:` followed by deeper lines is a nested
+                        # mapping, not an empty value: nothing this fixer can repair.
+                        else if (tc_empty_i && !tc_empty_flow && ind > child_indent && i == tc_empty_i + 1) tc_nested = 1
                     }
                 }
                 if (!in_with && !has_with && length(key_indent_of(line)) == skey) {
@@ -158,7 +166,8 @@ apply_to_file() {
                         has_with = 1; with_i = i; with_indent = skey; in_with = 1
                     } else if (line ~ WITH_FLOW_RE) {
                         has_with = 1; with_i = i; with_flow = 1
-                        if (line ~ TC_FLOW_RE) has_tc = 1
+                        if (line ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                        else if (line ~ TC_FLOW_RE) has_tc = 1
                         flow_depth = brace_delta(line)
                         if (flow_depth > 0) in_flow = 1
                     } else if (line ~ WITH_ANY_RE) {
@@ -169,15 +178,31 @@ apply_to_file() {
                     }
                 }
             }
+            if (tc_nested) { unrec[++nunrec] = lnum[tc_empty_i]; with_bad = 1 }
             if (has_tc || with_bad) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
             for (i = 1; i <= n; i++) {
                 line = buf[i]
-                if (has_with && with_flow && i == with_i) {
+                if (tc_empty_i && i == tc_empty_i) {
+                    # The key is there with no value: fill it where it stands.
+                    if (tc_empty_flow) {
+                        match(line, TC_FLOW_EMPTY_RE)
+                        pre = substr(line, 1, RSTART - 1); m = substr(line, RSTART, RLENGTH); post = substr(line, RSTART + RLENGTH)
+                        delim = substr(m, length(m))
+                        sub(/[[:space:]]*(null|~)?[[:space:]]*[,}]$/, "", m)
+                        line = pre m " " toolchain (delim == "}" ? " }" : ",") post
+                    } else {
+                        comment = ""
+                        if (match(line, /[[:space:]]+#.*$/)) comment = substr(line, RSTART)
+                        sub(/:[[:space:]]*(null|~)?[[:space:]]*(#.*)?$/, "", line)
+                        line = line ": " toolchain comment
+                    }
+                    print line; fixed++
+                } else if (has_with && with_flow && i == with_i && !tc_empty_i) {
                     if (line ~ /\{[[:space:]]*\}/) sub(/\{[[:space:]]*\}/, "{ toolchain: " toolchain " }", line)
                     else if (line ~ /\{[[:space:]]*$/) sub(/\{[[:space:]]*$/, "{ toolchain: " toolchain ",", line)
                     else sub(/\{[[:space:]]*/, "{ toolchain: " toolchain ", ", line)
                     print line; fixed++
-                } else if (has_with && !with_flow && i == with_i) {
+                } else if (has_with && !with_flow && i == with_i && !tc_empty_i) {
                     print line
                     print spaces(child_indent >= 0 ? child_indent : with_indent + 2) "toolchain: " toolchain
                     fixed++
@@ -205,6 +230,10 @@ apply_to_file() {
             WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"
             TC_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:]]"
             TC_FLOW_RE = "[{,][[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:],}]"
+            # The key present with no value (`toolchain:`, `toolchain: null`, `~`):
+            # not an input the action can read, and not a key to write twice.
+            TC_EMPTY_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*(null|~)?[[:space:]]*(#.*)?$"
+            TC_FLOW_EMPTY_RE = "(^|[{,])[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*(null|~)?[[:space:]]*[,}]"
         }
         {
             ind = indent_of($0)

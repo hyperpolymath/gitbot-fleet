@@ -66,7 +66,7 @@ merge_duplicate_records() {
         function emit_record(   i, n, out) {
             if (!cur) return
             # Rebuild the record: header lines, then a sorted, unique uses: list.
-            print cur
+            print spelled[cur]
             for (i = 1; i <= nhead[cur]; i++) print head[cur, i]
             n = 0
             for (u in uses_of) if (index(u, cur SUBSEP) == 1) n++
@@ -74,22 +74,31 @@ merge_duplicate_records() {
                 print "        uses:"
                 fflush()
                 cmd = "sort"
-                for (u in uses_of) if (index(u, cur SUBSEP) == 1) print "            - " substr(u, length(cur) + 2) | cmd
+                for (u in uses_of) if (index(u, cur SUBSEP) == 1) print "            - " uses_of[u] | cmd
                 close(cmd)
             }
         }
+        # A record key is the dependency between its quotes; the key is
+        # compared unquoted so `'a@sha':` and `"a@sha":` are one record, and
+        # the first spelling seen is the one written back.
+        function unq(s) { gsub(/["'"'"']/, "", s); return s }
         BEGIN { indep = 0; cur = "" }
         /^dependencies:[[:space:]]*$/ { indep = 1; print; next }
         !indep { print; next }
-        /^    '"'"'[^'"'"']+'"'"':$/ {
-            key = $0
-            if (!(key in seen)) { seen[key] = 1; order[++norder] = key; nhead[key] = 0; first = 1 } else { first = 0 }
+        /^    ["'"'"'][^"'"'"']+["'"'"']:$/ {
+            key = unq($0)
+            if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             cur = key; next
         }
         /^        uses:[[:space:]]*$/ { next }
-        /^            - '"'"'[^'"'"']+'"'"'$/ { u = $0; sub(/^            - /, "", u); uses_of[cur SUBSEP u] = 1; next }
+        /^            - ["'"'"'][^"'"'"']+["'"'"']$/ { u = $0; sub(/^            - /, "", u); uses_of[cur SUBSEP unq(u)] = u; next }
         /^        [a-z_]+: / { if (first) { head[cur, ++nhead[cur]] = $0 } ; next }
-        { next }
+        {
+            # A line the merger does not understand is not the merger'"'"'s to drop:
+            # it is kept where it stands, under the record it follows.
+            if (first) { head[cur, ++nhead[cur]] = $0 }
+            next
+        }
         END {
             for (k = 1; k <= norder; k++) {
                 cur = order[k]
@@ -165,6 +174,10 @@ yaml_context() { # <workflow.yml>
 # untouched, named on stderr, exit 2 — never "OK". The lock is edited after
 # the loop, once every workflow rewrite is known.
 USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?"
+# A SHA ref ends at a quote, whitespace, a comment or the end of the value: a
+# tag that merely STARTS with a dead SHA (`<sha>-patched`) is a different ref
+# the table never named, and must not be rewritten into `<replacement>-patched`.
+REF_END="([\"'[:space:]#]|$)"
 REUSABLE_REF_RE="hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}"
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge
 unsupported=0
@@ -176,13 +189,14 @@ while IFS= read -r -d '' wf; do
     while IFS= read -r numbered; do
         lineno="${numbered%%:*}"
         grep -qx "$lineno" <<<"$placed" && continue
-        ref=$(grep -oE "$REUSABLE_REF_RE" <<<"${numbered#*:}" | head -1)
+        ref=$(grep -oE "${REUSABLE_REF_RE}${REF_END}" <<<"${numbered#*:}" | head -1 | sed -E "s/[\"'[:space:]#]\$//" || true)
+        [ -n "$ref" ] || continue
         [ -n "$ref" ] || continue
         if lookup_replacement "${ref%@*}" "${ref##*@}"; then
             echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
             skip=1
         fi
-    done < <(grep -nE "$REUSABLE_REF_RE" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
+    done < <(grep -nE "${REUSABLE_REF_RE}${REF_END}" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()
     for lineno in $klines; do
@@ -190,12 +204,14 @@ while IFS= read -r -d '' wf; do
         # A job-level call pinned by tag (`@v1`) carries no SHA: nothing for a
         # SHA table to move, so it is a no-op here — not a grep exit 1 that
         # `set -e` would turn into a silent exit 1 of the whole run.
-        ref=$(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}" <<<"$line" | sed -E "s/${USES_KEY_RE}//" | head -1 || true)
+        ref=$(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$line" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]#]\$//" | head -1 || true)
         [ -n "$ref" ] || continue
         path="${ref%@*}"; stale="${ref##*@}"
         lookup_replacement "$path" "$stale" || continue
         [[ "$replacement" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: bad replacement SHA in table for $stale" >&2; exit 2; }
-        sed -i "${lineno}s|^\([[:space:]]*\(-[[:space:]]\+\)\?[\"']\?uses[\"']\?[[:space:]]*:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
+        # ERE: a `$` inside a BRE group is literal to sed, so the boundary
+        # alternation needs -E (and a delimiter the pattern does not use).
+        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path)@$stale([\"'[:space:]#]|\$)~\1@$replacement\3~" "$wf"
         echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
         rewrites=$((rewrites + 1))
         pending+=("$stale"$'\t'"$replacement"$'\t'"${path%%/.github/workflows/*}")

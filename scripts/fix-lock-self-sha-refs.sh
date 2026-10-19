@@ -68,14 +68,73 @@ lookup_tag() { # <owner/repo> <sha>
 # AND composite actions), so the class is per repository@revision. A record no
 # workflow uses directly (a nested dependency, a tree without workflows) falls
 # back to the two estate reusable sources by name.
+#
+# Only a `uses:` that is a real key counts: a job's key under `jobs:` is a
+# reusable call (R), a step's key under `steps:` is an action (A). The same
+# text inside a `run: |` script, a fixture under `env:`, or any other key is
+# data, so it can neither keep a defective action record nor repair one.
+# The sites are read once, with the YAML context the other fixers use.
+uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TAB>owner/repo[/path]@ref"
+    local wf
+    for wf in "$REPO_PATH"/.github/workflows/*.yml "$REPO_PATH"/.github/workflows/*.yaml; do
+        [ -f "$wf" ] || continue
+        awk '
+            function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
+            function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
+            function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
+            function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", s); sub(/["'"'"'[:space:]#].*$/, "", s); return s }
+            function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }
+            BEGIN {
+                Q = "[\"'"'"']?"
+                KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
+                ITEM_RE = "^[[:space:]]*-([[:space:]]|$)"
+                SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
+                USES_RE = "^" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q
+                item_steps = 0; item_indent = -1
+            }
+            {
+                ind = indent_of($0)
+                if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else next }
+                if (!plain($0)) next
+                if ($0 ~ ITEM_RE) {
+                    # A list item: its parent is the nearest key at its indentation or
+                    # shallower (`steps:\n- uses:` puts the dash under the key).
+                    p = -1; for (k in keyat) if (k + 0 <= ind && k + 0 > p) p = k + 0
+                    for (k in keyat) if (k + 0 > ind) delete keyat[k]
+                    item_steps = (p >= 0 && keyat[p] == "steps"); item_indent = ind
+                    t = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", t)
+                    if (t ~ USES_RE) { if (item_steps) print "A\t" ref_of(t) }
+                    else if (t ~ KEY_RE) {
+                        keyat[ind + 2] = keyname(t)
+                        if (t ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind + 2 }
+                    }
+                    next
+                }
+                if ($0 ~ KEY_RE) {
+                    key = keyname($0)
+                    for (k in keyat) if (k + 0 >= ind) delete keyat[k]
+                    if (ind <= item_indent) item_steps = 0
+                    if (key == "uses") {
+                        p = nearest_below(ind); g = (p >= 0) ? nearest_below(p) : -1
+                        if (p >= 0 && g >= 0 && keyat[g] == "jobs") print "R\t" ref_of($0)
+                        else if (item_steps && ind > item_indent) print "A\t" ref_of($0)
+                    }
+                    keyat[ind] = key
+                    if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
+                }
+            }
+        ' "$wf"
+    done
+}
+SITES=$(mktemp)
+uses_sites > "$SITES"
+
 # For owner/repo $1 at SHA $2, print reusable, action, or unknown; reusable
 # takes precedence when both kinds of use exist.
 usage_of() { # <owner/repo> <sha>  -> reusable | action | unknown
-    local key="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$1"
-    local end="@$2([\"'[:space:]]|$)"
-    if grep -rqE "${key}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml${end}" --include='*.yml' --include='*.yaml' "$REPO_PATH/.github/workflows" 2>/dev/null; then
+    if grep -qE "^R	$1/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@$2$" "$SITES"; then
         echo reusable
-    elif grep -rqE "${key}(/[A-Za-z0-9_./-]+)?${end}" --include='*.yml' --include='*.yaml' "$REPO_PATH/.github/workflows" 2>/dev/null; then
+    elif grep -qE "^A	$1(/[A-Za-z0-9_./-]+)?@$2$" "$SITES"; then
         echo action
     else
         echo unknown
@@ -115,7 +174,7 @@ if ! awk '
     { key_line = 0 }
 ' "$LOCK" > "$records"; then
     echo "fix-lock-self-sha-refs: could not parse $LOCK (awk failed); lock left unchanged" >&2
-    rm -f "$tmp" "$records"; exit 2
+    rm -f "$tmp" "$records" "$SITES"; exit 2
 fi
 while IFS=$'\t' read -r lineno repo sha; do
     if keeps_sha_ref "$repo" "$sha"; then continue; fi
@@ -135,7 +194,7 @@ while IFS=$'\t' read -r lineno repo sha; do
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
 done < "$records"
-rm -f "$records"
+rm -f "$records" "$SITES"
 
 if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; else rm -f "$tmp"; fi
 if [ "$fixed" -eq 0 ] && [ "$unresolved" -eq 0 ]; then echo "OK (no self-SHA action records): $LOCK"; fi
