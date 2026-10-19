@@ -21,8 +21,10 @@
 #   * only a `uses:` that is a KEY OF THE STEP MAPPING is the step's action:
 #     the same text nested under `env:`, inside a `run: |` script that writes
 #     a fixture, or under any other key is data and is left alone;
-#   * only the step's `with:` mapping decides: `toolchain:` under `env:` or any
-#     other key is not an action input and does not count;
+#   * only the step's `with:` mapping decides, and only its DIRECT children:
+#     `toolchain:` under `env:` or any other key is not an action input, and
+#     the same text inside another input's block scalar (`components: |`) is
+#     text, not a key, and does not count either;
 #   * a block `with:` (with or without a trailing comment) that names no
 #     `toolchain:` gets `toolchain: <TOOLCHAIN>` (default `stable`) as its
 #     first key, at the indentation its other keys use;
@@ -107,8 +109,10 @@ apply_to_file() {
                 if (in_with) {
                     if (plain(line) && ind <= with_indent) in_with = 0
                     else if (plain(line)) {
+                        # Only a DIRECT child of `with:` is an input: the contents of
+                        # another input'"'"'s block scalar (`components: |`) sit deeper.
                         if (child_indent < 0) child_indent = ind
-                        if (line ~ TC_RE) has_tc = 1
+                        if (ind == child_indent && line ~ TC_RE) has_tc = 1
                     }
                 }
                 if (!in_with && !has_with && length(key_indent_of(line)) == skey) {

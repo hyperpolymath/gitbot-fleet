@@ -170,6 +170,14 @@ if command -v mawk >/dev/null; then
     PATH="$fx/mawk-bin:$PATH" bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc3m" >/dev/null 2>&1 || true
     check "under mawk the same cases produce the same file" "cmp -s '$fx/tc3-after1.yml' '$fx/tc3m/.github/workflows/rust.yml'"
 fi
+# A `toolchain: stable` line inside ANOTHER input's block scalar is text, not
+# an input: the step still gets its own toolchain, as the first child of with:.
+mkdir -p "$fx/tc5/.github/workflows"
+printf 'jobs:\n  a:\n    steps:\n      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000b\n        with:\n          components: |\n            toolchain: stable\n' > "$fx/tc5/.github/workflows/x.yml"
+f5="$fx/tc5/.github/workflows/x.yml"
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc5" >/dev/null 2>&1
+check "toolchain: inside another input's block scalar does not count: a real input is added first" \
+  "grep -A2 '000000000000000000000000000000000000000b' '$f5' | sed -n '3p' | grep -q '^          toolchain: stable$' && grep -q '^            toolchain: stable$' '$f5' && [ \$(grep -c 'toolchain: stable' '$f5') -eq 2 ]"
 # A flow-style step: refused out loud, file untouched, exit 2 — never "OK".
 mkdir -p "$fx/tc4/.github/workflows"
 printf 'jobs:\n  a:\n    steps:\n      - { name: toolchain, uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000009 }\n      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000a\n' > "$fx/tc4/.github/workflows/x.yml"
