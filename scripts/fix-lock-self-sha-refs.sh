@@ -173,8 +173,9 @@ if ! awk '
         next
     }
     /^[^[:space:]]/ || /^    [^[:space:]]/ { inrec = 0 }
-    inrec && /^        ref: ["'"'"']/ {
-        r = $0; sub(/^        ref: /, "", r); gsub(/["'"'"']/, "", r)
+    inrec && /^        ref: / {
+        # Quoted either way, or a plain scalar: the same ref to GitHub.
+        r = $0; sub(/^        ref: /, "", r); sub(/[[:space:]]+#.*$/, "", r); gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
         if (r == key_sha) print NR "\t" key_repo "\t" key_sha
     }
 ' "$LOCK" > "$records"; then
@@ -194,8 +195,8 @@ while IFS=$'\t' read -r lineno repo sha; do
         echo "UNRESOLVED  $repo@${sha:0:7}: resolved tag '$tag' carries characters this fixer will not write into the lock (record left as is)" >&2
         unresolved=$((unresolved + 1)); continue
     fi
-    # lineno is the ref: line itself; its quote style is kept.
-    sed -i "${lineno}s|ref: \(['\"]\)$sha\1|ref: \1$tag\1|" "$tmp"
+    # lineno is the ref: line itself; its quote style (or none) is kept.
+    sed -i "${lineno}s|ref: \(['\"]\{0,1\}\)$sha\1|ref: \1$tag\1|" "$tmp"
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
 done < "$records"

@@ -91,12 +91,15 @@ apply_to_file() {
         # A 40-hex pin of the action on a non-comment line, trailing comment
         # stripped. `@stable` and `@1.85.0` are tags: the ref carries the
         # channel and the step is not ours.
-        function sha_ref(s,   t, m) {
+        # The 40 hex characters must END the ref: `@<sha>-patched` is a tag
+        # that merely begins with one, and carries its own channel.
+        function sha_ref(s,   t, m, nxt) {
             if (!plain(s)) return 0
             t = s; sub(/[[:space:]]#.*$/, "", t)
             if (!match(t, /dtolnay\/rust-toolchain@[0-9a-f]+/)) return 0
             m = substr(t, RSTART + 23, RLENGTH - 23)
-            return (length(m) == 40)
+            nxt = substr(t, RSTART + RLENGTH, 1)
+            return (length(m) == 40 && (nxt == "" || nxt ~ /["'"'"'[:space:],}\]]/))
         }
         # YAML context outside list items: the key at each indentation, so a
         # list item opens a step only when its parent key is `steps:`.

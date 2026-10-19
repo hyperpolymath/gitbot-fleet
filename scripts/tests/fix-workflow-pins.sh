@@ -445,6 +445,14 @@ run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc12"
 check "quoted braces and comment braces do not close a flow with: — the named toolchain is seen, the missing one added once" \
   "[ \$rc -eq 0 ] && cmp -s '$fx/tc12-expected.yml' '$fx/tc12/.github/workflows/x.yml'"
 
+# tc13: a ref that merely begins with 40 hex characters (`@<sha>-patched`) is
+# a tag, carries its own channel, and is not ours.
+mkdir -p "$fx/tc13/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772-patched\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # pinned\n' > "$fx/tc13/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc13"
+check "a tag beginning with a SHA is a tag: untouched; the real SHA pin beside it is fixed" \
+  "[ \$rc -eq 0 ] && sed -n '4p' '$fx/tc13/.github/workflows/x.yml' | grep -q 'patched\$' && sed -n '5p' '$fx/tc13/.github/workflows/x.yml' | grep -q '# pinned\$' && [ \$(grep -c 'toolchain: stable' '$fx/tc13/.github/workflows/x.yml') -eq 1 ] && sed -n '6,7p' '$fx/tc13/.github/workflows/x.yml' | grep -q '^          toolchain: stable$'"
+
 # ── 2. fix-stale-reusable-pin.sh ─────────────────────────────────────────────
 STALE_A=d135b05bfc647d0c0fbfedc7e80f37ea50f49236   # Window A (table row for rust-ci-reusable only)
 STALE_B=8f2ee50841e216cd8c192eeb68953118190f105c   # Window B (table row for every standards reusable)
@@ -1153,6 +1161,27 @@ printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_A" > "$fx/ls9-tags.tsv"
 TAG_MAP="$fx/ls9-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls9" --offline > "$fx/ls9.out" 2>&1; rc9=$?
 check "a ref: that is not the first line of its record is still the record's ref: repaired, exit 0" \
   "[ \$rc9 -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls9/.github/workflows/actions.lock' && ! grep -q \"ref: '$SHA_A'\" '$fx/ls9/.github/workflows/actions.lock' && grep -q '^FIXED' '$fx/ls9.out'"
+
+# ls10: a plain-scalar `ref: <sha>` (no quotes) is the same ref: found and
+# repaired, the absence of quotes kept.
+mkdir -p "$fx/ls10/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: foo/bar@%s\n' "$SHA_A" > "$fx/ls10/.github/workflows/ci.yml"
+cat > "$fx/ls10/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'foo/bar@$SHA_A'
+dependencies:
+    'foo/bar@$SHA_A':
+        ref: $SHA_A
+        commit: sha1-$SHA_A
+        owner_id: 1
+        repo_id: 2
+LOCK
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_A" > "$fx/ls10-tags.tsv"
+TAG_MAP="$fx/ls10-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls10" --offline > "$fx/ls10.out" 2>&1; rc10=$?
+check "an unquoted self-SHA ref is found and repaired, unquoted" \
+  "[ \$rc10 -eq 0 ] && grep -q '^        ref: v1.0.0$' '$fx/ls10/.github/workflows/actions.lock' && grep -q '^FIXED' '$fx/ls10.out'"
 
 # Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
 # fixture through mawk when it is installed, and refuse a lock the parser
