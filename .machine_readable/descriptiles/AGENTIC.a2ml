@@ -35,6 +35,24 @@ allow-silent-skip = false
 require-rerun-after-fix = true
 release-claim-requires-hard-pass = true
 
+[workflow-pin-remediation]
+# The fleet's half of the pin-propagation architecture
+#   hypatia (detection) -> gitbot-fleet (this: actuation) -> .git-private-farm (propagation)
+# Three fix scripts, one contract test (scripts/tests/fix-workflow-pins.sh, run
+# by rust.yml), and two data files that carry the SAME facts hypatia detects
+# on, so detection and repair cannot drift apart:
+#   scripts/fix-rust-toolchain-input.sh   WF026  SHA-pinned dtolnay/rust-toolchain with no toolchain: input
+#   scripts/fix-stale-reusable-pin.sh     WF027, PIN-003, WF016  a caller pinned at a reusable revision the estate has MEASURED dead
+#   scripts/fix-lock-self-sha-refs.sh     PI006  actions.lock record whose ref is its own SHA (GitHub: "invalid lockfile pin")
+#   scripts/lib/stale-reusable-pins.tsv   the dead revisions and the one replacement each moves to
+#   scripts/lib/action-ref-tags.tsv       the tag that resolves to each commit the estate pins by SHA
+may-rewrite-reusable-pins = true           # only to a replacement the table names; never "newest"
+may-rewrite-actions-lock = true            # SHA substitution and ref:tag only; nested uses: lists are never recomputed here
+may-choose-replacement-sha = false         # a human picks it against standards/scripts/lock-selfcheck.sh and records it in the table
+may-run-network-lookups = true             # git ls-remote --tags for a tag the map lacks; --offline disables it
+must-report-unresolved = true              # a self-SHA record with no tag is reported and left, never guessed (exit 1)
+must-be-idempotent = true                  # every script's second run is byte-identical; the contract test asserts it
+
 [automation-hooks]
 # on-enter: Read 0-AI-MANIFEST.a2ml, then .machine_readable/descriptiles/STATE.a2ml
 # on-exit: Update .machine_readable/descriptiles/STATE.a2ml with session outcomes

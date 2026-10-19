@@ -83,6 +83,8 @@ jobs:
         with:
           persist-credentials: false
       - run: bash scripts/tests/dispatch-paths.sh
+      - name: Workflow-pin fix scripts keep their contracts
+        run: bash scripts/tests/fix-workflow-pins.sh
 
   gsbot:
     name: GSBot build, tests and dependency security

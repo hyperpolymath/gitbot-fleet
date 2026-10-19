@@ -49,7 +49,10 @@
       "LicensePMPLDrift": "fix-pmpl-drift.sh",
       "ActionsPolicyTooRestrictive": "fix-actions-policy.sh",
       "SessionDetritus": "fix-session-detritus.sh",
-      "RetiredDescriptilePolicy": "fix-retired-descriptile-policy.sh"
+      "RetiredDescriptilePolicy": "fix-retired-descriptile-policy.sh",
+      "ToolchainInputMissing": "fix-rust-toolchain-input.sh",
+      "StaleReusablePin": "fix-stale-reusable-pin.sh",
+      "LockSelfShaRef": "fix-lock-self-sha-refs.sh"
     },
     "by_recipe": {
       "recipe-actions-allow-all": "fix-actions-policy.sh",
@@ -111,7 +114,16 @@
       "reusable_workflow_sha_bump_needs_propagation": "propagate-sha-bump.sh",
       "recipe-fix-pmpl-drift": "fix-pmpl-drift.sh",
       "recipe-archive-session-detritus": "fix-session-detritus.sh",
-      "recipe-retired-descriptile-policy": "fix-retired-descriptile-policy.sh"
+      "recipe-retired-descriptile-policy": "fix-retired-descriptile-policy.sh",
+      "WF026": "fix-rust-toolchain-input.sh",
+      "workflow_audit/sha_pinned_toolchain_without_input": "fix-rust-toolchain-input.sh",
+      "WF027": "fix-stale-reusable-pin.sh",
+      "workflow_audit/known_broken_reusable_revision": "fix-stale-reusable-pin.sh",
+      "WF016": "fix-stale-reusable-pin.sh",
+      "recipe-rewrite-orphan-reusable-pin": "fix-stale-reusable-pin.sh",
+      "PIN-003": "fix-stale-reusable-pin.sh",
+      "PI006": "fix-lock-self-sha-refs.sh",
+      "pin_integrity/self_sha_lock_record": "fix-lock-self-sha-refs.sh"
     }
   }
 }
