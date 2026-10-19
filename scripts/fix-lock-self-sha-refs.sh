@@ -25,7 +25,8 @@
 # left alone — a wrong tag is worse than a known-bad one.
 #
 # Idempotent. Exit 0 whether or not anything changed; exit 1 if a self-SHA
-# record remains unresolved (so a caller can tell "fixed" from "still dead").
+# record remains unresolved (so a caller can tell "fixed" from "still dead");
+# exit 2, lock untouched, if the lock cannot be parsed.
 #
 # Usage:
 #   fix-lock-self-sha-refs.sh <repo-path> [--offline]
@@ -57,6 +58,23 @@ lookup_tag() { # <owner/repo> <sha>
 
 fixed=0; unresolved=0
 tmp=$(mktemp); cp "$LOCK" "$tmp"
+# Parse first, loop second: a parser that dies inside a process substitution
+# would look like "no records" and the script would report OK. POSIX awk only
+# (Debian/Ubuntu's default awk is mawk: no match() capture array, no interval
+# expressions), so the SHA is checked for content and length separately.
+records=$(mktemp)
+if ! awk '
+    /^    '"'"'[^'"'"'@]+@[0-9a-f]+'"'"':$/ {
+        s = $0; sub(/^    '"'"'/, "", s); sub(/'"'"':$/, "", s)
+        i = index(s, "@"); repo = substr(s, 1, i - 1); sha = substr(s, i + 1)
+        if (length(sha) == 40) { key_line = NR; key_repo = repo; key_sha = sha; next }
+    }
+    key_line && NR == key_line + 1 && $0 == "        ref: '"'"'" key_sha "'"'"'" { print key_line "\t" key_repo "\t" key_sha }
+    { key_line = 0 }
+' "$LOCK" > "$records"; then
+    echo "fix-lock-self-sha-refs: could not parse $LOCK (awk failed); lock left unchanged" >&2
+    rm -f "$tmp" "$records"; exit 2
+fi
 while IFS=$'\t' read -r lineno repo sha; do
     case "$repo" in hyperpolymath/standards|hyperpolymath/cicd-suite) continue ;; esac
     tag=$(lookup_tag "$repo" "$sha")
@@ -68,11 +86,8 @@ while IFS=$'\t' read -r lineno repo sha; do
     sed -i "$((lineno + 1))s|ref: '$sha'|ref: '$tag'|" "$tmp"
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
-done < <(awk '
-    match($0, /^    '"'"'([^'"'"'@]+)@([0-9a-f]{40})'"'"':$/, m) { key_line = NR; key_repo = m[1]; key_sha = m[2]; next }
-    key_line && NR == key_line + 1 && $0 ~ "^        ref: '"'"'" key_sha "'"'"'$" { print key_line "\t" key_repo "\t" key_sha }
-    { key_line = 0 }
-' "$LOCK")
+done < "$records"
+rm -f "$records"
 
 if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; else rm -f "$tmp"; fi
 if [ "$fixed" -eq 0 ] && [ "$unresolved" -eq 0 ]; then echo "OK (no self-SHA action records): $LOCK"; fi

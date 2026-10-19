@@ -119,8 +119,6 @@
       "workflow_audit/sha_pinned_toolchain_without_input": "fix-rust-toolchain-input.sh",
       "WF027": "fix-stale-reusable-pin.sh",
       "workflow_audit/known_broken_reusable_revision": "fix-stale-reusable-pin.sh",
-      "WF016": "fix-stale-reusable-pin.sh",
-      "recipe-rewrite-orphan-reusable-pin": "fix-stale-reusable-pin.sh",
       "PIN-003": "fix-stale-reusable-pin.sh",
       "PI006": "fix-lock-self-sha-refs.sh",
       "pin_integrity/self_sha_lock_record": "fix-lock-self-sha-refs.sh"

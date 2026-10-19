@@ -14,13 +14,16 @@
 # can be LESS usable than an older one, so each replacement in the table was
 # chosen by hand against that check.
 #
-# If the repository carries .github/workflows/actions.lock and it names the
-# stale SHA (a caller onboarded with its reusable's dependency record), the
-# SHA is replaced there too — in the workflows: list and in the record's
-# key/ref/commit — so the lock stays internally consistent. The record's
-# nested `uses:` list is NOT recomputed: run `gh actions-lock` (or the
-# repository's check-lock-sync.sh) afterwards; the script says so when it
-# touches a lock.
+# If the repository carries .github/workflows/actions.lock, the lock follows
+# each rewritten CALLER, not the SHA: in `workflows:` only the rewritten
+# workflow's own entry moves to the replacement. In `dependencies:` the stale
+# record is renamed when no workflow references it any more, and copied under
+# the replacement key (stale record kept) while another workflow still pins
+# the stale SHA — a lock key is shared by every reusable of a repository, and
+# a caller the table does not cover must keep its record. Records that
+# collapse onto one key are merged. A record's nested `uses:` list is NOT
+# recomputed: run `gh actions-lock` (or the repository's check-lock-sync.sh)
+# afterwards; the script says so when it touches a lock.
 #
 # Idempotent. Rewrites nothing it does not recognise. Exit 0 whether or not
 # anything changed; exit 2 when the table is unreadable.
@@ -83,7 +86,7 @@ merge_duplicate_records() {
         { next }
         END {
             for (k = 1; k <= norder; k++) {
-                cur = order[k]; delete done_head
+                cur = order[k]
                 emit_record()
             }
         }
@@ -92,6 +95,8 @@ merge_duplicate_records() {
 }
 
 # Every `uses:` of an estate reusable at a full SHA, across the workflows.
+# The lock is edited after the loop, once every workflow rewrite is known.
+edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement
 while IFS= read -r -d '' wf; do
     while IFS= read -r line; do
         path="${line%@*}"; stale="${line##*@}"
@@ -106,16 +111,52 @@ while IFS= read -r -d '' wf; do
         done < "$PINS_TABLE"
         [ -n "$replacement" ] || continue
         [[ "$replacement" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: bad replacement SHA in table for $stale" >&2; exit 2; }
-        sed -i "s|\(uses:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
+        sed -i "s|\(uses[\"']\?[[:space:]]*:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
         echo "FIXED  ${wf#"$REPO_PATH"/}  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
         rewrites=$((rewrites + 1))
-        if [ -f "$LOCK" ] && grep -q "$stale" "$LOCK"; then
-            sed -i "s/$stale/$replacement/g" "$LOCK"
-            merge_duplicate_records "$LOCK"
-            lock_touched=1
-        fi
-    done < <(grep -oE "uses:[[:space:]]*[\"']?hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}" "$wf" | sed -E "s/^uses:[[:space:]]*[\"']?//" | sort -u)
+        printf '%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" >> "$edits"
+    done < <(grep -oE "[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}" "$wf" | sed -E "s/^[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?//" | sort -u)
 done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
+
+# Lock: move each rewritten workflow's own `workflows:` edges first.
+if [ -f "$LOCK" ] && [ -s "$edits" ]; then
+    sort -u "$edits" -o "$edits"
+    while IFS=$'\t' read -r wfkey stale new; do
+        grep -q "$stale" "$LOCK" || continue
+        tmp=$(mktemp)
+        awk -v wfkey="    '$wfkey':" -v stale="$stale" -v new="$new" '
+            /^workflows:[[:space:]]*$/ { sec = "w" }
+            /^dependencies:[[:space:]]*$/ { sec = "d" }
+            sec == "w" && /^    '"'"'/ { inwf = ($0 == wfkey) }
+            sec == "w" && inwf && /^        - / { i = index($0, "@" stale "'"'"'"); if (i) $0 = substr($0, 1, i) new "'"'"'" }
+            { print }
+        ' "$LOCK" > "$tmp"
+        if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
+    done < "$edits"
+    # Then the records: rename a stale record nothing references any more;
+    # copy it under the replacement key while a workflow still pins the stale SHA.
+    while IFS=$'\t' read -r stale new; do
+        grep -q "$stale" "$LOCK" || continue
+        still=$(awk -v stale="$stale" '
+            /^workflows:[[:space:]]*$/ { sec = "w" } /^dependencies:[[:space:]]*$/ { sec = "d" }
+            sec == "w" && index($0, "@" stale "'"'"'") { n++ } END { print n + 0 }' "$LOCK")
+        tmp=$(mktemp)
+        if [ "$still" -eq 0 ]; then
+            sed "s/$stale/$new/g" "$LOCK" > "$tmp"
+        else
+            awk -v stale="$stale" -v new="$new" '
+                /^dependencies:[[:space:]]*$/ { sec = "d" }
+                sec == "d" && /^    '"'"'/ { inrec = (index($0, "@" stale "'"'"':") > 0) }
+                sec == "d" && inrec { c = $0; gsub(stale, new, c); copy[++nc] = c }
+                { print }
+                END { for (i = 1; i <= nc; i++) print copy[i] }' "$LOCK" > "$tmp"
+            echo "NOTE: actions.lock keeps the record for ${stale:0:7}: a workflow the table does not cover still pins it; the replacement got its own record." >&2
+        fi
+        if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
+    done < <(cut -f2,3 "$edits" | sort -u)
+    [ "$lock_touched" -eq 1 ] && merge_duplicate_records "$LOCK"
+fi
+rm -f "$edits"
 
 if [ "$lock_touched" -eq 1 ]; then
     echo "WARN: actions.lock named a stale SHA and was rewritten to the replacement; its nested uses: list was NOT recomputed — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2

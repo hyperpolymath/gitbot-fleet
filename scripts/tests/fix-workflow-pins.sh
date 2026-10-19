@@ -4,6 +4,7 @@
 # defect, a planted non-defect that must be left alone, and a second run that
 # must change nothing. Offline: no network, no gh. Run by rust.yml
 # (dispatch-contracts) and `just test`.
+# shellcheck disable=SC2034  # out/rc variables are read inside check()'s eval strings
 set -euo pipefail
 fleet="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fx="$(mktemp -d)"
@@ -59,6 +60,59 @@ mkdir -p "$fx/tc0/.github/workflows"; printf 'name: x\njobs:\n  a:\n    steps:\n
 cp "$fx/tc0/.github/workflows/x.yml" "$fx/tc0-before.yml"
 bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc0" >/dev/null 2>&1
 check "control: a tree without the defect is untouched" "cmp -s '$fx/tc0-before.yml' '$fx/tc0/.github/workflows/x.yml'"
+
+
+# Review cases (gitbot-fleet#615): a `with:` with a trailing comment, a flow
+# `with:`, `with:` written above `uses:`, `env.toolchain` (not an input, so it
+# must not count), and a quoted key. Each step is inspected whole.
+mkdir -p "$fx/tc2/.github/workflows"
+cat > "$fx/tc2/.github/workflows/rust.yml" <<'YML'
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: # pinned inputs
+          components: clippy
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f
+        with: { components: rustfmt }
+      - with:
+          components: llvm-tools
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+      - with: { toolchain: nightly }
+        uses: dtolnay/rust-toolchain@1234567890abcdef1234567890abcdef12345678
+      - uses: dtolnay/rust-toolchain@abcdefabcdefabcdefabcdefabcdefabcdefabcd
+        env:
+          toolchain: beta
+      - env:
+          toolchain: beta
+        uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000001
+        with:
+          components: clippy
+      - "uses": "dtolnay/rust-toolchain@0000000000000000000000000000000000000002"
+      - run: cargo test
+YML
+f2="$fx/tc2/.github/workflows/rust.yml"
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc2" >/dev/null 2>&1
+after() { grep -A"$2" -- "$1" "$f2"; }   # the N lines after the first match
+check "a with: with a trailing comment is reused: toolchain: goes under it, no second with:" \
+  "after 6c977a6c 2 | sed -n '2p' | grep -q '^        with: # pinned inputs$' && after 6c977a6c 2 | sed -n '3p' | grep -q '^          toolchain: stable$'"
+check "a flow with: { } gets toolchain as its first entry" \
+  "grep -q '^        with: { toolchain: stable, components: rustfmt }$' '$f2'"
+check "a with: written above uses: is found and extended; nothing is inserted under uses:" \
+  "grep -B3 683b588c '$f2' | grep -q '^          toolchain: stable$' && after 683b588c 1 | sed -n '2p' | grep -qv '^        with:'"
+check "a flow with: above uses: that names a toolchain is left alone" \
+  "grep -q '^      - with: { toolchain: nightly }$' '$f2' && after 12345678 1 | sed -n '2p' | grep -qv '^        with:'"
+check "env.toolchain is not an input: the step still gets with: toolchain:, env: is kept" \
+  "after abcdefab 2 | sed -n '2p' | grep -q '^        with:$' && after abcdefab 2 | sed -n '3p' | grep -q '^          toolchain: stable$' && grep -A4 abcdefab '$f2' | grep -q '^          toolchain: beta$'"
+check "env.toolchain above uses: does not count either; the existing with: block is extended" \
+  "grep -A3 '0000000000000000000000000000000000000001' '$f2' | grep -q '^          toolchain: stable$' && grep -B3 '0000000000000000000000000000000000000001' '$f2' | grep -q '^          toolchain: beta$'"
+check "a quoted \"uses\" key is recognised" \
+  "after 0000000000000000000000000000000000000002 2 | sed -n '2p' | grep -q '^        with:$' && after 0000000000000000000000000000000000000002 2 | sed -n '3p' | grep -q '^          toolchain: stable$'"
+check "exactly six steps were fixed, one toolchain: each" \
+  "[ \$(grep -c 'toolchain: stable' '$f2') -eq 6 ] && [ \$(grep -c 'toolchain: nightly' '$f2') -eq 1 ] && grep -q 'cargo test' '$f2'"
+cp "$f2" "$fx/tc2-after1.yml"
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc2" >/dev/null 2>&1
+check "second run over the review cases is a no-op" "cmp -s '$fx/tc2-after1.yml' '$f2'"
 
 # ── 2. fix-stale-reusable-pin.sh ─────────────────────────────────────────────
 STALE_A=d135b05bfc647d0c0fbfedc7e80f37ea50f49236   # Window A (table row for rust-ci-reusable only)
@@ -136,6 +190,49 @@ check "the merged record carries the union of both nested lists, once each" \
   "[ \$(grep -c \"            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\" '$fx/sp2/.github/workflows/actions.lock') -eq 1 ] && grep -q 'erlef/setup-beam' '$fx/sp2/.github/workflows/actions.lock' && grep -q 'ossf/scorecard-action' '$fx/sp2/.github/workflows/actions.lock'"
 check "both workflows: entries point at the replacement" "[ \$(grep -c \"        - 'hyperpolymath/standards@$GOOD'\" '$fx/sp2/.github/workflows/actions.lock') -eq 2 ]"
 
+check "the merged record carries its header once (one ref: line)" \
+  "[ \$(grep -c \"        ref: '$GOOD'\" '$fx/sp2/.github/workflows/actions.lock') -eq 1 ] && [ \$(grep -c \"        commit: 'sha1-$GOOD'\" '$fx/sp2/.github/workflows/actions.lock') -eq 1 ]"
+# Partial migration (review): two callers share a Window-A SHA but the table
+# row covers only rust-ci-reusable. The lock must follow the rewritten caller
+# only: mirror's edge and the stale record stay, the replacement gets its own.
+mkdir -p "$fx/sp3/.github/workflows"
+printf 'jobs:\n  rust-ci:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp3/.github/workflows/rust-ci.yml"
+printf 'jobs:\n  mirror:\n    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@%s\n' "$STALE_A" > "$fx/sp3/.github/workflows/mirror.yml"
+cat > "$fx/sp3/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/mirror.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+    '.github/workflows/rust-ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 6759885
+        repo_id: 1116521501
+        uses:
+            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+LOCK
+out3=$(bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp3" 2>&1)
+l3="$fx/sp3/.github/workflows/actions.lock"
+check "partial migration: the rewritten caller's lock edge moves" \
+  "grep -A1 \"'.github/workflows/rust-ci.yml':\" '$l3' | grep -q \"hyperpolymath/standards@$GOOD\""
+check "partial migration: the untouched caller's lock edge stays at the stale SHA" \
+  "grep -A1 \"'.github/workflows/mirror.yml':\" '$l3' | grep -q \"hyperpolymath/standards@$STALE_A\" && grep -q \"mirror-reusable.yml@$STALE_A\" '$fx/sp3/.github/workflows/mirror.yml'"
+check "partial migration: both dependency records exist, each with its own ref and commit" \
+  "[ \$(grep -c \"^    'hyperpolymath/standards@\" '$l3') -eq 2 ] && grep -q \"ref: '$GOOD'\" '$l3' && grep -q \"ref: '$STALE_A'\" '$l3' && grep -q \"commit: 'sha1-$GOOD'\" '$l3'"
+check "partial migration is said out loud" "grep -q 'keeps the record for' <<<\"\$out3\""
+tar -C "$fx/sp3" -cf "$fx/sp3a.tar" .github
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp3" >/dev/null 2>&1
+tar -C "$fx/sp3" -cf "$fx/sp3b.tar" .github
+check "partial migration: second run is a no-op" "cmp -s '$fx/sp3a.tar' '$fx/sp3b.tar'"
+# A quoted key and value are still a pin.
+mkdir -p "$fx/sp4/.github/workflows"
+printf 'jobs:\n  governance:\n    "uses": "hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s"\n' "$STALE_B" > "$fx/sp4/.github/workflows/governance.yml"
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp4" >/dev/null 2>&1
+check "a quoted \"uses\" key with a quoted value is rewritten" "grep -q \"\\\"hyperpolymath/standards/.github/workflows/governance-reusable.yml@$GOOD\\\"\" '$fx/sp4/.github/workflows/governance.yml'"
+
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
 cat > "$fx/ls/.github/workflows/actions.lock" <<'LOCK'
@@ -178,6 +275,33 @@ cp "$fx/ls/.github/workflows/actions.lock" "$fx/ls1.lock"
 bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls" --offline >/dev/null 2>&1
 check "second run is a no-op and exits 0" "cmp -s '$fx/ls1.lock' '$fx/ls/.github/workflows/actions.lock'"
 check "a repository without a lock is OK, not an error" "mkdir -p '$fx/nolock' && bash '$fleet/scripts/fix-lock-self-sha-refs.sh' '$fx/nolock' --offline | grep -q 'OK (no actions.lock)'"
+
+# Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
+# fixture through mawk when it is installed, and refuse a lock the parser
+# cannot read instead of reporting OK.
+if command -v mawk >/dev/null; then
+    mkdir -p "$fx/mawk-bin" "$fx/ls2/.github/workflows"; ln -sf "$(command -v mawk)" "$fx/mawk-bin/awk"
+    cp "$fx/ls1.lock" "$fx/ls2/.github/workflows/actions.lock"
+    sed -i "s/ref: 'v7.0.1'/ref: '3d3c42e5aac5ba805825da76410c181273ba90b1'/" "$fx/ls2/.github/workflows/actions.lock"
+    sed -i '0,/ref: .3d3c42e5aac5ba805825da76410c181273ba90b1./!{0,/ref: .3d3c42e5aac5ba805825da76410c181273ba90b1./s//ref: '"'"'v7.0.1'"'"'/}' "$fx/ls2/.github/workflows/actions.lock"
+    printf "    'x/thirty-nine@123456789012345678901234567890123456789':\n        ref: '123456789012345678901234567890123456789'\n        commit: 'sha1-123456789012345678901234567890123456789'\n" >> "$fx/ls2/.github/workflows/actions.lock"
+    set +e
+    PATH="$fx/mawk-bin:$PATH" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls2" --offline > "$fx/ls2.out" 2>&1; rc2=$?
+    set -e
+    check "under mawk the self-SHA record is repaired and the run exits 0" \
+      "[ \$rc2 -eq 0 ] && grep -A1 \"'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1':\" '$fx/ls2/.github/workflows/actions.lock' | grep -q \"ref: 'v7.0.1'\""
+    check "a 39-hex key is not a record and is neither rewritten nor reported" \
+      "grep -q \"ref: '123456789012345678901234567890123456789'\" '$fx/ls2/.github/workflows/actions.lock' && ! grep -q UNRESOLVED '$fx/ls2.out'"
+else
+    echo "  skip mawk portability (mawk not installed)"
+fi
+mkdir -p "$fx/noawk-bin"; printf '#!/bin/sh\nexit 1\n' > "$fx/noawk-bin/awk"; chmod +x "$fx/noawk-bin/awk"
+cp "$fx/ls1.lock" "$fx/ls3.lock"; mkdir -p "$fx/ls3/.github/workflows"; cp "$fx/ls1.lock" "$fx/ls3/.github/workflows/actions.lock"
+set +e
+PATH="$fx/noawk-bin:$PATH" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls3" --offline > "$fx/ls3.out" 2>&1; rc3=$?
+set -e
+check "a parser failure exits 2, says so, and leaves the lock untouched (never OK)" \
+  "[ \$rc3 -eq 2 ] && grep -q 'could not parse' '$fx/ls3.out' && ! grep -q '^OK' '$fx/ls3.out' && cmp -s '$fx/ls3.lock' '$fx/ls3/.github/workflows/actions.lock'"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
