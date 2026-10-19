@@ -87,9 +87,33 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
             function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", s); sub(/["'"'"'[:space:]#].*$/, "", s); return s }
             function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }
+            # The line with its trailing comment dropped and every quoted
+            # scalar that is neither a key nor the value of a `uses` key
+            # blanked to `""`, so a `uses:` written inside a `name:` string
+            # or after a `#` names no site. Quotes are walked, not matched by
+            # pattern: a `#` or a brace inside a string is text.
+            function masked(s,   out, i, n, c, j, body) {
+                out = ""; n = length(s); i = 1
+                while (i <= n) {
+                    c = substr(s, i, 1)
+                    if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
+                    if (c == "\"" || c == "'"'"'") {
+                        j = i + 1
+                        if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
+                        else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
+                        body = substr(s, i + 1, j - i - 1)
+                        if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*$/) out = out c body c
+                        else out = out c c
+                        i = j + 1; continue
+                    }
+                    out = out c; i++
+                }
+                return out
+            }
             # Every `uses` entry of the flow mappings written on the key'"'"'s own
             # line (`call: { uses: ... }`, `- { uses: ... }`, `jobs: { a: { uses: ... },
-            # b: { uses: ... } }`), into out[1..n]; returns n.
+            # b: { uses: ... } }`), into out[1..n]; returns n. Given the MASKED
+            # line: the raw one carries its comment and its strings.
             function flow_uses_all(s, out,   n, r, t) {
                 n = 0; split("", out); t = s
                 while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?[^"'"'"'[:space:],}]+/)) {
@@ -123,7 +147,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     # other input and is data.
                     item_key = (t == "") ? -1 : length($0) - length(t)
                     if (t ~ USES_RE) { if (item_steps) print "A\t" ref_of(t) }
-                    else if (t ~ /^\{/) { m = flow_uses_all(t, fu); if (item_steps) for (j = 1; j <= m; j++) print "A\t" fu[j] }
+                    else if (t ~ /^\{/) { m = flow_uses_all(masked(t), fu); if (item_steps) for (j = 1; j <= m; j++) print "A\t" fu[j] }
                     else if (t ~ KEY_RE) {
                         keyat[ind + 2] = keyname(t)
                         if (t ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind + 2 }
@@ -139,14 +163,16 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                         p = nearest_below(ind); g = (p >= 0) ? nearest_below(p) : -1
                         if (p >= 0 && g >= 0 && keyat[g] == "jobs") print "R\t" ref_of($0)
                         else if (item_steps && ind == item_key) print "A\t" ref_of($0)
-                    } else if ($0 ~ /:[[:space:]]*\{/) {
+                    } else if ((ml = masked($0)) ~ /:[[:space:]]*\{/) {
                         # A flow mapping on the key'"'"'s line: a job written
                         # `call: { uses: ... }`, or the whole `jobs: { ... }` mapping
                         # on one line, is a reusable call; `steps: [ { uses: ... } ]`
                         # is a list of actions. A flow mapping on one of a step'"'"'s
                         # own keys (`with: { uses: ... }`) is that input'"'"'s data: the
                         # step'"'"'s action is its scalar `uses:` key, never a mapping.
-                        m = flow_uses_all($0, fu)
+                        # A `{ uses: ... }` inside a job'"'"'s `name:` string or after
+                        # a `#` is neither: the masked line has no such text.
+                        m = flow_uses_all(ml, fu)
                         if (m) {
                             p = nearest_below(ind)
                             for (j = 1; j <= m; j++) {
@@ -166,15 +192,21 @@ SITES=$(mktemp)
 uses_sites > "$SITES"
 
 # For owner/repo $1 at SHA $2, print reusable, action, or unknown; reusable
-# takes precedence when both kinds of use exist.
+# takes precedence when both kinds of use exist. Repository and revision are
+# compared as fields, never as a pattern — a `.` in a repository name is a
+# dot, so `foo/action.test` is not `foo/actionXtest` — and in lower case:
+# GitHub reads a repository name, and git a commit ID, in either case.
 usage_of() { # <owner/repo> <sha>  -> reusable | action | unknown
-    if grep -qE "^R	$1/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@$2$" "$SITES"; then
-        echo reusable
-    elif grep -qE "^A	$1(/[A-Za-z0-9_./-]+)?@$2$" "$SITES"; then
-        echo action
-    else
-        echo unknown
-    fi
+    awk -F'\t' -v r="$1" -v s="$2" '
+        BEGIN { r = tolower(r); s = tolower(s); n = length(r) }
+        {
+            i = index($2, "@"); if (!i) next
+            path = tolower(substr($2, 1, i - 1)); rev = tolower(substr($2, i + 1))
+            if (rev != s) next
+            if ($1 == "R" && substr(path, 1, n + 19) == r "/.github/workflows/" && substr(path, n + 20) ~ /^[a-z0-9_.-]+\.ya?ml$/) reusable = 1
+            if ($1 == "A" && (path == r || substr(path, 1, n + 1) == r "/")) action = 1
+        }
+        END { print (reusable ? "reusable" : (action ? "action" : "unknown")) }' "$SITES"
 }
 
 # Return 0 if owner/repo $1 at SHA $2 should keep its SHA ref, or 1 otherwise.
@@ -193,34 +225,39 @@ tmp=$(mktemp); cp "$LOCK" "$tmp"
 # would look like "no records" and the script would report OK. POSIX awk only
 # (Debian/Ubuntu's default awk is mawk: no match() capture array, no interval
 # expressions), so the SHA is checked for content and length separately.
-# A record key and its ref may be single- or double-quoted (gh actions-lock
-# writes single quotes; a hand-added record — exactly where this defect
-# comes from — may not), and the quote style is kept on the rewrite.
-# A record is read to its end (the next record key, or the end of the 8-space
-# block): YAML mapping order is not fixed, so `ref:` may follow `commit:` and
-# the other fields — exactly as a hand-added record might write it. Each
-# finding carries the line of the `ref:` itself.
+# A record key and its ref may be single-quoted, double-quoted or plain (gh
+# actions-lock writes single quotes; a hand-added record — exactly where this
+# defect comes from — may not), and the quote style is kept on the rewrite.
+# Either may write the commit ID in upper-case hex: git resolves it the same,
+# so it is the same self-SHA record, looked up in lower case and rewritten as
+# written. A record is read to its end (the next record key, or the end of
+# the 8-space block): YAML mapping order is not fixed, so `ref:` may follow
+# `commit:` and the other fields — exactly as a hand-added record might write
+# it. Each finding carries the line of the `ref:` itself, and the ref as that
+# line spells it.
 records=$(mktemp)
 if ! awk '
-    /^    ["'"'"'][^"'"'"'@]+@[0-9a-f]+["'"'"']:$/ {
-        s = $0; sub(/^    ["'"'"']/, "", s); sub(/["'"'"']:$/, "", s)
+    /^    ["'"'"']?[^"'"'"'@[:space:]#]+@[0-9a-fA-F]+["'"'"']?:$/ {
+        s = $0; sub(/^    ["'"'"']?/, "", s); sub(/["'"'"']?:$/, "", s)
         i = index(s, "@"); repo = substr(s, 1, i - 1); sha = substr(s, i + 1)
         if (length(sha) == 40) { inrec = 1; key_repo = repo; key_sha = sha } else inrec = 0
         next
     }
     /^[^[:space:]]/ || /^    [^[:space:]]/ { inrec = 0 }
     inrec && /^        ref: / {
-        # Quoted either way, or a plain scalar: the same ref to GitHub.
+        # Quoted either way, or a plain scalar, in either case of hex: the
+        # same ref to GitHub.
         r = $0; sub(/^        ref: /, "", r); sub(/[[:space:]]+#.*$/, "", r); gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
-        if (r == key_sha) print NR "\t" key_repo "\t" key_sha
+        if (tolower(r) == tolower(key_sha)) print NR "\t" key_repo "\t" key_sha "\t" r
     }
 ' "$LOCK" > "$records"; then
     echo "fix-lock-self-sha-refs: could not parse $LOCK (awk failed); lock left unchanged" >&2
     rm -f "$tmp" "$records" "$SITES"; exit 2
 fi
-while IFS=$'\t' read -r lineno repo sha; do
-    if keeps_sha_ref "$repo" "$sha"; then continue; fi
-    tag=$(lookup_tag "$repo" "$sha")
+while IFS=$'\t' read -r lineno repo sha ref_raw; do
+    sha_lc="${sha,,}"
+    if keeps_sha_ref "$repo" "$sha_lc"; then continue; fi
+    tag=$(lookup_tag "$repo" "$sha_lc")
     if [ -z "$tag" ]; then
         echo "UNRESOLVED  $repo@${sha:0:7}: no tag found for this commit (record left as is; GitHub rejects it)" >&2
         unresolved=$((unresolved + 1)); continue
@@ -231,8 +268,10 @@ while IFS=$'\t' read -r lineno repo sha; do
         echo "UNRESOLVED  $repo@${sha:0:7}: resolved tag '$tag' carries characters this fixer will not write into the lock (record left as is)" >&2
         unresolved=$((unresolved + 1)); continue
     fi
-    # lineno is the ref: line itself; its quote style (or none) is kept.
-    sed -i "${lineno}s|ref: \(['\"]\{0,1\}\)$sha\1|ref: \1$tag\1|" "$tmp"
+    # lineno is the ref: line itself; its quote style (or none) is kept, and
+    # the SHA is matched as that line spells it (its case may differ from the
+    # key's).
+    sed -i "${lineno}s|ref: \(['\"]\{0,1\}\)$ref_raw\1|ref: \1$tag\1|" "$tmp"
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
 done < "$records"

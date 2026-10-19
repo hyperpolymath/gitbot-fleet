@@ -96,29 +96,47 @@ apply_to_file() {
         function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
         # Return a string of n spaces for an inserted YAML line.
         function spaces(n,   t) { t = ""; while (n-- > 0) t = t " "; return t }
-        # Net brace depth of a line: a flow mapping closes when it returns to
-        # zero, not at the first `}` — an expression `${{ matrix.x }}` inside it
-        # opens and closes its own braces.
-        # ... and only braces OUTSIDE quoted scalars and comments count: a
+        # Only text OUTSIDE quoted scalars and comments is code: a
         # `components: "}"` or a `# }` is text, not the end of the mapping.
         function code_only(s,   t) { t = s; gsub(/"([^"\\]|\\.)*"/, "\"\"", t); gsub(/'"'"'[^'"'"']*'"'"'/, "'"'"''"'"'", t); sub(/(^|[[:space:]])#.*$/, "", t); return t }
-        function brace_delta(s,   a, b) { a = code_only(s); b = a; return gsub(/\{/, "", a) - gsub(/\}/, "", b) }
-        function nbrace(s,   a) { a = s; return gsub(/\{/, "", a) }
-        # The inputs a flow line names at the `with:` mapping'"'"'s own level: a
-        # quoted VALUE becomes the one-letter text `"v"` (a `"clippy, toolchain:
-        # nightly"` is text, a quoted key is still a key) while an empty one
-        # (`""`, `'"'"''"'"'`) stays empty, comments are dropped, nested mappings removed —
-        # on the opener the outer `{` is kept, on a continuation line at depth 1
-        # every balanced group is nested. A line deeper than that names nothing.
-        function inputs_view(s, keep_outer,   t) {
-            t = s
-            gsub(/:[[:space:]]*"([^"\\]|\\.)+"/, ": \"v\"", t); gsub(/:[[:space:]]*'"'"'[^'"'"']+'"'"'/, ": '"'"'v'"'"'", t)
-            sub(/(^|[[:space:]])#.*$/, "", t)
-            while (match(t, /\{[^{}]*\}/)) {
-                if (keep_outer && nbrace(t) <= 1) break
-                t = substr(t, 1, RSTART - 1) substr(t, RSTART + RLENGTH)
+        # The inputs one line names at the `with:` flow mapping'"'"'s OWN level,
+        # walked from brace depth `depth` — 0 on the `with: {` line, the depth
+        # the previous line left on a continuation line. A flow mapping closes
+        # when the depth returns to zero, not at the first `}`: an expression
+        # `${{ matrix.x }}` opens and closes its own braces (its `$` stays as
+        # the value'"'"'s text), and a nested mapping and its contents are dropped
+        # with its braces. The brace that opens the mapping and the one that
+        # closes it are kept. A quoted VALUE becomes the one-letter text `"v"`
+        # (a `"clippy, toolchain: nightly"` is text, a quoted key is still a
+        # key) while an empty one (`""`, `'"'"''"'"'`) stays empty, and a comment ends
+        # the line. Text BEFORE a nested group closes is hidden; text AFTER it
+        # on the same line (`channel: beta }, toolchain: nightly`) is read at
+        # the mapping'"'"'s level like any other entry. The depth the line leaves
+        # is left in lv_depth: the walk that reads the entries is the one that
+        # counts the braces, so the two can never disagree.
+        function level_view(s, depth,   out, i, n, c, j, body) {
+            out = ""; n = length(s); i = 1
+            while (i <= n) {
+                c = substr(s, i, 1)
+                if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
+                if (c == "\"" || c == "'"'"'") {
+                    j = i + 1
+                    if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
+                    else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
+                    body = substr(s, i + 1, j - i - 1)
+                    if (depth == 1) {
+                        if (substr(s, j + 1) ~ /^[[:space:]]*:/) out = out c body c
+                        else out = out c (body == "" ? "" : "v") c
+                    }
+                    i = j + 1; continue
+                }
+                if (c == "{") { depth++; if (depth == 1) out = out c }
+                else if (c == "}") { if (depth == 1) out = out c; depth-- }
+                else if (depth == 1) out = out c
+                i++
             }
-            return t
+            lv_depth = depth
+            return out
         }
         # A 40-hex pin of the action on a non-comment line, trailing comment
         # stripped. `@stable` and `@1.85.0` are tags: the ref carries the
@@ -187,10 +205,11 @@ apply_to_file() {
                     # A flow `with: {` spread over several lines: every entry up to
                     # the brace that closes it is an input. An EMPTY `toolchain:`
                     # entry (`toolchain: ,` / `toolchain: null`) is the key with no
-                    # value: it is given one in place, never duplicated. Only a line
-                    # at the mapping'"'"'s own depth names inputs, and only outside
-                    # quoted values and nested mappings.
-                    v = (flow_depth == 1) ? inputs_view(line, 0) : ""
+                    # value: it is given one in place, never duplicated. Only text
+                    # at the mapping'"'"'s own depth names inputs — outside quoted
+                    # values and nested mappings, and including the rest of a line
+                    # on which a nested mapping closes.
+                    v = level_view(line, flow_depth); flow_depth = lv_depth
                     # A bare `toolchain:` that ended the previous line is empty
                     # only when the next token closes the mapping or moves on
                     # (`}`, `,`); anything else is its value, spread over lines,
@@ -199,7 +218,6 @@ apply_to_file() {
                     if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
                     else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                     else if (v ~ TC_RE || v ~ TC_FLOW_RE) has_tc = 1
-                    flow_depth += brace_delta(line)
                     if (flow_depth <= 0) in_flow = 0
                     continue
                 }
@@ -223,11 +241,10 @@ apply_to_file() {
                         has_with = 1; with_i = i; with_indent = skey; in_with = 1
                     } else if (line ~ WITH_FLOW_RE) {
                         has_with = 1; with_i = i; with_flow = 1
-                        v = inputs_view(line, 1)
+                        v = level_view(line, 0); flow_depth = lv_depth
                         if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
                         else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                         else if (v ~ TC_FLOW_RE) has_tc = 1
-                        flow_depth = brace_delta(line)
                         if (flow_depth > 0) in_flow = 1
                     } else if (line ~ WITH_ANY_RE) {
                         # `with: &anchor`, `with: *alias`, or any value shape this

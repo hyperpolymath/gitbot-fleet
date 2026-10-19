@@ -2024,5 +2024,226 @@ TAG_MAP="$fx/ls14-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "a with: { uses: ... } flow input on a step key is data: the step's action is repaired, the estate record keeps its SHA ref" \
   "grep -q \"^        ref: 'v1.0.0'\" '$fx/ls14/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_B'\" '$fx/ls14/.github/workflows/actions.lock'"
 
+# Review cases (Codex round on 5fa7192, gitbot-fleet#615).
+
+# tc20: a continuation line of a multi-line flow `with:` is read at the
+# mapping's own level even when it STARTS inside a nested mapping: the text
+# after the brace that closes the nested group (`channel: beta }, toolchain:
+# nightly`) is an entry of `with:` — a toolchain that must count, or an
+# empty one that is filled where it stands — while `toolchain:` inside the
+# nested group is not.
+mkdir -p "$fx/tc20/.github/workflows"
+cat > "$fx/tc20/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: {
+            channel: beta }, toolchain: nightly
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: {
+            channel: beta }, toolchain: null }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: {
+            toolchain: nightly }, components: clippy
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: { channel: "}" }, # toolchain: nightly
+          toolchain: ${{ matrix.rust }}
+        }
+YML
+cat > "$fx/tc20-expected.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: {
+            channel: beta }, toolchain: nightly
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: {
+            channel: beta }, toolchain: stable }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: stable,
+          env: {
+            toolchain: nightly }, components: clippy
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: { channel: "}" }, # toolchain: nightly
+          toolchain: ${{ matrix.rust }}
+        }
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc20"
+check "tc20 an entry after a nested mapping closes mid-line counts (kept, or filled in place); one inside it does not" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc20-expected.yml' '$fx/tc20/.github/workflows/x.yml'"
+cp "$fx/tc20/.github/workflows/x.yml" "$fx/tc20-after1.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc20"
+check "tc20 second run is a no-op" "[ \$rc -eq 0 ] && cmp -s '$fx/tc20-after1.yml' '$fx/tc20/.github/workflows/x.yml'"
+
+# sp21: a table whose last row has no trailing newline is read whole — the
+# row is matched and, when it is malformed, rejected — never skipped.
+mkdir -p "$fx/sp21/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: octo/example/.github/workflows/ci.yml@%s\n' "$STALE_A" > "$fx/sp21/.github/workflows/ci.yml"
+printf '# a private table\nocto/example/.github/workflows/*\t%s\t%s\tdead window' "$STALE_A" "$GOOD" > "$fx/sp21-table.tsv"
+PINS_TABLE="$fx/sp21-table.tsv" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp21"
+check "sp21 a final table row without a newline is a row: its owner is scanned and its dead pin moved" \
+  "[ \$rc -eq 0 ] && grep -q \"ci.yml@$GOOD\$\" '$fx/sp21/.github/workflows/ci.yml' && grep -q '^FIXED' <<<\"\$out\""
+printf 'jobs:\n  rust:\n    uses: octo/example/.github/workflows/ci.yml@%s\n' "$STALE_A" > "$fx/sp21/.github/workflows/ci.yml"
+printf 'octo/example/.github/workflows/*\t%s\tnot-a-sha\tbad row' "$STALE_A" > "$fx/sp21-bad.tsv"
+PINS_TABLE="$fx/sp21-bad.tsv" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp21"
+check "sp21 a malformed final row without a newline is still validated: exit 2, nothing changed" \
+  "[ \$rc -eq 2 ] && grep -q 'bad replacement SHA' <<<\"\$out\" && grep -q \"ci.yml@$STALE_A\$\" '$fx/sp21/.github/workflows/ci.yml'"
+
+# sp22: a hand-written lock may leave its keys and edges unquoted. A plain
+# record (`actions/checkout@<sha>:`) written before the quoted ones used to
+# fall through the merger with no current record and vanish from
+# `dependencies:` on any repair; it is a record like the others, and a plain
+# edge or record of the dead pin itself moves like a quoted one.
+mkdir -p "$fx/sp22/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp22/.github/workflows/ci.yml"
+cat > "$fx/sp22/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - hyperpolymath/standards@$STALE_A
+        - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+dependencies:
+    actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1:
+        ref: v7.0.1
+        commit: sha1-3d3c42e5aac5ba805825da76410c181273ba90b1
+        owner_id: 1
+        repo_id: 2
+    hyperpolymath/standards@$STALE_A:
+        ref: $STALE_A
+        commit: sha1-$STALE_A
+        owner_id: 6759885
+        repo_id: 1116521501
+        uses:
+            - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp22"
+check "sp22 an unquoted record before the quoted ones survives a repair, ref and all" \
+  "[ \$rc -eq 3 ] && ! grep -q 'has no edge' <<<\"\$out\" && grep -q '^    actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1:$' '$fx/sp22/.github/workflows/actions.lock' && grep -q '^        ref: v7.0.1$' '$fx/sp22/.github/workflows/actions.lock' && grep -q '^        commit: sha1-3d3c42e5aac5ba805825da76410c181273ba90b1$' '$fx/sp22/.github/workflows/actions.lock'"
+check "sp22 an unquoted edge and record of the dead pin move; the nested unquoted uses: entry is kept" \
+  "grep -q \"^        - hyperpolymath/standards@$GOOD\$\" '$fx/sp22/.github/workflows/actions.lock' && grep -q \"^    hyperpolymath/standards@$GOOD:\$\" '$fx/sp22/.github/workflows/actions.lock' && grep -q \"^        ref: $GOOD\$\" '$fx/sp22/.github/workflows/actions.lock' && grep -q '^            - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1$' '$fx/sp22/.github/workflows/actions.lock' && ! grep -q \"$STALE_A\" '$fx/sp22/.github/workflows/actions.lock' && [ \$(wc -l < '$fx/sp22/.github/workflows/actions.lock') -eq 18 ]"
+
+# ls15: a `{ uses: ... }` written inside a job's `name:` string, or after a
+# `#`, on a one-line `jobs:` mapping is text, not a reusable call: it must
+# not give a repository used as an action elsewhere the reusable precedence
+# that would keep its self-SHA record.
+mkdir -p "$fx/ls15/.github/workflows"
+cat > "$fx/ls15/.github/workflows/ci.yml" <<YML
+jobs: { call: { uses: octo/example/.github/workflows/ci.yml@$SHA_B, with: { name: "{ uses: foo/bar/.github/workflows/x.yml@$SHA_A }" } } } # { uses: foo/baz/.github/workflows/y.yml@$SHA_C }
+YML
+cat > "$fx/ls15/.github/workflows/two.yml" <<YML
+jobs:
+  check:
+    steps:
+      - { name: 'see { uses: foo/bar/.github/workflows/z.yml@$SHA_A }', uses: foo/bar@$SHA_A }
+      - uses: foo/baz@$SHA_C # not { uses: foo/baz/.github/workflows/y.yml@$SHA_C }
+YML
+cat > "$fx/ls15/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'octo/example@$SHA_B'
+    '.github/workflows/two.yml':
+        - 'foo/bar@$SHA_A'
+        - 'foo/baz@$SHA_C'
+dependencies:
+    'octo/example@$SHA_B':
+        ref: '$SHA_B'
+        commit: 'sha1-$SHA_B'
+        owner_id: 1
+        repo_id: 2
+    'foo/bar@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    'foo/baz@$SHA_C':
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+        owner_id: 1
+        repo_id: 2
+LOCK
+printf 'foo/bar\t%s\tv1.0.0\nocto/example\t%s\tv9.9.9\nfoo/baz\t%s\tv3.0.0\n' "$SHA_A" "$SHA_B" "$SHA_C" > "$fx/ls15-tags.tsv"
+TAG_MAP="$fx/ls15-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls15" --offline
+check "ls15 a uses: inside a quoted string or a comment names no site: the two action records are repaired, the real reusable call keeps its SHA" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\" '$fx/ls15/.github/workflows/actions.lock' && grep -q \"^        ref: 'v3.0.0'\" '$fx/ls15/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_B'\" '$fx/ls15/.github/workflows/actions.lock' && [ \$(grep -c '^FIXED' <<<\"\$out\") -eq 2 ]"
+
+# ls16: a hand-added record may spell its commit ID in upper-case hex, in
+# its key, its ref, or the workflow's pin — git resolves it the same. The
+# record is found, looked up in lower case, and its ref rewritten as the
+# ref line spells it; a plain (unquoted) key is a record too.
+mkdir -p "$fx/ls16/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: foo/bar@%s\n      - uses: foo/baz@%s\n' "${SHA_A^^}" "$SHA_B" > "$fx/ls16/.github/workflows/ci.yml"
+cat > "$fx/ls16/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'foo/bar@${SHA_A^^}'
+        - 'foo/baz@$SHA_B'
+dependencies:
+    'foo/bar@${SHA_A^^}':
+        ref: '${SHA_A^^}'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    foo/baz@${SHA_B^^}:
+        ref: $SHA_B
+        commit: sha1-$SHA_B
+        owner_id: 1
+        repo_id: 2
+LOCK
+printf 'foo/bar\t%s\tv1.0.0\nfoo/baz\t%s\tv2.0.0\n' "$SHA_A" "$SHA_B" > "$fx/ls16-tags.tsv"
+TAG_MAP="$fx/ls16-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls16" --offline
+check "ls16 an upper-case self-SHA record (quoted) and a plain-keyed one whose key and ref differ in case are both found and repaired" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls16/.github/workflows/actions.lock' && grep -q '^        ref: v2.0.0\$' '$fx/ls16/.github/workflows/actions.lock' && ! grep -q 'no self-SHA' <<<\"\$out\" && [ \$(grep -c '^FIXED' <<<\"\$out\") -eq 2 ]"
+
+# ls17: a repository name is compared as a name, not as a pattern: the `.`
+# of `foo/action.test` is a dot, so a reusable call of `foo/actionXtest` at
+# the same SHA is not a reusable use of the action, whose self-SHA record is
+# repaired.
+mkdir -p "$fx/ls17/.github/workflows"
+cat > "$fx/ls17/.github/workflows/ci.yml" <<YML
+jobs:
+  call:
+    uses: foo/actionXtest/.github/workflows/x.yml@$SHA_A
+  check:
+    steps:
+      - uses: foo/action.test@$SHA_A
+YML
+cat > "$fx/ls17/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'foo/actionXtest@$SHA_A'
+        - 'foo/action.test@$SHA_A'
+dependencies:
+    'foo/actionXtest@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    'foo/action.test@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 3
+LOCK
+printf 'foo/action.test\t%s\tv1.0.0\nfoo/actionXtest\t%s\tv2.0.0\n' "$SHA_A" "$SHA_A" > "$fx/ls17-tags.tsv"
+TAG_MAP="$fx/ls17-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls17" --offline
+check "ls17 a dot in a repository name is a dot: the action's record is repaired, the reusable at the same SHA keeps its SHA ref" \
+  "[ \$rc -eq 0 ] && grep -A1 \"^    'foo/action.test@$SHA_A':\$\" '$fx/ls17/.github/workflows/actions.lock' | grep -q \"ref: 'v1.0.0'\" && grep -A1 \"^    'foo/actionXtest@$SHA_A':\$\" '$fx/ls17/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_A'\""
+
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

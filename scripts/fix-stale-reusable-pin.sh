@@ -56,7 +56,9 @@ REPO_PATH="${1:?Usage: fix-stale-reusable-pin.sh <repo-path>}"
 TABLE_OWNERS_RE=""
 validate_table() {
     local n=0 v_path v_stale v_new bad=0 owners=""
-    while IFS=$'\t' read -r v_path v_stale v_new _; do
+    # `|| [ -n ... ]`: a final row the file ends on without a newline is a
+    # row too — `read` returns 1 on it with the fields filled in.
+    while IFS=$'\t' read -r v_path v_stale v_new _ || [ -n "$v_path" ]; do
         n=$((n + 1))
         case "$v_path" in ''|'#'*) continue ;; esac
         [[ "$v_stale" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad stale SHA '$v_stale'" >&2; bad=1; }
@@ -105,20 +107,26 @@ merge_duplicate_records() {
                 close(cmd)
             }
         }
-        # A record key is the dependency between its quotes; the key is
-        # compared unquoted so `'a@sha':` and `"a@sha":` are one record, and
-        # the first spelling seen is the one written back.
+        # A record key is the dependency between its quotes — or a plain
+        # scalar, as a hand-added record may write it (`actions/checkout@<sha>:`,
+        # exactly the kind of record this fixer meets); the key is compared
+        # unquoted so `'a@sha':`, `"a@sha":` and `a@sha:` are one record, and
+        # the first spelling seen is the one written back. A record this
+        # merger did not recognise was not kept: every line of it fell to the
+        # catch-all below with no current record, and was dropped.
         function unq(s) { gsub(/["'"'"']/, "", s); return s }
+        function record_key(s) { return (s ~ /^    ["'"'"'][^"'"'"']+["'"'"']:$/ || s ~ /^    [^[:space:]"'"'"'#][^[:space:]]*:$/) }
+        function uses_entry(s) { return (s ~ /^            - ["'"'"'][^"'"'"']+["'"'"']$/ || s ~ /^            - [^[:space:]"'"'"'#][^[:space:]]*$/) }
         BEGIN { indep = 0; cur = "" }
         /^dependencies:[[:space:]]*$/ { indep = 1; print; next }
         !indep { print; next }
-        /^    ["'"'"'][^"'"'"']+["'"'"']:$/ {
+        record_key($0) {
             key = unq($0)
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             cur = key; next
         }
         /^        uses:[[:space:]]*$/ { next }
-        /^            - ["'"'"'][^"'"'"']+["'"'"']$/ { u = $0; sub(/^            - /, "", u); uses_of[cur SUBSEP unq(u)] = u; next }
+        uses_entry($0) { u = $0; sub(/^            - /, "", u); uses_of[cur SUBSEP unq(u)] = u; next }
         /^        [a-z_]+: / { if (first) { head[cur, ++nhead[cur]] = $0 } ; next }
         {
             # A line the merger does not understand is not the merger'"'"'s to drop:
@@ -142,7 +150,7 @@ merge_duplicate_records() {
 lookup_replacement() { # <reusable-path> <stale-sha>
     local t_path t_stale t_new t_reason
     replacement=""; reason=""
-    while IFS=$'\t' read -r t_path t_stale t_new t_reason; do
+    while IFS=$'\t' read -r t_path t_stale t_new t_reason || [ -n "$t_path" ]; do
         [[ -z "$t_path" || "$t_path" == \#* ]] && continue
         [[ "$t_stale" == "$2" ]] || continue
         if [[ "$t_path" == "$1" ]] || { [[ "$t_path" == */\* ]] && [[ "$1" == "${t_path%\*}"* ]]; }; then
@@ -268,14 +276,15 @@ done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml
 if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     sort -u "$edits" -o "$edits"
     while IFS=$'\t' read -r wfkey stale new keep repo; do
-        # The workflow key in either quote style (`gh actions-lock` writes
-        # single quotes; a hand edit may not): compared unquoted.
+        # The workflow key in either quote style, or none (`gh actions-lock`
+        # writes single quotes; a hand edit may not): compared unquoted.
         if ! awk -v wfkey="$wfkey" -v edge="$repo@$stale" '
                 function unq(s) { gsub(/["'"'"']/, "", s); return s }
+                function bare(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+(#.*)?$/, "", s); return s }
                 /^workflows:[[:space:]]*$/ { sec = "w" }
                 /^dependencies:[[:space:]]*$/ { sec = "d" }
-                sec == "w" && /^    ["'"'"']/ { inwf = (unq($0) == "    " wfkey ":") }
-                sec == "w" && inwf && /^        - / && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"")) { found = 1 }
+                sec == "w" && /^    [^[:space:]#]/ { inwf = (unq($0) == "    " wfkey ":") }
+                sec == "w" && inwf && /^        - / && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"") || bare($0) == edge) { found = 1 }
                 END { exit !found }' "$LOCK"; then
             echo "WARN: actions.lock has no edge '$repo@${stale:0:7}' under '$wfkey': the lock was already out of sync with this caller — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2
             lock_stale=1
@@ -291,19 +300,24 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             FNR == NR {
                 if ($0 ~ /^workflows:[[:space:]]*$/) s1 = "w"
                 if ($0 ~ /^dependencies:[[:space:]]*$/) s1 = "d"
-                if (s1 == "w" && $0 ~ /^    ["'"'"']/) w1 = (unq($0) == "    " wfkey ":")
+                if (s1 == "w" && $0 ~ /^    [^[:space:]#]/) w1 = (unq($0) == "    " wfkey ":")
                 if (s1 == "w" && w1 && $0 ~ /^        - /) have[unq($0)] = 1
                 next
             }
             /^workflows:[[:space:]]*$/ { sec = "w" }
             /^dependencies:[[:space:]]*$/ { sec = "d" }
-            sec == "w" && /^    ["'"'"']/ { inwf = (unq($0) == "    " wfkey ":") }
+            sec == "w" && /^    [^[:space:]#]/ { inwf = (unq($0) == "    " wfkey ":") }
             sec == "w" && inwf && /^        - / {
-                # Either quote style; the edge keeps the one it has.
+                # Either quote style, or none (a hand-written edge); the edge
+                # keeps the spelling it has.
                 q = "'"'"'"; i = index($0, q repo "@" stale q)
                 if (!i) { q = "\""; i = index($0, q repo "@" stale q) }
+                if (i) moved = substr($0, 1, i + length(repo)) "@" new q
+                else {
+                    t = $0; sub(/^        - /, "", t); sub(/[[:space:]]+(#.*)?$/, "", t)
+                    if (t == repo "@" stale) { i = 1; rest = $0; sub(/^        - [^[:space:]]+/, "", rest); moved = "        - " repo "@" new rest }
+                }
                 if (i) {
-                    moved = substr($0, 1, i + length(repo)) "@" new q
                     # keep: an uncovered caller in this workflow still pins the stale
                     # SHA, so the edge is added beside the old one, not replaced.
                     if (keep == "1") print
@@ -322,7 +336,8 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     while IFS=$'\t' read -r stale new repo; do
         grep -q "$repo@$stale" "$LOCK" || continue
         still=$(awk -v edge="$repo@$stale" '
-            /^ +- ["'"'"']/ && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"")) { n++ } END { print n + 0 }' "$LOCK")
+            function bare(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+(#.*)?$/, "", s); return s }
+            /^ +- / && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"") || bare($0) == edge) { n++ } END { print n + 0 }' "$LOCK")
         tmp=$(mktemp)
         # Only THIS repository'"'"'s record moves: its key line, and its ref: and
         # commit: lines. Another repository at the same SHA is a different
@@ -330,13 +345,14 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         awk -v stale="$stale" -v new="$new" -v repo="$repo" -v still="$still" '
             /^dependencies:[[:space:]]*$/ { sec = "d" }
             # The record is the one whose unquoted key IS repo@stale: a key that
-            # merely contains it (`evilhyperpolymath/standards@<sha>`) is another record.
-            sec == "d" && /^    ["'"'"']/ { k = $0; sub(/^    /, "", k); sub(/:$/, "", k); gsub(/["'"'"']/, "", k); inrec = (k == repo "@" stale) }
-            sec == "d" && inrec && (/^    ["'"'"']/ || /^        (ref|commit):/) {
+            # merely contains it (`evilhyperpolymath/standards@<sha>`) is another
+            # record, and so is a plain unquoted key (a hand-written record).
+            sec == "d" && /^    [^[:space:]#]/ { k = $0; sub(/^    /, "", k); sub(/:$/, "", k); gsub(/["'"'"']/, "", k); inrec = (k == repo "@" stale) }
+            sec == "d" && inrec && (/^    [^[:space:]#]/ || /^        (ref|commit):/) {
                 if (still == 0) gsub(stale, new)
                 else { c = $0; gsub(stale, new, c); copy[++nc] = c }
             }
-            sec == "d" && inrec && still != 0 && !(/^    ["'"'"']/ || /^        (ref|commit):/) { copy[++nc] = $0 }
+            sec == "d" && inrec && still != 0 && !(/^    [^[:space:]#]/ || /^        (ref|commit):/) { copy[++nc] = $0 }
             { print }
             END { for (i = 1; i <= nc; i++) print copy[i] }' "$LOCK" > "$tmp"
         [ "$still" -eq 0 ] || echo "NOTE: actions.lock keeps the record for ${stale:0:7}: a workflow the table does not cover still pins it; the replacement got its own record." >&2
