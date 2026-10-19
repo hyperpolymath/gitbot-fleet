@@ -478,6 +478,92 @@ run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc14"
 check "toolchain: inside a quoted value or a nested mapping is not an input: the three steps are fixed, the quoted real one is left" \
   "[ \$rc -eq 0 ] && [ \$(grep -c 'toolchain: stable' '$fx/tc14/.github/workflows/x.yml') -eq 3 ] && sed -n '5p' '$fx/tc14/.github/workflows/x.yml' | grep -q '^        with: { toolchain: stable, components: \"clippy, toolchain: nightly\" }$' && sed -n '7p' '$fx/tc14/.github/workflows/x.yml' | grep -q '^        with: { toolchain: stable, env: { toolchain: nightly } }$' && sed -n '9p' '$fx/tc14/.github/workflows/x.yml' | grep -q '^        with: { toolchain: stable,$' && sed -n '15p' '$fx/tc14/.github/workflows/x.yml' | grep -q 'toolchain: \"1.85.0\" }$'"
 
+# Ref length is part of the contract: abbreviated and overlong hex refs are
+# not full SHA pins, and another action at the same SHA is not dtolnay.
+tc_boundary="$fx/tc-boundary/.github/workflows"
+mkdir -p "$tc_boundary"
+cat > "$tc_boundary/ci.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - uses: other/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+YML
+cat > "$fx/tc-boundary-expected.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - uses: other/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+        with:
+          toolchain: stable
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc-boundary"
+check "only the exact 40-hex dtolnay pin is repaired, including the last step at EOF" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc-boundary-expected.yml' '$tc_boundary/ci.yml'"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$tc_boundary/ci.yml"
+check "SHA boundary controls remain unchanged on a second direct-file run" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc-boundary-expected.yml' '$tc_boundary/ci.yml' && ! grep -q '^FIXED' <<<\"\$out\""
+
+# Refusing an unsupported step is atomic for its file, even when a preceding
+# supported step could be repaired. No partial output may replace the file.
+tc_atomic="$fx/tc-atomic/.github/workflows"
+mkdir -p "$tc_atomic"
+cat > "$tc_atomic/ci.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      - { uses: dtolnay/rust-toolchain@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb }
+YML
+cp "$tc_atomic/ci.yml" "$fx/tc-atomic-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc-atomic"
+check "an unsupported step prevents earlier supported repairs in the same file" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 5' <<<\"\$out\" && ! grep -q '^FIXED' <<<\"\$out\" && cmp -s '$fx/tc-atomic-before.yml' '$tc_atomic/ci.yml'"
+
+# Indentless step sequences and a following job use different key columns.
+# A folded run scalar is data; a quoted null input in the next job is filled.
+tc_indent="$fx/tc-indent/.github/workflows"
+mkdir -p "$tc_indent"
+cat > "$tc_indent/ci.yaml" <<'YML'
+jobs:
+  first:
+    steps:
+    - with:
+        components: clippy
+      uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    - run: >-
+        echo dtolnay/rust-toolchain@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  second:
+    steps:
+      - uses: dtolnay/rust-toolchain@cccccccccccccccccccccccccccccccccccccccc
+        with:
+          'toolchain': null # keep this comment
+YML
+cat > "$fx/tc-indent-expected.yaml" <<'YML'
+jobs:
+  first:
+    steps:
+    - with:
+        toolchain: stable
+        components: clippy
+      uses: dtolnay/rust-toolchain@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    - run: >-
+        echo dtolnay/rust-toolchain@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  second:
+    steps:
+      - uses: dtolnay/rust-toolchain@cccccccccccccccccccccccccccccccccccccccc
+        with:
+          'toolchain': stable # keep this comment
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc-indent"
+check "indentless steps and a following job get inputs at their own key columns, preserving scalar data" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc-indent-expected.yaml' '$tc_indent/ci.yaml'"
+
 # ── 2. fix-stale-reusable-pin.sh ─────────────────────────────────────────────
 STALE_A=d135b05bfc647d0c0fbfedc7e80f37ea50f49236   # Window A (table row for rust-ci-reusable only)
 STALE_B=8f2ee50841e216cd8c192eeb68953118190f105c   # Window B (table row for every standards reusable)
@@ -943,6 +1029,126 @@ run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp16"
 check "a double-quoted edge and record move with their quotes; a key that merely contains repo@sha is left alone" \
   "[ \$rc -eq 3 ] && grep -q \"^        - \\\"hyperpolymath/standards@$GOOD\\\"\$\" '$fx/sp16/.github/workflows/actions.lock' && grep -q \"^    \\\"hyperpolymath/standards@$GOOD\\\":\$\" '$fx/sp16/.github/workflows/actions.lock' && grep -q \"^        ref: \\\"$GOOD\\\"\$\" '$fx/sp16/.github/workflows/actions.lock' && grep -A1 \"^    'evilhyperpolymath/standards@$STALE_A':\$\" '$fx/sp16/.github/workflows/actions.lock' | grep -q \"ref: '$STALE_A'\" && [ \$(grep -c \"$STALE_A\" '$fx/sp16/.github/workflows/actions.lock') -eq 3 ]"
 
+# A supported call beside an unsupported flow-style job must remain stale:
+# the file and its existing lock edge are one refused migration.
+sp_atomic="$fx/sp-atomic/.github/workflows"
+mkdir -p "$sp_atomic"
+cat > "$sp_atomic/ci.yml" <<YML
+jobs:
+  supported:
+    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@$STALE_A
+  unsupported: { uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@$STALE_A }
+YML
+cat > "$sp_atomic/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+LOCK
+cp "$sp_atomic/ci.yml" "$fx/sp-atomic-before.yml"
+cp "$sp_atomic/actions.lock" "$fx/sp-atomic-before.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-atomic"
+check "an unsupported job prevents every rewrite in its file and leaves the lock untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*ci.yml:4:' <<<\"\$out\" && ! grep -q '^FIXED' <<<\"\$out\" && cmp -s '$fx/sp-atomic-before.yml' '$sp_atomic/ci.yml' && cmp -s '$fx/sp-atomic-before.lock' '$sp_atomic/actions.lock'"
+
+# Overlapping table rows are evaluated in order, including exact and wildcard
+# rows. Each order chooses its first match rather than a newer revision.
+sp_order="$fx/sp-order/.github/workflows"
+mkdir -p "$sp_order"
+alternate=2222222222222222222222222222222222222222
+for first_match in exact wildcard; do
+    if [ "$first_match" = exact ]; then
+        printf 'fixture/reusable/.github/workflows/ci.yml\t%s\t%s\texact first\nfixture/reusable/.github/workflows/*\t%s\t%s\twildcard second\n' \
+          "$STALE_A" "$GOOD" "$STALE_A" "$alternate" > "$fx/ordered-pins.tsv"
+        chosen="$GOOD"
+    else
+        printf 'fixture/reusable/.github/workflows/*\t%s\t%s\twildcard first\nfixture/reusable/.github/workflows/ci.yml\t%s\t%s\texact second\n' \
+          "$STALE_A" "$alternate" "$STALE_A" "$GOOD" > "$fx/ordered-pins.tsv"
+        chosen="$alternate"
+    fi
+    printf 'jobs:\n  call:\n    uses: fixture/reusable/.github/workflows/ci.yml@%s\n' "$STALE_A" > "$sp_order/ci.yml"
+    printf 'jobs:\n  call:\n    uses: fixture/reusable/.github/workflows/ci.yml@%s\n' "$chosen" > "$fx/sp-order-expected.yml"
+    run_fix env PINS_TABLE="$fx/ordered-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-order"
+    check "overlapping table rows choose the first match when $first_match comes first" \
+      "[ \$rc -eq 0 ] && cmp -s '$fx/sp-order-expected.yml' '$sp_order/ci.yml'"
+    run_fix env PINS_TABLE="$fx/ordered-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-order"
+    check "the $first_match-first replacement is a stable no-op on the next run" \
+      "[ \$rc -eq 0 ] && cmp -s '$fx/sp-order-expected.yml' '$sp_order/ci.yml' && ! grep -q '^FIXED' <<<\"\$out\""
+done
+
+# A replacement may already have a dependency record. Merging must preserve
+# its spelling and metadata and produce a sorted union without duplicate uses.
+sp_existing="$fx/sp-existing/.github/workflows"
+mkdir -p "$sp_existing"
+printf 'jobs:\n  call:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$sp_existing/ci.yml"
+cat > "$sp_existing/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    "hyperpolymath/standards@$GOOD":
+        ref: "$GOOD"
+        commit: "sha1-$GOOD"
+        owner_id: 1
+        repo_id: 2
+        # keep replacement metadata
+        uses:
+            - 'fixture/shared@$GOOD'
+            - 'fixture/zeta@$GOOD'
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+        uses:
+            - 'fixture/alpha@$GOOD'
+            - 'fixture/shared@$GOOD'
+LOCK
+cat > "$fx/sp-existing-expected.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$GOOD'
+dependencies:
+    "hyperpolymath/standards@$GOOD":
+        ref: "$GOOD"
+        commit: "sha1-$GOOD"
+        owner_id: 1
+        repo_id: 2
+        # keep replacement metadata
+        uses:
+            - 'fixture/alpha@$GOOD'
+            - 'fixture/shared@$GOOD'
+            - 'fixture/zeta@$GOOD'
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-existing"
+check "migration into an existing replacement record keeps its header and merges nested uses exactly once" \
+  "[ \$rc -eq 3 ] && cmp -s '$fx/sp-existing-expected.lock' '$sp_existing/actions.lock'"
+printf 'jobs:\n  call:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$GOOD" > "$fx/sp-existing-expected.yml"
+check "the caller follows the existing replacement and the run reports the incomplete closure" \
+  "cmp -s '$fx/sp-existing-expected.yml' '$sp_existing/ci.yml' && grep -q 'nested uses: list was NOT recomputed' <<<\"\$out\""
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-existing"
+check "migration into an existing record is byte-identical on the second run and exits 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp-existing-expected.lock' '$sp_existing/actions.lock' && cmp -s '$fx/sp-existing-expected.yml' '$sp_existing/ci.yml'"
+
+# Validate stale refs and reusable paths as well as replacement refs. Invalid
+# rows after a matching good row must still stop all mutations up front.
+while IFS=$'\t' read -r invalid_path invalid_sha diagnostic; do
+    printf 'hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml\t%s\t%s\tgood row\n%s\t%s\t%s\tbad row\n' \
+      "$STALE_A" "$GOOD" "$invalid_path" "$invalid_sha" "$GOOD" > "$fx/invalid-row-pins.tsv"
+    run_fix env PINS_TABLE="$fx/invalid-row-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp12"
+    check "$diagnostic in a later table row refuses the run before caller or lock changes" \
+      "[ \$rc -eq 2 ] && grep -q 'table row 2: $diagnostic' <<<\"\$out\" && cmp -s '$fx/sp12-before.yml' '$fx/sp12/.github/workflows/rust-ci.yml' && cmp -s '$fx/sp12-before.lock' '$fx/sp12/.github/workflows/actions.lock'"
+done <<'TSV'
+fixture/reusable/.github/workflows/ci.yml	123456789012345678901234567890123456789	bad stale SHA
+fixture/reusable/.github/workflows/../ci.yml	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	bad reusable path
+TSV
+
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
 cat > "$fx/ls/.github/workflows/actions.lock" <<'LOCK'
@@ -1168,6 +1374,30 @@ run_lookup
 check "a ref different from its record's SHA is untouched" \
   "[ \$rc -eq 0 ] && ! grep -q UNRESOLVED <<<\"\$out\" && [ ! -s '$fx/git-calls' ] && cmp -s '$fx/non-self-before.lock' '$lookup_lock'"
 
+# Equal specificity is resolved by tag length. A missing optional map still
+# allows the Git fallback, whose response remains controlled by the stub.
+lookup_mode=()
+write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_A"
+printf '%s\trefs/tags/v2.4.7\n%s\trefs/tags/v2.4.7-rc1\n' "$SHA_A" "$SHA_A" > "$fx/git-response"
+write_action_lock "$fx/lookup-length-expected.lock" fixture/action "$SHA_A" v2.4.7-rc1
+: > "$fx/lookup-tags.tsv"
+: > "$fx/git-calls"
+run_lookup
+check "Git fallback breaks equal dot-count ties by tag length" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/lookup-length-expected.lock' '$lookup_lock' && cmp -s '$fx/expected-git-calls' '$fx/git-calls'"
+write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_A"
+rm "$fx/lookup-tags.tsv"
+: > "$fx/git-calls"
+run_lookup
+check "a missing tag map falls back to Git and repairs the record" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/lookup-length-expected.lock' '$lookup_lock' && cmp -s '$fx/expected-git-calls' '$fx/git-calls'"
+write_action_lock "$lookup_lock" fixture/action "$SHA_A" "$SHA_A"
+printf '%s\trefs/tags/v2.4.7&unsafe\n' "$SHA_A" > "$fx/git-response"
+: > "$fx/git-calls"
+run_lookup
+check "unsafe tags from Git are refused just like unsafe mapped tags" \
+  "[ \$rc -eq 1 ] && grep -q 'carries characters' <<<\"\$out\" && cmp -s '$fx/lookup-before.lock' '$lookup_lock' && cmp -s '$fx/expected-git-calls' '$fx/git-calls'"
+
 # ls8: a record's class comes from real `uses:` keys. The same reusable path
 # inside a `run: |` script or a fixture under `env:` is text: it cannot make an
 # action record "a reusable call" and so hide its self-SHA ref from repair.
@@ -1275,6 +1505,77 @@ printf 'octo/example\t%s\tv9.9.9\nocto/act\t%s\tv1.2.3\n' "$SHA_A" "$SHA_B" > "$
 TAG_MAP="$fx/ls11-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls11" --offline > "$fx/ls11.out" 2>&1; rc11=$?
 check "a flow-style job is a reusable call (SHA ref kept); a flow-style step is an action (repaired)" \
   "[ \$rc11 -eq 0 ] && grep -A1 \"^    'octo/example@$SHA_A':\$\" '$fx/ls11/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_A'\" && grep -A1 \"^    'octo/act@$SHA_B':\$\" '$fx/ls11/.github/workflows/actions.lock' | grep -q \"ref: 'v1.2.3'\" && ! grep -q UNRESOLVED '$fx/ls11.out'"
+
+# At the same revision a reusable call takes precedence over an action use,
+# even across workflow files and when a tag is available. Removing the call
+# exposes the action use, including its subdirectory, for repair.
+ls_shared="$fx/ls-shared/.github/workflows"
+mkdir -p "$ls_shared"
+printf 'jobs:\n  call:\n    uses: fixture/dual/.github/workflows/ci.yml@%s\n' "$SHA_A" > "$ls_shared/reusable.yml"
+printf 'jobs:\n  build:\n    steps:\n      - name: Nested action\n        uses: fixture/dual/actions/check@%s\n' "$SHA_A" > "$ls_shared/action.yaml"
+write_action_lock "$ls_shared/actions.lock" fixture/dual "$SHA_A" "$SHA_A"
+cp "$ls_shared/actions.lock" "$fx/ls-shared-before.lock"
+printf 'fixture/dual\t%s\tv1.2.3\n' "$SHA_A" > "$fx/ls-shared-tags.tsv"
+run_fix env TAG_MAP="$fx/ls-shared-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls-shared" --offline
+check "a reusable and action at the same revision keep their shared SHA ref despite an available tag" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/ls-shared-before.lock' '$ls_shared/actions.lock' && ! grep -qE '^(FIXED|UNRESOLVED)' <<<\"\$out\""
+rm "$ls_shared/reusable.yml"
+write_action_lock "$fx/ls-shared-expected.lock" fixture/dual "$SHA_A" v1.2.3
+run_fix env TAG_MAP="$fx/ls-shared-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls-shared" --offline
+check "without the reusable call the subdirectory action in a .yaml workflow gets its tag" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/ls-shared-expected.lock' '$ls_shared/actions.lock' && grep -q '^FIXED  fixture/dual' <<<\"\$out\""
+
+# A missing tag and an unsafe tag bracket a resolvable record. Neither may
+# stop that repair, alter neighboring records, or hide the unresolved status.
+ls_partial="$fx/ls-partial/.github/workflows"
+mkdir -p "$ls_partial"
+cat > "$ls_partial/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows: {}
+dependencies:
+    'fixture/missing@$SHA_A':
+        ref: '$SHA_A' # no tag
+        commit: 'sha1-$SHA_A'
+    "fixture/resolved@$SHA_B":
+        commit: "sha1-$SHA_B"
+        owner_id: 1
+        repo_id: 2
+        ref: "$SHA_B" # keep quote style and comment
+    'fixture/unsafe@$SHA_C':
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+LOCK
+cat > "$fx/ls-partial-expected.lock" <<LOCK
+version: 'v0.0.3'
+workflows: {}
+dependencies:
+    'fixture/missing@$SHA_A':
+        ref: '$SHA_A' # no tag
+        commit: 'sha1-$SHA_A'
+    "fixture/resolved@$SHA_B":
+        commit: "sha1-$SHA_B"
+        owner_id: 1
+        repo_id: 2
+        ref: "v2.3.4" # keep quote style and comment
+    'fixture/unsafe@$SHA_C':
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+LOCK
+printf 'fixture/resolved\t%s\tv2.3.4\nfixture/unsafe\t%s\trelease&unsafe\n' "$SHA_B" "$SHA_C" > "$fx/ls-partial-tags.tsv"
+run_fix env TAG_MAP="$fx/ls-partial-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls-partial" --offline
+check "mixed records repair the resolvable ref in place and preserve both unresolved records" \
+  "[ \$rc -eq 1 ] && cmp -s '$fx/ls-partial-expected.lock' '$ls_partial/actions.lock' && [ \$(grep -c '^FIXED' <<<\"\$out\") -eq 1 ] && [ \$(grep -c '^UNRESOLVED' <<<\"\$out\") -eq 2 ] && grep -q '^Rewrote 1 record(s)' <<<\"\$out\""
+run_fix env TAG_MAP="$fx/ls-partial-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls-partial" --offline
+check "a partially resolved lock is byte-identical on rerun and still exits 1" \
+  "[ \$rc -eq 1 ] && cmp -s '$fx/ls-partial-expected.lock' '$ls_partial/actions.lock' && ! grep -qE '^(FIXED|OK)' <<<\"\$out\" && [ \$(grep -c '^UNRESOLVED' <<<\"\$out\") -eq 2 ]"
+printf 'fixture/missing\t%s\tv1.0.0\nfixture/unsafe\t%s\tv3.0.0\n' "$SHA_A" "$SHA_C" > "$fx/ls-partial-tags.tsv"
+run_fix env TAG_MAP="$fx/ls-partial-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls-partial" --offline
+check "supplying safe tags resolves the remaining records without revisiting the repaired one" \
+  "[ \$rc -eq 0 ] && [ \$(grep -c '^FIXED' <<<\"\$out\") -eq 2 ] && ! grep -q '^UNRESOLVED' <<<\"\$out\" && grep -q \"ref: 'v1.0.0' # no tag\" '$ls_partial/actions.lock' && grep -q \"ref: 'v3.0.0'\" '$ls_partial/actions.lock' && grep -q 'ref: \"v2.3.4\" # keep quote style and comment' '$ls_partial/actions.lock'"
+cp "$ls_partial/actions.lock" "$fx/ls-partial-resolved.lock"
+run_fix env TAG_MAP="$fx/ls-partial-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls-partial" --offline
+check "a fully resolved mixed lock is an idempotent success" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/ls-partial-resolved.lock' '$ls_partial/actions.lock' && grep -q '^OK (no self-SHA action records)' <<<\"\$out\""
 
 # Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
 # fixture through mawk when it is installed, and refuse a lock the parser
