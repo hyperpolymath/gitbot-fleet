@@ -59,7 +59,9 @@ repo_name="$(basename "$repo")"
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
 
 if [[ -z "$output" ]]; then
-    output="/tmp/gitbot-fleet-maintenance/${repo_name}-${ts}.json"
+    # Reports persist between runs; keep them in the user's state directory.
+    umask 077
+    output="${XDG_STATE_HOME:-$HOME/.local/state}/gitbot-fleet/maintenance/${repo_name}-${ts}.json"
 fi
 mkdir -p "$(dirname "$output")"
 
