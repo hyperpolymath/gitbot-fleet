@@ -2245,5 +2245,155 @@ TAG_MAP="$fx/ls17-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls17 a dot in a repository name is a dot: the action's record is repaired, the reusable at the same SHA keeps its SHA ref" \
   "[ \$rc -eq 0 ] && grep -A1 \"^    'foo/action.test@$SHA_A':\$\" '$fx/ls17/.github/workflows/actions.lock' | grep -q \"ref: 'v1.0.0'\" && grep -A1 \"^    'foo/actionXtest@$SHA_A':\$\" '$fx/ls17/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_A'\""
 
+# Review cases (Codex round on 709c153, gitbot-fleet#615).
+
+# pl3: the lock file is opened only inside a directory private to this user.
+# By default that is a `pin-fixer-<uid>` directory created 0700 under the
+# runtime/temp base, so a symlink planted at the old predictable name in a
+# shared, world-writable directory is never followed. A lock directory that
+# is group/world-writable or a symlink is refused: exit 2, nothing changed.
+mkdir -p "$fx/pl3/.github/workflows" "$fx/pl3-shared" "$fx/pl3-private"
+chmod 1777 "$fx/pl3-shared"; chmod 700 "$fx/pl3-private"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/pl3/.github/workflows/ci.yml"
+cp "$fx/pl3/.github/workflows/ci.yml" "$fx/pl3-before.yml"
+pl3_key=$(cd "$fx/pl3" && pwd -P | tr -d '\n' | sha256sum | cut -c1-16)
+printf 'keep\n' > "$fx/pl3-victim"
+ln -s "$fx/pl3-victim" "$fx/pl3-shared/pin-fixer-$pl3_key.lock"
+PIN_FIXER_LOCK_DIR="$fx/pl3-shared" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl3"
+check "pl3 a world-writable lock directory is refused: exit 2, nothing changed, the planted link not followed" \
+  "[ \$rc -eq 2 ] && grep -q 'not a private directory' <<<\"\$out\" && cmp -s '$fx/pl3-before.yml' '$fx/pl3/.github/workflows/ci.yml' && [ \"\$(cat '$fx/pl3-victim')\" = keep ]"
+ln -s "$fx/pl3-private" "$fx/pl3-link"
+PIN_FIXER_LOCK_DIR="$fx/pl3-link" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl3"
+check "pl3 a symlinked lock directory is refused: exit 2, nothing changed" \
+  "[ \$rc -eq 2 ] && grep -q 'not a private directory' <<<\"\$out\" && cmp -s '$fx/pl3-before.yml' '$fx/pl3/.github/workflows/ci.yml'"
+rc=0; out=$(env -u PIN_FIXER_LOCK_DIR -u XDG_RUNTIME_DIR TMPDIR="$fx/pl3-shared" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl3" 2>&1) || rc=$?
+pl3_dir="$fx/pl3-shared/pin-fixer-$(id -u)"
+check "pl3 by default the lock sits in a 0700 per-user directory; the shared name is never opened" \
+  "[ \$rc -eq 0 ] && [ -f '$pl3_dir/pin-fixer-$pl3_key.lock' ] && [ -z \"\$(find '$pl3_dir' -maxdepth 0 \\( -perm -0020 -o -perm -0002 -o -perm -0040 -o -perm -0004 \\) -print)\" ] && [ \"\$(cat '$fx/pl3-victim')\" = keep ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/pl3/.github/workflows/ci.yml'"
+
+# sp23: a dead pin named only in a trailing comment or a quoted scalar is
+# data: no caller to repair and no UNSUPPORTED exit. The real caller beside
+# it is moved; a flow-style job carrying the dead pin as a `uses:` key is
+# still a caller the parser cannot place.
+mkdir -p "$fx/sp23/.github/workflows" "$fx/sp23b/.github/workflows"
+cat > "$fx/sp23/.github/workflows/ci.yml" <<YML
+name: test # hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@$STALE_A
+env:
+  OLD: "{ uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@$STALE_A }"
+jobs:
+  rust:
+    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@$STALE_A
+YML
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp23"
+check "sp23 a dead pin in a comment or a quoted scalar is text: the caller moves, the text stays, exit 0" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\" && sed -n '6p' '$fx/sp23/.github/workflows/ci.yml' | grep -q \"@$GOOD\$\" && [ \$(grep -c \"$STALE_A\" '$fx/sp23/.github/workflows/ci.yml') -eq 2 ]"
+printf 'jobs:\n  rust: { uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s }\n' "$STALE_A" > "$fx/sp23b/.github/workflows/ci.yml"
+cp "$fx/sp23b/.github/workflows/ci.yml" "$fx/sp23b-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp23b"
+check "sp23 a flow-style job whose uses: key carries the dead pin is still UNSUPPORTED: exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/sp23b-before.yml' '$fx/sp23b/.github/workflows/ci.yml'"
+
+# sp24: GitHub reads an owner or repository name in either case. A caller
+# spelled `Hyperpolymath/Standards/...` meets the table's row, is rewritten
+# with its own spelling kept, and finds its (lower-case) lock edge and record.
+mkdir -p "$fx/sp24/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: Hyperpolymath/Standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp24/.github/workflows/ci.yml"
+cat > "$fx/sp24/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp24"
+check "sp24 a mixed-case caller is the table's pin: rewritten with its spelling, its lower-case edge and record moved" \
+  "[ \$rc -eq 3 ] && ! grep -q 'has no edge' <<<\"\$out\" && grep -q \"^    uses: Hyperpolymath/Standards/.github/workflows/rust-ci-reusable.yml@$GOOD\$\" '$fx/sp24/.github/workflows/ci.yml' && grep -q \"^        - 'hyperpolymath/standards@$GOOD'\$\" '$fx/sp24/.github/workflows/actions.lock' && grep -q \"^    'hyperpolymath/standards@$GOOD':\$\" '$fx/sp24/.github/workflows/actions.lock' && ! grep -q \"$STALE_A\" '$fx/sp24/.github/workflows/actions.lock'"
+
+# sp25: a nested `uses:` entry with a trailing comment, and a comment line
+# inside the list, stay under their `uses:` header through the merge. Before,
+# the header was dropped and the entry kept: a child with no parent key.
+mkdir -p "$fx/sp25/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp25/.github/workflows/ci.yml"
+cat > "$fx/sp25/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830':
+        ref: 'v4.3.0'
+        commit: 'sha1-0057852bfaa89a56745cba8c7296529d2fc39830'
+        owner_id: 1
+        repo_id: 3
+        uses:
+            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' # nested by the action
+            # resolved 2026-10-19
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+LOCK
+cat > "$fx/sp25-expected.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$GOOD'
+dependencies:
+    'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830':
+        ref: 'v4.3.0'
+        commit: 'sha1-0057852bfaa89a56745cba8c7296529d2fc39830'
+        owner_id: 1
+        repo_id: 3
+        uses:
+            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' # nested by the action
+            # resolved 2026-10-19
+    'hyperpolymath/standards@$GOOD':
+        ref: '$GOOD'
+        commit: 'sha1-$GOOD'
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp25"
+check "sp25 a commented nested entry and a comment line stay under their uses: header through the merge" \
+  "[ \$rc -eq 3 ] && cmp -s '$fx/sp25-expected.lock' '$fx/sp25/.github/workflows/actions.lock'"
+
+# ls18: a step inside a one-line `jobs:` map is an action, not a reusable
+# call. `jobs: { build: { steps: [ { uses: hyperpolymath/standards@<sha> } ] } }`
+# used to classify every uses: on the line as R, so the estate action record
+# kept its self-SHA ref; the job-level reusable call beside it still keeps
+# its SHA.
+mkdir -p "$fx/ls18/.github/workflows"
+cat > "$fx/ls18/.github/workflows/ci.yml" <<YML
+jobs: { build: { steps: [ { uses: hyperpolymath/standards@$SHA_A } ] }, call: { uses: hyperpolymath/cicd-suite/.github/workflows/x.yml@$SHA_B } }
+YML
+cat > "$fx/ls18/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$SHA_A'
+        - 'hyperpolymath/cicd-suite@$SHA_B'
+dependencies:
+    'hyperpolymath/standards@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    'hyperpolymath/cicd-suite@$SHA_B':
+        ref: '$SHA_B'
+        commit: 'sha1-$SHA_B'
+        owner_id: 1
+        repo_id: 3
+LOCK
+printf 'hyperpolymath/standards\t%s\tv1.0.0\nhyperpolymath/cicd-suite\t%s\tv2.0.0\n' "$SHA_A" "$SHA_B" > "$fx/ls18-tags.tsv"
+TAG_MAP="$fx/ls18-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls18" --offline
+check "ls18 a step in a one-line jobs map is an action (tag written); the job-level reusable call keeps its SHA" \
+  "[ \$rc -eq 0 ] && grep -A1 \"^    'hyperpolymath/standards@$SHA_A':\$\" '$fx/ls18/.github/workflows/actions.lock' | grep -q \"ref: 'v1.0.0'\" && grep -A1 \"^    'hyperpolymath/cicd-suite@$SHA_B':\$\" '$fx/ls18/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_B'\""
+
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

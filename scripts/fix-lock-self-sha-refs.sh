@@ -114,13 +114,45 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             # line (`call: { uses: ... }`, `- { uses: ... }`, `jobs: { a: { uses: ... },
             # b: { uses: ... } }`), into out[1..n]; returns n. Given the MASKED
             # line: the raw one carries its comment and its strings.
-            function flow_uses_all(s, out,   n, r, t) {
-                n = 0; split("", out); t = s
+            # out_at[i] is the column of the `{` or `,` that precedes entry i
+            # (0 at the start of the line), for flow_kind/3.
+            function flow_uses_all(s, out,   n, r, t, base) {
+                n = 0; split("", out); split("", out_at); t = s; base = 0
                 while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?[^"'"'"'[:space:],}]+/)) {
-                    r = substr(t, RSTART, RLENGTH); sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", r)
-                    out[++n] = r; t = substr(t, RSTART + RLENGTH)
+                    r = substr(t, RSTART, RLENGTH)
+                    out_at[n + 1] = (r ~ /^[{,]/) ? base + RSTART : 0
+                    sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", r)
+                    out[++n] = r; base += RSTART + RLENGTH - 1; t = substr(t, RSTART + RLENGTH)
                 }
                 return n
+            }
+            # The kind of the flow `uses` entry whose mapping is open at
+            # column `at` of masked line s, from the keys that open the
+            # brackets around it: under a `[` that `steps:` opens it is an
+            # action (A); directly in a mapping a job key opens — inside the
+            # `{` that `jobs:` opens on this line, or on a job line (`call:
+            # { uses: ... }`) whose block parent is `jobs:` — it is a reusable
+            # call (R); anywhere else (`with: { uses: ... }`) it is data ("").
+            # `item` marks a `- { ... }` step: only its own entries are its
+            # action.
+            function flow_kind(s, at, parent, item,   i, c, d, k, seg, kn) {
+                d = 0; segs[0] = 1
+                for (i = 1; i <= at; i++) {
+                    c = substr(s, i, 1)
+                    if (c == "{" || c == "[") {
+                        seg = substr(s, segs[d], i - segs[d]); kn = ""
+                        if (match(seg, /["'"'"']?[A-Za-z0-9_.-]+["'"'"']?[[:space:]]*:[[:space:]]*$/)) { kn = substr(seg, RSTART, RLENGTH); sub(/[[:space:]]*:[[:space:]]*$/, "", kn); gsub(/["'"'"']/, "", kn) }
+                        d++; kind[d] = c; kname[d] = kn; segs[d] = i + 1
+                    } else if (c == ",") segs[d] = i + 1
+                    else if ((c == "}" || c == "]") && d > 0) d--
+                }
+                if (item) return (d == 1 && kind[1] == "{") ? "A" : ""
+                for (k = 1; k <= d; k++) if (kind[k] == "[" && kname[k] == "steps") return "A"
+                if (d >= 1 && kind[d] == "{" && kname[d] != "") {
+                    if (d >= 2 && kind[d - 1] == "{" && kname[d - 1] == "jobs") return "R"
+                    if (d == 1 && parent == "jobs") return "R"
+                }
+                return ""
             }
             BEGIN {
                 Q = "[\"'"'"']?"
@@ -147,7 +179,10 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     # other input and is data.
                     item_key = (t == "") ? -1 : length($0) - length(t)
                     if (t ~ USES_RE) { if (item_steps) print "A\t" ref_of(t) }
-                    else if (t ~ /^\{/) { m = flow_uses_all(masked(t), fu); if (item_steps) for (j = 1; j <= m; j++) print "A\t" fu[j] }
+                    else if (t ~ /^\{/) {
+                        mt = masked(t); m = flow_uses_all(mt, fu)
+                        if (item_steps) for (j = 1; j <= m; j++) if (flow_kind(mt, out_at[j], "", 1) == "A") print "A\t" fu[j]
+                    }
                     else if (t ~ KEY_RE) {
                         keyat[ind + 2] = keyname(t)
                         if (t ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind + 2 }
@@ -172,12 +207,15 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                         # step'"'"'s action is its scalar `uses:` key, never a mapping.
                         # A `{ uses: ... }` inside a job'"'"'s `name:` string or after
                         # a `#` is neither: the masked line has no such text.
+                        # Each entry is classified by the keys around it, so a
+                        # step inside a one-line `jobs: { b: { steps: [ ... ] } }`
+                        # is an action, not a reusable call.
                         m = flow_uses_all(ml, fu)
                         if (m) {
                             p = nearest_below(ind)
                             for (j = 1; j <= m; j++) {
-                                if (key == "jobs" || (p >= 0 && keyat[p] == "jobs")) print "R\t" fu[j]
-                                else if (key == "steps") print "A\t" fu[j]
+                                fk = flow_kind(ml, out_at[j], (p >= 0 ? keyat[p] : ""), 0)
+                                if (fk != "") print fk "\t" fu[j]
                             }
                         }
                     }

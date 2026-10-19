@@ -11,15 +11,33 @@
 # `sed -i` landing between another's read and write).
 #
 # Sourced, then `pin_fixer_lock <repo-path>`. The lock file lives outside the
-# checkout (PIN_FIXER_LOCK_DIR, else XDG_RUNTIME_DIR, else TMPDIR), named by
-# the checkout's real path, so every fixer run on the same checkout — by any
-# path that reaches it — contends for the same file. It is held until the
-# fixer exits. A holder that does not go away within PIN_FIXER_LOCK_WAIT
-# seconds (default 600) is reported and the fixer exits 2 having changed
-# nothing: a dispatcher must not record that run as a clean repair.
+# checkout, named by the checkout's real path, so every fixer run on the same
+# checkout — by any path that reaches it — contends for the same file. It is
+# held until the fixer exits. A holder that does not go away within
+# PIN_FIXER_LOCK_WAIT seconds (default 600) is reported and the fixer exits 2
+# having changed nothing: a dispatcher must not record that run as a clean
+# repair.
+#
+# The directory is PIN_FIXER_LOCK_DIR when set, else a per-user
+# `pin-fixer-<uid>` directory (created mode 0700) under XDG_RUNTIME_DIR, else
+# TMPDIR, else /tmp. Opening `>file` follows a symlink, so the file must sit
+# where no other user can plant one: the directory is refused — exit 2,
+# nothing changed — unless it is a real directory (not a symlink) owned by
+# this user and writable by neither group nor others. A predictable name in a
+# shared, world-writable /tmp is exactly what this rules out.
 pin_fixer_lock() {
     local repo="$1" dir key wait
-    dir="${PIN_FIXER_LOCK_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}}"
+    if [ -n "${PIN_FIXER_LOCK_DIR:-}" ]; then
+        dir="$PIN_FIXER_LOCK_DIR"
+    else
+        dir="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/pin-fixer-$(id -u)"
+        mkdir -m 700 "$dir" 2>/dev/null || true
+    fi
+    if [ -L "$dir" ] || [ ! -d "$dir" ] || [ ! -O "$dir" ] \
+       || [ -n "$(find "$dir" -maxdepth 0 \( -perm -0020 -o -perm -0002 \) -print 2>/dev/null)" ]; then
+        echo "fix-workflow-pins: lock directory $dir is not a private directory of this user (a symlink, missing, owned by another user, or group/world-writable); nothing was changed" >&2
+        exit 2
+    fi
     wait="${PIN_FIXER_LOCK_WAIT:-600}"
     key=$(cd "$repo" 2>/dev/null && pwd -P || printf '%s' "$repo")
     key=$(printf '%s' "$key" | sha256sum | cut -c1-16)

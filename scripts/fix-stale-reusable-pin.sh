@@ -99,12 +99,13 @@ merge_duplicate_records() {
             for (i = 1; i <= nhead[cur]; i++) print head[cur, i]
             n = 0
             for (u in uses_of) if (index(u, cur SUBSEP) == 1) n++
-            if (n > 0) {
+            if (n > 0 || nextra[cur] > 0) {
                 print "        uses:"
                 fflush()
                 cmd = "sort"
                 for (u in uses_of) if (index(u, cur SUBSEP) == 1) print "            - " uses_of[u] | cmd
                 close(cmd)
+                for (i = 1; i <= nextra[cur]; i++) print uses_extra[cur, i]
             }
         }
         # A record key is the dependency between its quotes — or a plain
@@ -116,17 +117,27 @@ merge_duplicate_records() {
         # catch-all below with no current record, and was dropped.
         function unq(s) { gsub(/["'"'"']/, "", s); return s }
         function record_key(s) { return (s ~ /^    ["'"'"'][^"'"'"']+["'"'"']:$/ || s ~ /^    [^[:space:]"'"'"'#][^[:space:]]*:$/) }
-        function uses_entry(s) { return (s ~ /^            - ["'"'"'][^"'"'"']+["'"'"']$/ || s ~ /^            - [^[:space:]"'"'"'#][^[:space:]]*$/) }
-        BEGIN { indep = 0; cur = "" }
+        # A nested `uses:` entry, quoted or plain, with or without a trailing
+        # comment; it is deduplicated on its value, the comment kept with
+        # the first spelling seen.
+        function uses_entry(s) { return (s ~ /^            - ["'"'"'][^"'"'"']+["'"'"']([[:space:]]+#.*)?$/ || s ~ /^            - [^[:space:]"'"'"'#][^[:space:]]*([[:space:]]+#.*)?$/) }
+        function entry_value(s) { sub(/^            - /, "", s); sub(/[[:space:]]+#.*$/, "", s); return unq(s) }
+        BEGIN { indep = 0; cur = ""; in_uses = 0 }
         /^dependencies:[[:space:]]*$/ { indep = 1; print; next }
         !indep { print; next }
+        # A record key or one of its own fields ends a nested `uses:` list.
+        /^    [^[:space:]]/ || /^        [^[:space:]]/ { in_uses = 0 }
         record_key($0) {
             key = unq($0)
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             cur = key; next
         }
-        /^        uses:[[:space:]]*$/ { next }
-        uses_entry($0) { u = $0; sub(/^            - /, "", u); uses_of[cur SUBSEP unq(u)] = u; next }
+        /^        uses:[[:space:]]*$/ { in_uses = 1; next }
+        uses_entry($0) { u = $0; sub(/^            - /, "", u); k = cur SUBSEP entry_value($0); if (!(k in uses_of)) uses_of[k] = u; next }
+        # Any other line inside the list (a comment, a shape this merger has
+        # no rule for) stays under the `uses:` header it came from: moved
+        # above it, it would be a child with no parent key.
+        in_uses { uses_extra[cur, ++nextra[cur]] = $0; next }
         /^        [a-z_]+: / { if (first) { head[cur, ++nhead[cur]] = $0 } ; next }
         {
             # A line the merger does not understand is not the merger'"'"'s to drop:
@@ -148,12 +159,15 @@ merge_duplicate_records() {
 # wildcard paths. Set replacement/reason and return 0 on a match; otherwise
 # clear both variables and return 1.
 lookup_replacement() { # <reusable-path> <stale-sha>
-    local t_path t_stale t_new t_reason
+    local t_path t_stale t_new t_reason t_path_lc
     replacement=""; reason=""
     while IFS=$'\t' read -r t_path t_stale t_new t_reason || [ -n "$t_path" ]; do
         [[ -z "$t_path" || "$t_path" == \#* ]] && continue
+        t_path_lc="${t_path,,}"
         [[ "$t_stale" == "$2" ]] || continue
-        if [[ "$t_path" == "$1" ]] || { [[ "$t_path" == */\* ]] && [[ "$1" == "${t_path%\*}"* ]]; }; then
+        # GitHub resolves an owner or repository name in either case: the
+        # table and the caller are compared case-folded.
+        if [[ "${t_path,,}" == "${1,,}" ]] || { [[ "$t_path" == */\* ]] && [[ "${1,,}" == "${t_path_lc%\*}"* ]]; }; then
             replacement="$t_new"; reason="$t_reason"; return 0
         fi
     done < "$PINS_TABLE"
@@ -213,9 +227,36 @@ USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:
 # tag that merely STARTS with a dead SHA (`<sha>-patched`) is a different ref
 # the table never named, and must not be rewritten into `<replacement>-patched`.
 REF_END="([\"'[:space:]#]|$)"
-# Git resolves a commit ID in either case: upper-case hex is the same pin,
+# Git resolves a commit ID in either case, and GitHub an owner or repository
+# name: an upper-case spelling is the same pin, matched case-insensitively,
 # looked up in lower case and rewritten as written.
 REUSABLE_REF_RE="(${TABLE_OWNERS_RE})/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-fA-F]{40}"
+# A line with its comment dropped and every quoted scalar that is neither a
+# key nor the value of a `uses` key emptied, quote-aware. The fallback scan
+# for pins the parser cannot place reads this, so a dead pin named in a
+# trailing comment or inside a `name:` string is data, not an UNSUPPORTED
+# caller.
+mask_line() {
+    printf '%s\n' "$1" | awk -v sq="'" '{
+        s = $0; out = ""; n = length(s); i = 1
+        tail = "(^|[-{,[:space:]])[\"" sq "]?uses[\"" sq "]?[[:space:]]*:[[:space:]]*$"
+        while (i <= n) {
+            c = substr(s, i, 1)
+            if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
+            if (c == "\"" || c == sq) {
+                j = i + 1
+                if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
+                else { while (j <= n && substr(s, j, 1) != sq) j++ }
+                if (substr(s, j + 1) ~ /^[[:space:]]*:/ || tolower(out) ~ tail) out = out substr(s, i, j - i + 1)
+                else out = out c c
+                i = j + 1; continue
+            }
+            out = out c; i++
+        }
+        print out
+    }'
+}
+FALLBACK_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?${REUSABLE_REF_RE}${REF_END}"
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge<TAB>repository
 lock_stale=0      # a rewritten caller whose lock entry never had the edge: the lock was already out of sync
 unsupported=0
@@ -227,14 +268,18 @@ while IFS= read -r -d '' wf; do
     while IFS= read -r numbered; do
         lineno="${numbered%%:*}"
         grep -qx "$lineno" <<<"$placed" && continue
-        ref=$(grep -oE "${REUSABLE_REF_RE}${REF_END}" <<<"${numbered#*:}" | head -1 | sed -E "s/[\"'[:space:]#]\$//" || true)
+        # Only a `uses:` key outside comments and other scalars can be a
+        # caller the parser failed to place (a flow-style job); a dead pin
+        # named in a comment or a `name:` string is text.
+        mask_line "${numbered#*:}" | grep -qiE "$FALLBACK_USES_RE" || continue
+        ref=$(grep -oiE "${REUSABLE_REF_RE}${REF_END}" <<<"${numbered#*:}" | head -1 | sed -E "s/[\"'[:space:]#]\$//" || true)
         [ -n "$ref" ] || continue
         sha="${ref##*@}"
         if lookup_replacement "${ref%@*}" "${sha,,}"; then
             echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
             skip=1
         fi
-    done < <(grep -nE "${REUSABLE_REF_RE}${REF_END}" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
+    done < <(grep -niE "${REUSABLE_REF_RE}${REF_END}" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()
     for lineno in $klines; do
@@ -242,14 +287,17 @@ while IFS= read -r -d '' wf; do
         # A job-level call pinned by tag (`@v1`) carries no SHA: nothing for a
         # SHA table to move, so it is a no-op here — not a grep exit 1 that
         # `set -e` would turn into a silent exit 1 of the whole run.
-        ref=$(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$line" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]#]\$//" | head -1 || true)
+        ref=$(grep -oiE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$line" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]#]\$//" | head -1 || true)
         [ -n "$ref" ] || continue
         path="${ref%@*}"; stale_raw="${ref##*@}"; stale="${stale_raw,,}"
         lookup_replacement "$path" "$stale" || continue
         [[ "$replacement" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: bad replacement SHA in table for $stale" >&2; exit 2; }
         # ERE: a `$` inside a BRE group is literal to sed, so the boundary
         # alternation needs -E (and a delimiter the pattern does not use).
-        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path)@$stale_raw([\"'[:space:]#]|\$)~\1@$replacement\3~" "$wf"
+        # The path as the caller spells it, matched literally (a `.` in it
+        # is a dot).
+        path_re=$(printf '%s' "$path" | sed -E 's/[][\.^$*+?(){}|~\\]/\\&/g')
+        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path_re)@$stale_raw([\"'[:space:]#]|\$)~\1@$replacement\3~" "$wf"
         echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
         rewrites=$((rewrites + 1))
         pending+=("$stale"$'\t'"$replacement"$'\t'"${path%%/.github/workflows/*}")
@@ -278,13 +326,16 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     while IFS=$'\t' read -r wfkey stale new keep repo; do
         # The workflow key in either quote style, or none (`gh actions-lock`
         # writes single quotes; a hand edit may not): compared unquoted.
+        # Repository and SHA are compared case-folded (GitHub and git read
+        # either case); every line keeps the spelling it has.
         if ! awk -v wfkey="$wfkey" -v edge="$repo@$stale" '
                 function unq(s) { gsub(/["'"'"']/, "", s); return s }
                 function bare(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+(#.*)?$/, "", s); return s }
+                BEGIN { edge = tolower(edge) }
                 /^workflows:[[:space:]]*$/ { sec = "w" }
                 /^dependencies:[[:space:]]*$/ { sec = "d" }
                 sec == "w" && /^    [^[:space:]#]/ { inwf = (unq($0) == "    " wfkey ":") }
-                sec == "w" && inwf && /^        - / && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"") || bare($0) == edge) { found = 1 }
+                sec == "w" && inwf && /^        - / { l = tolower($0); if (index(l, "'"'"'" edge "'"'"'") || index(l, "\"" edge "\"") || bare(l) == edge) found = 1 }
                 END { exit !found }' "$LOCK"; then
             echo "WARN: actions.lock has no edge '$repo@${stale:0:7}' under '$wfkey': the lock was already out of sync with this caller — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2
             lock_stale=1
@@ -301,7 +352,7 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                 if ($0 ~ /^workflows:[[:space:]]*$/) s1 = "w"
                 if ($0 ~ /^dependencies:[[:space:]]*$/) s1 = "d"
                 if (s1 == "w" && $0 ~ /^    [^[:space:]#]/) w1 = (unq($0) == "    " wfkey ":")
-                if (s1 == "w" && w1 && $0 ~ /^        - /) have[unq($0)] = 1
+                if (s1 == "w" && w1 && $0 ~ /^        - /) have[tolower(unq($0))] = 1
                 next
             }
             /^workflows:[[:space:]]*$/ { sec = "w" }
@@ -310,19 +361,20 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             sec == "w" && inwf && /^        - / {
                 # Either quote style, or none (a hand-written edge); the edge
                 # keeps the spelling it has.
-                q = "'"'"'"; i = index($0, q repo "@" stale q)
-                if (!i) { q = "\""; i = index($0, q repo "@" stale q) }
+                l = tolower($0); e = tolower(repo "@" stale)
+                q = "'"'"'"; i = index(l, q e q)
+                if (!i) { q = "\""; i = index(l, q e q) }
                 if (i) moved = substr($0, 1, i + length(repo)) "@" new q
                 else {
-                    t = $0; sub(/^        - /, "", t); sub(/[[:space:]]+(#.*)?$/, "", t)
-                    if (t == repo "@" stale) { i = 1; rest = $0; sub(/^        - [^[:space:]]+/, "", rest); moved = "        - " repo "@" new rest }
+                    t = l; sub(/^        - /, "", t); sub(/[[:space:]]+(#.*)?$/, "", t)
+                    if (t == e) { i = 1; rest = $0; sub(/^        - [^[:space:]]+/, "", rest); spell = substr($0, 11, length(repo)); moved = "        - " spell "@" new rest }
                 }
                 if (i) {
                     # keep: an uncovered caller in this workflow still pins the stale
                     # SHA, so the edge is added beside the old one, not replaced.
                     if (keep == "1") print
-                    if (unq(moved) in have) next
-                    have[unq(moved)] = 1; $0 = moved
+                    if (tolower(unq(moved)) in have) next
+                    have[tolower(unq(moved))] = 1; $0 = moved
                 }
             }
             { print }
@@ -334,10 +386,11 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     # stale SHA — a workflow's own edge, or another record's nested `uses:`
     # (a reusable that itself calls the stale revision keeps needing it).
     while IFS=$'\t' read -r stale new repo; do
-        grep -q "$repo@$stale" "$LOCK" || continue
+        grep -qiF "$repo@$stale" "$LOCK" || continue
         still=$(awk -v edge="$repo@$stale" '
             function bare(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+(#.*)?$/, "", s); return s }
-            /^ +- / && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"") || bare($0) == edge) { n++ } END { print n + 0 }' "$LOCK")
+            BEGIN { edge = tolower(edge) }
+            /^ +- / { l = tolower($0); if (index(l, "'"'"'" edge "'"'"'") || index(l, "\"" edge "\"") || bare(l) == edge) n++ } END { print n + 0 }' "$LOCK")
         tmp=$(mktemp)
         # Only THIS repository'"'"'s record moves: its key line, and its ref: and
         # commit: lines. Another repository at the same SHA is a different
@@ -347,10 +400,17 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             # The record is the one whose unquoted key IS repo@stale: a key that
             # merely contains it (`evilhyperpolymath/standards@<sha>`) is another
             # record, and so is a plain unquoted key (a hand-written record).
-            sec == "d" && /^    [^[:space:]#]/ { k = $0; sub(/^    /, "", k); sub(/:$/, "", k); gsub(/["'"'"']/, "", k); inrec = (k == repo "@" stale) }
+            # The SHA is replaced wherever it stands on the line, in either
+            # case; the rest of the line keeps its spelling.
+            function isub(s, old, new,   l, o, i, out) {
+                out = ""; l = tolower(s); o = tolower(old)
+                while ((i = index(l, o)) > 0) { out = out substr(s, 1, i - 1) new; s = substr(s, i + length(old)); l = substr(l, i + length(old)) }
+                return out s
+            }
+            sec == "d" && /^    [^[:space:]#]/ { k = $0; sub(/^    /, "", k); sub(/:$/, "", k); gsub(/["'"'"']/, "", k); inrec = (tolower(k) == tolower(repo "@" stale)) }
             sec == "d" && inrec && (/^    [^[:space:]#]/ || /^        (ref|commit):/) {
-                if (still == 0) gsub(stale, new)
-                else { c = $0; gsub(stale, new, c); copy[++nc] = c }
+                if (still == 0) $0 = isub($0, stale, new)
+                else copy[++nc] = isub($0, stale, new)
             }
             sec == "d" && inrec && still != 0 && !(/^    [^[:space:]#]/ || /^        (ref|commit):/) { copy[++nc] = $0 }
             { print }
