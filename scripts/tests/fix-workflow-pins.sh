@@ -178,6 +178,46 @@ f5="$fx/tc5/.github/workflows/x.yml"
 bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc5" >/dev/null 2>&1
 check "toolchain: inside another input's block scalar does not count: a real input is added first" \
   "grep -A2 '000000000000000000000000000000000000000b' '$f5' | sed -n '3p' | grep -q '^          toolchain: stable$' && grep -q '^            toolchain: stable$' '$f5' && [ \$(grep -c 'toolchain: stable' '$f5') -eq 2 ]"
+# A flow `with: {` spread over several lines is read to its closing brace:
+# a toolchain inside it counts; without one it gets the input as first entry.
+# A list item whose parent is not `steps:` — a fixture kept in a top-level
+# `env:` block scalar, even one that spells out `steps:` inside — is text.
+mkdir -p "$fx/tc6/.github/workflows"
+cat > "$fx/tc6/.github/workflows/x.yml" <<'YML'
+env:
+  FIXTURE: |
+    jobs:
+      a:
+        steps:
+          - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000c
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000d
+        with: {
+          toolchain: nightly,
+        }
+      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000e
+        with: {
+          components: clippy,
+        }
+      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000f
+YML
+f6="$fx/tc6/.github/workflows/x.yml"
+set +e
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc6" >/dev/null 2>&1; rc_tc6=$?
+set -e
+check "a fixture in a top-level env: block scalar is text: its dtolnay line is untouched, nothing inserted" \
+  "grep -A1 '000000000000000000000000000000000000000c' '$f6' | sed -n '2p' | grep -q '^jobs:$' && grep -q '^          - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000c$' '$f6'"
+check "a multi-line flow with: naming a toolchain counts: untouched" \
+  "grep -A1 '000000000000000000000000000000000000000d' '$f6' | sed -n '2p' | grep -q '^        with: {$' && [ \$(grep -c 'toolchain: nightly' '$f6') -eq 1 ]"
+check "a multi-line flow with: without a toolchain gets it as its first entry" \
+  "grep -A1 '000000000000000000000000000000000000000e' '$f6' | sed -n '2p' | grep -q '^        with: { toolchain: stable,$' && grep -A2 '000000000000000000000000000000000000000e' '$f6' | sed -n '3p' | grep -q '^          components: clippy,$'"
+check "the real steps were fixed, the fixture was not, exit 0" \
+  "[ \$rc_tc6 -eq 0 ] && [ \$(grep -c 'toolchain: stable' '$f6') -eq 2 ] && grep -A2 '000000000000000000000000000000000000000f' '$f6' | sed -n '2p' | grep -q '^        with:$'"
+cp "$f6" "$fx/tc6-after1.yml"
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc6" >/dev/null 2>&1
+check "second run over these cases is a no-op" "cmp -s '$fx/tc6-after1.yml' '$f6'"
 # A flow-style step: refused out loud, file untouched, exit 2 — never "OK".
 mkdir -p "$fx/tc4/.github/workflows"
 printf 'jobs:\n  a:\n    steps:\n      - { name: toolchain, uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000009 }\n      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000a\n' > "$fx/tc4/.github/workflows/x.yml"
@@ -351,6 +391,47 @@ tar -C "$fx/sp6" -cf "$fx/sp6a.tar" .github
 bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp6" >/dev/null 2>&1; rc_sp6b=$?
 tar -C "$fx/sp6" -cf "$fx/sp6b.tar" .github
 check "kept-edge case: second run is a no-op and exits 0" "[ \$rc_sp6b -eq 0 ] && cmp -s '$fx/sp6a.tar' '$fx/sp6b.tar'"
+# A flow-style job mapping carrying a known-dead pin: the parser cannot place
+# it as a `uses` key, so the file is refused out loud — never "OK".
+mkdir -p "$fx/sp7/.github/workflows"
+printf 'jobs:\n  mirror:\n    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@%s\n  rust: { uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s }\n' "$STALE_A" "$STALE_A" > "$fx/sp7/.github/workflows/ci.yml"
+cp "$fx/sp7/.github/workflows/ci.yml" "$fx/sp7-before.yml"
+set +e
+out7=$(bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp7" 2>&1); rc_sp7=$?
+set -e
+check "a flow-style job with a known-dead pin is UNSUPPORTED: named with its line, file untouched, exit 2, never OK" \
+  "[ \$rc_sp7 -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:4:' <<<\"\$out7\" && ! grep -q '^OK' <<<\"\$out7\" && cmp -s '$fx/sp7-before.yml' '$fx/sp7/.github/workflows/ci.yml'"
+# A nested `uses:` edge of ANOTHER record still pointing at the stale SHA (a
+# reusable that itself calls the stale revision) keeps the stale record alive.
+mkdir -p "$fx/sp8/.github/workflows"
+printf 'jobs:\n  governance:\n    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s\n' "$STALE_B" > "$fx/sp8/.github/workflows/governance.yml"
+cat > "$fx/sp8/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/governance.yml':
+        - 'hyperpolymath/standards@$STALE_B'
+dependencies:
+    'hyperpolymath/cicd-suite@1111111111111111111111111111111111111111':
+        ref: '1111111111111111111111111111111111111111'
+        commit: 'sha1-1111111111111111111111111111111111111111'
+        owner_id: 6759885
+        repo_id: 1
+        uses:
+            - 'hyperpolymath/standards@$STALE_B'
+    'hyperpolymath/standards@$STALE_B':
+        ref: '$STALE_B'
+        commit: 'sha1-$STALE_B'
+        owner_id: 6759885
+        repo_id: 1116521501
+LOCK
+set +e
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp8" >/dev/null 2>&1; rc_sp8=$?
+set -e
+l8="$fx/sp8/.github/workflows/actions.lock"
+check "transitive edge: the caller's own edge moves, the other record's nested edge stays at the stale SHA" \
+  "grep -A1 \"'.github/workflows/governance.yml':\" '$l8' | grep -q \"standards@$GOOD\" && grep -A6 \"'hyperpolymath/cicd-suite@1111\" '$l8' | grep -q \"            - 'hyperpolymath/standards@$STALE_B'\""
+check "transitive edge: the stale record is kept beside the replacement's, exit 3" \
+  "[ \$rc_sp8 -eq 3 ] && grep -q \"^    'hyperpolymath/standards@$STALE_B':\" '$l8' && grep -q \"^    'hyperpolymath/standards@$GOOD':\" '$l8'"
 
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
@@ -394,6 +475,28 @@ cp "$fx/ls/.github/workflows/actions.lock" "$fx/ls1.lock"
 bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls" --offline >/dev/null 2>&1
 check "second run is a no-op and exits 0" "cmp -s '$fx/ls1.lock' '$fx/ls/.github/workflows/actions.lock'"
 check "a repository without a lock is OK, not an error" "mkdir -p '$fx/nolock' && bash '$fleet/scripts/fix-lock-self-sha-refs.sh' '$fx/nolock' --offline | grep -q 'OK (no actions.lock)'"
+# A reusable source is whatever the workflows call as a reusable, not a
+# hard-coded pair of names: its record keeps its SHA ref and is not "unresolved".
+mkdir -p "$fx/ls4/.github/workflows"
+printf 'jobs:\n  corpus:\n    uses: hyperpolymath/proven-tests-and-benches/.github/workflows/corpus-check.yml@2222222222222222222222222222222222222222\n' > "$fx/ls4/.github/workflows/ci.yml"
+cat > "$fx/ls4/.github/workflows/actions.lock" <<'LOCK'
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/proven-tests-and-benches@2222222222222222222222222222222222222222'
+dependencies:
+    'hyperpolymath/proven-tests-and-benches@2222222222222222222222222222222222222222':
+        ref: '2222222222222222222222222222222222222222'
+        commit: 'sha1-2222222222222222222222222222222222222222'
+        owner_id: 6759885
+        repo_id: 2
+LOCK
+cp "$fx/ls4/.github/workflows/actions.lock" "$fx/ls4-before.lock"
+set +e
+bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls4" --offline > "$fx/ls4.out" 2>&1; rc4=$?
+set -e
+check "a reusable source read from the workflows keeps its SHA ref: untouched, not UNRESOLVED, exit 0" \
+  "[ \$rc4 -eq 0 ] && ! grep -q UNRESOLVED '$fx/ls4.out' && cmp -s '$fx/ls4-before.lock' '$fx/ls4/.github/workflows/actions.lock'"
 
 # Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
 # fixture through mawk when it is installed, and refuse a lock the parser

@@ -26,9 +26,11 @@
 # afterwards; the script says so when it touches a lock.
 #
 # Idempotent. Rewrites nothing it does not recognise. Exit 0 whether or not
-# anything changed; exit 2 when the table is unreadable; exit 3 when the pins
-# were rewritten but actions.lock was touched and still needs `gh actions-lock`
-# — a dispatcher must not record that as a clean success.
+# anything changed; exit 2 when the table is unreadable or a file carries a
+# known-dead pin the parser cannot place as a `uses` key (that file is left
+# untouched and named); exit 3 when the pins were rewritten but actions.lock
+# was touched and still needs `gh actions-lock` — a dispatcher must not
+# record either as a clean success.
 #
 # Usage:
 #   fix-stale-reusable-pin.sh <repo-path>
@@ -96,26 +98,46 @@ merge_duplicate_records() {
     if ! cmp -s "$lock" "$tmp"; then mv "$tmp" "$lock"; else rm -f "$tmp"; fi
 }
 
+# The table row for a reusable path at a stale SHA: sets replacement/reason.
+lookup_replacement() { # <reusable-path> <stale-sha>
+    local t_path t_stale t_new t_reason
+    replacement=""; reason=""
+    while IFS=$'\t' read -r t_path t_stale t_new t_reason; do
+        [[ -z "$t_path" || "$t_path" == \#* ]] && continue
+        [[ "$t_stale" == "$2" ]] || continue
+        if [[ "$t_path" == "$1" ]] || { [[ "$t_path" == */\* ]] && [[ "$1" == "${t_path%\*}"* ]]; }; then
+            replacement="$t_new"; reason="$t_reason"; return 0
+        fi
+    done < "$PINS_TABLE"
+    return 1
+}
+
 # Every `uses:` of an estate reusable at a full SHA, across the workflows.
 # Only a YAML `uses` KEY counts — the key at the start of the line (quoted or
 # not, list dash or not); the same text after a `#` is a comment, not a
-# caller, and must not move anything. The lock is edited after the loop,
-# once every workflow rewrite is known.
+# caller, and must not move anything. A covered pin the parser cannot place
+# that way (a flow-style job `rust: { uses: ... }`) makes the whole file
+# UNSUPPORTED: left untouched, named on stderr, exit 2 — never "OK". The lock
+# is edited after the loop, once every workflow rewrite is known.
 USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?"
+REUSABLE_REF_RE="hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}"
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge
+unsupported=0
 while IFS= read -r -d '' wf; do
+    skip=0
+    while IFS= read -r numbered; do
+        lineno="${numbered%%:*}"; ref=$(grep -oE "$REUSABLE_REF_RE" <<<"${numbered#*:}" | head -1)
+        [ -n "$ref" ] || continue
+        if lookup_replacement "${ref%@*}" "${ref##*@}"; then
+            echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key at the start of its line (flow-style job mapping?). Fix by hand; the file was not changed." >&2
+            skip=1
+        fi
+    done < <(grep -nE "$REUSABLE_REF_RE" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" | grep -vE "^[0-9]+:${USES_KEY_RE#^}" || true)
+    if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     while IFS= read -r line; do
         path="${line%@*}"; stale="${line##*@}"
         [[ "$stale" =~ ^[0-9a-f]{40}$ ]] || continue
-        replacement=""; reason=""
-        while IFS=$'\t' read -r t_path t_stale t_new t_reason; do
-            [[ -z "$t_path" || "$t_path" == \#* ]] && continue
-            [[ "$t_stale" == "$stale" ]] || continue
-            if [[ "$t_path" == "$path" ]] || { [[ "$t_path" == */\* ]] && [[ "$path" == "${t_path%\*}"* ]]; }; then
-                replacement="$t_new"; reason="$t_reason"; break
-            fi
-        done < "$PINS_TABLE"
-        [ -n "$replacement" ] || continue
+        lookup_replacement "$path" "$stale" || continue
         [[ "$replacement" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: bad replacement SHA in table for $stale" >&2; exit 2; }
         sed -i "s|^\([[:space:]]*\(-[[:space:]]\+\)\?[\"']\?uses[\"']\?[[:space:]]*:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
         echo "FIXED  ${wf#"$REPO_PATH"/}  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
@@ -128,7 +150,7 @@ while IFS= read -r -d '' wf; do
         keep=0
         grep -qE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" "$wf" && keep=1
         printf '%s\t%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" "$keep" >> "$edits"
-    done < <(grep -oE "${USES_KEY_RE}hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}" "$wf" | sed -E "s/${USES_KEY_RE}//" | sort -u)
+    done < <(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}" "$wf" | sed -E "s/${USES_KEY_RE}//" | sort -u)
 done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
 
 # Lock: move each rewritten workflow's own `workflows:` edges first.
@@ -155,12 +177,13 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
     done < "$edits"
     # Then the records: rename a stale record nothing references any more;
-    # copy it under the replacement key while a workflow still pins the stale SHA.
+    # copy it under the replacement key while an edge still points at the
+    # stale SHA — a workflow's own edge, or another record's nested `uses:`
+    # (a reusable that itself calls the stale revision keeps needing it).
     while IFS=$'\t' read -r stale new; do
         grep -q "$stale" "$LOCK" || continue
         still=$(awk -v stale="$stale" '
-            /^workflows:[[:space:]]*$/ { sec = "w" } /^dependencies:[[:space:]]*$/ { sec = "d" }
-            sec == "w" && index($0, "@" stale "'"'"'") { n++ } END { print n + 0 }' "$LOCK")
+            /^ +- '"'"'/ && index($0, "@" stale "'"'"'") { n++ } END { print n + 0 }' "$LOCK")
         tmp=$(mktemp)
         if [ "$still" -eq 0 ]; then
             sed "s/$stale/$new/g" "$LOCK" > "$tmp"
@@ -181,8 +204,13 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
 fi
 rm -f "$edits"
 
-if [ "$rewrites" -eq 0 ]; then echo "OK (no known-dead reusable pins): $REPO_PATH"; else echo "Rewrote $rewrites pin(s) in $REPO_PATH"; fi
+if [ "$rewrites" -eq 0 ] && [ "$unsupported" -eq 0 ]; then echo "OK (no known-dead reusable pins): $REPO_PATH"; elif [ "$rewrites" -gt 0 ]; then echo "Rewrote $rewrites pin(s) in $REPO_PATH"; fi
 if [ "$lock_touched" -eq 1 ]; then
     echo "WARN: actions.lock named a stale SHA and was rewritten to the replacement; its nested uses: list was NOT recomputed — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing. Exit 3: not a clean success." >&2
-    exit 3
 fi
+if [ "$unsupported" -ne 0 ]; then
+    echo "fix-stale-reusable-pin: $unsupported file(s) left untouched (UNSUPPORTED above); not a clean success." >&2
+    exit 2
+fi
+[ "$lock_touched" -eq 1 ] && exit 3
+exit 0

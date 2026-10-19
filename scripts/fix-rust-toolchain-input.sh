@@ -13,8 +13,11 @@
 # rust-ci-reusable.yml carried the defect from d73c93e0 to 49ed4715
 # (fixed by standards#439, 9fe0d8ff).
 #
-# What it does, per workflow file, for every list item that holds a step
-# whose `uses:` is dtolnay/rust-toolchain@<40-hex>:
+# What it does, per workflow file, for every list item under a `steps:` key
+# that holds a step whose `uses:` is dtolnay/rust-toolchain@<40-hex>:
+#   * only a list item whose parent key is `steps:` is a step: a list item
+#     inside a block scalar (`run: |`, a fixture kept in `env:`) or under any
+#     other key is text and is never touched;
 #   * the step is inspected whole — from its opening `- ` line (a bare `-` on
 #     its own line opens a step too), so a `with:` written above `uses:`
 #     counts (YAML mapping keys carry no order);
@@ -28,7 +31,8 @@
 #   * a block `with:` (with or without a trailing comment) that names no
 #     `toolchain:` gets `toolchain: <TOOLCHAIN>` (default `stable`) as its
 #     first key, at the indentation its other keys use;
-#   * a flow `with: { ... }` without `toolchain` gets it as its first entry;
+#   * a flow `with: { ... }` — on one line or spread over several up to its
+#     closing brace — without `toolchain` gets it as its first entry;
 #   * a step with no `with:` at all gets one, directly under `uses:`;
 #   * keys may be quoted (`"uses":`, "with":) — the same key to GitHub;
 #   * a tag-pinned step (`@stable`, `@1.85.0`) and a step that already names a
@@ -39,7 +43,7 @@
 # Idempotent: a second run changes nothing.
 #
 # Exit 0 whether or not anything changed. Exit 2 when some file holds a
-# SHA-pinned reference the parser cannot place as a block-style step key:
+# SHA-pinned step the parser cannot place as a block-style step mapping:
 # that file is left untouched (other files are still fixed) and a dispatcher
 # must not record the run as a clean success.
 #
@@ -79,9 +83,22 @@ apply_to_file() {
             m = substr(t, RSTART + 23, RLENGTH - 23)
             return (length(m) == 40)
         }
-        # Emit the buffered list item, patched if it is a SHA-pinned dtolnay step
+        # YAML context outside list items: the key at each indentation, so a
+        # list item opens a step only when its parent key is `steps:`.
+        function record_key(s,   ind, k, t) {
+            ind = indent_of(s)
+            t = s; sub(/^[[:space:]]*/, "", t); sub(/[[:space:]]*:.*$/, "", t); gsub(/["'"'"']/, "", t)
+            for (k in keyat) if (k + 0 > ind) delete keyat[k]
+            keyat[ind] = t
+        }
+        function parent_is_steps(ind,   k, best) {
+            best = -1
+            for (k in keyat) if (k + 0 <= ind && k + 0 > best) best = k + 0
+            return (best >= 0 && keyat[best] == "steps")
+        }
+        # Emit the buffered step, patched if it is a SHA-pinned dtolnay step
         # whose `with:` names no toolchain.
-        function flush(   i, j, line, ind, uses_i, has_with, with_i, with_flow, with_indent, in_with, child_indent, has_tc, key_indent, skey, flow_item) {
+        function flush(   i, j, line, ind, uses_i, has_with, with_i, with_flow, with_indent, in_with, in_flow, child_indent, has_tc, key_indent, skey, flow_item) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` the indentation of the first plain line under it.
@@ -92,7 +109,7 @@ apply_to_file() {
                 for (j = 2; j <= n; j++) if (plain(buf[j])) { skey = indent_of(buf[j]); break }
                 if (skey < 0) skey = indent_of(buf[1]) + 2
             }
-            # Place every SHA-pinned reference in the item: the step'"'"'s own `uses:`
+            # Place every SHA-pinned reference in the step: the step'"'"'s own `uses:`
             # key, data nested under some other key (left alone), or something the
             # parser cannot place (a flow-style step) — that is reported, not guessed.
             uses_i = 0
@@ -103,9 +120,16 @@ apply_to_file() {
                 unrec[++nunrec] = lnum[i]
             }
             if (!uses_i) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
-            has_with = 0; with_i = 0; with_flow = 0; with_indent = -1; in_with = 0; child_indent = -1; has_tc = 0
+            has_with = 0; with_i = 0; with_flow = 0; with_indent = -1; in_with = 0; in_flow = 0; child_indent = -1; has_tc = 0
             for (i = 1; i <= n; i++) {
                 line = buf[i]; ind = indent_of(line)
+                if (in_flow) {
+                    # A flow `with: {` spread over several lines: every entry up to
+                    # the closing brace is an input.
+                    if (line ~ TC_RE || line ~ TC_FLOW_RE) has_tc = 1
+                    if (index(line, "}")) in_flow = 0
+                    continue
+                }
                 if (in_with) {
                     if (plain(line) && ind <= with_indent) in_with = 0
                     else if (plain(line)) {
@@ -121,6 +145,7 @@ apply_to_file() {
                     } else if (line ~ WITH_FLOW_RE) {
                         has_with = 1; with_i = i; with_flow = 1
                         if (line ~ TC_FLOW_RE) has_tc = 1
+                        if (!index(line, "}")) in_flow = 1
                     }
                 }
             }
@@ -129,6 +154,7 @@ apply_to_file() {
                 line = buf[i]
                 if (has_with && with_flow && i == with_i) {
                     if (line ~ /\{[[:space:]]*\}/) sub(/\{[[:space:]]*\}/, "{ toolchain: " toolchain " }", line)
+                    else if (line ~ /\{[[:space:]]*$/) sub(/\{[[:space:]]*$/, "{ toolchain: " toolchain ",", line)
                     else sub(/\{[[:space:]]*/, "{ toolchain: " toolchain ", ", line)
                     print line; fixed++
                 } else if (has_with && !with_flow && i == with_i) {
@@ -148,8 +174,11 @@ apply_to_file() {
             n = 0
         }
         BEGIN {
-            n = 0; in_step = 0; fixed = 0; nunrec = 0
+            n = 0; in_step = 0; in_scalar = 0; fixed = 0; nunrec = 0
             Q = "[\"'"'"']?"
+            LIST_RE = "^[[:space:]]*-([[:space:]]|$)"
+            KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
+            SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
             USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
             WITH_BLOCK_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*(#.*)?$"
             WITH_FLOW_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*\\{"
@@ -157,17 +186,30 @@ apply_to_file() {
             TC_FLOW_RE = "[{,][[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:],}]"
         }
         {
+            ind = indent_of($0)
+            # A block scalar outside any step (`FIXTURE: |` under `env:`) is text
+            # until a plain line at its key'"'"'s indentation or shallower.
+            if (!in_step && in_scalar) {
+                if (plain($0) && ind <= scalar_indent) in_scalar = 0
+                else { print; next }
+            }
             if (in_step) {
-                # The item ends at the next list item at its own indentation (or
+                # The step ends at the next list item at its own indentation (or
                 # shallower), or at a shallower key. Blank and comment lines and
                 # deeper lines belong to it.
-                ind = indent_of($0)
-                if ($0 ~ /^[[:space:]]*-([[:space:]]|$)/ && ind <= step_indent) { flush(); in_step = 0 }
+                if ($0 ~ LIST_RE && ind <= step_indent) { flush(); in_step = 0 }
                 else if (plain($0) && ind < step_indent) { flush(); in_step = 0 }
             }
-            if (!in_step && $0 ~ /^[[:space:]]*-([[:space:]]|$)/) { in_step = 1; step_indent = indent_of($0); n = 0; buf[++n] = $0; lnum[n] = NR; next }
             if (in_step) { buf[++n] = $0; lnum[n] = NR; next }
-            if (sha_ref($0)) unrec[++nunrec] = NR
+            if ($0 ~ LIST_RE) {
+                if (parent_is_steps(ind)) { in_step = 1; step_indent = ind; n = 0; buf[++n] = $0; lnum[n] = NR; next }
+                # A list item whose parent is not `steps:` (a matrix, a fixture) is data.
+                print; next
+            }
+            if (plain($0) && $0 ~ KEY_RE) {
+                record_key($0)
+                if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
+            } else if (sha_ref($0) && parent_is_steps(ind)) unrec[++nunrec] = NR
             print
         }
         END {

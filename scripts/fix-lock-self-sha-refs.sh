@@ -16,9 +16,10 @@
 # a record died. standards main carried them from 2026-08-19 to 2026-10-19.
 #
 # What it does: for each record `'owner/repo@<sha>':` followed by
-# `ref: '<sha>'`, where owner/repo is NOT an estate reusable-workflow source
-# (hyperpolymath/standards, hyperpolymath/cicd-suite — a reusable record
-# legitimately carries its SHA as ref; standards' accepted lock does), look the
+# `ref: '<sha>'`, where owner/repo is NOT a reusable-workflow source (a
+# reusable record legitimately carries its SHA as ref; standards' accepted
+# lock does — the sources are read from the workflows' own reusable `uses:`
+# lines, plus hyperpolymath/standards and hyperpolymath/cicd-suite), look the
 # commit up in scripts/lib/action-ref-tags.tsv, else (unless --offline) in
 # `git ls-remote --tags https://github.com/owner/repo`, preferring the most
 # specific tag; rewrite the ref line. A commit with no tag is reported and
@@ -56,6 +57,19 @@ lookup_tag() { # <owner/repo> <sha>
     printf '%s' "$tag"
 }
 
+# Reusable-workflow sources keep their SHA as ref (standards' accepted lock
+# does). Which repositories those are is read from the workflows themselves —
+# every `uses:` of `owner/repo/.github/workflows/<file>.yml@<ref>` — plus the
+# two estate sources, so a reusable from ANY repository is never mistaken for
+# an action record and "repaired" into a ref GitHub would then reject.
+reusable_sources=$(grep -rhoE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@" \
+    --include='*.yml' --include='*.yaml' "$REPO_PATH/.github/workflows" 2>/dev/null \
+    | sed -E "s/^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?//; s#/\.github/workflows/.*\$##" | sort -u || true)
+is_reusable_source() {
+    case "$1" in hyperpolymath/standards|hyperpolymath/cicd-suite) return 0 ;; esac
+    grep -qxF "$1" <<<"$reusable_sources"
+}
+
 fixed=0; unresolved=0
 tmp=$(mktemp); cp "$LOCK" "$tmp"
 # Parse first, loop second: a parser that dies inside a process substitution
@@ -76,7 +90,7 @@ if ! awk '
     rm -f "$tmp" "$records"; exit 2
 fi
 while IFS=$'\t' read -r lineno repo sha; do
-    case "$repo" in hyperpolymath/standards|hyperpolymath/cicd-suite) continue ;; esac
+    if is_reusable_source "$repo"; then continue; fi
     tag=$(lookup_tag "$repo" "$sha")
     if [ -z "$tag" ]; then
         echo "UNRESOLVED  $repo@${sha:0:7}: no tag found for this commit (record left as is; GitHub rejects it)" >&2
