@@ -88,6 +88,22 @@ apply_to_file() {
         # `components: "}"` or a `# }` is text, not the end of the mapping.
         function code_only(s,   t) { t = s; gsub(/"([^"\\]|\\.)*"/, "\"\"", t); gsub(/'"'"'[^'"'"']*'"'"'/, "'"'"''"'"'", t); sub(/(^|[[:space:]])#.*$/, "", t); return t }
         function brace_delta(s,   a, b) { a = code_only(s); b = a; return gsub(/\{/, "", a) - gsub(/\}/, "", b) }
+        function nbrace(s,   a) { a = s; return gsub(/\{/, "", a) }
+        # The inputs a flow line names at the `with:` mapping'"'"'s own level: quoted
+        # VALUES are blanked (a `"clippy, toolchain: nightly"` is text, a quoted
+        # key is still a key), comments dropped, and nested mappings removed —
+        # on the opener the outer `{` is kept, on a continuation line at depth 1
+        # every balanced group is nested. A line deeper than that names nothing.
+        function inputs_view(s, keep_outer,   t) {
+            t = s
+            gsub(/:[[:space:]]*"([^"\\]|\\.)*"/, ": \"\"", t); gsub(/:[[:space:]]*'"'"'[^'"'"']*'"'"'/, ": '"'"''"'"'", t)
+            sub(/(^|[[:space:]])#.*$/, "", t)
+            while (match(t, /\{[^{}]*\}/)) {
+                if (keep_outer && nbrace(t) <= 1) break
+                t = substr(t, 1, RSTART - 1) substr(t, RSTART + RLENGTH)
+            }
+            return t
+        }
         # A 40-hex pin of the action on a non-comment line, trailing comment
         # stripped. `@stable` and `@1.85.0` are tags: the ref carries the
         # channel and the step is not ours.
@@ -117,7 +133,7 @@ apply_to_file() {
         }
         # Emit the buffered step, patched if it is a SHA-pinned dtolnay step
         # whose `with:` names no toolchain.
-        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_nested, m, pre, post, delim, comment) {
+        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_nested, m, pre, post, delim, comment, v) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` the indentation of the first plain line under it.
@@ -147,9 +163,12 @@ apply_to_file() {
                     # A flow `with: {` spread over several lines: every entry up to
                     # the brace that closes it is an input. An EMPTY `toolchain:`
                     # entry (`toolchain: ,` / `toolchain: null`) is the key with no
-                    # value: it is given one in place, never duplicated.
-                    if (line ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
-                    else if (line ~ TC_RE || line ~ TC_FLOW_RE) has_tc = 1
+                    # value: it is given one in place, never duplicated. Only a line
+                    # at the mapping'"'"'s own depth names inputs, and only outside
+                    # quoted values and nested mappings.
+                    v = (flow_depth == 1) ? inputs_view(line, 0) : ""
+                    if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                    else if (v ~ TC_RE || v ~ TC_FLOW_RE) has_tc = 1
                     flow_depth += brace_delta(line)
                     if (flow_depth <= 0) in_flow = 0
                     continue
@@ -172,8 +191,9 @@ apply_to_file() {
                         has_with = 1; with_i = i; with_indent = skey; in_with = 1
                     } else if (line ~ WITH_FLOW_RE) {
                         has_with = 1; with_i = i; with_flow = 1
-                        if (line ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
-                        else if (line ~ TC_FLOW_RE) has_tc = 1
+                        v = inputs_view(line, 1)
+                        if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                        else if (v ~ TC_FLOW_RE) has_tc = 1
                         flow_depth = brace_delta(line)
                         if (flow_depth > 0) in_flow = 1
                     } else if (line ~ WITH_ANY_RE) {

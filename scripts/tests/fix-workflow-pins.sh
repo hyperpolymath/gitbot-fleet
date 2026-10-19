@@ -453,6 +453,31 @@ run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc13"
 check "a tag beginning with a SHA is a tag: untouched; the real SHA pin beside it is fixed" \
   "[ \$rc -eq 0 ] && sed -n '4p' '$fx/tc13/.github/workflows/x.yml' | grep -q 'patched\$' && sed -n '5p' '$fx/tc13/.github/workflows/x.yml' | grep -q '# pinned\$' && [ \$(grep -c 'toolchain: stable' '$fx/tc13/.github/workflows/x.yml') -eq 1 ] && sed -n '6,7p' '$fx/tc13/.github/workflows/x.yml' | grep -q '^          toolchain: stable$'"
 
+# tc14: inputs are read at the `with:` mapping's own level. `toolchain:`
+# text inside a quoted value or a nested mapping is not an input; a quoted
+# toolchain value still is.
+mkdir -p "$fx/tc14/.github/workflows"
+cat > "$fx/tc14/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { components: "clippy, toolchain: nightly" }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { env: { toolchain: nightly } }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          env: {
+            toolchain: nightly,
+          },
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { components: "clippy", toolchain: "1.85.0" }
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc14"
+check "toolchain: inside a quoted value or a nested mapping is not an input: the three steps are fixed, the quoted real one is left" \
+  "[ \$rc -eq 0 ] && [ \$(grep -c 'toolchain: stable' '$fx/tc14/.github/workflows/x.yml') -eq 3 ] && sed -n '5p' '$fx/tc14/.github/workflows/x.yml' | grep -q '^        with: { toolchain: stable, components: \"clippy, toolchain: nightly\" }$' && sed -n '7p' '$fx/tc14/.github/workflows/x.yml' | grep -q '^        with: { toolchain: stable, env: { toolchain: nightly } }$' && sed -n '9p' '$fx/tc14/.github/workflows/x.yml' | grep -q '^        with: { toolchain: stable,$' && sed -n '15p' '$fx/tc14/.github/workflows/x.yml' | grep -q 'toolchain: \"1.85.0\" }$'"
+
 # ── 2. fix-stale-reusable-pin.sh ─────────────────────────────────────────────
 STALE_A=d135b05bfc647d0c0fbfedc7e80f37ea50f49236   # Window A (table row for rust-ci-reusable only)
 STALE_B=8f2ee50841e216cd8c192eeb68953118190f105c   # Window B (table row for every standards reusable)
@@ -883,6 +908,41 @@ run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp14"
 check "a rewritten caller with no lock edge is reported and the run ends 3, lock untouched, caller moved" \
   "[ \$rc -eq 3 ] && grep -q 'has no edge' <<<\"\$out\" && grep -q \"@$GOOD\" '$fx/sp14/.github/workflows/ci.yml' && cmp -s '$fx/sp14-before.lock' '$fx/sp14/.github/workflows/actions.lock'"
 
+# sp15: the candidate scan is built from the owners the table names, so a
+# private table for another owner finds its callers.
+mkdir -p "$fx/sp15/.github/workflows"
+printf 'octo/example/.github/workflows/*\t%s\t%s\tprivate owner\n' "$STALE_A" "$GOOD" > "$fx/sp15-pins.tsv"
+printf 'jobs:\n  ci:\n    uses: octo/example/.github/workflows/ci.yml@%s\n' "$STALE_A" > "$fx/sp15/.github/workflows/ci.yml"
+run_fix env PINS_TABLE="$fx/sp15-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp15"
+check "a table row for another owner finds and moves that owner's caller" \
+  "[ \$rc -eq 0 ] && grep -q \"octo/example/.github/workflows/ci.yml@$GOOD\$\" '$fx/sp15/.github/workflows/ci.yml' && grep -q '^FIXED' <<<\"\$out\""
+
+# sp16: a double-quoted lock edge moves like a single-quoted one and keeps
+# its quotes; a record whose key merely CONTAINS repo@sha
+# (`evilhyperpolymath/standards@<sha>`) is another record and stays.
+mkdir -p "$fx/sp16/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp16/.github/workflows/ci.yml"
+cat > "$fx/sp16/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - "hyperpolymath/standards@$STALE_A"
+dependencies:
+    "hyperpolymath/standards@$STALE_A":
+        ref: "$STALE_A"
+        commit: "sha1-$STALE_A"
+        owner_id: 6759885
+        repo_id: 1116521501
+    'evilhyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp16"
+check "a double-quoted edge and record move with their quotes; a key that merely contains repo@sha is left alone" \
+  "[ \$rc -eq 3 ] && grep -q \"^        - \\\"hyperpolymath/standards@$GOOD\\\"\$\" '$fx/sp16/.github/workflows/actions.lock' && grep -q \"^    \\\"hyperpolymath/standards@$GOOD\\\":\$\" '$fx/sp16/.github/workflows/actions.lock' && grep -q \"^        ref: \\\"$GOOD\\\"\$\" '$fx/sp16/.github/workflows/actions.lock' && grep -A1 \"^    'evilhyperpolymath/standards@$STALE_A':\$\" '$fx/sp16/.github/workflows/actions.lock' | grep -q \"ref: '$STALE_A'\" && [ \$(grep -c \"$STALE_A\" '$fx/sp16/.github/workflows/actions.lock') -eq 3 ]"
+
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
 cat > "$fx/ls/.github/workflows/actions.lock" <<'LOCK'
@@ -1182,6 +1242,39 @@ printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_A" > "$fx/ls10-tags.tsv"
 TAG_MAP="$fx/ls10-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls10" --offline > "$fx/ls10.out" 2>&1; rc10=$?
 check "an unquoted self-SHA ref is found and repaired, unquoted" \
   "[ \$rc10 -eq 0 ] && grep -q '^        ref: v1.0.0$' '$fx/ls10/.github/workflows/actions.lock' && grep -q '^FIXED' '$fx/ls10.out'"
+
+# ls11: a flow-style job (`call: { uses: ... }`) is a reusable call and keeps
+# its SHA ref; a flow-style step (`- { uses: ... }`) is an action and is repaired.
+mkdir -p "$fx/ls11/.github/workflows"
+cat > "$fx/ls11/.github/workflows/ci.yml" <<YML
+jobs:
+  call: { uses: octo/example/.github/workflows/ci.yml@$SHA_A }
+  build:
+    steps:
+      - { uses: octo/act@$SHA_B }
+YML
+cat > "$fx/ls11/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'octo/example@$SHA_A'
+        - 'octo/act@$SHA_B'
+dependencies:
+    'octo/example@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    'octo/act@$SHA_B':
+        ref: '$SHA_B'
+        commit: 'sha1-$SHA_B'
+        owner_id: 1
+        repo_id: 3
+LOCK
+printf 'octo/example\t%s\tv9.9.9\nocto/act\t%s\tv1.2.3\n' "$SHA_A" "$SHA_B" > "$fx/ls11-tags.tsv"
+TAG_MAP="$fx/ls11-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls11" --offline > "$fx/ls11.out" 2>&1; rc11=$?
+check "a flow-style job is a reusable call (SHA ref kept); a flow-style step is an action (repaired)" \
+  "[ \$rc11 -eq 0 ] && grep -A1 \"^    'octo/example@$SHA_A':\$\" '$fx/ls11/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_A'\" && grep -A1 \"^    'octo/act@$SHA_B':\$\" '$fx/ls11/.github/workflows/actions.lock' | grep -q \"ref: 'v1.2.3'\" && ! grep -q UNRESOLVED '$fx/ls11.out'"
 
 # Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
 # fixture through mawk when it is installed, and refuse a lock the parser

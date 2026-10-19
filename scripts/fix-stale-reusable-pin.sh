@@ -50,16 +50,23 @@ REPO_PATH="${1:?Usage: fix-stale-reusable-pin.sh <repo-path>}"
 
 # Every row is checked before any caller is touched: a malformed row found
 # mid-run would leave earlier callers rewritten and the lock never reached.
+# The owners the table names are the owners a caller may be pinned to; the
+# candidate scan is built from them, so a private table for another owner
+# (`octo/example/.github/workflows/*`) finds its callers.
+TABLE_OWNERS_RE=""
 validate_table() {
-    local n=0 v_path v_stale v_new bad=0
+    local n=0 v_path v_stale v_new bad=0 owners=""
     while IFS=$'\t' read -r v_path v_stale v_new _; do
         n=$((n + 1))
         case "$v_path" in ''|'#'*) continue ;; esac
         [[ "$v_stale" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad stale SHA '$v_stale'" >&2; bad=1; }
         [[ "$v_new" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad replacement SHA '$v_new' for ${v_stale:0:7}" >&2; bad=1; }
         [[ "$v_path" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.*-]+$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad reusable path '$v_path'" >&2; bad=1; }
+        owners="$owners${v_path%%/*}"$'\n'
     done < "$PINS_TABLE"
     [ "$bad" -eq 0 ] || { echo "fix-stale-reusable-pin: table $PINS_TABLE is invalid; nothing was changed" >&2; exit 2; }
+    TABLE_OWNERS_RE=$(printf '%s' "$owners" | sed -E 's/[.]/\\./g' | sort -u | paste -sd'|' -)
+    [ -n "$TABLE_OWNERS_RE" ] || TABLE_OWNERS_RE="hyperpolymath"
 }
 validate_table
 [ -d "$REPO_PATH/.github/workflows" ] || { echo "OK (no workflows): $REPO_PATH"; exit 0; }
@@ -193,7 +200,7 @@ USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:
 # tag that merely STARTS with a dead SHA (`<sha>-patched`) is a different ref
 # the table never named, and must not be rewritten into `<replacement>-patched`.
 REF_END="([\"'[:space:]#]|$)"
-REUSABLE_REF_RE="hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}"
+REUSABLE_REF_RE="(${TABLE_OWNERS_RE})/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}"
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge<TAB>repository
 lock_stale=0      # a rewritten caller whose lock entry never had the edge: the lock was already out of sync
 unsupported=0
@@ -206,7 +213,6 @@ while IFS= read -r -d '' wf; do
         lineno="${numbered%%:*}"
         grep -qx "$lineno" <<<"$placed" && continue
         ref=$(grep -oE "${REUSABLE_REF_RE}${REF_END}" <<<"${numbered#*:}" | head -1 | sed -E "s/[\"'[:space:]#]\$//" || true)
-        [ -n "$ref" ] || continue
         [ -n "$ref" ] || continue
         if lookup_replacement "${ref%@*}" "${ref##*@}"; then
             echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
@@ -270,9 +276,11 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             /^dependencies:[[:space:]]*$/ { sec = "d" }
             sec == "w" && /^    ["'"'"']/ { inwf = ($0 == wfkey) }
             sec == "w" && inwf && /^        - / {
-                i = index($0, "'"'"'" repo "@" stale "'"'"'")
+                # Either quote style; the edge keeps the one it has.
+                q = "'"'"'"; i = index($0, q repo "@" stale q)
+                if (!i) { q = "\""; i = index($0, q repo "@" stale q) }
                 if (i) {
-                    moved = substr($0, 1, i + length(repo)) "@" new "'"'"'"
+                    moved = substr($0, 1, i + length(repo)) "@" new q
                     # keep: an uncovered caller in this workflow still pins the stale
                     # SHA, so the edge is added beside the old one, not replaced.
                     if (keep == "1") { if (!seen[moved]++) { print; $0 = moved } else next } else $0 = moved
@@ -296,7 +304,9 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         # record and keeps its SHA.
         awk -v stale="$stale" -v new="$new" -v repo="$repo" -v still="$still" '
             /^dependencies:[[:space:]]*$/ { sec = "d" }
-            sec == "d" && /^    ["'"'"']/ { inrec = (index($0, repo "@" stale) > 0) }
+            # The record is the one whose unquoted key IS repo@stale: a key that
+            # merely contains it (`evilhyperpolymath/standards@<sha>`) is another record.
+            sec == "d" && /^    ["'"'"']/ { k = $0; sub(/^    /, "", k); sub(/:$/, "", k); gsub(/["'"'"']/, "", k); inrec = (k == repo "@" stale) }
             sec == "d" && inrec && (/^    ["'"'"']/ || /^        (ref|commit):/) {
                 if (still == 0) gsub(stale, new)
                 else { c = $0; gsub(stale, new, c); copy[++nc] = c }
