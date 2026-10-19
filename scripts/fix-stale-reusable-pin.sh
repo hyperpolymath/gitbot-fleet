@@ -26,7 +26,9 @@
 # afterwards; the script says so when it touches a lock.
 #
 # Idempotent. Rewrites nothing it does not recognise. Exit 0 whether or not
-# anything changed; exit 2 when the table is unreadable.
+# anything changed; exit 2 when the table is unreadable; exit 3 when the pins
+# were rewritten but actions.lock was touched and still needs `gh actions-lock`
+# — a dispatcher must not record that as a clean success.
 #
 # Usage:
 #   fix-stale-reusable-pin.sh <repo-path>
@@ -158,7 +160,8 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
 fi
 rm -f "$edits"
 
-if [ "$lock_touched" -eq 1 ]; then
-    echo "WARN: actions.lock named a stale SHA and was rewritten to the replacement; its nested uses: list was NOT recomputed — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2
-fi
 if [ "$rewrites" -eq 0 ]; then echo "OK (no known-dead reusable pins): $REPO_PATH"; else echo "Rewrote $rewrites pin(s) in $REPO_PATH"; fi
+if [ "$lock_touched" -eq 1 ]; then
+    echo "WARN: actions.lock named a stale SHA and was rewritten to the replacement; its nested uses: list was NOT recomputed — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing. Exit 3: not a clean success." >&2
+    exit 3
+fi

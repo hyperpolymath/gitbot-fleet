@@ -135,22 +135,24 @@ dependencies:
         owner_id: 6759885
         repo_id: 1116521501
 LOCK
-out=$(bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp" 2>&1)
+set +e
+out=$(bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp" 2>&1); rc_sp=$?
+set -e
 check "Window A pin of rust-ci-reusable is moved to the replacement" "grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/sp/.github/workflows/rust-ci.yml'"
 check "Window B pin of any standards reusable is moved (wildcard row)" "grep -q \"governance-reusable.yml@$GOOD\" '$fx/sp/.github/workflows/governance.yml'"
 check "a Window-A SHA on a reusable the window does not cover is left alone" "grep -q \"mirror-reusable.yml@$STALE_A\" '$fx/sp/.github/workflows/mirror.yml'"
 check "a cicd-suite pin that happens to share the SHA is not a standards pin and is untouched" "grep -q \"main-estate-audit.yml@$STALE_B\" '$fx/sp/.github/workflows/audit.yml'"
 check "the lock's workflows entry and record follow the pin" "[ \$(grep -c \"$GOOD\" '$fx/sp/.github/workflows/actions.lock') -eq 4 ] && ! grep -q \"$STALE_B\" '$fx/sp/.github/workflows/actions.lock'"
-check "touching the lock is said out loud" "grep -q 'nested uses: list was NOT recomputed' <<<\"\$out\""
+check "touching the lock is said out loud and exits 3, never a clean success" "[ \$rc_sp -eq 3 ] && grep -q 'nested uses: list was NOT recomputed' <<<\"\$out\""
 tar -C "$fx/sp" -cf "$fx/sp1.tar" .github
-bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp" >/dev/null 2>&1
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp" >/dev/null 2>&1; rc_sp2=$?
 tar -C "$fx/sp" -cf "$fx/sp2.tar" .github
-check "second run is a no-op" "cmp -s '$fx/sp1.tar' '$fx/sp2.tar'"
+check "second run is a no-op and exits 0 (nothing left to say about the lock)" "[ \$rc_sp2 -eq 0 ] && cmp -s '$fx/sp1.tar' '$fx/sp2.tar'"
 # Planted control: an empty table rewrites nothing.
 printf '# empty\n' > "$fx/empty.tsv"
 mkdir -p "$fx/sp0/.github/workflows"; printf 'jobs:\n  rust-ci:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp0/.github/workflows/rust-ci.yml"
-PINS_TABLE="$fx/empty.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp0" >/dev/null 2>&1
-check "control: with no table rows nothing is rewritten" "grep -q \"@$STALE_A\" '$fx/sp0/.github/workflows/rust-ci.yml'"
+PINS_TABLE="$fx/empty.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp0" >/dev/null 2>&1; rc_sp0=$?
+check "control: with no table rows nothing is rewritten and the run exits 0" "[ \$rc_sp0 -eq 0 ] && grep -q \"@$STALE_A\" '$fx/sp0/.github/workflows/rust-ci.yml'"
 check "the shipped table names both windows' edges and never lists the replacement as stale" \
   "grep -q \"rust-ci-reusable.yml.$STALE_A\" '$fleet/scripts/lib/stale-reusable-pins.tsv' && grep -q \"workflows/\\*.$STALE_B\" '$fleet/scripts/lib/stale-reusable-pins.tsv' && ! awk -F'\\t' -v g=\"$GOOD\" '\$2 == g' '$fleet/scripts/lib/stale-reusable-pins.tsv' | grep -q ."
 # Two callers at two different dead SHAs that move to the SAME replacement must
@@ -184,7 +186,7 @@ dependencies:
             - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
             - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'
 LOCK
-bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp2" >/dev/null 2>&1
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp2" >/dev/null 2>&1 || true
 check "two dead SHAs moving to one replacement leave ONE record for it" "[ \$(grep -c \"^    'hyperpolymath/standards@$GOOD':\" '$fx/sp2/.github/workflows/actions.lock') -eq 1 ]"
 check "the merged record carries the union of both nested lists, once each" \
   "[ \$(grep -c \"            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\" '$fx/sp2/.github/workflows/actions.lock') -eq 1 ] && grep -q 'erlef/setup-beam' '$fx/sp2/.github/workflows/actions.lock' && grep -q 'ossf/scorecard-action' '$fx/sp2/.github/workflows/actions.lock'"
@@ -214,7 +216,9 @@ dependencies:
         uses:
             - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
 LOCK
-out3=$(bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp3" 2>&1)
+set +e
+out3=$(bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp3" 2>&1); rc_sp3=$?
+set -e
 l3="$fx/sp3/.github/workflows/actions.lock"
 check "partial migration: the rewritten caller's lock edge moves" \
   "grep -A1 \"'.github/workflows/rust-ci.yml':\" '$l3' | grep -q \"hyperpolymath/standards@$GOOD\""
@@ -222,16 +226,16 @@ check "partial migration: the untouched caller's lock edge stays at the stale SH
   "grep -A1 \"'.github/workflows/mirror.yml':\" '$l3' | grep -q \"hyperpolymath/standards@$STALE_A\" && grep -q \"mirror-reusable.yml@$STALE_A\" '$fx/sp3/.github/workflows/mirror.yml'"
 check "partial migration: both dependency records exist, each with its own ref and commit" \
   "[ \$(grep -c \"^    'hyperpolymath/standards@\" '$l3') -eq 2 ] && grep -q \"ref: '$GOOD'\" '$l3' && grep -q \"ref: '$STALE_A'\" '$l3' && grep -q \"commit: 'sha1-$GOOD'\" '$l3'"
-check "partial migration is said out loud" "grep -q 'keeps the record for' <<<\"\$out3\""
+check "partial migration is said out loud and exits 3" "[ \$rc_sp3 -eq 3 ] && grep -q 'keeps the record for' <<<\"\$out3\""
 tar -C "$fx/sp3" -cf "$fx/sp3a.tar" .github
-bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp3" >/dev/null 2>&1
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp3" >/dev/null 2>&1; rc_sp3b=$?
 tar -C "$fx/sp3" -cf "$fx/sp3b.tar" .github
-check "partial migration: second run is a no-op" "cmp -s '$fx/sp3a.tar' '$fx/sp3b.tar'"
+check "partial migration: second run is a no-op and exits 0" "[ \$rc_sp3b -eq 0 ] && cmp -s '$fx/sp3a.tar' '$fx/sp3b.tar'"
 # A quoted key and value are still a pin.
 mkdir -p "$fx/sp4/.github/workflows"
 printf 'jobs:\n  governance:\n    "uses": "hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s"\n' "$STALE_B" > "$fx/sp4/.github/workflows/governance.yml"
-bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp4" >/dev/null 2>&1
-check "a quoted \"uses\" key with a quoted value is rewritten" "grep -q \"\\\"hyperpolymath/standards/.github/workflows/governance-reusable.yml@$GOOD\\\"\" '$fx/sp4/.github/workflows/governance.yml'"
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp4" >/dev/null 2>&1; rc_sp4=$?
+check "a quoted \"uses\" key with a quoted value is rewritten" "[ \$rc_sp4 -eq 0 ] && grep -q \"\\\"hyperpolymath/standards/.github/workflows/governance-reusable.yml@$GOOD\\\"\" '$fx/sp4/.github/workflows/governance.yml'"
 
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
