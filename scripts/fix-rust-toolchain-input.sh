@@ -84,7 +84,10 @@ apply_to_file() {
         # Net brace depth of a line: a flow mapping closes when it returns to
         # zero, not at the first `}` — an expression `${{ matrix.x }}` inside it
         # opens and closes its own braces.
-        function brace_delta(s,   a, b) { a = s; b = s; return gsub(/\{/, "", a) - gsub(/\}/, "", b) }
+        # ... and only braces OUTSIDE quoted scalars and comments count: a
+        # `components: "}"` or a `# }` is text, not the end of the mapping.
+        function code_only(s,   t) { t = s; gsub(/"([^"\\]|\\.)*"/, "\"\"", t); gsub(/'"'"'[^'"'"']*'"'"'/, "'"'"''"'"'", t); sub(/(^|[[:space:]])#.*$/, "", t); return t }
+        function brace_delta(s,   a, b) { a = code_only(s); b = a; return gsub(/\{/, "", a) - gsub(/\}/, "", b) }
         # A 40-hex pin of the action on a non-comment line, trailing comment
         # stripped. `@stable` and `@1.85.0` are tags: the ref carries the
         # channel and the step is not ours.
@@ -179,6 +182,7 @@ apply_to_file() {
                 }
             }
             if (tc_nested) { unrec[++nunrec] = lnum[tc_empty_i]; with_bad = 1 }
+            if (tc_empty_i && tc_empty_flow && !match(buf[tc_empty_i], TC_FLOW_EMPTY_RE)) { unrec[++nunrec] = lnum[tc_empty_i]; with_bad = 1 }
             if (has_tc || with_bad) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
             for (i = 1; i <= n; i++) {
                 line = buf[i]

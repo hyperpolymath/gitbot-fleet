@@ -409,6 +409,42 @@ run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc11"
 check "a toolchain: key with a nested mapping is UNSUPPORTED: file untouched, exit 2" \
   "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 6' <<<\"\$out\" && cmp -s '$fx/tc11-before.yml' '$fx/tc11/.github/workflows/x.yml'"
 
+# tc12: braces inside quoted scalars and comments are text. A `"}"` value or
+# a `# }` comment inside a multi-line flow `with:` must not end the mapping
+# early (and hide a later toolchain, or misplace the insertion).
+mkdir -p "$fx/tc12/.github/workflows"
+cat > "$fx/tc12/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          components: "}", # a } in a comment
+          toolchain: nightly,
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          components: '{',
+        }
+YML
+cat > "$fx/tc12-expected.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          components: "}", # a } in a comment
+          toolchain: nightly,
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: stable,
+          components: '{',
+        }
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc12"
+check "quoted braces and comment braces do not close a flow with: — the named toolchain is seen, the missing one added once" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc12-expected.yml' '$fx/tc12/.github/workflows/x.yml'"
+
 # ── 2. fix-stale-reusable-pin.sh ─────────────────────────────────────────────
 STALE_A=d135b05bfc647d0c0fbfedc7e80f37ea50f49236   # Window A (table row for rust-ci-reusable only)
 STALE_B=8f2ee50841e216cd8c192eeb68953118190f105c   # Window B (table row for every standards reusable)
@@ -777,6 +813,68 @@ run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp11"
 check "a tag that begins with a dead SHA is not that SHA: untouched, exit 0, the dead pin beside it moved" \
   "[ \$rc -eq 0 ] && sed -n '3p' '$fx/sp11/.github/workflows/ci.yml' | grep -q \"@$STALE_A-patched\$\" && sed -n '5p' '$fx/sp11/.github/workflows/ci.yml' | grep -q \"@$GOOD\$\" && ! grep -q 'UNSUPPORTED' <<<\"\$out\""
 
+# sp12: the whole table is validated before any caller is touched: a good
+# row followed by a malformed one leaves every workflow and the lock as they
+# were, exit 2.
+mkdir -p "$fx/sp12/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp12/.github/workflows/rust-ci.yml"
+cp "$fx/sp12/.github/workflows/rust-ci.yml" "$fx/sp12-before.yml"
+cp "$fx/sp5/.github/workflows/actions.lock" "$fx/sp12/.github/workflows/actions.lock"
+cp "$fx/sp12/.github/workflows/actions.lock" "$fx/sp12-before.lock"
+printf 'hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml\t%s\t%s\tgood row\nhyperpolymath/standards/.github/workflows/*\t%s\tnot-a-sha\tbad row after a good one\n' \
+  "$STALE_A" "$GOOD" "$STALE_B" > "$fx/sp12-pins.tsv"
+run_fix env PINS_TABLE="$fx/sp12-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp12"
+check "a malformed row anywhere in the table stops the run before any caller or lock is touched: exit 2" \
+  "[ \$rc -eq 2 ] && grep -q 'table row 2: bad replacement SHA' <<<\"\$out\" && cmp -s '$fx/sp12-before.yml' '$fx/sp12/.github/workflows/rust-ci.yml' && cmp -s '$fx/sp12-before.lock' '$fx/sp12/.github/workflows/actions.lock'"
+
+# sp13: a lock edge is per repository@SHA. An unrelated repository that sits
+# at the same SHA keeps its edge and its record when the covered one moves.
+mkdir -p "$fx/sp13/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n  other:\n    uses: octo-org/example/.github/workflows/ci.yml@%s\n' "$STALE_A" "$STALE_A" > "$fx/sp13/.github/workflows/ci.yml"
+cat > "$fx/sp13/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+        - 'octo-org/example@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 6759885
+        repo_id: 1116521501
+    'octo-org/example@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp13"
+check "only the covered repository's edge and record move; the unrelated repository at the same SHA keeps both" \
+  "[ \$rc -eq 3 ] && grep -q \"^        - 'hyperpolymath/standards@$GOOD'\$\" '$fx/sp13/.github/workflows/actions.lock' && grep -q \"^        - 'octo-org/example@$STALE_A'\$\" '$fx/sp13/.github/workflows/actions.lock' && grep -q \"^    'hyperpolymath/standards@$GOOD':\$\" '$fx/sp13/.github/workflows/actions.lock' && grep -A1 \"^    'octo-org/example@$STALE_A':\$\" '$fx/sp13/.github/workflows/actions.lock' | grep -q \"ref: '$STALE_A'\" && [ \$(grep -c \"$STALE_A\" '$fx/sp13/.github/workflows/actions.lock') -eq 4 ]"
+
+# sp14: a lock that exists but carries no edge for the rewritten caller was
+# already out of sync; the caller still moves, but the run says so and ends 3,
+# never 0 — dispatch must not record a clean repair over a stale lock.
+mkdir -p "$fx/sp14/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp14/.github/workflows/ci.yml"
+cat > "$fx/sp14/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/other.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+dependencies:
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1':
+        ref: 'v7.0.1'
+        commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
+        owner_id: 1
+        repo_id: 2
+LOCK
+cp "$fx/sp14/.github/workflows/actions.lock" "$fx/sp14-before.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp14"
+check "a rewritten caller with no lock edge is reported and the run ends 3, lock untouched, caller moved" \
+  "[ \$rc -eq 3 ] && grep -q 'has no edge' <<<\"\$out\" && grep -q \"@$GOOD\" '$fx/sp14/.github/workflows/ci.yml' && cmp -s '$fx/sp14-before.lock' '$fx/sp14/.github/workflows/actions.lock'"
+
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
 cat > "$fx/ls/.github/workflows/actions.lock" <<'LOCK'
@@ -1034,6 +1132,27 @@ printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_A" > "$fx/ls8-tags.tsv"
 TAG_MAP="$fx/ls8-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls8" --offline > "$fx/ls8.out" 2>&1; rc8=$?
 check "a reusable path inside run: | or env: is text: the action record it names is still repaired" \
   "[ \$rc8 -eq 0 ] && grep -q \"ref: 'v1.0.0'\" '$fx/ls8/.github/workflows/actions.lock' && ! grep -q UNRESOLVED '$fx/ls8.out'"
+
+# ls9: a record is read to its end: `ref:` after `commit:` and the ids is
+# still the record's ref, and still repaired.
+mkdir -p "$fx/ls9/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: foo/bar@%s\n' "$SHA_A" > "$fx/ls9/.github/workflows/ci.yml"
+cat > "$fx/ls9/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'foo/bar@$SHA_A'
+dependencies:
+    'foo/bar@$SHA_A':
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+        ref: '$SHA_A'
+LOCK
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_A" > "$fx/ls9-tags.tsv"
+TAG_MAP="$fx/ls9-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls9" --offline > "$fx/ls9.out" 2>&1; rc9=$?
+check "a ref: that is not the first line of its record is still the record's ref: repaired, exit 0" \
+  "[ \$rc9 -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls9/.github/workflows/actions.lock' && ! grep -q \"ref: '$SHA_A'\" '$fx/ls9/.github/workflows/actions.lock' && grep -q '^FIXED' '$fx/ls9.out'"
 
 # Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
 # fixture through mawk when it is installed, and refuse a lock the parser

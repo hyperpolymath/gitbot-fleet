@@ -160,18 +160,23 @@ tmp=$(mktemp); cp "$LOCK" "$tmp"
 # A record key and its ref may be single- or double-quoted (gh actions-lock
 # writes single quotes; a hand-added record — exactly where this defect
 # comes from — may not), and the quote style is kept on the rewrite.
+# A record is read to its end (the next record key, or the end of the 8-space
+# block): YAML mapping order is not fixed, so `ref:` may follow `commit:` and
+# the other fields — exactly as a hand-added record might write it. Each
+# finding carries the line of the `ref:` itself.
 records=$(mktemp)
 if ! awk '
     /^    ["'"'"'][^"'"'"'@]+@[0-9a-f]+["'"'"']:$/ {
         s = $0; sub(/^    ["'"'"']/, "", s); sub(/["'"'"']:$/, "", s)
         i = index(s, "@"); repo = substr(s, 1, i - 1); sha = substr(s, i + 1)
-        if (length(sha) == 40) { key_line = NR; key_repo = repo; key_sha = sha; next }
+        if (length(sha) == 40) { inrec = 1; key_repo = repo; key_sha = sha } else inrec = 0
+        next
     }
-    key_line && NR == key_line + 1 && /^        ref: ["'"'"']/ {
+    /^[^[:space:]]/ || /^    [^[:space:]]/ { inrec = 0 }
+    inrec && /^        ref: ["'"'"']/ {
         r = $0; sub(/^        ref: /, "", r); gsub(/["'"'"']/, "", r)
-        if (r == key_sha) print key_line "\t" key_repo "\t" key_sha
+        if (r == key_sha) print NR "\t" key_repo "\t" key_sha
     }
-    { key_line = 0 }
 ' "$LOCK" > "$records"; then
     echo "fix-lock-self-sha-refs: could not parse $LOCK (awk failed); lock left unchanged" >&2
     rm -f "$tmp" "$records" "$SITES"; exit 2
@@ -189,8 +194,8 @@ while IFS=$'\t' read -r lineno repo sha; do
         echo "UNRESOLVED  $repo@${sha:0:7}: resolved tag '$tag' carries characters this fixer will not write into the lock (record left as is)" >&2
         unresolved=$((unresolved + 1)); continue
     fi
-    # The ref line is the one directly after the record key; its quote style is kept.
-    sed -i "$((lineno + 1))s|ref: \(['\"]\)$sha\1|ref: \1$tag\1|" "$tmp"
+    # lineno is the ref: line itself; its quote style is kept.
+    sed -i "${lineno}s|ref: \(['\"]\)$sha\1|ref: \1$tag\1|" "$tmp"
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
 done < "$records"

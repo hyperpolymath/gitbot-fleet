@@ -47,6 +47,21 @@ PINS_TABLE="${PINS_TABLE:-$SCRIPT_DIR/lib/stale-reusable-pins.tsv}"
 REPO_PATH="${1:?Usage: fix-stale-reusable-pin.sh <repo-path>}"
 
 [ -r "$PINS_TABLE" ] || { echo "fix-stale-reusable-pin: table not readable: $PINS_TABLE" >&2; exit 2; }
+
+# Every row is checked before any caller is touched: a malformed row found
+# mid-run would leave earlier callers rewritten and the lock never reached.
+validate_table() {
+    local n=0 v_path v_stale v_new bad=0
+    while IFS=$'\t' read -r v_path v_stale v_new _; do
+        n=$((n + 1))
+        case "$v_path" in ''|'#'*) continue ;; esac
+        [[ "$v_stale" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad stale SHA '$v_stale'" >&2; bad=1; }
+        [[ "$v_new" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad replacement SHA '$v_new' for ${v_stale:0:7}" >&2; bad=1; }
+        [[ "$v_path" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.*-]+$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad reusable path '$v_path'" >&2; bad=1; }
+    done < "$PINS_TABLE"
+    [ "$bad" -eq 0 ] || { echo "fix-stale-reusable-pin: table $PINS_TABLE is invalid; nothing was changed" >&2; exit 2; }
+}
+validate_table
 [ -d "$REPO_PATH/.github/workflows" ] || { echo "OK (no workflows): $REPO_PATH"; exit 0; }
 
 LOCK="$REPO_PATH/.github/workflows/actions.lock"
@@ -179,7 +194,8 @@ USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:
 # the table never named, and must not be rewritten into `<replacement>-patched`.
 REF_END="([\"'[:space:]#]|$)"
 REUSABLE_REF_RE="hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}"
-edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge
+edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge<TAB>repository
+lock_stale=0      # a rewritten caller whose lock entry never had the edge: the lock was already out of sync
 unsupported=0
 while IFS= read -r -d '' wf; do
     ctx=$(yaml_context "$wf")
@@ -226,24 +242,37 @@ while IFS= read -r -d '' wf; do
         for other in $klines; do
             sed -n "${other}p" "$wf" | grep -qE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" && keep=1
         done
-        printf '%s\t%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" "$keep" >> "$edits"
+        printf '%s\t%s\t%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" "$keep" "$repo_prefix" >> "$edits"
     done
 done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
 
-# Lock: move each rewritten workflow's own `workflows:` edges first.
+# Lock: move each rewritten workflow's own `workflows:` edges first. An edge
+# is per repository@SHA: an unrelated repository that happens to sit at the
+# same SHA keeps its edge and its record. A rewritten caller whose lock entry
+# has no such edge at all was already out of sync with its lock; that is
+# said, and the run ends 3 (the lock needs `gh actions-lock`), never 0.
 if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     sort -u "$edits" -o "$edits"
-    while IFS=$'\t' read -r wfkey stale new keep; do
-        grep -q "$stale" "$LOCK" || continue
+    while IFS=$'\t' read -r wfkey stale new keep repo; do
+        if ! awk -v wfkey="    '$wfkey':" -v edge="$repo@$stale" '
+                /^workflows:[[:space:]]*$/ { sec = "w" }
+                /^dependencies:[[:space:]]*$/ { sec = "d" }
+                sec == "w" && /^    ["'"'"']/ { inwf = ($0 == wfkey) }
+                sec == "w" && inwf && /^        - / && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"")) { found = 1 }
+                END { exit !found }' "$LOCK"; then
+            echo "WARN: actions.lock has no edge '$repo@${stale:0:7}' under '$wfkey': the lock was already out of sync with this caller — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2
+            lock_stale=1
+            continue
+        fi
         tmp=$(mktemp)
-        awk -v wfkey="    '$wfkey':" -v stale="$stale" -v new="$new" -v keep="$keep" '
+        awk -v wfkey="    '$wfkey':" -v stale="$stale" -v new="$new" -v keep="$keep" -v repo="$repo" '
             /^workflows:[[:space:]]*$/ { sec = "w" }
             /^dependencies:[[:space:]]*$/ { sec = "d" }
-            sec == "w" && /^    '"'"'/ { inwf = ($0 == wfkey) }
+            sec == "w" && /^    ["'"'"']/ { inwf = ($0 == wfkey) }
             sec == "w" && inwf && /^        - / {
-                i = index($0, "@" stale "'"'"'")
+                i = index($0, "'"'"'" repo "@" stale "'"'"'")
                 if (i) {
-                    moved = substr($0, 1, i) new "'"'"'"
+                    moved = substr($0, 1, i + length(repo)) "@" new "'"'"'"
                     # keep: an uncovered caller in this workflow still pins the stale
                     # SHA, so the edge is added beside the old one, not replaced.
                     if (keep == "1") { if (!seen[moved]++) { print; $0 = moved } else next } else $0 = moved
@@ -257,24 +286,27 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     # copy it under the replacement key while an edge still points at the
     # stale SHA — a workflow's own edge, or another record's nested `uses:`
     # (a reusable that itself calls the stale revision keeps needing it).
-    while IFS=$'\t' read -r stale new; do
-        grep -q "$stale" "$LOCK" || continue
-        still=$(awk -v stale="$stale" '
-            /^ +- '"'"'/ && index($0, "@" stale "'"'"'") { n++ } END { print n + 0 }' "$LOCK")
+    while IFS=$'\t' read -r stale new repo; do
+        grep -q "$repo@$stale" "$LOCK" || continue
+        still=$(awk -v edge="$repo@$stale" '
+            /^ +- ["'"'"']/ && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"")) { n++ } END { print n + 0 }' "$LOCK")
         tmp=$(mktemp)
-        if [ "$still" -eq 0 ]; then
-            sed "s/$stale/$new/g" "$LOCK" > "$tmp"
-        else
-            awk -v stale="$stale" -v new="$new" '
-                /^dependencies:[[:space:]]*$/ { sec = "d" }
-                sec == "d" && /^    '"'"'/ { inrec = (index($0, "@" stale "'"'"':") > 0) }
-                sec == "d" && inrec { c = $0; gsub(stale, new, c); copy[++nc] = c }
-                { print }
-                END { for (i = 1; i <= nc; i++) print copy[i] }' "$LOCK" > "$tmp"
-            echo "NOTE: actions.lock keeps the record for ${stale:0:7}: a workflow the table does not cover still pins it; the replacement got its own record." >&2
-        fi
+        # Only THIS repository'"'"'s record moves: its key line, and its ref: and
+        # commit: lines. Another repository at the same SHA is a different
+        # record and keeps its SHA.
+        awk -v stale="$stale" -v new="$new" -v repo="$repo" -v still="$still" '
+            /^dependencies:[[:space:]]*$/ { sec = "d" }
+            sec == "d" && /^    ["'"'"']/ { inrec = (index($0, repo "@" stale) > 0) }
+            sec == "d" && inrec && (/^    ["'"'"']/ || /^        (ref|commit):/) {
+                if (still == 0) gsub(stale, new)
+                else { c = $0; gsub(stale, new, c); copy[++nc] = c }
+            }
+            sec == "d" && inrec && still != 0 && !(/^    ["'"'"']/ || /^        (ref|commit):/) { copy[++nc] = $0 }
+            { print }
+            END { for (i = 1; i <= nc; i++) print copy[i] }' "$LOCK" > "$tmp"
+        [ "$still" -eq 0 ] || echo "NOTE: actions.lock keeps the record for ${stale:0:7}: a workflow the table does not cover still pins it; the replacement got its own record." >&2
         if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
-    done < <(cut -f2,3 "$edits" | sort -u)
+    done < <(cut -f2,3,5 "$edits" | sort -u)
     # A kept stale edge means the new edge was ADDED, so the stale record is
     # kept too (the branch above copies it); nothing else to do here.
     [ "$lock_touched" -eq 1 ] && merge_duplicate_records "$LOCK"
@@ -288,6 +320,10 @@ fi
 if [ "$unsupported" -ne 0 ]; then
     echo "fix-stale-reusable-pin: $unsupported file(s) left untouched (UNSUPPORTED above); not a clean success." >&2
     exit 2
+fi
+if [ "$lock_stale" -eq 1 ]; then
+    echo "fix-stale-reusable-pin: a rewritten caller had no matching lock edge (WARN above); the lock is out of sync. Exit 3: not a clean success." >&2
+    exit 3
 fi
 [ "$lock_touched" -eq 1 ] && exit 3
 exit 0
