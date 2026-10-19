@@ -97,8 +97,12 @@ merge_duplicate_records() {
 }
 
 # Every `uses:` of an estate reusable at a full SHA, across the workflows.
-# The lock is edited after the loop, once every workflow rewrite is known.
-edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement
+# Only a YAML `uses` KEY counts — the key at the start of the line (quoted or
+# not, list dash or not); the same text after a `#` is a comment, not a
+# caller, and must not move anything. The lock is edited after the loop,
+# once every workflow rewrite is known.
+USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?"
+edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge
 while IFS= read -r -d '' wf; do
     while IFS= read -r line; do
         path="${line%@*}"; stale="${line##*@}"
@@ -113,24 +117,39 @@ while IFS= read -r -d '' wf; do
         done < "$PINS_TABLE"
         [ -n "$replacement" ] || continue
         [[ "$replacement" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: bad replacement SHA in table for $stale" >&2; exit 2; }
-        sed -i "s|\(uses[\"']\?[[:space:]]*:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
+        sed -i "s|^\([[:space:]]*\(-[[:space:]]\+\)\?[\"']\?uses[\"']\?[[:space:]]*:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
         echo "FIXED  ${wf#"$REPO_PATH"/}  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
         rewrites=$((rewrites + 1))
-        printf '%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" >> "$edits"
-    done < <(grep -oE "[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}" "$wf" | sed -E "s/^[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?//" | sort -u)
+        # A lock edge is per repository@SHA, shared by every reusable of that
+        # repository the workflow calls. When this workflow still calls another
+        # reusable of the same repository at the stale SHA (a pin the table does
+        # not cover), the stale edge must stay next to the new one.
+        repo_prefix="${path%%/.github/workflows/*}"
+        keep=0
+        grep -qE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" "$wf" && keep=1
+        printf '%s\t%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" "$keep" >> "$edits"
+    done < <(grep -oE "${USES_KEY_RE}hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}" "$wf" | sed -E "s/${USES_KEY_RE}//" | sort -u)
 done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
 
 # Lock: move each rewritten workflow's own `workflows:` edges first.
 if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     sort -u "$edits" -o "$edits"
-    while IFS=$'\t' read -r wfkey stale new; do
+    while IFS=$'\t' read -r wfkey stale new keep; do
         grep -q "$stale" "$LOCK" || continue
         tmp=$(mktemp)
-        awk -v wfkey="    '$wfkey':" -v stale="$stale" -v new="$new" '
+        awk -v wfkey="    '$wfkey':" -v stale="$stale" -v new="$new" -v keep="$keep" '
             /^workflows:[[:space:]]*$/ { sec = "w" }
             /^dependencies:[[:space:]]*$/ { sec = "d" }
             sec == "w" && /^    '"'"'/ { inwf = ($0 == wfkey) }
-            sec == "w" && inwf && /^        - / { i = index($0, "@" stale "'"'"'"); if (i) $0 = substr($0, 1, i) new "'"'"'" }
+            sec == "w" && inwf && /^        - / {
+                i = index($0, "@" stale "'"'"'")
+                if (i) {
+                    moved = substr($0, 1, i) new "'"'"'"
+                    # keep: an uncovered caller in this workflow still pins the stale
+                    # SHA, so the edge is added beside the old one, not replaced.
+                    if (keep == "1") { if (!seen[moved]++) { print; $0 = moved } else next } else $0 = moved
+                }
+            }
             { print }
         ' "$LOCK" > "$tmp"
         if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
@@ -156,6 +175,8 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         fi
         if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
     done < <(cut -f2,3 "$edits" | sort -u)
+    # A kept stale edge means the new edge was ADDED, so the stale record is
+    # kept too (the branch above copies it); nothing else to do here.
     [ "$lock_touched" -eq 1 ] && merge_duplicate_records "$LOCK"
 fi
 rm -f "$edits"

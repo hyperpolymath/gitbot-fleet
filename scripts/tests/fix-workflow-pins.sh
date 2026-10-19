@@ -114,6 +114,72 @@ cp "$f2" "$fx/tc2-after1.yml"
 bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc2" >/dev/null 2>&1
 check "second run over the review cases is a no-op" "cmp -s '$fx/tc2-after1.yml' '$f2'"
 
+# Review cases (Codex, gitbot-fleet#615): a quoted "with" key; the same text
+# inside a `run: |` script and under `env:` (data, not the step's action); a
+# tag ref that starts with hex digits (`@1.85.0`); bare `-` openers; and a
+# flow-style step the parser must refuse out loud rather than report clean.
+mkdir -p "$fx/tc3/.github/workflows"
+cat > "$fx/tc3/.github/workflows/rust.yml" <<'YML'
+jobs:
+  a:
+    steps:
+      - "uses": "dtolnay/rust-toolchain@0000000000000000000000000000000000000003"
+        "with": { components: clippy }
+      - name: write a fixture
+        run: |
+          cat > fixture.yml <<'EOF'
+          uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000004
+          EOF
+      - uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000005
+        env:
+          uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000006
+      - uses: dtolnay/rust-toolchain@1.85.0
+      -
+        with:
+          toolchain: nightly
+        uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000007
+      -
+        uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000008
+      - run: cargo test
+YML
+f3="$fx/tc3/.github/workflows/rust.yml"
+cp "$f3" "$fx/tc3-before.yml"
+set +e
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc3" >/dev/null 2>&1; rc_tc3=$?
+set -e
+check "a quoted \"with\" key is reused: toolchain goes into it, nothing inserted under uses:" \
+  "grep -A1 '0000000000000000000000000000000000000003' '$f3' | sed -n '2p' | grep -q '^        \"with\": { toolchain: stable, components: clippy }$'"
+check "a SHA ref inside a run: | script is data: left alone, nothing inserted after it" \
+  "grep -A1 '0000000000000000000000000000000000000004' '$f3' | sed -n '2p' | grep -q '^          EOF$' && grep -q '^          uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000004$' '$f3'"
+check "a SHA ref under env: is data: the step gets with: under its own uses:, env: is kept as is" \
+  "grep -A2 '0000000000000000000000000000000000000005' '$f3' | sed -n '2p' | grep -q '^        with:$' && grep -A2 '0000000000000000000000000000000000000005' '$f3' | sed -n '3p' | grep -q '^          toolchain: stable$' && grep -A1 '0000000000000000000000000000000000000006' '$f3' | sed -n '2p' | grep -q '^      - uses: dtolnay/rust-toolchain@1.85.0$'"
+check "a tag ref that starts with hex digits (@1.85.0) is a tag: untouched" \
+  "grep -A1 'rust-toolchain@1.85.0' '$f3' | sed -n '2p' | grep -q '^      -$'"
+check "a bare - opener: a with: toolchain: above uses: counts, nothing inserted" \
+  "grep -A1 '0000000000000000000000000000000000000007' '$f3' | sed -n '2p' | grep -q '^      -$'"
+check "a bare - opener with a bare uses: gets with: at the keys' column" \
+  "grep -A2 '0000000000000000000000000000000000000008' '$f3' | sed -n '2p' | grep -q '^        with:$' && grep -A2 '0000000000000000000000000000000000000008' '$f3' | sed -n '3p' | grep -q '^          toolchain: stable$'"
+check "exactly three steps were fixed and the run exits 0" \
+  "[ \$rc_tc3 -eq 0 ] && [ \$(grep -c 'toolchain: stable' '$f3') -eq 3 ] && grep -q 'toolchain: nightly' '$f3' && grep -q 'cargo test' '$f3'"
+cp "$f3" "$fx/tc3-after1.yml"
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc3" >/dev/null 2>&1
+check "second run over these cases is a no-op" "cmp -s '$fx/tc3-after1.yml' '$f3'"
+if command -v mawk >/dev/null; then
+    mkdir -p "$fx/mawk-bin" "$fx/tc3m/.github/workflows"; ln -sf "$(command -v mawk)" "$fx/mawk-bin/awk"
+    cp "$fx/tc3-before.yml" "$fx/tc3m/.github/workflows/rust.yml"
+    PATH="$fx/mawk-bin:$PATH" bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc3m" >/dev/null 2>&1 || true
+    check "under mawk the same cases produce the same file" "cmp -s '$fx/tc3-after1.yml' '$fx/tc3m/.github/workflows/rust.yml'"
+fi
+# A flow-style step: refused out loud, file untouched, exit 2 — never "OK".
+mkdir -p "$fx/tc4/.github/workflows"
+printf 'jobs:\n  a:\n    steps:\n      - { name: toolchain, uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000009 }\n      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000a\n' > "$fx/tc4/.github/workflows/x.yml"
+cp "$fx/tc4/.github/workflows/x.yml" "$fx/tc4-before.yml"
+set +e
+out4=$(bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc4" 2>&1); rc_tc4=$?
+set -e
+check "a flow-style step is UNSUPPORTED: named with its line, file untouched, exit 2, never OK" \
+  "[ \$rc_tc4 -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 4' <<<\"\$out4\" && ! grep -q '^OK' <<<\"\$out4\" && cmp -s '$fx/tc4-before.yml' '$fx/tc4/.github/workflows/x.yml'"
+
 # ── 2. fix-stale-reusable-pin.sh ─────────────────────────────────────────────
 STALE_A=d135b05bfc647d0c0fbfedc7e80f37ea50f49236   # Window A (table row for rust-ci-reusable only)
 STALE_B=8f2ee50841e216cd8c192eeb68953118190f105c   # Window B (table row for every standards reusable)
@@ -236,6 +302,47 @@ mkdir -p "$fx/sp4/.github/workflows"
 printf 'jobs:\n  governance:\n    "uses": "hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s"\n' "$STALE_B" > "$fx/sp4/.github/workflows/governance.yml"
 bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp4" >/dev/null 2>&1; rc_sp4=$?
 check "a quoted \"uses\" key with a quoted value is rewritten" "[ \$rc_sp4 -eq 0 ] && grep -q \"\\\"hyperpolymath/standards/.github/workflows/governance-reusable.yml@$GOOD\\\"\" '$fx/sp4/.github/workflows/governance.yml'"
+# Review cases (Codex, gitbot-fleet#615): a commented-out caller is not a
+# caller; a workflow calling two reusables of one repository at the same dead
+# SHA, only one covered by the table, keeps the stale lock edge beside the new.
+mkdir -p "$fx/sp5/.github/workflows"
+printf 'jobs:\n  mirror:\n    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@%s\n  # rust-ci:\n  #   uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" "$STALE_A" > "$fx/sp5/.github/workflows/ci.yml"
+cat > "$fx/sp5/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 6759885
+        repo_id: 1116521501
+LOCK
+tar -C "$fx/sp5" -cf "$fx/sp5a.tar" .github
+set +e
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp5" >/dev/null 2>&1; rc_sp5=$?
+set -e
+tar -C "$fx/sp5" -cf "$fx/sp5b.tar" .github
+check "a commented-out caller of a covered reusable moves nothing: workflow and lock byte-identical, exit 0" \
+  "[ \$rc_sp5 -eq 0 ] && cmp -s '$fx/sp5a.tar' '$fx/sp5b.tar'"
+mkdir -p "$fx/sp6/.github/workflows"
+printf 'jobs:\n  rust-ci:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n  mirror:\n    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@%s\n' "$STALE_A" "$STALE_A" > "$fx/sp6/.github/workflows/ci.yml"
+sed 's#sp5#sp6#' "$fx/sp5/.github/workflows/actions.lock" > "$fx/sp6/.github/workflows/actions.lock"
+set +e
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp6" >/dev/null 2>&1; rc_sp6=$?
+set -e
+l6="$fx/sp6/.github/workflows/actions.lock"
+check "two reusables of one repository at one dead SHA, one covered: the covered pin moves, the other stays" \
+  "grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/sp6/.github/workflows/ci.yml' && grep -q \"mirror-reusable.yml@$STALE_A\" '$fx/sp6/.github/workflows/ci.yml'"
+check "the workflow's lock entry then carries BOTH edges, the stale one kept beside the new" \
+  "grep -A2 \"'.github/workflows/ci.yml':\" '$l6' | grep -q \"hyperpolymath/standards@$STALE_A\" && grep -A2 \"'.github/workflows/ci.yml':\" '$l6' | grep -q \"hyperpolymath/standards@$GOOD\""
+check "both dependency records exist, each with its ref, and the run exits 3" \
+  "[ \$rc_sp6 -eq 3 ] && grep -q \"ref: '$GOOD'\" '$l6' && grep -q \"ref: '$STALE_A'\" '$l6'"
+tar -C "$fx/sp6" -cf "$fx/sp6a.tar" .github
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp6" >/dev/null 2>&1; rc_sp6b=$?
+tar -C "$fx/sp6" -cf "$fx/sp6b.tar" .github
+check "kept-edge case: second run is a no-op and exits 0" "[ \$rc_sp6b -eq 0 ] && cmp -s '$fx/sp6a.tar' '$fx/sp6b.tar'"
 
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
