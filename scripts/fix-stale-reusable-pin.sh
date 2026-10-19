@@ -74,12 +74,12 @@ merge_duplicate_records() {
         !indep { print; next }
         /^    '"'"'[^'"'"']+'"'"':$/ {
             key = $0
-            if (!(key in seen)) { seen[key] = 1; order[++norder] = key; nhead[key] = 0 }
+            if (!(key in seen)) { seen[key] = 1; order[++norder] = key; nhead[key] = 0; first = 1 } else { first = 0 }
             cur = key; next
         }
         /^        uses:[[:space:]]*$/ { next }
         /^            - '"'"'[^'"'"']+'"'"'$/ { u = $0; sub(/^            - /, "", u); uses_of[cur SUBSEP u] = 1; next }
-        /^        [a-z_]+: / { if (!(cur in done_head)) { head[cur, ++nhead[cur]] = $0 } ; next }
+        /^        [a-z_]+: / { if (first) { head[cur, ++nhead[cur]] = $0 } ; next }
         { next }
         END {
             for (k = 1; k <= norder; k++) {
