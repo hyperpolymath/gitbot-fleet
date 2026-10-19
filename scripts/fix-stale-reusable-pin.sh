@@ -63,6 +63,7 @@ merge_duplicate_records() {
             for (u in uses_of) if (index(u, cur SUBSEP) == 1) n++
             if (n > 0) {
                 print "        uses:"
+                fflush()
                 cmd = "sort"
                 for (u in uses_of) if (index(u, cur SUBSEP) == 1) print "            - " substr(u, length(cur) + 2) | cmd
                 close(cmd)
