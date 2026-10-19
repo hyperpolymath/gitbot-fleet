@@ -187,7 +187,10 @@ while IFS= read -r -d '' wf; do
     pending=()
     for lineno in $klines; do
         line=$(sed -n "${lineno}p" "$wf")
-        ref=$(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}" <<<"$line" | sed -E "s/${USES_KEY_RE}//" | head -1)
+        # A job-level call pinned by tag (`@v1`) carries no SHA: nothing for a
+        # SHA table to move, so it is a no-op here — not a grep exit 1 that
+        # `set -e` would turn into a silent exit 1 of the whole run.
+        ref=$(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}" <<<"$line" | sed -E "s/${USES_KEY_RE}//" | head -1 || true)
         [ -n "$ref" ] || continue
         path="${ref%@*}"; stale="${ref##*@}"
         lookup_replacement "$path" "$stale" || continue
