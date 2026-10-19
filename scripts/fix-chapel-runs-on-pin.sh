@@ -31,8 +31,8 @@ for f in $(find .github/workflows -name '*.yml' -o -name '*.yaml' 2>/dev/null); 
   fi
 
   # Also normalise the apt install pattern (declarative resolution beats dpkg+fix loop)
-  if grep -qF 'sudo dpkg -i /tmp/chapel.deb || sudo apt-get install -f -y' "$f"; then
-    sed -i 's|sudo dpkg -i /tmp/chapel.deb || sudo apt-get install -f -y|sudo apt-get install -y /tmp/chapel.deb|' "$f"
+  if grep -qF 'sudo dpkg -i /tmp/chapel.deb || sudo apt-get install -f -y' "$f"; then  # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
+    sed -i 's|sudo dpkg -i /tmp/chapel.deb || sudo apt-get install -f -y|sudo apt-get install -y /tmp/chapel.deb|' "$f"  # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
     echo "  apt-get install replaces dpkg fallback: $f"
     CHANGED=$((CHANGED + 1))
   fi

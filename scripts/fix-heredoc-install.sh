@@ -29,7 +29,7 @@ while IFS= read -r -d '' file; do
 
     # Pattern 1: curl | bash / curl | sh (pipe-to-shell)
     if grep -qP 'curl\s.*\|\s*(ba)?sh' "$file" 2>/dev/null; then
-        echo "  FOUND curl|bash in $rel_path"
+        echo "  FOUND curl|bash in $rel_path"  # hypatia: allow content_patterns/download_then_run_shell -- diagnostic message text; nothing is downloaded or executed
         # Add warning comment (idempotent — skip if already annotated)
         if ! grep -q "WARNING: Pipe-to-shell is unsafe" "$file" 2>/dev/null; then
             sed -i 's/\(.*curl.*|.*sh\)/# WARNING: Pipe-to-shell is unsafe — download and verify first\n\1/' "$file" 2>/dev/null || true
@@ -38,14 +38,14 @@ while IFS= read -r -d '' file; do
     fi
 
     # Pattern 2: eval "$(cat ..." or eval "$(heredoc..."
-    if grep -qP 'eval\s+["\x27]?\$\(' "$file" 2>/dev/null; then
-        echo "  FOUND eval \$() in $rel_path"
+    if grep -qP 'eval\s+["\x27]?\$\(' "$file" 2>/dev/null; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
+        echo "  FOUND eval \$() in $rel_path"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
         ((changes++)) || true
     fi
 
     # Pattern 3: eval $VAR
-    if grep -qP 'eval\s+\$[A-Z_]' "$file" 2>/dev/null; then
-        echo "  FOUND eval \$VAR in $rel_path"
+    if grep -qP 'eval\s+\$[A-Z_]' "$file" 2>/dev/null; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
+        echo "  FOUND eval \$VAR in $rel_path"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
         ((changes++)) || true
     fi
 
@@ -56,7 +56,7 @@ done < <(find "$REPO_PATH" -type f \( -name "*.sh" -o -name "*.bash" \) -not -pa
 
 echo ""
 if [[ "$FIXED_COUNT" -gt 0 ]]; then
-    echo "Found eval/heredoc patterns in $FIXED_COUNT file(s)"
+    echo "Found eval/heredoc patterns in $FIXED_COUNT file(s)"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
 else
-    echo "No eval/heredoc patterns found"
+    echo "No eval/heredoc patterns found"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
 fi

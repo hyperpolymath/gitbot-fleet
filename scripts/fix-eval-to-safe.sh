@@ -35,9 +35,9 @@ while IFS= read -r -d '' file; do
 
     # --- Fix 1: eval statements ---
     # Annotate eval calls that are not already marked
-    if grep -v '^\s*#' "$file" 2>/dev/null | grep -qw 'eval'; then
-        if ! grep -q 'SECURITY.*eval' "$file" 2>/dev/null; then
-            sed -i '/^\s*#/!{/\beval\b/{/SECURITY/!s/\(.*\beval\b\)/# SECURITY: eval is unsafe with untrusted input — refactor to avoid dynamic code execution\n\1/}}' "$file" 2>/dev/null || true
+    if grep -v '^\s*#' "$file" 2>/dev/null | grep -qw 'eval'; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
+        if ! grep -q 'SECURITY.*eval' "$file" 2>/dev/null; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
+            sed -i '/^\s*#/!{/\beval\b/{/SECURITY/!s/\(.*\beval\b\)/# SECURITY: eval is unsafe with untrusted input — refactor to avoid dynamic code execution\n\1/}}' "$file" 2>/dev/null || true  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             changed=true
         fi
     fi
@@ -54,7 +54,7 @@ while IFS= read -r -d '' file; do
 
     if [[ "$changed" == true ]]; then
         rel_path="${file#"$REPO_PATH"/}"
-        echo "  FIXED $rel_path (shell eval/pipe-to-shell)"
+        echo "  FIXED $rel_path (shell eval/pipe-to-shell)"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f \( -name "*.sh" -o -name "*.bash" \) "${FIND_EXCLUDES[@]}" -print0 2>/dev/null)
@@ -70,9 +70,9 @@ while IFS= read -r -d '' file; do
     changed=false
 
     # eval annotation
-    if grep -v '^\s*#' "$file" 2>/dev/null | grep -qw 'eval'; then
-        if ! grep -q 'SECURITY.*eval' "$file" 2>/dev/null; then
-            sed -i '/^\s*#/!{/\beval\b/{/SECURITY/!s/\(.*\beval\b\)/# SECURITY: eval is unsafe with untrusted input — refactor to avoid dynamic code execution\n\1/}}' "$file" 2>/dev/null || true
+    if grep -v '^\s*#' "$file" 2>/dev/null | grep -qw 'eval'; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
+        if ! grep -q 'SECURITY.*eval' "$file" 2>/dev/null; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
+            sed -i '/^\s*#/!{/\beval\b/{/SECURITY/!s/\(.*\beval\b\)/# SECURITY: eval is unsafe with untrusted input — refactor to avoid dynamic code execution\n\1/}}' "$file" 2>/dev/null || true  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             changed=true
         fi
     fi
@@ -87,7 +87,7 @@ while IFS= read -r -d '' file; do
 
     if [[ "$changed" == true ]]; then
         rel_path="${file#"$REPO_PATH"/}"
-        echo "  FIXED $rel_path (shell eval/pipe-to-shell)"
+        echo "  FIXED $rel_path (shell eval/pipe-to-shell)"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
         ((FIXED_COUNT++)) || true
     fi
 done < <(find "$REPO_PATH" -type f -not -name "*.*" "${FIND_EXCLUDES[@]}" -print0 2>/dev/null)
@@ -96,5 +96,5 @@ echo ""
 if [[ "$FIXED_COUNT" -gt 0 ]]; then
     echo "Annotated dynamic code execution patterns in $FIXED_COUNT file(s)"
 else
-    echo "No eval/pipe-to-shell patterns found"
+    echo "No eval/pipe-to-shell patterns found"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
 fi
