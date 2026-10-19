@@ -37,7 +37,9 @@
 #   * keys may be quoted (`"uses":`, "with":) — the same key to GitHub;
 #   * a tag-pinned step (`@stable`, `@1.85.0`) and a step that already names a
 #     toolchain are left alone;
-#   * a step written as a flow mapping (`- { name: x, uses: ... }`) is NOT
+#   * a step written as a flow mapping (`- { name: x, uses: ... }`), a
+#     one-line `steps: [ { uses: ... } ]`, or a `with:` whose value this
+#     parser does not read (`with: &anchor`, `with: *alias`) is NOT
 #     rewritten: the script names the line as UNSUPPORTED and exits 2 rather
 #     than report the file as clean. Fix it by hand.
 # Idempotent: a second run changes nothing.
@@ -73,6 +75,10 @@ apply_to_file() {
         function key_indent_of(s,   t) { t = s; sub(/[A-Za-z"'"'"'].*$/, "", t); gsub(/-/, " ", t); return t }
         function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
         function spaces(n,   t) { t = ""; while (n-- > 0) t = t " "; return t }
+        # Net brace depth of a line: a flow mapping closes when it returns to
+        # zero, not at the first `}` — an expression `${{ matrix.x }}` inside it
+        # opens and closes its own braces.
+        function brace_delta(s,   a, b) { a = s; b = s; return gsub(/\{/, "", a) - gsub(/\}/, "", b) }
         # A 40-hex pin of the action on a non-comment line, trailing comment
         # stripped. `@stable` and `@1.85.0` are tags: the ref carries the
         # channel and the step is not ours.
@@ -98,7 +104,7 @@ apply_to_file() {
         }
         # Emit the buffered step, patched if it is a SHA-pinned dtolnay step
         # whose `with:` names no toolchain.
-        function flush(   i, j, line, ind, uses_i, has_with, with_i, with_flow, with_indent, in_with, in_flow, child_indent, has_tc, key_indent, skey, flow_item) {
+        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` the indentation of the first plain line under it.
@@ -120,14 +126,15 @@ apply_to_file() {
                 unrec[++nunrec] = lnum[i]
             }
             if (!uses_i) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
-            has_with = 0; with_i = 0; with_flow = 0; with_indent = -1; in_with = 0; in_flow = 0; child_indent = -1; has_tc = 0
+            has_with = 0; with_bad = 0; with_i = 0; with_flow = 0; with_indent = -1; in_with = 0; in_flow = 0; child_indent = -1; has_tc = 0
             for (i = 1; i <= n; i++) {
                 line = buf[i]; ind = indent_of(line)
                 if (in_flow) {
                     # A flow `with: {` spread over several lines: every entry up to
-                    # the closing brace is an input.
+                    # the brace that closes it is an input.
                     if (line ~ TC_RE || line ~ TC_FLOW_RE) has_tc = 1
-                    if (index(line, "}")) in_flow = 0
+                    flow_depth += brace_delta(line)
+                    if (flow_depth <= 0) in_flow = 0
                     continue
                 }
                 if (in_with) {
@@ -145,11 +152,17 @@ apply_to_file() {
                     } else if (line ~ WITH_FLOW_RE) {
                         has_with = 1; with_i = i; with_flow = 1
                         if (line ~ TC_FLOW_RE) has_tc = 1
-                        if (!index(line, "}")) in_flow = 1
+                        flow_depth = brace_delta(line)
+                        if (flow_depth > 0) in_flow = 1
+                    } else if (line ~ WITH_ANY_RE) {
+                        # `with: &anchor`, `with: *alias`, or any value shape this
+                        # parser does not read: a second `with:` would be worse than
+                        # none, so the step is reported, not rewritten.
+                        has_with = 1; with_bad = 1; unrec[++nunrec] = lnum[i]
                     }
                 }
             }
-            if (has_tc) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
+            if (has_tc || with_bad) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
             for (i = 1; i <= n; i++) {
                 line = buf[i]
                 if (has_with && with_flow && i == with_i) {
@@ -182,6 +195,7 @@ apply_to_file() {
             USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
             WITH_BLOCK_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*(#.*)?$"
             WITH_FLOW_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*\\{"
+            WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"
             TC_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:]]"
             TC_FLOW_RE = "[{,][[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:],}]"
         }
@@ -209,6 +223,9 @@ apply_to_file() {
             if (plain($0) && $0 ~ KEY_RE) {
                 record_key($0)
                 if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
+                # A key line that itself carries the pin (`steps: [ { uses: ... } ]`
+                # on one line) is a step this parser cannot place.
+                if (sha_ref($0)) unrec[++nunrec] = NR
             } else if (sha_ref($0) && parent_is_steps(ind)) unrec[++nunrec] = NR
             print
         }

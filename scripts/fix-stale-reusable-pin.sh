@@ -112,45 +112,97 @@ lookup_replacement() { # <reusable-path> <stale-sha>
     return 1
 }
 
+# The YAML context of a workflow, one marker per source line that matters:
+#   K<n>  line n is a `uses:` key of a job under `jobs:` — the one place a
+#         reusable is called;
+#   D<n>  line n is a `uses:` key under some other key (`env:`) — data;
+#   S<n>  line n is inside a block scalar (`run: |`, a fixture in `env:`) — text.
+# A line with none of these that still carries a known-dead pin is one the
+# parser cannot place (a flow-style job `rust: { uses: ... }`).
+yaml_context() { # <workflow.yml>
+    awk '
+        function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
+        function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
+        BEGIN {
+            Q = "[\"'"'"']?"
+            KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
+            ITEM_KEY_RE = "^[[:space:]]*-[[:space:]]+" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
+            SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
+        }
+        {
+            ind = indent_of($0)
+            if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else { print "S" NR; next } }
+            if (!plain($0)) next
+            if ($0 ~ KEY_RE) {
+                key = $0; sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*:.*$/, "", key); gsub(/["'"'"']/, "", key)
+                for (k in keyat) if (k + 0 >= ind) delete keyat[k]
+                if (key == "uses") {
+                    p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0
+                    g = -1; for (k in keyat) if (k + 0 < p && k + 0 > g) g = k + 0
+                    if (p >= 0 && g >= 0 && keyat[g] == "jobs") print "K" NR; else print "D" NR
+                }
+                keyat[ind] = key
+                if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
+            } else if ($0 ~ ITEM_KEY_RE && $0 ~ SCALAR_RE) {
+                # `- run: |`: the scalar hangs off the item'"'"'s key column.
+                in_scalar = 1; scalar_indent = ind + 2
+            }
+        }
+    ' "$1"
+}
+
 # Every `uses:` of an estate reusable at a full SHA, across the workflows.
-# Only a YAML `uses` KEY counts — the key at the start of the line (quoted or
-# not, list dash or not); the same text after a `#` is a comment, not a
-# caller, and must not move anything. A covered pin the parser cannot place
-# that way (a flow-style job `rust: { uses: ... }`) makes the whole file
-# UNSUPPORTED: left untouched, named on stderr, exit 2 — never "OK". The lock
-# is edited after the loop, once every workflow rewrite is known.
+# Only a `uses:` that is a key of a job under `jobs:` is a call: the same text
+# under `env:`, inside a `run: |` script or a fixture, or after a `#` is data
+# and must not move anything. A covered pin the parser cannot place at all (a
+# flow-style job `rust: { uses: ... }`) makes the whole file UNSUPPORTED: left
+# untouched, named on stderr, exit 2 — never "OK". The lock is edited after
+# the loop, once every workflow rewrite is known.
 USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?"
 REUSABLE_REF_RE="hyperpolymath/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}"
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge
 unsupported=0
 while IFS= read -r -d '' wf; do
+    ctx=$(yaml_context "$wf")
+    klines=$(grep -o '^K[0-9]*' <<<"$ctx" | tr -d K | sort -n || true)
+    placed=$(grep -oE '^[KDS][0-9]*' <<<"$ctx" | tr -d KDS || true)
     skip=0
     while IFS= read -r numbered; do
-        lineno="${numbered%%:*}"; ref=$(grep -oE "$REUSABLE_REF_RE" <<<"${numbered#*:}" | head -1)
+        lineno="${numbered%%:*}"
+        grep -qx "$lineno" <<<"$placed" && continue
+        ref=$(grep -oE "$REUSABLE_REF_RE" <<<"${numbered#*:}" | head -1)
         [ -n "$ref" ] || continue
         if lookup_replacement "${ref%@*}" "${ref##*@}"; then
-            echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key at the start of its line (flow-style job mapping?). Fix by hand; the file was not changed." >&2
+            echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
             skip=1
         fi
-    done < <(grep -nE "$REUSABLE_REF_RE" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" | grep -vE "^[0-9]+:${USES_KEY_RE#^}" || true)
+    done < <(grep -nE "$REUSABLE_REF_RE" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
-    while IFS= read -r line; do
-        path="${line%@*}"; stale="${line##*@}"
-        [[ "$stale" =~ ^[0-9a-f]{40}$ ]] || continue
+    pending=()
+    for lineno in $klines; do
+        line=$(sed -n "${lineno}p" "$wf")
+        ref=$(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}" <<<"$line" | sed -E "s/${USES_KEY_RE}//" | head -1)
+        [ -n "$ref" ] || continue
+        path="${ref%@*}"; stale="${ref##*@}"
         lookup_replacement "$path" "$stale" || continue
         [[ "$replacement" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: bad replacement SHA in table for $stale" >&2; exit 2; }
-        sed -i "s|^\([[:space:]]*\(-[[:space:]]\+\)\?[\"']\?uses[\"']\?[[:space:]]*:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
-        echo "FIXED  ${wf#"$REPO_PATH"/}  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
+        sed -i "${lineno}s|^\([[:space:]]*\(-[[:space:]]\+\)\?[\"']\?uses[\"']\?[[:space:]]*:[[:space:]]*[\"']\?$path\)@$stale|\1@$replacement|" "$wf"
+        echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
         rewrites=$((rewrites + 1))
-        # A lock edge is per repository@SHA, shared by every reusable of that
-        # repository the workflow calls. When this workflow still calls another
-        # reusable of the same repository at the stale SHA (a pin the table does
-        # not cover), the stale edge must stay next to the new one.
-        repo_prefix="${path%%/.github/workflows/*}"
+        pending+=("$stale"$'\t'"$replacement"$'\t'"${path%%/.github/workflows/*}")
+    done
+    # A lock edge is per repository@SHA, shared by every reusable of that
+    # repository the workflow calls. When a job of this workflow still calls
+    # another reusable of the same repository at the stale SHA (a pin the
+    # table does not cover), the stale edge must stay next to the new one.
+    for entry in ${pending[@]+"${pending[@]}"}; do
+        IFS=$'\t' read -r stale replacement repo_prefix <<<"$entry"
         keep=0
-        grep -qE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" "$wf" && keep=1
+        for other in $klines; do
+            sed -n "${other}p" "$wf" | grep -qE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" && keep=1
+        done
         printf '%s\t%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" "$keep" >> "$edits"
-    done < <(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}" "$wf" | sed -E "s/${USES_KEY_RE}//" | sort -u)
+    done
 done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
 
 # Lock: move each rewritten workflow's own `workflows:` edges first.

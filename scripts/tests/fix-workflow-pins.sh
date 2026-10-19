@@ -218,6 +218,55 @@ check "the real steps were fixed, the fixture was not, exit 0" \
 cp "$f6" "$fx/tc6-after1.yml"
 bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc6" >/dev/null 2>&1
 check "second run over these cases is a no-op" "cmp -s '$fx/tc6-after1.yml' '$f6'"
+# An expression inside a multi-line flow with: (`${{ matrix.component }}`)
+# opens and closes its own braces: the mapping ends when the depth returns to
+# zero, so a toolchain written after the expression still counts.
+mkdir -p "$fx/tc7/.github/workflows"
+cat > "$fx/tc7/.github/workflows/x.yml" <<'YML'
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000010
+        with: {
+          components: ${{ matrix.component }},
+          toolchain: nightly,
+        }
+      - uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000011
+        with: {
+          components: ${{ matrix.component }},
+        }
+YML
+f7="$fx/tc7/.github/workflows/x.yml"
+set +e
+bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc7" >/dev/null 2>&1; rc_tc7=$?
+set -e
+check "a toolchain after an expression's braces in a multi-line flow with: counts: untouched" \
+  "grep -A1 '0000000000000000000000000000000000000010' '$f7' | sed -n '2p' | grep -q '^        with: {$' && [ \$(grep -c 'toolchain: nightly' '$f7') -eq 1 ]"
+check "the same shape without a toolchain gets it as first entry, the expression kept" \
+  "[ \$rc_tc7 -eq 0 ] && grep -A1 '0000000000000000000000000000000000000011' '$f7' | sed -n '2p' | grep -q '^        with: { toolchain: stable,$' && [ \$(grep -c 'components: \${{ matrix.component }},' '$f7') -eq 2 ] && [ \$(grep -c 'toolchain: stable' '$f7') -eq 1 ]"
+# A `with:` whose value the parser does not read (an anchor, an alias) and a
+# one-line `steps: [ { uses: ... } ]` are refused out loud, file untouched.
+mkdir -p "$fx/tc8/.github/workflows" "$fx/tc9/.github/workflows"
+cat > "$fx/tc8/.github/workflows/x.yml" <<'YML'
+jobs:
+  a:
+    steps:
+      - uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000012
+        with: &rust-inputs
+          components: clippy
+      - uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000013
+        with: *rust-inputs
+YML
+printf 'jobs:\n  a:\n    steps: [ { uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000014 } ]\n' > "$fx/tc9/.github/workflows/x.yml"
+cp "$fx/tc8/.github/workflows/x.yml" "$fx/tc8-before.yml"; cp "$fx/tc9/.github/workflows/x.yml" "$fx/tc9-before.yml"
+set +e
+out8=$(bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc8" 2>&1); rc_tc8=$?
+out9=$(bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc9" 2>&1); rc_tc9=$?
+set -e
+check "with: &anchor and with: *alias are UNSUPPORTED (no second with:), file untouched, exit 2" \
+  "[ \$rc_tc8 -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 5 8' <<<\"\$out8\" && cmp -s '$fx/tc8-before.yml' '$fx/tc8/.github/workflows/x.yml'"
+check "a one-line steps: [ { uses: ... } ] is UNSUPPORTED, file untouched, exit 2, never OK" \
+  "[ \$rc_tc9 -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 3' <<<\"\$out9\" && ! grep -q '^OK' <<<\"\$out9\" && cmp -s '$fx/tc9-before.yml' '$fx/tc9/.github/workflows/x.yml'"
 # A flow-style step: refused out loud, file untouched, exit 2 — never "OK".
 mkdir -p "$fx/tc4/.github/workflows"
 printf 'jobs:\n  a:\n    steps:\n      - { name: toolchain, uses: dtolnay/rust-toolchain@0000000000000000000000000000000000000009 }\n      - uses: dtolnay/rust-toolchain@000000000000000000000000000000000000000a\n' > "$fx/tc4/.github/workflows/x.yml"
@@ -432,6 +481,41 @@ check "transitive edge: the caller's own edge moves, the other record's nested e
   "grep -A1 \"'.github/workflows/governance.yml':\" '$l8' | grep -q \"standards@$GOOD\" && grep -A6 \"'hyperpolymath/cicd-suite@1111\" '$l8' | grep -q \"            - 'hyperpolymath/standards@$STALE_B'\""
 check "transitive edge: the stale record is kept beside the replacement's, exit 3" \
   "[ \$rc_sp8 -eq 3 ] && grep -q \"^    'hyperpolymath/standards@$STALE_B':\" '$l8' && grep -q \"^    'hyperpolymath/standards@$GOOD':\" '$l8'"
+# Only a `uses:` key of a job is a call: the same text under `env:` or inside
+# a `run: |` fixture is data, left byte-identical, and never moves the lock.
+mkdir -p "$fx/sp9/.github/workflows"
+cat > "$fx/sp9/.github/workflows/ci.yml" <<YML
+jobs:
+  fixture:
+    env:
+      uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@$STALE_B
+    steps:
+      - run: |
+          cat > caller.yml <<'EOF'
+          uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@$STALE_B
+          EOF
+  governance:
+    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@$STALE_B
+YML
+cat > "$fx/sp9/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_B'
+dependencies:
+    'hyperpolymath/standards@$STALE_B':
+        ref: '$STALE_B'
+        commit: 'sha1-$STALE_B'
+        owner_id: 6759885
+        repo_id: 1116521501
+LOCK
+set +e
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp9" >/dev/null 2>&1; rc_sp9=$?
+set -e
+check "only the job-level call moves; the env: copy and the run: | fixture line are untouched" \
+  "sed -n '11p' '$fx/sp9/.github/workflows/ci.yml' | grep -q \"governance-reusable.yml@$GOOD\" && sed -n '4p;8p' '$fx/sp9/.github/workflows/ci.yml' | grep -c \"@$STALE_B\" | grep -qx 2"
+check "the lock follows the call: edge and record at the replacement, stale gone, exit 3" \
+  "[ \$rc_sp9 -eq 3 ] && grep -q \"hyperpolymath/standards@$GOOD\" '$fx/sp9/.github/workflows/actions.lock' && ! grep -q \"$STALE_B\" '$fx/sp9/.github/workflows/actions.lock'"
 
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
 mkdir -p "$fx/ls/.github/workflows"
@@ -497,6 +581,55 @@ bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls4" --offline > "$fx/ls4.o
 set -e
 check "a reusable source read from the workflows keeps its SHA ref: untouched, not UNRESOLVED, exit 0" \
   "[ \$rc4 -eq 0 ] && ! grep -q UNRESOLVED '$fx/ls4.out' && cmp -s '$fx/ls4-before.lock' '$fx/ls4/.github/workflows/actions.lock'"
+# One repository, two revisions, two classes: a reusable call keeps its SHA
+# ref; a composite action from the same repository at another revision is
+# repaired. The class is per repository@revision, read from the workflows.
+SHA_A=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; SHA_B=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+mkdir -p "$fx/ls5/.github/workflows"
+printf 'jobs:\n  gate:\n    uses: hyperpolymath/cicd-suite/.github/workflows/rust-ci.yml@%s\n  check:\n    steps:\n      - uses: hyperpolymath/cicd-suite/actions/manifest-check@%s\n' "$SHA_A" "$SHA_B" > "$fx/ls5/.github/workflows/ci.yml"
+cat > "$fx/ls5/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/cicd-suite@$SHA_A'
+        - 'hyperpolymath/cicd-suite@$SHA_B'
+dependencies:
+    'hyperpolymath/cicd-suite@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 6759885
+        repo_id: 3
+    'hyperpolymath/cicd-suite@$SHA_B':
+        ref: '$SHA_B'
+        commit: 'sha1-$SHA_B'
+        owner_id: 6759885
+        repo_id: 3
+LOCK
+printf 'hyperpolymath/cicd-suite\t%s\tv1.2.3\n' "$SHA_B" > "$fx/ls5-tags.tsv"
+set +e
+TAG_MAP="$fx/ls5-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls5" --offline > "$fx/ls5.out" 2>&1; rc5=$?
+set -e
+check "same repository, two revisions: the reusable call keeps its SHA ref, the action record gets its tag" \
+  "[ \$rc5 -eq 0 ] && grep -A1 \"'hyperpolymath/cicd-suite@$SHA_A':\" '$fx/ls5/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_A'\" && grep -A1 \"'hyperpolymath/cicd-suite@$SHA_B':\" '$fx/ls5/.github/workflows/actions.lock' | grep -q \"ref: 'v1.2.3'\" && ! grep -q UNRESOLVED '$fx/ls5.out'"
+# A double-quoted record is the same record: repaired, quote style kept.
+mkdir -p "$fx/ls6/.github/workflows"
+printf 'version: "v0.0.3"\nworkflows:\n    ".github/workflows/ci.yml":\n        - "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"\ndependencies:\n    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1":\n        ref: "3d3c42e5aac5ba805825da76410c181273ba90b1"\n        commit: "sha1-3d3c42e5aac5ba805825da76410c181273ba90b1"\n        owner_id: 44036562\n        repo_id: 197814629\n' > "$fx/ls6/.github/workflows/actions.lock"
+set +e
+bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls6" --offline > "$fx/ls6.out" 2>&1; rc6=$?
+set -e
+check "a double-quoted self-SHA record is parsed and repaired, keeping its quotes" \
+  "[ \$rc6 -eq 0 ] && grep -q 'ref: \"v7.0.1\"' '$fx/ls6/.github/workflows/actions.lock' && grep -q 'FIXED  actions/checkout' '$fx/ls6.out'"
+# A tag Git allows but this fixer will not write (`&`, `|`, a quote) is refused.
+SHA_C=cccccccccccccccccccccccccccccccccccccccc
+mkdir -p "$fx/ls7/.github/workflows"
+printf "version: 'v0.0.3'\nworkflows: {}\ndependencies:\n    'nobody/weird@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n        owner_id: 1\n        repo_id: 1\n" "$SHA_C" "$SHA_C" "$SHA_C" > "$fx/ls7/.github/workflows/actions.lock"
+printf 'nobody/weird\t%s\trelease&stable\n' "$SHA_C" > "$fx/ls7-tags.tsv"
+cp "$fx/ls7/.github/workflows/actions.lock" "$fx/ls7-before.lock"
+set +e
+TAG_MAP="$fx/ls7-tags.tsv" bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls7" --offline > "$fx/ls7.out" 2>&1; rc7=$?
+set -e
+check "a tag with characters the fixer will not write is UNRESOLVED, the record untouched, exit 1" \
+  "[ \$rc7 -eq 1 ] && grep -q 'carries characters' '$fx/ls7.out' && cmp -s '$fx/ls7-before.lock' '$fx/ls7/.github/workflows/actions.lock'"
 
 # Portability (review): Debian/Ubuntu's default awk is mawk. Run the same
 # fixture through mawk when it is installed, and refuse a lock the parser
