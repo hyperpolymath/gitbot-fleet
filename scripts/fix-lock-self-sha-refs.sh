@@ -43,6 +43,9 @@ OFFLINE=0; [ "${2:-}" = "--offline" ] && OFFLINE=1
 LOCK="$REPO_PATH/.github/workflows/actions.lock"
 
 [ -f "$LOCK" ] || { echo "OK (no actions.lock): $REPO_PATH"; exit 0; }
+# One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh).
+. "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
+pin_fixer_lock "$REPO_PATH"
 
 # Read tag names from stdin and print the most specific: more dots, then longer.
 best_tag() { awk '{ n = gsub(/\./, ".", $0); print n "\t" length($0) "\t" $0 }' | sort -t $'\t' -k1,1nr -k2,2nr | head -1 | cut -f3; }
@@ -84,11 +87,16 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
             function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", s); sub(/["'"'"'[:space:]#].*$/, "", s); return s }
             function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }
-            # The `uses` entry of a flow mapping written on the key'"'"'s own line
-            # (`call: { uses: ... }`, `- { uses: ... }`), or "".
-            function flow_uses(s,   r) {
-                if (!match(s, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?[^"'"'"'[:space:],}]+/)) return ""
-                r = substr(s, RSTART, RLENGTH); sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", r); return r
+            # Every `uses` entry of the flow mappings written on the key'"'"'s own
+            # line (`call: { uses: ... }`, `- { uses: ... }`, `jobs: { a: { uses: ... },
+            # b: { uses: ... } }`), into out[1..n]; returns n.
+            function flow_uses_all(s, out,   n, r, t) {
+                n = 0; split("", out); t = s
+                while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?[^"'"'"'[:space:],}]+/)) {
+                    r = substr(t, RSTART, RLENGTH); sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", r)
+                    out[++n] = r; t = substr(t, RSTART + RLENGTH)
+                }
+                return n
             }
             BEGIN {
                 Q = "[\"'"'"']?"
@@ -109,8 +117,13 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     for (k in keyat) if (k + 0 > ind) delete keyat[k]
                     item_steps = (p >= 0 && keyat[p] == "steps"); item_indent = ind
                     t = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", t)
+                    # The step'"'"'s own keys sit at the column of its first one (`- name:`
+                    # puts `uses:` under `name`); a bare dash learns it from the next
+                    # key line. A deeper `uses:` belongs to `with:`, `env:` or some
+                    # other input and is data.
+                    item_key = (t == "") ? -1 : length($0) - length(t)
                     if (t ~ USES_RE) { if (item_steps) print "A\t" ref_of(t) }
-                    else if (t ~ /^\{/) { r = flow_uses(t); if (r != "" && item_steps) print "A\t" r }
+                    else if (t ~ /^\{/) { m = flow_uses_all(t, fu); if (item_steps) for (j = 1; j <= m; j++) print "A\t" fu[j] }
                     else if (t ~ KEY_RE) {
                         keyat[ind + 2] = keyname(t)
                         if (t ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind + 2 }
@@ -121,19 +134,23 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     key = keyname($0)
                     for (k in keyat) if (k + 0 >= ind) delete keyat[k]
                     if (ind <= item_indent) item_steps = 0
+                    if (item_steps && item_key < 0 && ind > item_indent) item_key = ind
                     if (key == "uses") {
                         p = nearest_below(ind); g = (p >= 0) ? nearest_below(p) : -1
                         if (p >= 0 && g >= 0 && keyat[g] == "jobs") print "R\t" ref_of($0)
-                        else if (item_steps && ind > item_indent) print "A\t" ref_of($0)
+                        else if (item_steps && ind == item_key) print "A\t" ref_of($0)
                     } else if ($0 ~ /:[[:space:]]*\{/) {
                         # A flow mapping on the key'"'"'s line: a job written
-                        # `call: { uses: ... }` is a reusable call; `steps: [ { uses: ... } ]`
+                        # `call: { uses: ... }`, or the whole `jobs: { ... }` mapping
+                        # on one line, is a reusable call; `steps: [ { uses: ... } ]`
                         # or a flow mapping inside a step is an action.
-                        r = flow_uses($0)
-                        if (r != "") {
+                        m = flow_uses_all($0, fu)
+                        if (m) {
                             p = nearest_below(ind)
-                            if (p >= 0 && keyat[p] == "jobs") print "R\t" r
-                            else if (key == "steps" || (item_steps && ind > item_indent)) print "A\t" r
+                            for (j = 1; j <= m; j++) {
+                                if (key == "jobs" || (p >= 0 && keyat[p] == "jobs")) print "R\t" fu[j]
+                                else if (key == "steps" || (item_steps && ind == item_key)) print "A\t" fu[j]
+                            }
                         }
                     }
                     keyat[ind] = key

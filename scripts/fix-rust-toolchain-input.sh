@@ -61,6 +61,11 @@ set -euo pipefail
 
 TOOLCHAIN="${TOOLCHAIN:-stable}"
 TARGET="${1:?Usage: fix-rust-toolchain-input.sh <workflow.yml | repo-path>}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh):
+# a single workflow file is locked by the checkout it belongs to.
+. "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
+if [ -d "$TARGET" ]; then pin_fixer_lock "$TARGET"; else pin_fixer_lock "${TARGET%/.github/workflows/*}"; fi
 
 # Add missing TOOLCHAIN inputs to SHA-pinned Rust toolchain steps in file $1.
 # Return 0 for a repair or no-op; return 2 and leave the file untouched if
@@ -68,7 +73,7 @@ TARGET="${1:?Usage: fix-rust-toolchain-input.sh <workflow.yml | repo-path>}"
 apply_to_file() {
     local f="$1" tmp rc
     [ -f "$f" ] || { echo "SKIP (not a file): $f" >&2; return 0; }
-    grep -qE 'dtolnay/rust-toolchain@[0-9a-f]{40}' "$f" || return 0
+    grep -qE 'dtolnay/rust-toolchain@[0-9a-fA-F]{40}' "$f" || return 0
 
     tmp=$(mktemp)
     set +e
@@ -89,14 +94,15 @@ apply_to_file() {
         function code_only(s,   t) { t = s; gsub(/"([^"\\]|\\.)*"/, "\"\"", t); gsub(/'"'"'[^'"'"']*'"'"'/, "'"'"''"'"'", t); sub(/(^|[[:space:]])#.*$/, "", t); return t }
         function brace_delta(s,   a, b) { a = code_only(s); b = a; return gsub(/\{/, "", a) - gsub(/\}/, "", b) }
         function nbrace(s,   a) { a = s; return gsub(/\{/, "", a) }
-        # The inputs a flow line names at the `with:` mapping'"'"'s own level: quoted
-        # VALUES are blanked (a `"clippy, toolchain: nightly"` is text, a quoted
-        # key is still a key), comments dropped, and nested mappings removed —
+        # The inputs a flow line names at the `with:` mapping'"'"'s own level: a
+        # quoted VALUE becomes the one-letter text `"v"` (a `"clippy, toolchain:
+        # nightly"` is text, a quoted key is still a key) while an empty one
+        # (`""`, `'"'"''"'"'`) stays empty, comments are dropped, nested mappings removed —
         # on the opener the outer `{` is kept, on a continuation line at depth 1
         # every balanced group is nested. A line deeper than that names nothing.
         function inputs_view(s, keep_outer,   t) {
             t = s
-            gsub(/:[[:space:]]*"([^"\\]|\\.)*"/, ": \"\"", t); gsub(/:[[:space:]]*'"'"'[^'"'"']*'"'"'/, ": '"'"''"'"'", t)
+            gsub(/:[[:space:]]*"([^"\\]|\\.)+"/, ": \"v\"", t); gsub(/:[[:space:]]*'"'"'[^'"'"']+'"'"'/, ": '"'"'v'"'"'", t)
             sub(/(^|[[:space:]])#.*$/, "", t)
             while (match(t, /\{[^{}]*\}/)) {
                 if (keep_outer && nbrace(t) <= 1) break
@@ -108,11 +114,12 @@ apply_to_file() {
         # stripped. `@stable` and `@1.85.0` are tags: the ref carries the
         # channel and the step is not ours.
         # The 40 hex characters must END the ref: `@<sha>-patched` is a tag
-        # that merely begins with one, and carries its own channel.
+        # that merely begins with one, and carries its own channel. Either
+        # case: git resolves a commit ID written in upper-case hex too.
         function sha_ref(s,   t, m, nxt) {
             if (!plain(s)) return 0
             t = s; sub(/[[:space:]]#.*$/, "", t)
-            if (!match(t, /dtolnay\/rust-toolchain@[0-9a-f]+/)) return 0
+            if (!match(t, /dtolnay\/rust-toolchain@[0-9a-fA-F]+/)) return 0
             m = substr(t, RSTART + 23, RLENGTH - 23)
             nxt = substr(t, RSTART + RLENGTH, 1)
             return (length(m) == 40 && (nxt == "" || nxt ~ /["'"'"'[:space:],}\]]/))
@@ -131,9 +138,16 @@ apply_to_file() {
             for (k in keyat) if (k + 0 <= ind && k + 0 > best) best = k + 0
             return (best >= 0 && keyat[best] == "steps")
         }
+        # Return true if the nearest recorded key strictly above ind is steps:
+        # a key line inside a flow-style step spread over several lines.
+        function under_steps(ind,   k, best) {
+            best = -1
+            for (k in keyat) if (k + 0 < ind && k + 0 > best) best = k + 0
+            return (best >= 0 && keyat[best] == "steps")
+        }
         # Emit the buffered step, patched if it is a SHA-pinned dtolnay step
         # whose `with:` names no toolchain.
-        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_nested, m, pre, post, delim, comment, v) {
+        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_empty_eol, tc_nested, tc_await, tc_flow_await, m, pre, post, delim, comment, v, w) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` the indentation of the first plain line under it.
@@ -156,7 +170,7 @@ apply_to_file() {
             }
             if (!uses_i) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
             has_with = 0; with_bad = 0; with_i = 0; with_flow = 0; with_indent = -1; in_with = 0; in_flow = 0; child_indent = -1; has_tc = 0
-            tc_empty_i = 0; tc_empty_flow = 0; tc_nested = 0
+            tc_empty_i = 0; tc_empty_flow = 0; tc_empty_eol = 0; tc_nested = 0; tc_await = 0; tc_flow_await = 0
             for (i = 1; i <= n; i++) {
                 line = buf[i]; ind = indent_of(line)
                 if (in_flow) {
@@ -167,7 +181,13 @@ apply_to_file() {
                     # at the mapping'"'"'s own depth names inputs, and only outside
                     # quoted values and nested mappings.
                     v = (flow_depth == 1) ? inputs_view(line, 0) : ""
+                    # A bare `toolchain:` that ended the previous line is empty
+                    # only when the next token closes the mapping or moves on
+                    # (`}`, `,`); anything else is its value, spread over lines,
+                    # and not this fixer'"'"'s to place.
+                    if (tc_flow_await) { w = code_only(line); sub(/^[[:space:]]*/, "", w); if (w != "") { tc_flow_await = 0; if (w !~ /^[,}]/) tc_nested = 1 } }
                     if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                    else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                     else if (v ~ TC_RE || v ~ TC_FLOW_RE) has_tc = 1
                     flow_depth += brace_delta(line)
                     if (flow_depth <= 0) in_flow = 0
@@ -179,11 +199,13 @@ apply_to_file() {
                         # Only a DIRECT child of `with:` is an input: the contents of
                         # another input'"'"'s block scalar (`components: |`) sit deeper.
                         if (child_indent < 0) child_indent = ind
-                        if (ind == child_indent && line ~ TC_EMPTY_RE) tc_empty_i = i
+                        # An empty `toolchain:` whose next plain line (blank and
+                        # comment lines between them notwithstanding) sits deeper is
+                        # a nested mapping, not an empty value: nothing this fixer
+                        # can repair.
+                        if (tc_await) { tc_await = 0; if (ind > child_indent) tc_nested = 1 }
+                        if (ind == child_indent && line ~ TC_EMPTY_RE) { tc_empty_i = i; tc_await = 1 }
                         else if (ind == child_indent && line ~ TC_RE) has_tc = 1
-                        # An empty `toolchain:` followed by deeper lines is a nested
-                        # mapping, not an empty value: nothing this fixer can repair.
-                        else if (tc_empty_i && !tc_empty_flow && ind > child_indent && i == tc_empty_i + 1) tc_nested = 1
                     }
                 }
                 if (!in_with && !has_with && length(key_indent_of(line)) == skey) {
@@ -193,6 +215,7 @@ apply_to_file() {
                         has_with = 1; with_i = i; with_flow = 1
                         v = inputs_view(line, 1)
                         if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                        else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                         else if (v ~ TC_FLOW_RE) has_tc = 1
                         flow_depth = brace_delta(line)
                         if (flow_depth > 0) in_flow = 1
@@ -204,8 +227,10 @@ apply_to_file() {
                     }
                 }
             }
+            if (tc_flow_await) tc_nested = 1
             if (tc_nested) { unrec[++nunrec] = lnum[tc_empty_i]; with_bad = 1 }
             if (tc_empty_i && tc_empty_flow && !match(buf[tc_empty_i], TC_FLOW_EMPTY_RE)) { unrec[++nunrec] = lnum[tc_empty_i]; with_bad = 1 }
+            if (tc_empty_i && tc_empty_eol && !match(buf[tc_empty_i], TC_FLOW_EOL_RAW_RE)) { unrec[++nunrec] = lnum[tc_empty_i]; with_bad = 1 }
             if (has_tc || with_bad) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
             for (i = 1; i <= n; i++) {
                 line = buf[i]
@@ -215,12 +240,14 @@ apply_to_file() {
                         match(line, TC_FLOW_EMPTY_RE)
                         pre = substr(line, 1, RSTART - 1); m = substr(line, RSTART, RLENGTH); post = substr(line, RSTART + RLENGTH)
                         delim = substr(m, length(m))
-                        sub(/[[:space:]]*(null|~)?[[:space:]]*[,}]$/, "", m)
+                        sub("[[:space:]]*" NULLV "[[:space:]]*[,}]$", "", m)
                         line = pre m " " toolchain (delim == "}" ? " }" : ",") post
                     } else {
+                        # A block entry, or a flow entry whose delimiter is on
+                        # the next line: the value ends the line either way.
                         comment = ""
                         if (match(line, /[[:space:]]+#.*$/)) comment = substr(line, RSTART)
-                        sub(/:[[:space:]]*(null|~)?[[:space:]]*(#.*)?$/, "", line)
+                        sub(":[[:space:]]*" NULLV "[[:space:]]*(#.*)?$", "", line)
                         line = line ": " toolchain comment
                     }
                     print line; fixed++
@@ -257,10 +284,20 @@ apply_to_file() {
             WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"
             TC_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:]]"
             TC_FLOW_RE = "[{,][[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:],}]"
-            # The key present with no value (`toolchain:`, `toolchain: null`, `~`):
-            # not an input the action can read, and not a key to write twice.
-            TC_EMPTY_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*(null|~)?[[:space:]]*(#.*)?$"
-            TC_FLOW_EMPTY_RE = "(^|[{,])[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*(null|~)?[[:space:]]*[,}]"
+            # The key present with no value — YAML null in the spellings the core
+            # schema admits unquoted (`toolchain:`, `null`, `Null`, `NULL`, `~`)
+            # or the empty string (`""`, `'"'"''"'"'`): not an input the action can
+            # read, and not a key to write twice. `"null"` quoted is the string
+            # null, a value.
+            NULLV = "(null|Null|NULL|~|\"\"|'"'"''"'"')?"
+            TC_EMPTY_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*" NULLV "[[:space:]]*(#.*)?$"
+            TC_FLOW_EMPTY_RE = "(^|[{,])[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*" NULLV "[[:space:]]*[,}]"
+            # The same entry with its delimiter on the next line of a multi-line
+            # flow mapping (`toolchain: null` then `}`); a BARE key there waits
+            # for the next token, which must be that delimiter.
+            TC_FLOW_EOL_RE = "(^|[{,])[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*" NULLV "[[:space:]]*$"
+            TC_FLOW_EOL_RAW_RE = "(^|[{,])[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*" NULLV "[[:space:]]*(#.*)?$"
+            TC_FLOW_BARE_EOL_RE = "(^|[{,])[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*$"
         }
         {
             ind = indent_of($0)
@@ -287,8 +324,10 @@ apply_to_file() {
                 record_key($0)
                 if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
                 # A key line that itself carries the pin (`steps: [ { uses: ... } ]`
-                # on one line) is a step this parser cannot place.
-                if (sha_ref($0)) unrec[++nunrec] = NR
+                # on one line, a key of a flow-style step spread over lines) is a
+                # step this parser cannot place. The pin inside some other value
+                # (a workflow-level `env:` string naming the action) is data.
+                if (sha_ref($0) && (parent_is_steps(ind) || under_steps(ind))) unrec[++nunrec] = NR
             } else if (sha_ref($0) && parent_is_steps(ind)) unrec[++nunrec] = NR
             print
         }

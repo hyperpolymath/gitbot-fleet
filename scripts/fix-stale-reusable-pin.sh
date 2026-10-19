@@ -61,7 +61,9 @@ validate_table() {
         case "$v_path" in ''|'#'*) continue ;; esac
         [[ "$v_stale" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad stale SHA '$v_stale'" >&2; bad=1; }
         [[ "$v_new" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad replacement SHA '$v_new' for ${v_stale:0:7}" >&2; bad=1; }
-        [[ "$v_path" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.*-]+$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad reusable path '$v_path'" >&2; bad=1; }
+        # The only wildcard is a terminal `/*` (every reusable of the repository);
+        # a `*` anywhere else would be matched literally, never as a glob.
+        [[ "$v_path" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/([A-Za-z0-9_.-]+|\*)$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad reusable path '$v_path' (the only wildcard is a terminal /*)" >&2; bad=1; }
         owners="$owners${v_path%%/*}"$'\n'
     done < "$PINS_TABLE"
     [ "$bad" -eq 0 ] || { echo "fix-stale-reusable-pin: table $PINS_TABLE is invalid; nothing was changed" >&2; exit 2; }
@@ -70,6 +72,9 @@ validate_table() {
 }
 validate_table
 [ -d "$REPO_PATH/.github/workflows" ] || { echo "OK (no workflows): $REPO_PATH"; exit 0; }
+# One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh).
+. "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
+pin_fixer_lock "$REPO_PATH"
 
 LOCK="$REPO_PATH/.github/workflows/actions.lock"
 rewrites=0; lock_touched=0
@@ -200,7 +205,9 @@ USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:
 # tag that merely STARTS with a dead SHA (`<sha>-patched`) is a different ref
 # the table never named, and must not be rewritten into `<replacement>-patched`.
 REF_END="([\"'[:space:]#]|$)"
-REUSABLE_REF_RE="(${TABLE_OWNERS_RE})/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-f]{40}"
+# Git resolves a commit ID in either case: upper-case hex is the same pin,
+# looked up in lower case and rewritten as written.
+REUSABLE_REF_RE="(${TABLE_OWNERS_RE})/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-fA-F]{40}"
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge<TAB>repository
 lock_stale=0      # a rewritten caller whose lock entry never had the edge: the lock was already out of sync
 unsupported=0
@@ -214,7 +221,8 @@ while IFS= read -r -d '' wf; do
         grep -qx "$lineno" <<<"$placed" && continue
         ref=$(grep -oE "${REUSABLE_REF_RE}${REF_END}" <<<"${numbered#*:}" | head -1 | sed -E "s/[\"'[:space:]#]\$//" || true)
         [ -n "$ref" ] || continue
-        if lookup_replacement "${ref%@*}" "${ref##*@}"; then
+        sha="${ref##*@}"
+        if lookup_replacement "${ref%@*}" "${sha,,}"; then
             echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
             skip=1
         fi
@@ -228,12 +236,12 @@ while IFS= read -r -d '' wf; do
         # `set -e` would turn into a silent exit 1 of the whole run.
         ref=$(grep -oE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$line" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]#]\$//" | head -1 || true)
         [ -n "$ref" ] || continue
-        path="${ref%@*}"; stale="${ref##*@}"
+        path="${ref%@*}"; stale_raw="${ref##*@}"; stale="${stale_raw,,}"
         lookup_replacement "$path" "$stale" || continue
         [[ "$replacement" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: bad replacement SHA in table for $stale" >&2; exit 2; }
         # ERE: a `$` inside a BRE group is literal to sed, so the boundary
         # alternation needs -E (and a delimiter the pattern does not use).
-        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path)@$stale([\"'[:space:]#]|\$)~\1@$replacement\3~" "$wf"
+        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path)@$stale_raw([\"'[:space:]#]|\$)~\1@$replacement\3~" "$wf"
         echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
         rewrites=$((rewrites + 1))
         pending+=("$stale"$'\t'"$replacement"$'\t'"${path%%/.github/workflows/*}")
@@ -246,7 +254,7 @@ while IFS= read -r -d '' wf; do
         IFS=$'\t' read -r stale replacement repo_prefix <<<"$entry"
         keep=0
         for other in $klines; do
-            sed -n "${other}p" "$wf" | grep -qE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" && keep=1
+            sed -n "${other}p" "$wf" | grep -qiE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" && keep=1
         done
         printf '%s\t%s\t%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" "$keep" "$repo_prefix" >> "$edits"
     done
@@ -260,10 +268,13 @@ done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml
 if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     sort -u "$edits" -o "$edits"
     while IFS=$'\t' read -r wfkey stale new keep repo; do
-        if ! awk -v wfkey="    '$wfkey':" -v edge="$repo@$stale" '
+        # The workflow key in either quote style (`gh actions-lock` writes
+        # single quotes; a hand edit may not): compared unquoted.
+        if ! awk -v wfkey="$wfkey" -v edge="$repo@$stale" '
+                function unq(s) { gsub(/["'"'"']/, "", s); return s }
                 /^workflows:[[:space:]]*$/ { sec = "w" }
                 /^dependencies:[[:space:]]*$/ { sec = "d" }
-                sec == "w" && /^    ["'"'"']/ { inwf = ($0 == wfkey) }
+                sec == "w" && /^    ["'"'"']/ { inwf = (unq($0) == "    " wfkey ":") }
                 sec == "w" && inwf && /^        - / && (index($0, "'"'"'" edge "'"'"'") || index($0, "\"" edge "\"")) { found = 1 }
                 END { exit !found }' "$LOCK"; then
             echo "WARN: actions.lock has no edge '$repo@${stale:0:7}' under '$wfkey': the lock was already out of sync with this caller — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2
@@ -271,10 +282,22 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             continue
         fi
         tmp=$(mktemp)
-        awk -v wfkey="    '$wfkey':" -v stale="$stale" -v new="$new" -v keep="$keep" -v repo="$repo" '
+        # The lock is read twice: first for the edges this workflow entry
+        # already lists, then to move the stale one — an entry that already
+        # holds the replacement edge (a job already at the new revision) is
+        # never given it a second time.
+        awk -v wfkey="$wfkey" -v stale="$stale" -v new="$new" -v keep="$keep" -v repo="$repo" '
+            function unq(s) { gsub(/["'"'"']/, "", s); return s }
+            FNR == NR {
+                if ($0 ~ /^workflows:[[:space:]]*$/) s1 = "w"
+                if ($0 ~ /^dependencies:[[:space:]]*$/) s1 = "d"
+                if (s1 == "w" && $0 ~ /^    ["'"'"']/) w1 = (unq($0) == "    " wfkey ":")
+                if (s1 == "w" && w1 && $0 ~ /^        - /) have[unq($0)] = 1
+                next
+            }
             /^workflows:[[:space:]]*$/ { sec = "w" }
             /^dependencies:[[:space:]]*$/ { sec = "d" }
-            sec == "w" && /^    ["'"'"']/ { inwf = ($0 == wfkey) }
+            sec == "w" && /^    ["'"'"']/ { inwf = (unq($0) == "    " wfkey ":") }
             sec == "w" && inwf && /^        - / {
                 # Either quote style; the edge keeps the one it has.
                 q = "'"'"'"; i = index($0, q repo "@" stale q)
@@ -283,11 +306,13 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                     moved = substr($0, 1, i + length(repo)) "@" new q
                     # keep: an uncovered caller in this workflow still pins the stale
                     # SHA, so the edge is added beside the old one, not replaced.
-                    if (keep == "1") { if (!seen[moved]++) { print; $0 = moved } else next } else $0 = moved
+                    if (keep == "1") print
+                    if (unq(moved) in have) next
+                    have[unq(moved)] = 1; $0 = moved
                 }
             }
             { print }
-        ' "$LOCK" > "$tmp"
+        ' "$LOCK" "$LOCK" > "$tmp"
         if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
     done < "$edits"
     # Then the records: rename a stale record nothing references any more;

@@ -1623,5 +1623,344 @@ by_recipe	PI006	fix-lock-self-sha-refs.sh
 by_recipe	pin_integrity/self_sha_lock_record	fix-lock-self-sha-refs.sh
 TSV
 
+
+# ── Review cases (gitbot-fleet#615, rounds 10–11) ───────────────────────────
+# tc15: the empty string (`""`, `''`), the other null spellings YAML admits
+# unquoted (`Null`, `NULL`) and an upper-case SHA are all the key with no
+# value: filled in place, never duplicated. `"null"` quoted is the string
+# null — a value the step names, left alone.
+mkdir -p "$fx/tc15/.github/workflows"
+cat > "$fx/tc15/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6C977A6CA4077A0CEB28FFBE03F59D46E9AC8772
+        with:
+          toolchain: ""
+          components: clippy
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: '', components: clippy }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: NULL # chosen later
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: Null }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: "null" }
+YML
+cat > "$fx/tc15-expected.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6C977A6CA4077A0CEB28FFBE03F59D46E9AC8772
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: stable, components: clippy }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable # chosen later
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: stable }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: "null" }
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc15"
+check "quoted-empty, Null/NULL and an upper-case SHA are filled in place; a quoted \"null\" string is a value" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc15-expected.yml' '$fx/tc15/.github/workflows/x.yml'"
+cp "$fx/tc15/.github/workflows/x.yml" "$fx/tc15-after1.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc15"
+check "tc15 second run is a no-op" "[ \$rc -eq 0 ] && cmp -s '$fx/tc15-after1.yml' '$fx/tc15/.github/workflows/x.yml'"
+
+# tc16: an empty `toolchain:` whose next PLAIN line sits deeper is a nested
+# mapping even when a comment or blank line sits between them: unsupported,
+# the file untouched, exit 2 — never a second `toolchain:` key.
+mkdir -p "$fx/tc16/.github/workflows"
+cat > "$fx/tc16/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain:
+          # chosen below
+
+            channel: stable
+YML
+cp "$fx/tc16/.github/workflows/x.yml" "$fx/tc16-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc16"
+check "a nested toolchain mapping behind a comment line is unsupported: exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/tc16-before.yml' '$fx/tc16/.github/workflows/x.yml'"
+
+# tc17: a multi-line flow `with:` whose empty entry has its delimiter on the
+# next line — `toolchain: null` then `}`, or a bare `toolchain:` followed by
+# the closing brace — is filled where it stands; a bare key whose next token
+# is a value (spread over lines) is not this fixer's to place.
+mkdir -p "$fx/tc17/.github/workflows" "$fx/tc17b/.github/workflows"
+cat > "$fx/tc17/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          toolchain: null
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          components: clippy,
+          toolchain:
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: ~
+        }
+YML
+cat > "$fx/tc17-expected.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          toolchain: stable
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          components: clippy,
+          toolchain: stable
+        }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: stable
+        }
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc17"
+check "an empty flow entry whose delimiter is on the next line is filled in place, never duplicated" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc17-expected.yml' '$fx/tc17/.github/workflows/x.yml'"
+cat > "$fx/tc17b/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          toolchain:
+            nightly }
+YML
+cp "$fx/tc17b/.github/workflows/x.yml" "$fx/tc17b-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc17b"
+check "a bare flow toolchain: whose value starts on the next line is unsupported: exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/tc17b-before.yml' '$fx/tc17b/.github/workflows/x.yml'"
+
+# tc18: only a pin the parser cannot place AS A STEP is unsupported. A
+# workflow-level `env:` string naming the action is data: the step below it
+# is still repaired and the run is clean. A key of a flow-style step spread
+# over several lines IS a step the parser cannot place.
+mkdir -p "$fx/tc18/.github/workflows" "$fx/tc18b/.github/workflows"
+cat > "$fx/tc18/.github/workflows/x.yml" <<'YML'
+env:
+  TOOLCHAIN_ACTION: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc18"
+check "a workflow-level env string naming the pin is data: the step is repaired and the run is clean" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\" && grep -q '^  TOOLCHAIN_ACTION: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772$' '$fx/tc18/.github/workflows/x.yml' && [ \$(grep -c 'toolchain: stable' '$fx/tc18/.github/workflows/x.yml') -eq 1 ]"
+cat > "$fx/tc18b/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps: [
+      { name: toolchain,
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 }
+    ]
+YML
+cp "$fx/tc18b/.github/workflows/x.yml" "$fx/tc18b-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc18b"
+check "a key of a flow-style step spread over lines is still unsupported: exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/tc18b-before.yml' '$fx/tc18b/.github/workflows/x.yml'"
+
+# ls12: only a DIRECT key of a step is its `uses:`; the same key nested under
+# `with:` or `env:` is an input and names no action. An estate record such
+# an input names is then unreferenced and keeps its SHA ref (the reusable
+# fallback) — as an action site it would have been given the tag. A
+# bare-dash item learns its key column from its first key line.
+mkdir -p "$fx/ls12/.github/workflows"
+cat > "$fx/ls12/.github/workflows/ci.yml" <<YML
+jobs:
+  check:
+    steps:
+      - name: run
+        uses: foo/bar@$SHA_A
+        with:
+          uses: hyperpolymath/standards/.github/workflows/x.yml@$SHA_B
+      -
+        uses: foo/bar@$SHA_C
+YML
+cat > "$fx/ls12/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'foo/bar@$SHA_A'
+        - 'hyperpolymath/standards@$SHA_B'
+        - 'foo/bar@$SHA_C'
+dependencies:
+    'foo/bar@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    'hyperpolymath/standards@$SHA_B':
+        ref: '$SHA_B'
+        commit: 'sha1-$SHA_B'
+        owner_id: 1
+        repo_id: 2
+    'foo/bar@$SHA_C':
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+        owner_id: 1
+        repo_id: 2
+LOCK
+printf 'foo/bar\t%s\tv1.0.0\nhyperpolymath/standards\t%s\tv2.0.0\nfoo/bar\t%s\tv3.0.0\n' "$SHA_A" "$SHA_B" "$SHA_C" > "$fx/ls12-tags.tsv"
+TAG_MAP="$fx/ls12-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls12" --offline
+check "a step's direct uses: (under - name: and under a bare dash) is an action site; a uses: nested under with: is not" \
+  "grep -q \"^        ref: 'v1.0.0'\" '$fx/ls12/.github/workflows/actions.lock' && grep -q \"^        ref: 'v3.0.0'\" '$fx/ls12/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_B'\" '$fx/ls12/.github/workflows/actions.lock'"
+
+# ls13: the whole `jobs:` mapping written on one line is still a job map:
+# its `uses:` entries are reusable calls, whose records keep their SHA ref.
+# Two steps on one `steps: [ ... ]` line are each an action site.
+mkdir -p "$fx/ls13/.github/workflows"
+cat > "$fx/ls13/.github/workflows/ci.yml" <<YML
+jobs: { call: { uses: hyperpolymath/standards/.github/workflows/x.yml@$SHA_A }, other: { uses: hyperpolymath/standards/.github/workflows/y.yml@$SHA_A } }
+YML
+cat > "$fx/ls13/.github/workflows/two.yml" <<YML
+jobs:
+  check:
+    steps: [ { uses: foo/bar@$SHA_B }, { uses: foo/baz@$SHA_C } ]
+YML
+cat > "$fx/ls13/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$SHA_A'
+    '.github/workflows/two.yml':
+        - 'foo/bar@$SHA_B'
+        - 'foo/baz@$SHA_C'
+dependencies:
+    'hyperpolymath/standards@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    'foo/bar@$SHA_B':
+        ref: '$SHA_B'
+        commit: 'sha1-$SHA_B'
+        owner_id: 1
+        repo_id: 2
+    'foo/baz@$SHA_C':
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+        owner_id: 1
+        repo_id: 2
+LOCK
+printf 'hyperpolymath/standards\t%s\tv9.9.9\nfoo/bar\t%s\tv2.0.0\nfoo/baz\t%s\tv3.0.0\n' "$SHA_A" "$SHA_B" "$SHA_C" > "$fx/ls13-tags.tsv"
+TAG_MAP="$fx/ls13-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls13" --offline
+check "an inline jobs: { ... } mapping is a reusable call: its record keeps the SHA ref; two inline steps are both actions" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: '$SHA_A'\" '$fx/ls13/.github/workflows/actions.lock' && grep -q \"^        ref: 'v2.0.0'\" '$fx/ls13/.github/workflows/actions.lock' && grep -q \"^        ref: 'v3.0.0'\" '$fx/ls13/.github/workflows/actions.lock'"
+
+# sp17: an upper-case SHA is the same dead pin: looked up in lower case, the
+# caller rewritten as written, the (lower-case) lock edge moved.
+mkdir -p "$fx/sp17/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "${STALE_A^^}" > "$fx/sp17/.github/workflows/ci.yml"
+cat > "$fx/sp17/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp17"
+check "an upper-case dead pin is rewritten and its lock edge and record moved (exit 3: the record's nested list is not recomputed)" \
+  "[ \$rc -eq 3 ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/sp17/.github/workflows/ci.yml' && grep -q \"'hyperpolymath/standards@$GOOD'\" '$fx/sp17/.github/workflows/actions.lock' && ! grep -qi \"$STALE_A\" '$fx/sp17/.github/workflows/actions.lock'"
+
+# sp18: the only wildcard a table row may carry is a terminal `/*`; a `*`
+# anywhere else is rejected before any caller is touched.
+mkdir -p "$fx/sp18/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp18/.github/workflows/ci.yml"
+cp "$fx/sp18/.github/workflows/ci.yml" "$fx/sp18-before.yml"
+printf 'hyperpolymath/standards/.github/workflows/rust-*.yml\t%s\t%s\tglob in the file name\n' "$STALE_A" "$GOOD" > "$fx/sp18-table.tsv"
+PINS_TABLE="$fx/sp18-table.tsv" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp18"
+check "a wildcard anywhere but a terminal /* is a bad row: exit 2, nothing changed" \
+  "[ \$rc -eq 2 ] && grep -q 'terminal /\\*' <<<\"\$out\" && cmp -s '$fx/sp18-before.yml' '$fx/sp18/.github/workflows/ci.yml'"
+
+# sp19: a hand-edited lock whose workflow key is double-quoted is the same
+# key: the edge is found and moved, not reported as missing.
+mkdir -p "$fx/sp19/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp19/.github/workflows/ci.yml"
+cat > "$fx/sp19/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    ".github/workflows/ci.yml":
+        - "hyperpolymath/standards@$STALE_A"
+dependencies:
+    "hyperpolymath/standards@$STALE_A":
+        ref: "$STALE_A"
+        commit: "sha1-$STALE_A"
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp19"
+check "a double-quoted workflow key is matched: the edge moves, no 'has no edge' warning (exit 3 for the renamed record, as always)" \
+  "[ \$rc -eq 3 ] && ! grep -q 'has no edge' <<<\"\$out\" && grep -q \"\\\"hyperpolymath/standards@$GOOD\\\"\" '$fx/sp19/.github/workflows/actions.lock'"
+
+# sp20: a partly migrated workflow — one job at the dead pin, another already
+# at the replacement — lists both edges; moving the dead one must not write
+# the replacement edge a second time.
+mkdir -p "$fx/sp20/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n  done:\n    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@%s\n' "$STALE_A" "$GOOD" > "$fx/sp20/.github/workflows/ci.yml"
+cat > "$fx/sp20/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+        - 'hyperpolymath/standards@$GOOD'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+    'hyperpolymath/standards@$GOOD':
+        ref: '$GOOD'
+        commit: 'sha1-$GOOD'
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp20"
+check "an edge the workflow entry already lists is not added again: exactly one replacement edge, no stale edge" \
+  "[ \$rc -eq 3 ] && [ \$(grep -c \"^        - 'hyperpolymath/standards@$GOOD'\" '$fx/sp20/.github/workflows/actions.lock') -eq 1 ] && ! grep -q \"standards@$STALE_A\" '$fx/sp20/.github/workflows/actions.lock'"
+
+# pl1: one workflow-pin fixer per checkout at a time. While another holder
+# has the repository's lock, a fixer waits PIN_FIXER_LOCK_WAIT seconds, then
+# reports it and exits 2 with nothing changed; once the holder is gone the
+# same run succeeds.
+mkdir -p "$fx/pl1/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/pl1/.github/workflows/ci.yml"
+cp "$fx/pl1/.github/workflows/ci.yml" "$fx/pl1-before.yml"
+pl1_key=$(cd "$fx/pl1" && pwd -P | tr -d '\n' | sha256sum | cut -c1-16)
+flock -x "$fx/pin-fixer-$pl1_key.lock" sleep 3 &
+pl1_holder=$!
+sleep 0.3
+PIN_FIXER_LOCK_DIR="$fx" PIN_FIXER_LOCK_WAIT=1 run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl1"
+check "a fixer that cannot take the checkout's lock in time reports it, exits 2 and changes nothing" \
+  "[ \$rc -eq 2 ] && grep -q 'another workflow-pin fixer holds' <<<\"\$out\" && cmp -s '$fx/pl1-before.yml' '$fx/pl1/.github/workflows/ci.yml'"
+wait "$pl1_holder" || true
+PIN_FIXER_LOCK_DIR="$fx" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl1"
+check "once the holder is gone the same run takes the lock and repairs" \
+  "[ \$rc -eq 0 ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/pl1/.github/workflows/ci.yml'"
+
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
