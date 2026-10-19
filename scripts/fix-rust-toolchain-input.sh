@@ -62,6 +62,9 @@ set -euo pipefail
 TOOLCHAIN="${TOOLCHAIN:-stable}"
 TARGET="${1:?Usage: fix-rust-toolchain-input.sh <workflow.yml | repo-path>}"
 
+# Add missing TOOLCHAIN inputs to SHA-pinned Rust toolchain steps in file $1.
+# Return 0 for a repair or no-op; return 2 and leave the file untouched if
+# parsing fails or a pinned reference uses an unsupported layout.
 apply_to_file() {
     local f="$1" tmp rc
     [ -f "$f" ] || { echo "SKIP (not a file): $f" >&2; return 0; }
@@ -70,10 +73,13 @@ apply_to_file() {
     tmp=$(mktemp)
     set +e
     awk -v toolchain="$TOOLCHAIN" '
+        # Return the number of leading spaces in source line s.
         function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
         # Column of a key, with a list dash counted as indentation: `  - with:` -> 4.
         function key_indent_of(s,   t) { t = s; sub(/[A-Za-z"'"'"'].*$/, "", t); gsub(/-/, " ", t); return t }
+        # Return true when s is neither blank nor a full-line comment.
         function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
+        # Return a string of n spaces for an inserted YAML line.
         function spaces(n,   t) { t = ""; while (n-- > 0) t = t " "; return t }
         # Net brace depth of a line: a flow mapping closes when it returns to
         # zero, not at the first `}` — an expression `${{ matrix.x }}` inside it
@@ -97,6 +103,7 @@ apply_to_file() {
             for (k in keyat) if (k + 0 > ind) delete keyat[k]
             keyat[ind] = t
         }
+        # Return true if the nearest recorded key at or above ind is steps.
         function parent_is_steps(ind,   k, best) {
             best = -1
             for (k in keyat) if (k + 0 <= ind && k + 0 > best) best = k + 0

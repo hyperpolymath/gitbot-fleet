@@ -10,8 +10,14 @@ fleet="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fx="$(mktemp -d)"
 trap 'rm -rf "$fx"' EXIT
 pass=0; fail=0
+
+# Increment the pass count and print assertion label $1 to stdout.
 ok()   { pass=$((pass + 1)); echo "  ok   $1"; }
+
+# Increment the failure count and print assertion label $1 to stderr.
 bad()  { fail=$((fail + 1)); echo "  FAIL $1" >&2; }
+
+# Evaluate trusted fixture assertion $2 and record its result under label $1.
 check(){ if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 
 # ── 1. fix-rust-toolchain-input.sh ───────────────────────────────────────────
@@ -93,6 +99,8 @@ jobs:
 YML
 f2="$fx/tc2/.github/workflows/rust.yml"
 bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc2" >/dev/null 2>&1
+# Print each match of pattern $1 in fixture $f2 with $2 following lines,
+# merging overlapping groups as grep -A does; return grep's exit status.
 after() { grep -A"$2" -- "$1" "$f2"; }   # the N lines after the first match
 check "a with: with a trailing comment is reused: toolchain: goes under it, no second with:" \
   "after 6c977a6c 2 | sed -n '2p' | grep -q '^        with: # pinned inputs$' && after 6c977a6c 2 | sed -n '3p' | grep -q '^          toolchain: stable$'"

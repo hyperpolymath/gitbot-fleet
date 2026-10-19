@@ -44,9 +44,11 @@ LOCK="$REPO_PATH/.github/workflows/actions.lock"
 
 [ -f "$LOCK" ] || { echo "OK (no actions.lock): $REPO_PATH"; exit 0; }
 
-# Prefer the most specific tag: more dotted numeric components, then longer.
+# Read tag names from stdin and print the most specific: more dots, then longer.
 best_tag() { awk '{ n = gsub(/\./, ".", $0); print n "\t" length($0) "\t" $0 }' | sort -t $'\t' -k1,1nr -k2,2nr | head -1 | cut -f3; }
 
+# Print the tag for owner/repo $1 at SHA $2 from TAG_MAP, falling back to
+# remote tags unless OFFLINE is set. Print nothing when no tag is found.
 lookup_tag() { # <owner/repo> <sha>
     local repo="$1" sha="$2" tag
     tag=$(awk -F'\t' -v r="$repo" -v s="$sha" '$1 == r && $2 == s { print $3; exit }' "$TAG_MAP" 2>/dev/null || true)
@@ -66,6 +68,8 @@ lookup_tag() { # <owner/repo> <sha>
 # AND composite actions), so the class is per repository@revision. A record no
 # workflow uses directly (a nested dependency, a tree without workflows) falls
 # back to the two estate reusable sources by name.
+# For owner/repo $1 at SHA $2, print reusable, action, or unknown; reusable
+# takes precedence when both kinds of use exist.
 usage_of() { # <owner/repo> <sha>  -> reusable | action | unknown
     local key="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$1"
     local end="@$2([\"'[:space:]]|$)"
@@ -77,6 +81,9 @@ usage_of() { # <owner/repo> <sha>  -> reusable | action | unknown
         echo unknown
     fi
 }
+
+# Return 0 if owner/repo $1 at SHA $2 should keep its SHA ref, or 1 otherwise.
+# Use workflow classification, then the estate source fallback for unknown use.
 keeps_sha_ref() { # <owner/repo> <sha>
     case "$(usage_of "$1" "$2")" in
         reusable) return 0 ;;

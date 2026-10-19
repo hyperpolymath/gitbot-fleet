@@ -56,11 +56,13 @@ rewrites=0; lock_touched=0
 # so after substitution the lock can hold the same dependency key twice. A
 # duplicate key is a lockfile GitHub refuses. Keep the first record, fold the
 # others' nested `uses:` into it (deduplicated, sorted as gh actions-lock sorts),
-# and drop them. gh-actions-lock's 4-space layout is preserved.
+# and drop them. Rewrite lockfile $1 in place, preserving gh-actions-lock's
+# 4-space layout and leaving the file alone when the output is identical.
 merge_duplicate_records() {
     local lock="$1" tmp
     tmp=$(mktemp)
     awk '
+        # Print dependency cur using its saved header and sorted, unique uses.
         function emit_record(   i, n, out) {
             if (!cur) return
             # Rebuild the record: header lines, then a sorted, unique uses: list.
@@ -98,7 +100,9 @@ merge_duplicate_records() {
     if ! cmp -s "$lock" "$tmp"; then mv "$tmp" "$lock"; else rm -f "$tmp"; fi
 }
 
-# The table row for a reusable path at a stale SHA: sets replacement/reason.
+# Find the first PINS_TABLE row for reusable path $1 at stale SHA $2, including
+# wildcard paths. Set replacement/reason and return 0 on a match; otherwise
+# clear both variables and return 1.
 lookup_replacement() { # <reusable-path> <stale-sha>
     local t_path t_stale t_new t_reason
     replacement=""; reason=""
@@ -112,7 +116,7 @@ lookup_replacement() { # <reusable-path> <stale-sha>
     return 1
 }
 
-# The YAML context of a workflow, one marker per source line that matters:
+# Print YAML context markers for workflow file $1, one per line that matters:
 #   K<n>  line n is a `uses:` key of a job under `jobs:` — the one place a
 #         reusable is called;
 #   D<n>  line n is a `uses:` key under some other key (`env:`) — data;
@@ -121,7 +125,9 @@ lookup_replacement() { # <reusable-path> <stale-sha>
 # parser cannot place (a flow-style job `rust: { uses: ... }`).
 yaml_context() { # <workflow.yml>
     awk '
+        # Return the number of leading spaces in source line s.
         function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
+        # Return true when s is neither blank nor a full-line comment.
         function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
         BEGIN {
             Q = "[\"'"'"']?"
