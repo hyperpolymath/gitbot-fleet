@@ -54,7 +54,9 @@ best_tag() { awk '{ n = gsub(/\./, ".", $0); print n "\t" length($0) "\t" $0 }' 
 # remote tags unless OFFLINE is set. Print nothing when no tag is found.
 lookup_tag() { # <owner/repo> <sha>
     local repo="$1" sha="$2" tag
-    tag=$(awk -F'\t' -v r="$repo" -v s="$sha" '$1 == r && $2 == s { print $3; exit }' "$TAG_MAP" 2>/dev/null || true)
+    # GitHub resolves an owner/repository in either case and git a commit ID:
+    # the map is read case-folded, so `Actions/Checkout` meets `actions/checkout`.
+    tag=$(awk -F'\t' -v r="$repo" -v s="$sha" 'tolower($1) == tolower(r) && tolower($2) == tolower(s) { print $3; exit }' "$TAG_MAP" 2>/dev/null || true)
     if [ -z "$tag" ] && [ "$OFFLINE" -eq 0 ]; then
         tag=$(git ls-remote --tags "https://github.com/$repo" 2>/dev/null \
               | awk -v s="$sha" '$1 == s { sub(/^refs\/tags\//, "", $2); sub(/\^\{\}$/, "", $2); print $2 }' \

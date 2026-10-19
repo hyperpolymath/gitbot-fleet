@@ -2395,5 +2395,54 @@ TAG_MAP="$fx/ls18-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls18 a step in a one-line jobs map is an action (tag written); the job-level reusable call keeps its SHA" \
   "[ \$rc -eq 0 ] && grep -A1 \"^    'hyperpolymath/standards@$SHA_A':\$\" '$fx/ls18/.github/workflows/actions.lock' | grep -q \"ref: 'v1.0.0'\" && grep -A1 \"^    'hyperpolymath/cicd-suite@$SHA_B':\$\" '$fx/ls18/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_B'\""
 
+# Review cases (Codex round on c7392ee, gitbot-fleet#615).
+
+# sp26: an entry that already lists the replacement edge WITH a trailing
+# comment is the same edge: moving the stale one must not add it again.
+mkdir -p "$fx/sp26/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n  done:\n    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@%s\n' "$STALE_A" "$GOOD" > "$fx/sp26/.github/workflows/ci.yml"
+cat > "$fx/sp26/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+        - 'hyperpolymath/standards@$GOOD' # mirror already moved
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 1
+        repo_id: 2
+    'hyperpolymath/standards@$GOOD':
+        ref: '$GOOD'
+        commit: 'sha1-$GOOD'
+        owner_id: 1
+        repo_id: 2
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp26"
+check "sp26 a commented replacement edge is the same edge: one replacement edge, its comment kept, no stale edge" \
+  "[ \$rc -eq 3 ] && [ \$(grep -c \"^        - 'hyperpolymath/standards@$GOOD'\" '$fx/sp26/.github/workflows/actions.lock') -eq 1 ] && grep -q \"^        - 'hyperpolymath/standards@$GOOD' # mirror already moved\$\" '$fx/sp26/.github/workflows/actions.lock' && ! grep -q \"standards@$STALE_A\" '$fx/sp26/.github/workflows/actions.lock'"
+
+# ls19: the tag map is read case-folded: an action spelled `Actions/Checkout`
+# in its record meets the shipped lower-case `actions/checkout` row offline.
+mkdir -p "$fx/ls19/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: Actions/Checkout@%s\n' "$SHA_A" > "$fx/ls19/.github/workflows/ci.yml"
+cat > "$fx/ls19/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'Actions/Checkout@$SHA_A'
+dependencies:
+    'Actions/Checkout@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+LOCK
+printf 'actions/checkout\t%s\tv7.0.1\n' "$SHA_A" > "$fx/ls19-tags.tsv"
+TAG_MAP="$fx/ls19-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls19" --offline
+check "ls19 a mixed-case action meets its lower-case tag-map row offline: repaired, exit 0" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v7.0.1'\$\" '$fx/ls19/.github/workflows/actions.lock' && ! grep -q UNRESOLVED <<<\"\$out\""
+
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

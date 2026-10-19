@@ -348,11 +348,14 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         # never given it a second time.
         awk -v wfkey="$wfkey" -v stale="$stale" -v new="$new" -v keep="$keep" -v repo="$repo" '
             function unq(s) { gsub(/["'"'"']/, "", s); return s }
+            # An edge compared by its value: the list dash, a trailing
+            # comment, quotes and case are not part of it.
+            function edge_val(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return tolower(unq(s)) }
             FNR == NR {
                 if ($0 ~ /^workflows:[[:space:]]*$/) s1 = "w"
                 if ($0 ~ /^dependencies:[[:space:]]*$/) s1 = "d"
                 if (s1 == "w" && $0 ~ /^    [^[:space:]#]/) w1 = (unq($0) == "    " wfkey ":")
-                if (s1 == "w" && w1 && $0 ~ /^        - /) have[tolower(unq($0))] = 1
+                if (s1 == "w" && w1 && $0 ~ /^        - /) have[edge_val($0)] = 1
                 next
             }
             /^workflows:[[:space:]]*$/ { sec = "w" }
@@ -373,8 +376,8 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                     # keep: an uncovered caller in this workflow still pins the stale
                     # SHA, so the edge is added beside the old one, not replaced.
                     if (keep == "1") print
-                    if (tolower(unq(moved)) in have) next
-                    have[tolower(unq(moved))] = 1; $0 = moved
+                    if (edge_val(moved) in have) next
+                    have[edge_val(moved)] = 1; $0 = moved
                 }
             }
             { print }
