@@ -143,13 +143,15 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                         # A flow mapping on the key'"'"'s line: a job written
                         # `call: { uses: ... }`, or the whole `jobs: { ... }` mapping
                         # on one line, is a reusable call; `steps: [ { uses: ... } ]`
-                        # or a flow mapping inside a step is an action.
+                        # is a list of actions. A flow mapping on one of a step'"'"'s
+                        # own keys (`with: { uses: ... }`) is that input'"'"'s data: the
+                        # step'"'"'s action is its scalar `uses:` key, never a mapping.
                         m = flow_uses_all($0, fu)
                         if (m) {
                             p = nearest_below(ind)
                             for (j = 1; j <= m; j++) {
                                 if (key == "jobs" || (p >= 0 && keyat[p] == "jobs")) print "R\t" fu[j]
-                                else if (key == "steps" || (item_steps && ind == item_key)) print "A\t" fu[j]
+                                else if (key == "steps") print "A\t" fu[j]
                             }
                         }
                     }

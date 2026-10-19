@@ -63,9 +63,19 @@ TOOLCHAIN="${TOOLCHAIN:-stable}"
 TARGET="${1:?Usage: fix-rust-toolchain-input.sh <workflow.yml | repo-path>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh):
-# a single workflow file is locked by the checkout it belongs to.
+# a single workflow file is locked by the checkout it belongs to — found from
+# the file'"'"'s directory (`<checkout>/.github/workflows/<file>`, relative or
+# absolute), so every fixer on that checkout contends for the same lock.
 . "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
-if [ -d "$TARGET" ]; then pin_fixer_lock "$TARGET"; else pin_fixer_lock "${TARGET%/.github/workflows/*}"; fi
+if [ -d "$TARGET" ]; then
+    pin_fixer_lock "$TARGET"
+else
+    target_dir=$(cd "$(dirname "$TARGET")" 2>/dev/null && pwd -P || dirname "$TARGET")
+    case "$target_dir" in
+        */.github/workflows) pin_fixer_lock "${target_dir%/.github/workflows}" ;;
+        *) pin_fixer_lock "$target_dir" ;;
+    esac
+fi
 
 # Add missing TOOLCHAIN inputs to SHA-pinned Rust toolchain steps in file $1.
 # Return 0 for a repair or no-op; return 2 and leave the file untouched if
@@ -278,7 +288,7 @@ apply_to_file() {
             LIST_RE = "^[[:space:]]*-([[:space:]]|$)"
             KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
-            USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
+            USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-fA-F]+"
             WITH_BLOCK_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*(#.*)?$"
             WITH_FLOW_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*\\{"
             WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"

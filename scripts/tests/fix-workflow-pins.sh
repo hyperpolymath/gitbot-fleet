@@ -1962,5 +1962,67 @@ PIN_FIXER_LOCK_DIR="$fx" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh"
 check "once the holder is gone the same run takes the lock and repairs" \
   "[ \$rc -eq 0 ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/pl1/.github/workflows/ci.yml'"
 
+
+# ── Review cases (gitbot-fleet#615, round 12) ───────────────────────────────
+# tc19: an upper-case SHA that begins with a letter is still the step's own
+# `uses:` key (USES_RE accepts the same hex as sha_ref), so it is repaired,
+# not reported as a pin the parser cannot place.
+mkdir -p "$fx/tc19/.github/workflows"
+cat > "$fx/tc19/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@AC977A6CA4077A0CEB28FFBE03F59D46E9AC8772
+        with:
+          components: clippy
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc19"
+check "an upper-case SHA beginning with a letter is the step's uses: key: repaired, not unsupported" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\" && grep -A2 'AC977A6CA4077A0CEB28FFBE03F59D46E9AC8772' '$fx/tc19/.github/workflows/x.yml' | grep -q '^          toolchain: stable$'"
+
+# pl2: a single workflow file named relative to the checkout root locks the
+# checkout, not the file: the lock file is the one every fixer run on that
+# checkout computes.
+mkdir -p "$fx/pl2/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/pl2/.github/workflows/x.yml"
+pl2_key=$(cd "$fx/pl2" && pwd -P | tr -d '\n' | sha256sum | cut -c1-16)
+(cd "$fx/pl2" && PIN_FIXER_LOCK_DIR="$fx/pl2-locks" bash -c 'mkdir -p "$PIN_FIXER_LOCK_DIR"; bash "$1" .github/workflows/x.yml' _ "$fleet/scripts/fix-rust-toolchain-input.sh") > "$fx/pl2.out" 2>&1; rc_pl2=$?
+check "a relative workflow-file target is locked by its checkout (same lock file as a checkout-path run)" \
+  "[ \$rc_pl2 -eq 0 ] && [ -f '$fx/pl2-locks/pin-fixer-$pl2_key.lock' ] && grep -q 'toolchain: stable' '$fx/pl2/.github/workflows/x.yml'"
+
+# ls14: a flow mapping on one of a step's own keys (`with: { uses: ... }`) is
+# that input's data, not the step's action: the estate record it names stays
+# unreferenced and keeps its SHA ref.
+mkdir -p "$fx/ls14/.github/workflows"
+cat > "$fx/ls14/.github/workflows/ci.yml" <<YML
+jobs:
+  check:
+    steps:
+      - uses: foo/bar@$SHA_A
+        with: { uses: hyperpolymath/standards/.github/workflows/x.yml@$SHA_B }
+YML
+cat > "$fx/ls14/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'foo/bar@$SHA_A'
+        - 'hyperpolymath/standards@$SHA_B'
+dependencies:
+    'foo/bar@$SHA_A':
+        ref: '$SHA_A'
+        commit: 'sha1-$SHA_A'
+        owner_id: 1
+        repo_id: 2
+    'hyperpolymath/standards@$SHA_B':
+        ref: '$SHA_B'
+        commit: 'sha1-$SHA_B'
+        owner_id: 1
+        repo_id: 2
+LOCK
+printf 'foo/bar\t%s\tv1.0.0\nhyperpolymath/standards\t%s\tv2.0.0\n' "$SHA_A" "$SHA_B" > "$fx/ls14-tags.tsv"
+TAG_MAP="$fx/ls14-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls14" --offline
+check "a with: { uses: ... } flow input on a step key is data: the step's action is repaired, the estate record keeps its SHA ref" \
+  "grep -q \"^        ref: 'v1.0.0'\" '$fx/ls14/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_B'\" '$fx/ls14/.github/workflows/actions.lock'"
+
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
