@@ -156,9 +156,31 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 }
                 return ""
             }
+            # The brackets a masked line opens and leaves open (negative when
+            # it closes more than it opens). Quoted text is already blanked.
+            function depth_of(s,   t) { t = s; return gsub(/[[{]/, "", t) - gsub(/[]}]/, "", s) }
+            # Every `uses` entry of the flow collection s (masked, possibly
+            # joined from several lines), classified by flow_kind/4. `steps`
+            # gates an item: only a `- { ... }` under `steps:` is a step.
+            function flow_emit(s, parent, item, steps,   m, j, fk) {
+                m = flow_uses_all(s, fe)
+                for (j = 1; j <= m; j++) {
+                    fk = flow_kind(s, out_at[j], parent, item)
+                    if (fk != "" && (!item || steps)) print fk "\t" fe[j]
+                }
+            }
+            # A flow collection that opens on line s and does not close there
+            # is read to its closing bracket before it is classified: the
+            # lines in between are its entries, never block keys.
+            function flow_open(s, parent, item, steps) {
+                fdepth = depth_of(s)
+                if (fdepth > 0) { facc = s; fparent = parent; fitem = item; fsteps = steps }
+                else { fdepth = 0; flow_emit(s, parent, item, steps) }
+            }
             BEGIN {
                 Q = "[\"'"'"']?"
                 KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
+                KEY_FLOW_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:[[:space:]]*[[{]"
                 ITEM_RE = "^[[:space:]]*-([[:space:]]|$)"
                 SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
                 USES_RE = "^" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q
@@ -168,6 +190,19 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 ind = indent_of($0)
                 if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else next }
                 if (!plain($0)) next
+                if (fdepth > 0) {
+                    ml = masked($0); facc = facc " " ml; fdepth += depth_of(ml)
+                    if (fdepth <= 0) { fdepth = 0; flow_emit(facc, fparent, fitem, fsteps) }
+                    next
+                }
+                if ((ml = masked($0)) ~ /^[[:space:]]*[[{]/) {
+                    # A flow collection that is a whole line: the root of a
+                    # KYAML document, or the value of the key above it
+                    # (`steps:` then `[ ... ]`), read as if written after it.
+                    p = nearest_below(ind); g = (p >= 0) ? nearest_below(p) : -1
+                    flow_open(((p >= 0) ? keyat[p] ": " : "") ml, (g >= 0 ? keyat[g] : ""), 0, 0)
+                    next
+                }
                 if ($0 ~ ITEM_RE) {
                     # A list item: its parent is the nearest key at its indentation or
                     # shallower (`steps:\n- uses:` puts the dash under the key).
@@ -181,13 +216,13 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     # other input and is data.
                     item_key = (t == "") ? -1 : length($0) - length(t)
                     if (t ~ USES_RE) { if (item_steps) print "A\t" ref_of(t) }
-                    else if (t ~ /^\{/) {
-                        mt = masked(t); m = flow_uses_all(mt, fu)
-                        if (item_steps) for (j = 1; j <= m; j++) if (flow_kind(mt, out_at[j], "", 1) == "A") print "A\t" fu[j]
-                    }
+                    else if (t ~ /^\{/) flow_open(masked(t), "", 1, item_steps)
                     else if (t ~ KEY_RE) {
                         keyat[ind + 2] = keyname(t)
                         if (t ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind + 2 }
+                        # An input written as a flow mapping over several lines
+                        # (`- with: {`) is read to its end; it names no site.
+                        else if ((mt = masked(t)) ~ KEY_FLOW_RE && depth_of(mt) > 0) flow_open(mt, "", 0, 0)
                     }
                     next
                 }
@@ -200,8 +235,8 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                         p = nearest_below(ind); g = (p >= 0) ? nearest_below(p) : -1
                         if (p >= 0 && g >= 0 && keyat[g] == "jobs") print "R\t" ref_of($0)
                         else if (item_steps && ind == item_key) print "A\t" ref_of($0)
-                    } else if ((ml = masked($0)) ~ /:[[:space:]]*\{/) {
-                        # A flow mapping on the key'"'"'s line: a job written
+                    } else if ((ml = masked($0)) ~ KEY_FLOW_RE) {
+                        # A flow collection as the key'"'"'s value: a job written
                         # `call: { uses: ... }`, or the whole `jobs: { ... }` mapping
                         # on one line, is a reusable call; `steps: [ { uses: ... } ]`
                         # is a list of actions. A flow mapping on one of a step'"'"'s
@@ -211,25 +246,27 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                         # a `#` is neither: the masked line has no such text.
                         # Each entry is classified by the keys around it, so a
                         # step inside a one-line `jobs: { b: { steps: [ ... ] } }`
-                        # is an action, not a reusable call.
-                        m = flow_uses_all(ml, fu)
-                        if (m) {
-                            p = nearest_below(ind)
-                            for (j = 1; j <= m; j++) {
-                                fk = flow_kind(ml, out_at[j], (p >= 0 ? keyat[p] : ""), 0)
-                                if (fk != "") print fk "\t" fu[j]
-                            }
-                        }
+                        # is an action, not a reusable call. A collection that
+                        # spans lines (`steps: [` ... `]`) is read whole.
+                        p = nearest_below(ind)
+                        flow_open(ml, (p >= 0 ? keyat[p] : ""), 0, 0)
                     }
                     keyat[ind] = key
                     if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
                 }
             }
+            # A flow collection that never closes cannot be classified: the
+            # caller refuses rather than guess the kind of what it hides.
+            END { if (fdepth > 0) print "X\t" FILENAME }
         ' "$wf"
     done
 }
 SITES=$(mktemp)
 uses_sites > "$SITES"
+if grep -q '^X' "$SITES"; then
+    echo "fix-lock-self-sha-refs: a flow collection in $(grep -m1 '^X' "$SITES" | cut -f2) never closes, so its uses: sites cannot be classified; lock left unchanged" >&2
+    rm -f "$SITES"; exit 2
+fi
 
 # For owner/repo $1 at SHA $2, print reusable, action, or unknown; reusable
 # takes precedence when both kinds of use exist. Repository and revision are
@@ -255,7 +292,8 @@ keeps_sha_ref() { # <owner/repo> <sha>
     case "$(usage_of "$1" "$2")" in
         reusable) return 0 ;;
         action) return 1 ;;
-        *) case "$1" in hyperpolymath/standards|hyperpolymath/cicd-suite) return 0 ;; esac; return 1 ;;
+        # GitHub reads `Hyperpolymath/Standards` as hyperpolymath/standards.
+        *) case "${1,,}" in hyperpolymath/standards|hyperpolymath/cicd-suite) return 0 ;; esac; return 1 ;;
     esac
 }
 
@@ -277,17 +315,17 @@ tmp=$(mktemp); cp "$LOCK" "$tmp"
 # line spells it.
 records=$(mktemp)
 if ! awk '
-    /^    ["'"'"']?[^"'"'"'@[:space:]#]+@[0-9a-fA-F]+["'"'"']?:$/ {
-        s = $0; sub(/^    ["'"'"']?/, "", s); sub(/["'"'"']?:$/, "", s)
+    /^    ["'"'"']?[^"'"'"'@[:space:]#]+@[0-9a-fA-F]+["'"'"']?:([[:space:]]+#.*)?$/ {
+        s = $0; sub(/^    ["'"'"']?/, "", s); sub(/["'"'"']?:([[:space:]]+#.*)?$/, "", s)
         i = index(s, "@"); repo = substr(s, 1, i - 1); sha = substr(s, i + 1)
         if (length(sha) == 40) { inrec = 1; key_repo = repo; key_sha = sha } else inrec = 0
         next
     }
     /^[^[:space:]]/ || /^    [^[:space:]]/ { inrec = 0 }
-    inrec && /^        ref: / {
+    inrec && /^        ["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]/ {
         # Quoted either way, or a plain scalar, in either case of hex: the
-        # same ref to GitHub.
-        r = $0; sub(/^        ref: /, "", r); sub(/[[:space:]]+#.*$/, "", r); gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
+        # same ref to GitHub. The key may be quoted too (`"ref": ...`).
+        r = $0; sub(/^        ["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*/, "", r); sub(/[[:space:]]+#.*$/, "", r); gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
         if (tolower(r) == tolower(key_sha)) print NR "\t" key_repo "\t" key_sha "\t" r
     }
 ' "$LOCK" > "$records"; then
@@ -311,7 +349,7 @@ while IFS=$'\t' read -r lineno repo sha ref_raw; do
     # lineno is the ref: line itself; its quote style (or none) is kept, and
     # the SHA is matched as that line spells it (its case may differ from the
     # key's).
-    sed -i "${lineno}s|ref: \(['\"]\{0,1\}\)$ref_raw\1|ref: \1$tag\1|" "$tmp"
+    sed -i "${lineno}s|^\(        ['\"]\{0,1\}ref['\"]\{0,1\}[[:space:]]*:[[:space:]]*\)\(['\"]\{0,1\}\)$ref_raw\2|\1\2$tag\2|" "$tmp"
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
 done < "$records"

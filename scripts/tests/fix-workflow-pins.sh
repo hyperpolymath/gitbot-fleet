@@ -2444,6 +2444,186 @@ TAG_MAP="$fx/ls19-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls19 a mixed-case action meets its lower-case tag-map row offline: repaired, exit 0" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v7.0.1'\$\" '$fx/ls19/.github/workflows/actions.lock' && ! grep -q UNRESOLVED <<<\"\$out\""
 
+# ls20: a flow `steps:` sequence spread over lines is read to its closing
+# bracket: an estate repository used there is an action, so its self-SHA
+# record gets the tag instead of falling back to "estate reusable source"
+# and being reported OK. The block reusable call after it keeps its SHA.
+lock_records() { # <dir> <owner/repo@sha>... : a lock with one record per argument
+    { printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n"
+      for r in "${@:2}"; do printf "        - '%s'\n" "$r"; done
+      printf "dependencies:\n"
+      for r in "${@:2}"; do printf "    '%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n" "$r" "${r##*@}" "${r##*@}"; done
+    } > "$1/.github/workflows/actions.lock"
+}
+printf 'hyperpolymath/standards\t%s\tv2.0.0\nfoo/bar\t%s\tv1.0.0\nhyperpolymath/cicd-suite\t%s\tv9.9.9\n' "$SHA_A" "$SHA_B" "$SHA_C" > "$fx/ls20-tags.tsv"
+mkdir -p "$fx/ls20/.github/workflows"
+cat > "$fx/ls20/.github/workflows/ci.yml" <<YML
+jobs:
+  check:
+    steps: [
+      { uses: hyperpolymath/standards@$SHA_A },
+      { name: build, uses: foo/bar@$SHA_B }
+    ]
+  call:
+    uses: hyperpolymath/cicd-suite/.github/workflows/x.yml@$SHA_C
+YML
+lock_records "$fx/ls20" "hyperpolymath/standards@$SHA_A" "foo/bar@$SHA_B" "hyperpolymath/cicd-suite@$SHA_C"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls20" --offline
+check "ls20 a multi-line flow steps: sequence is read whole: the estate action gets its tag, the block reusable keeps its SHA" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v2.0.0'\$\" '$fx/ls20/.github/workflows/actions.lock' && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls20/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_C'\$\" '$fx/ls20/.github/workflows/actions.lock'"
+
+# ls21: the same on one line — `steps: [ { uses: ... } ]` under a block job
+# was never read at all (only `key: {` opened the flow branch), which ls13
+# did not show because a non-estate action falls back to "action" anyway.
+mkdir -p "$fx/ls21/.github/workflows"
+printf 'jobs:\n  check:\n    runs-on: ubuntu-latest\n    steps: [ { uses: hyperpolymath/standards@%s } ]\n' "$SHA_A" > "$fx/ls21/.github/workflows/ci.yml"
+lock_records "$fx/ls21" "hyperpolymath/standards@$SHA_A"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls21" --offline
+check "ls21 an estate action in a one-line steps: [ ] under a block job is an action: tag written" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v2.0.0'\$\" '$fx/ls21/.github/workflows/actions.lock'"
+
+# ls22: a KYAML workflow is one flow mapping from its first line: its steps
+# are actions and its job-level calls reusable, read through the brackets.
+mkdir -p "$fx/ls22/.github/workflows"
+cat > "$fx/ls22/.github/workflows/ci.yml" <<YML
+{
+  jobs: {
+    check: {
+      steps: [
+        { uses: "hyperpolymath/standards@$SHA_A" },
+      ],
+    },
+    call: { uses: "hyperpolymath/cicd-suite/.github/workflows/x.yml@$SHA_C" },
+  },
+}
+YML
+lock_records "$fx/ls22" "hyperpolymath/standards@$SHA_A" "hyperpolymath/cicd-suite@$SHA_C"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls22" --offline
+check "ls22 a KYAML workflow: its step is an action (tag written), its job-level call keeps its SHA" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v2.0.0'\$\" '$fx/ls22/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_C'\$\" '$fx/ls22/.github/workflows/actions.lock'"
+
+# ls23: a flow collection that never closes hides the kind of every site
+# after it: the fixer refuses (exit 2, lock untouched) rather than guess.
+mkdir -p "$fx/ls23/.github/workflows"
+printf 'jobs:\n  check:\n    steps: [\n      { uses: hyperpolymath/standards@%s }\n' "$SHA_A" > "$fx/ls23/.github/workflows/ci.yml"
+lock_records "$fx/ls23" "hyperpolymath/standards@$SHA_A"
+cp "$fx/ls23/.github/workflows/actions.lock" "$fx/ls23-before.lock"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls23" --offline
+check "ls23 an unclosed flow collection is refused: exit 2, said, lock untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'never closes' <<<\"\$out\" && cmp -s '$fx/ls23-before.lock' '$fx/ls23/.github/workflows/actions.lock'"
+
+# ls24: the estate-source fallback for a record no workflow uses reads the
+# repository case-folded: `Hyperpolymath/Standards` is the reusable source
+# and keeps its SHA ref, even with a tag-map row that would retag it.
+mkdir -p "$fx/ls24/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: foo/bar@v1\n' > "$fx/ls24/.github/workflows/ci.yml"
+lock_records "$fx/ls24" "Hyperpolymath/Standards@$SHA_A"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls24" --offline
+check "ls24 an unreferenced Hyperpolymath/Standards record is the estate source in any case: keeps its SHA ref" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: '$SHA_A'\$\" '$fx/ls24/.github/workflows/actions.lock' && ! grep -q FIXED <<<\"\$out\""
+
+# ls25/ls26: a hand-added record may quote its `ref` key, and may carry a
+# trailing comment on its own key line; both are the same record.
+mkdir -p "$fx/ls25/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: foo/bar@%s\n      - uses: foo/baz@%s\n' "$SHA_B" "$SHA_C" > "$fx/ls25/.github/workflows/ci.yml"
+cat > "$fx/ls25/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'foo/bar@$SHA_B'
+        - 'foo/baz@$SHA_C'
+dependencies:
+    'foo/bar@$SHA_B':
+        "ref": "$SHA_B"
+        commit: 'sha1-$SHA_B'
+    'foo/baz@$SHA_C': # added by hand
+        ref: '$SHA_C'
+        commit: 'sha1-$SHA_C'
+LOCK
+printf 'foo/bar\t%s\tv1.0.0\nfoo/baz\t%s\tv3.0.0\n' "$SHA_B" "$SHA_C" > "$fx/ls25-tags.tsv"
+TAG_MAP="$fx/ls25-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls25" --offline
+check "ls25 a quoted \"ref\": key is the record's ref: rewritten in place, its quotes kept" \
+  "[ \$rc -eq 0 ] && grep -q '^        \"ref\": \"v1.0.0\"\$' '$fx/ls25/.github/workflows/actions.lock'"
+check "ls26 a record key with a trailing comment is a record: its ref rewritten, the comment kept" \
+  "grep -q \"^    'foo/baz@$SHA_C': # added by hand\$\" '$fx/ls25/.github/workflows/actions.lock' && grep -q \"^        ref: 'v3.0.0'\$\" '$fx/ls25/.github/workflows/actions.lock'"
+
+# tc21: the pin text inside an ordinary step field is data, not a step the
+# parser cannot place: no UNSUPPORTED, and a real bare step beside it is fixed.
+mkdir -p "$fx/tc21/.github/workflows" "$fx/tc21b/.github/workflows"
+cat > "$fx/tc21/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - name: "fixture dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"
+        uses: actions/checkout@v4
+YML
+cp "$fx/tc21/.github/workflows/x.yml" "$fx/tc21-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc21"
+check "tc21 the pin named in a step's name: string is data: exit 0, no UNSUPPORTED, file untouched" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/tc21-before.yml' '$fx/tc21/.github/workflows/x.yml'"
+cat > "$fx/tc21b/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - name: "pins dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc21b"
+check "tc21b the same name: beside the real bare step: the step is repaired, the name kept" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\" && grep -q 'toolchain: stable' '$fx/tc21b/.github/workflows/x.yml' && grep -q '^      - name: \"pins dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\"\$' '$fx/tc21b/.github/workflows/x.yml'"
+
+# sp27: the fallback for pins the parser cannot place reads each `uses:`
+# site of the masked line. A dead ref inside `name:` beside a live `uses:`
+# is text (no UNSUPPORTED); a live first site does not hide a dead second
+# one; and a flow brace right after the SHA ends the ref.
+RC_REUSABLE=hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml
+mkdir -p "$fx/sp27a/.github/workflows" "$fx/sp27b/.github/workflows" "$fx/sp27c/.github/workflows"
+printf 'jobs:\n  call: { name: "%s@%s", uses: %s@%s }\n' "$RC_REUSABLE" "$STALE_A" "$RC_REUSABLE" "$GOOD" > "$fx/sp27a/.github/workflows/ci.yml"
+cp "$fx/sp27a/.github/workflows/ci.yml" "$fx/sp27a-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp27a"
+check "sp27a a dead ref inside name: beside a live flow uses: is text: exit 0, no UNSUPPORTED, untouched" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/sp27a-before.yml' '$fx/sp27a/.github/workflows/ci.yml'"
+printf 'jobs: { a: { uses: %s@%s }, b: { uses: %s@%s } }\n' "$RC_REUSABLE" "$GOOD" "$RC_REUSABLE" "$STALE_A" > "$fx/sp27b/.github/workflows/ci.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp27b"
+check "sp27b a dead second flow site behind a live first one is UNSUPPORTED: exit 2" \
+  "[ \$rc -eq 2 ] && grep -q \"UNSUPPORTED.*@$STALE_A\" <<<\"\$out\""
+printf 'jobs:\n  call: { uses: %s@%s}\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp27c/.github/workflows/ci.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp27c"
+check "sp27c a dead flow site closed by a brace with no space is UNSUPPORTED, never OK: exit 2" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\""
+
+# sp28: `#` with no whitespace before it is part of a plain scalar, so
+# `<dead-sha>#patched` is another ref the table never named: left alone.
+mkdir -p "$fx/sp28/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: %s@%s#patched\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp28/.github/workflows/ci.yml"
+cp "$fx/sp28/.github/workflows/ci.yml" "$fx/sp28-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp28"
+check "sp28 <dead-sha>#patched is a different ref: not rewritten, exit 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp28-before.yml' '$fx/sp28/.github/workflows/ci.yml'"
+
+# sp29: a lock record or workflow key with a trailing comment is a key:
+# the merger keeps the unrelated commented record (it used to vanish), and
+# the commented workflow key still carries the edge that moves.
+mkdir -p "$fx/sp29/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp29/.github/workflows/ci.yml"
+cat > "$fx/sp29/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml': # main CI
+        - 'actions/checkout@$SHA_A'
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'actions/checkout@$SHA_A': # pinned by hand
+        ref: 'v4.2.2'
+        commit: 'sha1-$SHA_A'
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp29"
+check "sp29 a commented record key survives the merger, and a commented workflow key still moves its edge" \
+  "[ \$rc -eq 3 ] && grep -q \"^    'actions/checkout@$SHA_A': # pinned by hand\$\" '$fx/sp29/.github/workflows/actions.lock' && grep -q \"^        ref: 'v4.2.2'\$\" '$fx/sp29/.github/workflows/actions.lock' && grep -q \"^        - 'hyperpolymath/standards@$GOOD'\$\" '$fx/sp29/.github/workflows/actions.lock' && ! grep -q 'already out of sync' <<<\"\$out\""
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

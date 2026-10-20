@@ -152,6 +152,30 @@ apply_to_file() {
             nxt = substr(t, RSTART + RLENGTH, 1)
             return (length(m) == 40 && (nxt == "" || nxt ~ /["'"'"'[:space:],}\]]/))
         }
+        # The line with its comment dropped and every quoted scalar that is
+        # neither a key nor the value of a `uses` key blanked to `""`.
+        function site_view(s,   out, i, n, c, j, body) {
+            out = ""; n = length(s); i = 1
+            while (i <= n) {
+                c = substr(s, i, 1)
+                if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
+                if (c == "\"" || c == "'"'"'") {
+                    j = i + 1
+                    if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
+                    else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
+                    body = substr(s, i + 1, j - i - 1)
+                    if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*$/) out = out c body c
+                    else out = out c c
+                    i = j + 1; continue
+                }
+                out = out c; i++
+            }
+            return out
+        }
+        # A SHA pin that is the value of a `uses` key, block or flow: the
+        # only pin the parser can be asked to place. The same text inside
+        # another key'"'"'s string (`name: "fixture dtolnay/...@<sha>"`) is data.
+        function uses_pin(s) { return sha_ref(s) && site_view(s) ~ USES_SITE_RE }
         # YAML context outside list items: the key at each indentation, so a
         # list item opens a step only when its parent key is `steps:`.
         function record_key(s,   ind, k, t) {
@@ -194,6 +218,7 @@ apply_to_file() {
                 if (!sha_ref(buf[i])) continue
                 if (!flow_item && buf[i] ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
                 if (!flow_item && i > 1 && indent_of(buf[i]) > skey) continue
+                if (!uses_pin(buf[i])) continue
                 unrec[++nunrec] = lnum[i]
             }
             if (!uses_i) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
@@ -306,6 +331,7 @@ apply_to_file() {
             KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
             USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-fA-F]+"
+            USES_SITE_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-fA-F]+"
             WITH_BLOCK_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*(#.*)?$"
             WITH_FLOW_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*\\{"
             WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"
@@ -354,8 +380,8 @@ apply_to_file() {
                 # on one line, a key of a flow-style step spread over lines) is a
                 # step this parser cannot place. The pin inside some other value
                 # (a workflow-level `env:` string naming the action) is data.
-                if (sha_ref($0) && (parent_is_steps(ind) || under_steps(ind))) unrec[++nunrec] = NR
-            } else if (sha_ref($0) && parent_is_steps(ind)) unrec[++nunrec] = NR
+                if (uses_pin($0) && (parent_is_steps(ind) || under_steps(ind))) unrec[++nunrec] = NR
+            } else if (uses_pin($0) && parent_is_steps(ind)) unrec[++nunrec] = NR
             print
         }
         END {

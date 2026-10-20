@@ -116,7 +116,7 @@ merge_duplicate_records() {
         # merger did not recognise was not kept: every line of it fell to the
         # catch-all below with no current record, and was dropped.
         function unq(s) { gsub(/["'"'"']/, "", s); return s }
-        function record_key(s) { return (s ~ /^    ["'"'"'][^"'"'"']+["'"'"']:$/ || s ~ /^    [^[:space:]"'"'"'#][^[:space:]]*:$/) }
+        function record_key(s) { sub(/[[:space:]]+#.*$/, "", s); return (s ~ /^    ["'"'"'][^"'"'"']+["'"'"']:$/ || s ~ /^    [^[:space:]"'"'"'#][^[:space:]]*:$/) }
         # A nested `uses:` entry, quoted or plain, with or without a trailing
         # comment; it is deduplicated on its value, the comment kept with
         # the first spelling seen.
@@ -128,7 +128,7 @@ merge_duplicate_records() {
         # A record key or one of its own fields ends a nested `uses:` list.
         /^    [^[:space:]]/ || /^        [^[:space:]]/ { in_uses = 0 }
         record_key($0) {
-            key = unq($0)
+            key = $0; sub(/[[:space:]]+#.*$/, "", key); key = unq(key)
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             cur = key; next
         }
@@ -223,10 +223,16 @@ yaml_context() { # <workflow.yml>
 # untouched, named on stderr, exit 2 — never "OK". The lock is edited after
 # the loop, once every workflow rewrite is known.
 USES_KEY_RE="^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?"
-# A SHA ref ends at a quote, whitespace, a comment or the end of the value: a
-# tag that merely STARTS with a dead SHA (`<sha>-patched`) is a different ref
-# the table never named, and must not be rewritten into `<replacement>-patched`.
-REF_END="([\"'[:space:]#]|$)"
+# A SHA ref ends at a quote, whitespace or the end of the value: a tag that
+# merely STARTS with a dead SHA (`<sha>-patched`) is a different ref the table
+# never named, and must not be rewritten into `<replacement>-patched`. A `#`
+# starts a comment only after whitespace, so `<sha>#patched` is one plain
+# scalar — that other ref — and a comment is reached through the whitespace.
+REF_END="([\"'[:space:]]|$)"
+# The fallback that looks for a pin the parser could not place also stops at
+# flow punctuation: `{ uses: x@<sha>}` is a flow-style caller, and missing it
+# would let the run report OK.
+FALLBACK_REF_END="([\"'[:space:],}]|]|$)"
 # Git resolves a commit ID in either case, and GitHub an owner or repository
 # name: an upper-case spelling is the same pin, matched case-insensitively,
 # looked up in lower case and rewritten as written.
@@ -256,7 +262,7 @@ mask_line() {
         print out
     }'
 }
-FALLBACK_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?${REUSABLE_REF_RE}${REF_END}"
+FALLBACK_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?${REUSABLE_REF_RE}${FALLBACK_REF_END}"
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge<TAB>repository
 lock_stale=0      # a rewritten caller whose lock entry never had the edge: the lock was already out of sync
 unsupported=0
@@ -271,15 +277,19 @@ while IFS= read -r -d '' wf; do
         # Only a `uses:` key outside comments and other scalars can be a
         # caller the parser failed to place (a flow-style job); a dead pin
         # named in a comment or a `name:` string is text.
-        mask_line "${numbered#*:}" | grep -qiE "$FALLBACK_USES_RE" || continue
-        ref=$(grep -oiE "${REUSABLE_REF_RE}${REF_END}" <<<"${numbered#*:}" | head -1 | sed -E "s/[\"'[:space:]#]\$//" || true)
-        [ -n "$ref" ] || continue
-        sha="${ref##*@}"
-        if lookup_replacement "${ref%@*}" "${sha,,}"; then
-            echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
-            skip=1
-        fi
-    done < <(grep -niE "${REUSABLE_REF_RE}${REF_END}" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
+        # Every such site on the line is checked, each read from the masked
+        # line the guard read: a dead ref inside a `name:` string beside a
+        # live `uses:` is text, and a live first site does not hide a dead
+        # second one.
+        while IFS= read -r ref; do
+            [ -n "$ref" ] || continue
+            sha="${ref##*@}"
+            if lookup_replacement "${ref%@*}" "${sha,,}"; then
+                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
+                skip=1
+            fi
+        done < <(mask_line "${numbered#*:}" | grep -oiE "$FALLBACK_USES_RE" | grep -oiE "$REUSABLE_REF_RE" || true)
+    done < <(grep -niE "${REUSABLE_REF_RE}${FALLBACK_REF_END}" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()
     for lineno in $klines; do
@@ -287,7 +297,7 @@ while IFS= read -r -d '' wf; do
         # A job-level call pinned by tag (`@v1`) carries no SHA: nothing for a
         # SHA table to move, so it is a no-op here — not a grep exit 1 that
         # `set -e` would turn into a silent exit 1 of the whole run.
-        ref=$(grep -oiE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$line" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]#]\$//" | head -1 || true)
+        ref=$(grep -oiE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$line" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]]\$//" | head -1 || true)
         [ -n "$ref" ] || continue
         path="${ref%@*}"; stale_raw="${ref##*@}"; stale="${stale_raw,,}"
         lookup_replacement "$path" "$stale" || continue
@@ -297,7 +307,7 @@ while IFS= read -r -d '' wf; do
         # The path as the caller spells it, matched literally (a `.` in it
         # is a dot).
         path_re=$(printf '%s' "$path" | sed -E 's/[][\.^$*+?(){}|~\\]/\\&/g')
-        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path_re)@$stale_raw([\"'[:space:]#]|\$)~\1@$replacement\3~" "$wf"
+        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path_re)@$stale_raw([\"'[:space:]]|\$)~\1@$replacement\3~" "$wf"
         echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
         rewrites=$((rewrites + 1))
         pending+=("$stale"$'\t'"$replacement"$'\t'"${path%%/.github/workflows/*}")
@@ -330,11 +340,12 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         # either case); every line keeps the spelling it has.
         if ! awk -v wfkey="$wfkey" -v edge="$repo@$stale" '
                 function unq(s) { gsub(/["'"'"']/, "", s); return s }
+                function keyv(s) { sub(/[[:space:]]+#.*$/, "", s); return unq(s) }
                 function bare(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+(#.*)?$/, "", s); return s }
                 BEGIN { edge = tolower(edge) }
                 /^workflows:[[:space:]]*$/ { sec = "w" }
                 /^dependencies:[[:space:]]*$/ { sec = "d" }
-                sec == "w" && /^    [^[:space:]#]/ { inwf = (unq($0) == "    " wfkey ":") }
+                sec == "w" && /^    [^[:space:]#]/ { inwf = (keyv($0) == "    " wfkey ":") }
                 sec == "w" && inwf && /^        - / { l = tolower($0); if (index(l, "'"'"'" edge "'"'"'") || index(l, "\"" edge "\"") || bare(l) == edge) found = 1 }
                 END { exit !found }' "$LOCK"; then
             echo "WARN: actions.lock has no edge '$repo@${stale:0:7}' under '$wfkey': the lock was already out of sync with this caller — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2
@@ -348,19 +359,20 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         # never given it a second time.
         awk -v wfkey="$wfkey" -v stale="$stale" -v new="$new" -v keep="$keep" -v repo="$repo" '
             function unq(s) { gsub(/["'"'"']/, "", s); return s }
+            function keyv(s) { sub(/[[:space:]]+#.*$/, "", s); return unq(s) }
             # An edge compared by its value: the list dash, a trailing
             # comment, quotes and case are not part of it.
             function edge_val(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return tolower(unq(s)) }
             FNR == NR {
                 if ($0 ~ /^workflows:[[:space:]]*$/) s1 = "w"
                 if ($0 ~ /^dependencies:[[:space:]]*$/) s1 = "d"
-                if (s1 == "w" && $0 ~ /^    [^[:space:]#]/) w1 = (unq($0) == "    " wfkey ":")
+                if (s1 == "w" && $0 ~ /^    [^[:space:]#]/) w1 = (keyv($0) == "    " wfkey ":")
                 if (s1 == "w" && w1 && $0 ~ /^        - /) have[edge_val($0)] = 1
                 next
             }
             /^workflows:[[:space:]]*$/ { sec = "w" }
             /^dependencies:[[:space:]]*$/ { sec = "d" }
-            sec == "w" && /^    [^[:space:]#]/ { inwf = (unq($0) == "    " wfkey ":") }
+            sec == "w" && /^    [^[:space:]#]/ { inwf = (keyv($0) == "    " wfkey ":") }
             sec == "w" && inwf && /^        - / {
                 # Either quote style, or none (a hand-written edge); the edge
                 # keeps the spelling it has.
@@ -410,7 +422,7 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                 while ((i = index(l, o)) > 0) { out = out substr(s, 1, i - 1) new; s = substr(s, i + length(old)); l = substr(l, i + length(old)) }
                 return out s
             }
-            sec == "d" && /^    [^[:space:]#]/ { k = $0; sub(/^    /, "", k); sub(/:$/, "", k); gsub(/["'"'"']/, "", k); inrec = (tolower(k) == tolower(repo "@" stale)) }
+            sec == "d" && /^    [^[:space:]#]/ { k = $0; sub(/^    /, "", k); sub(/[[:space:]]+#.*$/, "", k); sub(/:[[:space:]]*$/, "", k); gsub(/["'"'"']/, "", k); inrec = (tolower(k) == tolower(repo "@" stale)) }
             sec == "d" && inrec && (/^    [^[:space:]#]/ || /^        (ref|commit):/) {
                 if (still == 0) $0 = isub($0, stale, new)
                 else copy[++nc] = isub($0, stale, new)
