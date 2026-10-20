@@ -2703,6 +2703,55 @@ TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls27 anchored uses: values are read: the anchored step is an action (tag), the anchored job call keeps its SHA" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v2.0.0'\$\" '$fx/ls27/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_C'\$\" '$fx/ls27/.github/workflows/actions.lock'"
 
+# ls28: `#` with no whitespace before it is part of the scalar, so
+# `.../x.yml@<sha>#patched` is another ref, not a reusable call at <sha>
+# that would keep the action's self-SHA record from its tag.
+mkdir -p "$fx/ls28/.github/workflows"
+cat > "$fx/ls28/.github/workflows/ci.yml" <<YML
+jobs:
+  call:
+    uses: foo/action.test/.github/workflows/x.yml@$SHA_A#patched
+  check:
+    steps:
+      - uses: foo/action.test@$SHA_A
+YML
+lock_records "$fx/ls28" "foo/action.test@$SHA_A"
+printf 'foo/action.test\t%s\tv1.2.3\n' "$SHA_A" > "$fx/ls28-tags.tsv"
+TAG_MAP="$fx/ls28-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls28" --offline
+check "ls28 an unspaced # keeps the ref whole: <sha>#patched is no reusable call at <sha>, the action gets its tag" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.2.3'\$\" '$fx/ls28/.github/workflows/actions.lock'"
+
+# sp34: a row that moves a SHA to itself repairs nothing: the table is
+# refused rather than every caller reported FIXED on every run.
+mkdir -p "$fx/sp34/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp34/.github/workflows/ci.yml"
+printf 'hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml\t%s\t%s\tself\n' "$STALE_A" "$STALE_A" > "$fx/sp34-pins.tsv"
+run_fix env PINS_TABLE="$fx/sp34-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp34"
+check "sp34 a row whose replacement equals its stale SHA is refused: exit 2, nothing FIXED" \
+  "[ \$rc -eq 2 ] && grep -q 'replacement equals the stale SHA' <<<\"\$out\" && ! grep -q '^FIXED' <<<\"\$out\""
+
+# mode: a repaired workflow or lock keeps the mode it had (a mktemp file is
+# 0600; renamed as it is, the file would be unreadable to the checkout's
+# other users). 0640 is no default either path could produce by chance.
+mkdir -p "$fx/mode-tc/.github/workflows" "$fx/mode-sp/.github/workflows" "$fx/mode-ls/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/mode-tc/.github/workflows/x.yml"
+chmod 0640 "$fx/mode-tc/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/mode-tc"
+check "mode: the toolchain fixer's repaired workflow keeps its 0640" \
+  "[ \$rc -eq 0 ] && grep -q 'toolchain: stable' '$fx/mode-tc/.github/workflows/x.yml' && [ \$(stat -c %a '$fx/mode-tc/.github/workflows/x.yml') = 640 ]"
+printf 'jobs:\n  rust:\n    uses: %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$fx/mode-sp/.github/workflows/ci.yml"
+lock_records "$fx/mode-sp" "hyperpolymath/standards@$STALE_A"
+chmod 0640 "$fx/mode-sp/.github/workflows/ci.yml" "$fx/mode-sp/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/mode-sp"
+check "mode: the stale-pin fixer's repaired workflow and lock keep their 0640" \
+  "grep -q '@$GOOD' '$fx/mode-sp/.github/workflows/ci.yml' && [ \$(stat -c %a '$fx/mode-sp/.github/workflows/ci.yml') = 640 ] && [ \$(stat -c %a '$fx/mode-sp/.github/workflows/actions.lock') = 640 ]"
+printf 'jobs:\n  check:\n    steps:\n      - uses: foo/bar@%s\n' "$SHA_B" > "$fx/mode-ls/.github/workflows/ci.yml"
+lock_records "$fx/mode-ls" "foo/bar@$SHA_B"
+chmod 0640 "$fx/mode-ls/.github/workflows/actions.lock"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/mode-ls" --offline
+check "mode: the self-SHA fixer's repaired lock keeps its 0640" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/mode-ls/.github/workflows/actions.lock' && [ \$(stat -c %a '$fx/mode-ls/.github/workflows/actions.lock') = 640 ]"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

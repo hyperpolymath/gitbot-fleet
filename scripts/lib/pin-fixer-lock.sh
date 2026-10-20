@@ -51,3 +51,14 @@ pin_fixer_lock() {
         exit 2
     }
 }
+
+# Replace <dest> with the rewritten <tmp> the way `sed -i` does: by a rename
+# (never a half-written file), keeping <dest>'s mode, and its owner and group
+# where this user may set them. A `mktemp` file is created 0600; renamed as it
+# is over a 0644 workflow or lock, it would leave the repaired file unreadable
+# to everyone else who shares the checkout.
+pin_fixer_replace() { # <tmp> <dest>
+    chmod --reference="$2" "$1" 2>/dev/null || chmod "$(stat -c %a "$2")" "$1"
+    chown --reference="$2" "$1" 2>/dev/null || true
+    mv -f "$1" "$2"
+}

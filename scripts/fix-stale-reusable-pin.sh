@@ -63,6 +63,9 @@ validate_table() {
         case "$v_path" in ''|'#'*) continue ;; esac
         [[ "$v_stale" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad stale SHA '$v_stale'" >&2; bad=1; }
         [[ "$v_new" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad replacement SHA '$v_new' for ${v_stale:0:7}" >&2; bad=1; }
+        # A row that moves a SHA to itself repairs nothing, yet every caller
+        # it matches would be reported FIXED on every run.
+        [ "$v_new" != "$v_stale" ] || { echo "fix-stale-reusable-pin: table row $n: replacement equals the stale SHA ${v_stale:0:7}; a row must move the pin" >&2; bad=1; }
         # The only wildcard is a terminal `/*` (every reusable of the repository);
         # a `*` anywhere else would be matched literally, never as a glob.
         [[ "$v_path" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/([A-Za-z0-9_.-]+|\*)$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad reusable path '$v_path' (the only wildcard is a terminal /*)" >&2; bad=1; }
@@ -152,7 +155,7 @@ merge_duplicate_records() {
             }
         }
     ' "$lock" > "$tmp"
-    if ! cmp -s "$lock" "$tmp"; then mv "$tmp" "$lock"; else rm -f "$tmp"; fi
+    if ! cmp -s "$lock" "$tmp"; then pin_fixer_replace "$tmp" "$lock"; else rm -f "$tmp"; fi
 }
 
 # Find the first PINS_TABLE row for reusable path $1 at stale SHA $2, including
@@ -438,7 +441,7 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             }
             { print }
         ' "$LOCK" "$LOCK" > "$tmp"
-        if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
+        if ! cmp -s "$LOCK" "$tmp"; then pin_fixer_replace "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
     done < "$edits"
     # Then the records: rename a stale record nothing references any more;
     # copy it under the replacement key while an edge still points at the
@@ -478,7 +481,7 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             { print }
             END { for (i = 1; i <= nc; i++) print copy[i] }' "$LOCK" > "$tmp"
         [ "$still" -eq 0 ] || echo "NOTE: actions.lock keeps the record for ${stale:0:7}: a workflow the table does not cover still pins it; the replacement got its own record." >&2
-        if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
+        if ! cmp -s "$LOCK" "$tmp"; then pin_fixer_replace "$tmp" "$LOCK"; lock_touched=1; else rm -f "$tmp"; fi
     done < <(cut -f2,3,5 "$edits" | sort -u)
     # A kept stale edge means the new edge was ADDED, so the stale record is
     # kept too (the branch above copies it); nothing else to do here.

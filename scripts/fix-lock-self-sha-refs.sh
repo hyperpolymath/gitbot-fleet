@@ -87,7 +87,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
             function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
             function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
-            function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^[:space:]]+[[:space:]]+)?["'"'"']?/, "", s); sub(/["'"'"'[:space:]#].*$/, "", s); return s }
+            function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^[:space:]]+[[:space:]]+)?["'"'"']?/, "", s); sub(/["'"'"'[:space:]].*$/, "", s); return s }
             function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }
             # The line with its trailing comment dropped and every quoted
             # scalar that is neither a key nor the value of a `uses` key
@@ -355,7 +355,7 @@ while IFS=$'\t' read -r lineno repo sha ref_raw; do
 done < "$records"
 rm -f "$records" "$SITES"
 
-if ! cmp -s "$LOCK" "$tmp"; then mv "$tmp" "$LOCK"; else rm -f "$tmp"; fi
+if ! cmp -s "$LOCK" "$tmp"; then pin_fixer_replace "$tmp" "$LOCK"; else rm -f "$tmp"; fi
 if [ "$fixed" -eq 0 ] && [ "$unresolved" -eq 0 ]; then echo "OK (no self-SHA action records): $LOCK"; fi
 [ "$fixed" -gt 0 ] && echo "Rewrote $fixed record(s) in $LOCK"
 [ "$unresolved" -eq 0 ]

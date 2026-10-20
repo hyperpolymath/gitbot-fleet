@@ -398,7 +398,7 @@ apply_to_file() {
     set -e
     if [ "$rc" -ne 0 ]; then rm -f "$tmp"; return 2; fi
 
-    if ! cmp -s "$f" "$tmp"; then mv "$tmp" "$f"; else rm -f "$tmp"; echo "OK (every SHA-pinned dtolnay step names a toolchain): $f"; fi
+    if ! cmp -s "$f" "$tmp"; then pin_fixer_replace "$tmp" "$f"; else rm -f "$tmp"; echo "OK (every SHA-pinned dtolnay step names a toolchain): $f"; fi
 }
 
 unsupported=0
