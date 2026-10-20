@@ -1,6 +1,9 @@
 {
   "license": "MPL-2.0",
   "description": "Maps recipe IDs and categories to their fix scripts",
+  "deprecated_recipe_ids": {
+    "recipe-remove-believe-me": "recipe-annotate-believe-me"
+  },
   "registry": {
     "by_category": {
       "CommandInjection": "fix-command-injection.sh",
@@ -79,6 +82,7 @@
       "recipe-scorecard-token-permissions": "fix-workflow-permissions.sh",
       "recipe-scorecard-license": "fix-license-file.sh",
       "recipe-deno-least-privilege": "fix-deno-permissions.sh",
+      "recipe-annotate-believe-me": "fix-believe-me.sh",
       "recipe-remove-believe-me": "fix-believe-me.sh",
       "recipe-pin-github-actions": "fix-unpinned-actions.sh",
       "recipe-fix-spdx-license": "fix-missing-spdx.sh",

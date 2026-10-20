@@ -7,11 +7,28 @@
 # Targets PA009-shell-unquoted-var findings.
 #
 # Usage: fix-shell-quoting.sh <repo-path> <finding-json>
+# outcome-predicate: --check
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
+
+# --check <repo-path>: print how many expansions the edits below would quote,
+# change nothing. This is the recipe's predicate (see lib/outcome-verdict.sh).
+if [[ "${1:-}" == "--check" ]]; then
+    [[ -d "${2:-}" ]] || { echo "--check: not a directory: ${2:-}" >&2; exit 2; }
+    # grep exits 1 for a batch with no match, which is a count, not an error.
+    # Any other failure (find, grep 2, no PCRE) exits non-zero here, so the
+    # caller records NA instead of a zero that would read as "fixed".
+    hits=$(find "$2" -type f \( -name "*.sh" -o -name "*.bash" \) \
+        -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 \
+        | xargs -0 -r sh -c 'grep -ohP -- "$0" "$@"; [ $? -le 1 ]' \
+            '\b(cd|cp|mv|rm|mkdir|rmdir|chmod|chown|echo) \$[A-Z_][A-Z0-9_]*') \
+        || { echo "--check: predicate failed" >&2; exit 2; }
+    if [[ -n "$hits" ]]; then printf '%s\n' "$hits" | wc -l; else echo 0; fi
+    exit 0
+fi
 
 REPO_PATH="${1:?Usage: $0 <repo-path> <finding-json>}"
 FINDING_JSON="${2:?Missing finding JSON file}"

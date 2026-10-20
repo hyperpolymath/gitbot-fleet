@@ -22,6 +22,8 @@ jobs:
         run: pip install pyyaml --quiet
       - name: Verify automation quarantine
         run: bash tests/automation-quarantine-test.sh
+      - name: Verify fix-outcome verdicts
+        run: bash tests/outcome-verdict-test.sh
       - name: Run E2E tests
         run: bash tests/e2e.sh
       - name: Verify canonical descriptile policy repair

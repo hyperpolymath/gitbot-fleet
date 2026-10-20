@@ -73,15 +73,26 @@ fi
 echo ""
 echo -e "${CYAN}🔧 Auto-Fix Outcomes${NC}"
 if [[ -f "$LEARNING_DIR/fix-outcomes.jsonl" ]]; then
+    # Only a predicate-confirmed fix counts as successful. Rows written
+    # before verdicts existed record an exit status only: they are reported
+    # separately as legacy, never as successes (experiment E1).
     total_fixes=$(wc -l < "$LEARNING_DIR/fix-outcomes.jsonl")
-    successful=$(jq -r 'select(.success == true)' "$LEARNING_DIR/fix-outcomes.jsonl" | wc -l)
-    failed=$((total_fixes - successful))
+    count_verdict() {
+        { jq -r --arg v "$1" 'select(.verdict == $v) | 1' "$LEARNING_DIR/fix-outcomes.jsonl" 2>/dev/null || true; } | wc -l
+    }
+    verified=$(count_verdict verified)
+    incomplete=$(count_verdict incomplete)
+    failed=$(count_verdict failed)
+    no_op=$(count_verdict no_op)
+    unverified=$(count_verdict unverified)
+    legacy=$( { jq -r 'select(has("verdict") | not) | 1' "$LEARNING_DIR/fix-outcomes.jsonl" 2>/dev/null || true; } | wc -l)
 
     if [[ $total_fixes -gt 0 ]]; then
-        success_rate=$(awk "BEGIN {printf \"%.1f\", ($successful/$total_fixes)*100}")
-        echo -e "  Total fixes attempted: $total_fixes"
-        echo -e "  Successful: ${GREEN}$successful${NC} (${success_rate}%)"
-        echo -e "  Failed: ${RED}$failed${NC}"
+        echo -e "  Total outcome rows: $total_fixes"
+        echo -e "  Verified (predicate confirms): ${GREEN}$verified${NC}"
+        echo -e "  Incomplete / failed: ${RED}$incomplete${NC} / ${RED}$failed${NC}"
+        echo -e "  No-op / unverified: $no_op / ${YELLOW}$unverified${NC}"
+        echo -e "  Legacy (exit status only, no evidence): ${YELLOW}$legacy${NC}"
     fi
 else
     echo -e "  ${YELLOW}No fix attempts yet${NC}"
