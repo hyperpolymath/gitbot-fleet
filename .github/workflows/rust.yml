@@ -65,12 +65,11 @@ jobs:
         run: cargo test --locked --verbose
       - name: Clippy (deny warnings)
         run: cargo clippy --locked --all-targets -- -D warnings
-      - name: Rustfmt check (informational)
-        # Pre-existing formatting drift is not yet gated; surfaced here so it
-        # stays visible without blocking. Flip to a hard gate after a dedicated
-        # `cargo fmt` pass lands.
+      - name: Rustfmt check
+        # A hard gate since 2026-10-19: all four matrix crates were measured
+        # rustfmt-clean, so `continue-on-error` (hypatia RE005, a silent
+        # green) no longer buys anything.
         run: cargo fmt --check
-        continue-on-error: true
 
   dispatch-contracts:
     name: Dispatch path and outcome contracts
@@ -83,6 +82,8 @@ jobs:
         with:
           persist-credentials: false
       - run: bash scripts/tests/dispatch-paths.sh
+      - name: Workflow-pin fix scripts keep their contracts
+        run: bash scripts/tests/fix-workflow-pins.sh
 
   gsbot:
     name: GSBot build, tests and dependency security

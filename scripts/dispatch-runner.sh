@@ -155,6 +155,17 @@ mkdir -p "$(dirname "$OUTCOME_FILE")"
 # waiting for the nightly sweep.
 RESCAN_REPOS_FILE="$(mktemp /tmp/dispatch-rescan-repos.XXXXXX)"
 
+# Verdicts come from the recipe's predicate, not the fix script's exit code.
+# shellcheck source=lib/outcome-verdict.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/outcome-verdict.sh"
+
+# Parallel jobs on one repo take a per-repo lock around check/fix/check
+# (repo_lock), so --parallel needs flock. Refuse rather than run unlocked.
+if [[ "$PARALLEL" -gt 1 ]] && ! command -v flock &>/dev/null; then
+    echo "ERROR: --parallel $PARALLEL needs flock (util-linux) to serialise fixes per repo" >&2
+    exit 1
+fi
+
 # --- Hypatia closed-loop contract ---
 #
 # Per hypatia/docs/operations/dispatch-runner-contract.adoc, after each
@@ -237,13 +248,27 @@ hypatia_record_outcome() {
     return "$rc"
 }
 
+# record_outcome <pattern_id> <recipe_id> <repo> <file> <verdict> [exit before after]
+#
+# <verdict> is one of lib/outcome-verdict.sh's verdicts, or refused_* for a
+# policy refusal. `outcome` is kept for older readers and reports the exit
+# status only; `verdict` says whether anything was fixed.
 record_outcome() {
     local pattern_id="$1"
     local recipe_id="$2"
     local repo="$3"
     local file="$4"
-    local outcome="$5"
+    local verdict="$5"
+    local exit_code="${6:-}"
+    local before="${7:-NA}"
+    local after="${8:-NA}"
     local bot="dispatch-runner"
+
+    local outcome
+    case "$verdict" in
+        refused_*) outcome="$verdict" ;;
+        *) outcome=$(legacy_outcome "$verdict") ;;
+    esac
 
     local ts
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -255,9 +280,18 @@ record_outcome() {
         --arg repo "$repo" \
         --arg file "$file" \
         --arg outcome "$outcome" \
+        --arg verdict "$verdict" \
+        --arg exit_code "$exit_code" \
+        --arg before "$before" \
+        --arg after "$after" \
         --arg ts "$ts" \
         --arg bot "$bot" \
-        '{pattern_id: $pid, recipe_id: $rid, repo: $repo, file: $file, outcome: $outcome, timestamp: $ts, bot: $bot}')
+        '{pattern_id: $pid, recipe_id: $rid, repo: $repo, file: $file, outcome: $outcome,
+          verdict: $verdict,
+          exit_code: (if $exit_code == "" then null else ($exit_code | tonumber) end),
+          before_hits: (if $before == "NA" then null else ($before | tonumber) end),
+          after_hits: (if $after == "NA" then null else ($after | tonumber) end),
+          timestamp: $ts, bot: $bot}')
 
     echo "$json" >> "$OUTCOME_FILE"
     # Avoid duplicate JSONL records when the two configured stores are the same.
@@ -270,18 +304,20 @@ record_outcome() {
     fi
 
     # Hypatia closed-loop contract — best-effort, never fails the dispatch
-    # loop. Map shell outcomes to the contract's outcome vocabulary:
-    #   success/failure  → pass through
-    #   refused_*        → false_positive (the recipe is misfiring, not
-    #                      the code; surfaces this to auto-quarantine)
-    #   anything else    → skip (don't poison the metric).
+    # loop. Map verdicts to the contract's outcome vocabulary:
+    #   verified            → success
+    #   failed / incomplete → failure (the fix ran but the work remains)
+    #   refused_*           → false_positive (the recipe is misfiring, not
+    #                         the code; surfaces this to auto-quarantine)
+    #   no_op / unverified  → skip: no evidence either way, so it must not
+    #                         move the recipe's confidence.
     local hypatia_outcome
-    case "$outcome" in
-        success)
+    case "$verdict" in
+        verified)
             hypatia_outcome="success"
             echo "$repo" >> "$RESCAN_REPOS_FILE"
             ;;
-        failure)
+        failed|incomplete)
             hypatia_outcome="failure"
             ;;
         refused_license_policy|refused_*)
@@ -304,6 +340,9 @@ execute_entry() {
     repo=$(echo "$entry" | jq -r '.repo')
     pattern_id=$(echo "$entry" | jq -r '.pattern_id')
     recipe_id=$(echo "$entry" | jq -r '.recipe_id // "none"')
+    # Report under the canonical id: a deprecated alias must not earn credit
+    # for the recipe it was renamed from.
+    recipe_id=$(canonical_recipe_id "$FLEET_SCRIPTS/fix-script-registry.json" "$recipe_id")
     confidence=$(echo "$entry" | jq -r '.confidence // 0')
     auto_fixable=$(echo "$entry" | jq -r '.auto_fixable // false')
     fix_script=$(echo "$entry" | jq -r '.fix_script // "none"')
@@ -424,31 +463,45 @@ execute_entry() {
                 tmp_finding=$(mktemp /tmp/dispatch-finding-XXXXXX.json)
                 echo "$entry" > "$tmp_finding"
 
+                local before after rc verdict
+                if [[ "$PARALLEL" -gt 1 ]]; then repo_lock "$PARALLEL_TMPDIR" "$repo_path"; fi
+                before=$(recipe_check_count "$FLEET_SCRIPTS/$fix_script" "$repo_path")
+
                 echo "        Running: $fix_script $repo_path $tmp_finding"
-                if "$FLEET_SCRIPTS/$fix_script" "$repo_path" "$tmp_finding" 2>&1 | sed 's/^/        /'; then
-                    echo "        OK"
-                    ((SUCCEEDED++)) || true
-                    record_outcome "$pattern_id" "$recipe_id" "$repo" "" "success"
-                else
-                    echo "        FAILED (exit $?)"
+                rc=0
+                "$FLEET_SCRIPTS/$fix_script" "$repo_path" "$tmp_finding" 2>&1 | sed 's/^/        /' \
+                    || rc=${PIPESTATUS[0]}
+
+                after=$(recipe_check_count "$FLEET_SCRIPTS/$fix_script" "$repo_path")
+                if [[ "$PARALLEL" -gt 1 ]]; then repo_unlock; fi
+                verdict=$(outcome_verdict "$rc" "$before" "$after")
+                echo "        $verdict (exit $rc, targets $before -> $after)"
+                if [[ "$verdict" == failed || "$verdict" == incomplete ]]; then
                     ((FAILED++)) || true
-                    record_outcome "$pattern_id" "$recipe_id" "$repo" "" "failure"
+                else
+                    ((SUCCEEDED++)) || true
                 fi
+                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" "$before" "$after"
 
                 rm -f "$tmp_finding"
 
             elif command -v "$RRA_BIN" &>/dev/null; then
                 # Use robot-repo-automaton fix command
                 echo "        Running: $RRA_BIN fix --repo $repo_path --commit"
-                if "$RRA_BIN" fix --repo "$repo_path" --commit 2>&1 | sed 's/^/        /'; then
-                    echo "        OK"
-                    ((SUCCEEDED++)) || true
-                    record_outcome "$pattern_id" "$recipe_id" "$repo" "" "success"
-                else
-                    echo "        FAILED (exit $?)"
+                # robot-repo-automaton exposes no predicate, so a clean exit
+                # is recorded as unverified, never as a confirmed fix.
+                local rc=0
+                "$RRA_BIN" fix --repo "$repo_path" --commit 2>&1 | sed 's/^/        /' \
+                    || rc=${PIPESTATUS[0]}
+                local verdict
+                verdict=$(outcome_verdict "$rc" NA NA)
+                echo "        $verdict (exit $rc)"
+                if [[ "$verdict" == failed ]]; then
                     ((FAILED++)) || true
-                    record_outcome "$pattern_id" "$recipe_id" "$repo" "" "failure"
+                else
+                    ((SUCCEEDED++)) || true
                 fi
+                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc"
             else
                 echo "        SKIP: No fix mechanism available (no fix_script, no $RRA_BIN)"
                 ((SKIPPED++)) || true

@@ -7,6 +7,9 @@ fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/repos/sample" "$fixture/checkout/scripts" "$fixture/primary/dispatch"
 cp "$fleet_test_root/scripts/repo-path-overrides.json" "$fixture/checkout/scripts/"
+# dispatch-runner sources its outcome-verdict library from beside itself.
+mkdir -p "$fixture/checkout/scripts/lib"
+cp "$fleet_test_root/scripts/lib/outcome-verdict.sh" "$fixture/checkout/scripts/lib/"
 
 # While dispatch is quarantined (docs/AUTOMATION-QUARANTINE.adoc), the
 # production runner must refuse every call. The path/outcome contracts

@@ -1,6 +1,9 @@
 {
   "license": "MPL-2.0",
   "description": "Maps recipe IDs and categories to their fix scripts",
+  "deprecated_recipe_ids": {
+    "recipe-remove-believe-me": "recipe-annotate-believe-me"
+  },
   "registry": {
     "by_category": {
       "CommandInjection": "fix-command-injection.sh",
@@ -49,7 +52,10 @@
       "LicensePMPLDrift": "fix-pmpl-drift.sh",
       "ActionsPolicyTooRestrictive": "fix-actions-policy.sh",
       "SessionDetritus": "fix-session-detritus.sh",
-      "RetiredDescriptilePolicy": "fix-retired-descriptile-policy.sh"
+      "RetiredDescriptilePolicy": "fix-retired-descriptile-policy.sh",
+      "ToolchainInputMissing": "fix-rust-toolchain-input.sh",
+      "StaleReusablePin": "fix-stale-reusable-pin.sh",
+      "LockSelfShaRef": "fix-lock-self-sha-refs.sh"
     },
     "by_recipe": {
       "recipe-actions-allow-all": "fix-actions-policy.sh",
@@ -76,6 +82,7 @@
       "recipe-scorecard-token-permissions": "fix-workflow-permissions.sh",
       "recipe-scorecard-license": "fix-license-file.sh",
       "recipe-deno-least-privilege": "fix-deno-permissions.sh",
+      "recipe-annotate-believe-me": "fix-believe-me.sh",
       "recipe-remove-believe-me": "fix-believe-me.sh",
       "recipe-pin-github-actions": "fix-unpinned-actions.sh",
       "recipe-fix-spdx-license": "fix-missing-spdx.sh",
@@ -111,7 +118,14 @@
       "reusable_workflow_sha_bump_needs_propagation": "propagate-sha-bump.sh",
       "recipe-fix-pmpl-drift": "fix-pmpl-drift.sh",
       "recipe-archive-session-detritus": "fix-session-detritus.sh",
-      "recipe-retired-descriptile-policy": "fix-retired-descriptile-policy.sh"
+      "recipe-retired-descriptile-policy": "fix-retired-descriptile-policy.sh",
+      "WF026": "fix-rust-toolchain-input.sh",
+      "workflow_audit/sha_pinned_toolchain_without_input": "fix-rust-toolchain-input.sh",
+      "WF027": "fix-stale-reusable-pin.sh",
+      "workflow_audit/known_broken_reusable_revision": "fix-stale-reusable-pin.sh",
+      "PIN-003": "fix-stale-reusable-pin.sh",
+      "PI006": "fix-lock-self-sha-refs.sh",
+      "pin_integrity/self_sha_lock_record": "fix-lock-self-sha-refs.sh"
     }
   }
 }

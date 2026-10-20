@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= E1 — Fix-outcome replay: how many "success" rows does a rescan confirm?
+:revdate: 2026-10-20
+:toc: preamble
+
+Experiment E1 of the Kautz-ladder ultraplan (`standards/docs/ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc`).
+Question: of the rows that `gitbot-fleet/shared-context/learning/fix-outcomes.jsonl` labels
+`outcome: success`, how many would a rescan with the fixer's *own* detection predicate confirm?
+
+== Verdict
+
+*The `success` label carries no evidence that anything was fixed.*
+
+* Of the 214 rows that can be replayed here, *0 are confirmed*:
+** 21 are refuted: the target was still present when the success was claimed, and still present seven days later.
+** 109 are vacuous: there was nothing to fix at claim time.
+** 84 cannot be checked, because the repo's history begins after them.
+* Across the whole log, the 21,498 success rows collapse to *136 distinct (repo, file, pattern) keys*. 20,169 of the rows carry an empty `file`.
+* Root cause: both shell writers set `outcome: "success"` when the fix script exits 0. The scripts exit 0 even when they changed nothing.
+
+== Data
+
+[cols="2,1",options="header"]
+|===
+| Fact | Value
+| Rows / success / failure | 21,585 / 21,498 / 87
+| Writers (`bot`) | hypatia 21,303 · dispatch-runner 270 · robot-repo-automaton 12
+| Distinct success keys (repo, file, pattern) | *136* (hypatia: 21,216 rows → 136 keys)
+| Success rows with empty `file` | *20,169* (93.8 %)
+| `recipe-shell-quote-vars` success rows on `.yml` | 113 — the fixer never edits YAML (see below)
+| Date span | 2026-02-10 → 2026-04-05
+|===
+
+The file is a Git LFS object (3.2 MB). It needs `git lfs pull` to read.
+
+== Method
+
+* *Replay set.* Every row whose repo is checked out in this session: `standards` (70 rows) and `verisimdb` (144 rows). All 214 have an empty `file`, so the replay is repo-level.
+* *Predicate.* Each recipe's own detection rule, taken from the script that `fix-script-registry.json` maps it to, and applied with the script's own third-party exclusions:
+** `recipe-shell-quote-vars` (`fix-shell-quoting.sh`): `\b(cd|cp|mv|rm|mkdir|rmdir|chmod|chown|echo) \$[A-Z_][A-Z0-9_]*` in `*.sh` and `*.bash`.
+** `recipe-remove-believe-me` (`fix-believe-me.sh`): a non-comment `believe_me` in `*.idr`. This is the script's own selection test, and it is the effect the recipe name claims (removal). Its actual edit is an annotation; see "Recipe name ≠ recipe effect" below.
+* *Time points.* The predicate is evaluated with `git grep` on the tree at three commits: the one current at `fixed_at`, the one at `fixed_at + 7 days` (time for a fix PR to land), and `origin/main` HEAD.
+* *Script.* `scripts/audit-fix-outcomes.sh` (bash + jq + git). Output: `E1-replay-2026-10-20.tsv`, alongside this report.
+* *Sanity checks.*
+** The predicate fires on a synthetic `cd $FOO`.
+** The verisimdb root commit shows one real hit (`verisimdb-data/scripts/scan-all.sh`), which disappears by 2026-03-22.
+
+== Results
+
+[cols="1,2,1,1,1,1",options="header"]
+|===
+| Repo | Recipe | Rows | Refuted (still present at claim and +7 d) | Vacuous (nothing to fix at claim) | Not checkable (before history)
+| standards | remove-believe-me | 70 | *21* (2026-02-12/13) | 49 | 0
+| verisimdb | remove-believe-me | 70 | 0 | 28 | 42
+| verisimdb | shell-quote-vars | 74 | 0 | 32 | 42
+| *Total* | | *214* | *21* | *109* | *84*
+|===
+
+Confirmed fixes attributable to the bot: *0 of 130* checkable rows.
+
+=== What actually removed the standards `believe_me` calls
+
+They went in commit `8225e55f` (2026-02-27, "Auto-commit: Sync changes", owner). That diff deletes lines such as `(believe_me cb)` together with the bot's `-- PROOF_TODO: Replace believe_me with actual proof` annotation. A human/sync commit did the removal, two weeks after the bot logged success. The 49 standards rows logged after it re-claim success on a repo where the predicate was already clear.
+
+=== verisimdb
+
+* `believe_me` never appears in verisimdb's history: `git log -S believe_me -- '*.idr'` returns 0 commits. Every checkable `remove-believe-me` row there is vacuous.
+* The repo's history starts on 2026-03-21. It was extracted from `nextgen-databases`, so the 84 earlier rows refer to a tree that no longer exists here.
+
+== Root causes (structural, independent of the sample)
+
+. *Exit code taken as outcome.*
+** `run-fleet.sh:459-475` writes `success` when `"$fix_path" …` exits 0.
+** `fleet-coordinator.sh:309-315` writes `success` when `fixed_count > 0`, with `pattern: "auto-fix"` and no file.
+** Neither one re-scans afterwards.
+** `fix-shell-quoting.sh` exits 0 after "No fixable patterns found".
+** `fix-believe-me.sh` exits 0 after only annotating.
+. *Recipe name ≠ recipe effect.* `recipe-remove-believe-me` never removes anything. It inserts a `PROOF_TODO` comment above each call, so a rescan for `believe_me` is unchanged by design.
+. *Collected ≠ edited.* `fix-shell-quoting.sh` collects `.github/workflows/*.yml`, but its edit loop only handles `*.sh` and `*.bash`. That accounts for the 113 `.yml` success rows.
+. *Repeat logging.* The same repo-level claim is re-appended on every pass: about 156 rows per key on average.
+. *Schema drift.*
+** The log rows (`bot, file, fixed_at, outcome, pattern, repo`) match neither shell writer's schema (`timestamp, fix_script, severity` and `count` respectively), so a third writer (Hypatia-side) produced 98.7 % of them.
+** `learning-monitor.sh:77` counts `select(.success == true)`, a field no row has, so its success count is always 0.
+
+== Consequences
+
+* Anything that learns confidence from this log learns from a label that is "the script didn't crash". The safety triangle's `auto_execute ≥ 0.95` gate is exactly where that would bite.
+* This is consistent with the automation quarantine (exit 78) staying in place, and it supports the ruling that the policy interpreter comes first.
+
+== What changed (gitbot-fleet, same PR as this report)
+
+* *Verdicts, not exit codes.* `scripts/lib/outcome-verdict.sh` computes a verdict from the recipe's predicate before and after the fix:
+** `verified`: work found before, none after.
+** `no_op`: nothing to fix before, and nothing after.
+** `incomplete`: work remains after the run, including targets that appear during it (0 → n). Run summaries count it with the failures.
+** `unverified`: no predicate.
+** `failed`: non-zero exit.
+* *Writers.*
+** `dispatch-runner.sh` and `run-fleet.sh` record `verdict`, `exit_code`, `before_hits` and `after_hits`.
+** `outcome` stays, for older readers (Hypatia reads these rows), and reports the exit status only.
+** `fleet-coordinator.sh`'s batch generation is recorded as `generated` / `unverified`: nothing has run at that point.
+* *Hypatia closed loop.* `verified` maps to `success`; `failed` and `incomplete` map to `failure`; `no_op` and `unverified` are not reported, so they cannot move a recipe's confidence. Only `verified` repos trigger the post-run rescan.
+* *Predicates live in the fixers.*
+** `<fix-script> --check <repo>` prints the count of remaining targets and changes nothing. Shell quoting and believe-me have it now.
+** A script opts in with the line `# outcome-predicate: --check`. Unmarked fixers are never run with `--check`, and their verdict is `unverified`.
+** A predicate that cannot run (a `find` or `grep` error, no PCRE) exits non-zero rather than printing 0, so the verdict is `unverified`, not `verified`.
+** Under `--parallel`, `dispatch-runner.sh` holds a per-repo lock around check, fix and check. Two jobs on one repo otherwise both count the targets before either fix and both record `verified`.
+* *Rename.*
+** `recipe-annotate-believe-me` is the canonical id. `recipe-remove-believe-me` stays as a registry alias, listed under `deprecated_recipe_ids`, because Hypatia still emits it. `dispatch-runner.sh` reports outcomes under the canonical id, so a verified annotation never raises the removal recipe's confidence.
+** The script's predicate measures what it actually does: un-annotated `believe_me` calls. E1 above measured the claimed effect (removal).
+* *Reporting.* `learning-monitor.sh` counted a `.success` field that no row has. It now reports per verdict, with pre-verdict rows shown as legacy.
+* *Replay.* `scripts/audit-fix-outcomes.sh` reruns this experiment. It reads the rows of all three writers. It excludes the fixers' own third-party directories (`lib/third-party-excludes.sh`), and reports NA, not 0, when `git grep` cannot run. Rerun with those changes, it reproduces `E1-replay-2026-10-20.tsv` byte for byte. It measures `recipe-remove-believe-me` by removal and `recipe-annotate-believe-me` by annotation, as each claims. `E1-replay-2026-10-20.tsv` is its output for the rows above. The HEAD column moves as the repos do.
+
+All of this sits behind the automation quarantine (exit 78), which this change does not lift. It is a precondition for lifting it.
+
+== Still open
+
+* *Hypatia.* Its rows (98.7 % of the log) come from Hypatia's own writer, which is outside this repo. It should read `verdict` and stop writing `success` for unverified fixes.
+* *Remaining predicates.* `recipe-heredoc-to-install`, `recipe-todo-to-fill` and the other fixers have no `--check` yet, so their verdict is `unverified`.
+* *Row keys.* Rows should be appended once per (repo, file, pattern, rev), with a non-empty `file` or an explicit `scope: repo`.
+* *History.* Historical rows stay as written. The log is evidence; read them as unverified.
+
+Type/proof angle: the verdict is a function of `(predicate, tree_before, tree_after)`, not of the fixer. Make it a total function in the policy interpreter, with no input the fixer controls. Then "success" can't be asserted, only computed. This is the same shape as the HYP-01 `sound` level.
+
+== Limits
+
+* Only 214 of 21,585 rows (1 %) could be replayed. Only 2 of 78 repos are in this session's scope, and both are repo-level rows. The structural root causes apply to the whole log regardless.
+* The predicates are the fixers' own. A row that a stronger checker would call fixed but the fixer's predicate would not is out of scope. The opposite case (fixer's predicate clear, real bug remains) is also not measured.
+* `heredoc-to-install` and `todo-to-fill` (4,608 rows) have no row in a checked-out repo, so they were not replayed.

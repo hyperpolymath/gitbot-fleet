@@ -29,7 +29,7 @@ while IFS= read -r -d '' file; do
     fi
 
     # Only match static /tmp/name patterns (not /tmp/$VAR or /tmp/${VAR})
-    if grep -qP '/tmp/[a-zA-Z][\w.-]+' "$file" 2>/dev/null; then
+    if grep -qP '/tmp/[a-zA-Z][\w.-]+' "$file" 2>/dev/null; then  # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
         rel_path="${file#$REPO_PATH/}"
 
         # Skip files that already use mktemp properly
@@ -38,7 +38,7 @@ while IFS= read -r -d '' file; do
             continue
         fi
 
-        count=$(grep -cP '/tmp/[a-zA-Z][\w.-]+' "$file" 2>/dev/null || echo 0)
+        count=$(grep -cP '/tmp/[a-zA-Z][\w.-]+' "$file" 2>/dev/null || echo 0)  # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
 
         # Check if file already has our TMPDIR block (idempotent)
         if grep -q 'HYPATIA_TMPDIR' "$file" 2>/dev/null; then
@@ -48,13 +48,14 @@ while IFS= read -r -d '' file; do
 
         # Strategy: Add a mktemp block after set -e (or shebang) and replace /tmp/X with $HYPATIA_TMPDIR/X
         # Step 1: Extract all static /tmp/filename patterns
-        tmp_names=$(grep -oP '/tmp/\K[a-zA-Z][\w.-]+' "$file" 2>/dev/null | sort -u)
+        tmp_names=$(grep -oP '/tmp/\K[a-zA-Z][\w.-]+' "$file" 2>/dev/null | sort -u)  # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
 
         if [[ -z "$tmp_names" ]]; then
             continue
         fi
 
         # Step 2: Insert mktemp block after the first 'set -' line or after shebang
+        # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
         MKTEMP_BLOCK='# Auto-generated temp dir (replaces hardcoded /tmp/)
 HYPATIA_TMPDIR="$(mktemp -d)"
 trap '\''rm -rf "$HYPATIA_TMPDIR"'\'' EXIT'
@@ -73,7 +74,7 @@ ${MKTEMP_BLOCK}" "$file" 2>/dev/null || true
 
         # Step 3: Replace /tmp/name with $HYPATIA_TMPDIR/name for each static name
         while IFS= read -r name; do
-            sed -i "s|/tmp/${name}|\"\$HYPATIA_TMPDIR/${name}\"|g" "$file" 2>/dev/null || true
+            sed -i "s|/tmp/${name}|\"\$HYPATIA_TMPDIR/${name}\"|g" "$file" 2>/dev/null || true  # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
         done <<< "$tmp_names"
 
         echo "  FIXED $rel_path — replaced $count hardcoded /tmp/ path(s) with mktemp"
@@ -85,5 +86,5 @@ echo ""
 if [[ "$FIXED_COUNT" -gt 0 ]]; then
     echo "Fixed $FIXED_COUNT file(s) — hardcoded /tmp/ replaced with mktemp"
 else
-    echo "No fixable /tmp/ patterns found"
+    echo "No fixable /tmp/ patterns found"  # hypatia: allow content_patterns/hardcoded_tmp -- literal path this fixer matches in target files; nothing is created at that path
 fi

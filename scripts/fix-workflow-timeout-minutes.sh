@@ -21,9 +21,12 @@ set -euo pipefail
 DEFAULT_TIMEOUT="${DEFAULT_TIMEOUT:-10}"
 TARGET="${1:?Usage: fix-workflow-timeout-minutes.sh <workflow.yml | repo-path>}"
 
-apply_to_file() {
+apply_to_file() (
     local f="$1"
     [ -f "$f" ] || { echo "SKIP (not a file): $f" >&2; return 0; }
+    local missing_timeouts tmp=""
+    missing_timeouts=$(mktemp)
+    trap 'rm -f "$missing_timeouts"; if [ -n "$tmp" ]; then rm -f "$tmp"; fi' EXIT
 
     # Get list of (line_number, job_name) for jobs that lack timeout-minutes
     # within their block. We scan the file and find each top-level `^  <key>:$`
@@ -38,10 +41,9 @@ apply_to_file() {
         }
         in_jobs && /^    timeout-minutes:/ { hadto = 1 }
         END { if (curjob && !hadto) print curjob_line "\t" curjob }
-    ' "$f" > /tmp/missing_timeouts.$$
+    ' "$f" > "$missing_timeouts"
 
-    if [ ! -s /tmp/missing_timeouts.$$ ]; then
-        rm -f /tmp/missing_timeouts.$$
+    if [ ! -s "$missing_timeouts" ]; then
         echo "OK (no missing timeouts): $f"
         return 0
     fi
@@ -51,7 +53,7 @@ apply_to_file() {
     tmp=$(mktemp)
     cp "$f" "$tmp"
 
-    tac /tmp/missing_timeouts.$$ | while IFS=$'\t' read -r job_start_line job_name; do
+    tac "$missing_timeouts" | while IFS=$'\t' read -r job_start_line job_name; do
         # Find the runs-on line within the next 20 lines from the job header
         runs_on_line=$(awk -v start="$job_start_line" -v end="$((job_start_line+20))" '
             NR > start && NR < end && /^    runs-on:/ { print NR; exit }
@@ -70,8 +72,7 @@ apply_to_file() {
     else
         rm -f "$tmp"
     fi
-    rm -f /tmp/missing_timeouts.$$
-}
+)
 
 if [ -d "$TARGET" ]; then
     for f in "$TARGET"/.github/workflows/*.yml "$TARGET"/.github/workflows/*.yaml; do

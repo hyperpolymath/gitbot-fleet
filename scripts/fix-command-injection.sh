@@ -75,13 +75,13 @@ for file in "${SHELL_FILES[@]}"; do
 
     # --- Fix 2: Annotate eval usage with warning ---
     # Insert a warning comment above eval lines that use variable expansion
-    if grep -qP '^\s*eval\s+["\$]' "$file" 2>/dev/null; then
+    if grep -qP '^\s*eval\s+["\$]' "$file" 2>/dev/null; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
         # Check if warning comment already exists (idempotent)
-        if ! grep -q "SECURITY: eval with variable expansion is a command injection risk" "$file" 2>/dev/null; then
-            sed -i.bak '/^\s*eval\s\+["\$]/i\# SECURITY: eval with variable expansion is a command injection risk — refactor to avoid eval' "$file"
+        if ! grep -q "SECURITY: eval with variable expansion is a command injection risk" "$file" 2>/dev/null; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
+            sed -i.bak '/^\s*eval\s\+["\$]/i\# SECURITY: eval with variable expansion is a command injection risk — refactor to avoid eval' "$file"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             if [[ -f "$file.bak" ]] && ! diff -q "$file" "$file.bak" >/dev/null 2>&1; then
                 ((CHANGES++)) || true
-                echo "  [shell] Annotated eval usage in $rel_path"
+                echo "  [shell] Annotated eval usage in $rel_path"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             fi
             rm -f "$file.bak"
         fi
