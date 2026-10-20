@@ -96,6 +96,33 @@ SKIPPED=0
 FAILED=0
 SUCCEEDED=0
 
+# --- Run counters ---
+# Under --parallel, execute_entry runs in a background subshell, where a plain
+# ((FAILED++)) is lost when the job exits: the summary and the heartbeat then
+# read 0 failures over real ones. A job (IN_JOB=1) appends the counter's name
+# to a tally file instead (one short O_APPEND write, atomic), and the parent
+# folds the tally in after `wait`.
+count() {
+    if [[ "${IN_JOB:-0}" == 1 ]]; then
+        printf '%s\n' "$1" >> "$PARALLEL_TMPDIR/tally"
+    else
+        # shellcheck disable=SC2004 # $1 names the counter; the $ is the indirection
+        (( $1++ )) || true
+    fi
+}
+
+fold_counts() {
+    local name
+    [[ -f "$PARALLEL_TMPDIR/tally" ]] || return 0
+    while IFS= read -r name; do
+        case "$name" in
+            # shellcheck disable=SC2004 # $name names the counter
+            EXECUTED|SKIPPED|FAILED|SUCCEEDED) (( $name++ )) || true ;;
+        esac
+    done < "$PARALLEL_TMPDIR/tally"
+}
+# --- end run counters ---
+
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -357,7 +384,7 @@ execute_entry() {
         # Validate repo name (prevent directory traversal)
         if ! validate_safe_name "$repo" "repo"; then
             echo "  SKIP: $pattern_id (unsafe repo name)"
-            ((SKIPPED++)) || true
+            count SKIPPED
             return
         fi
         repo_path="$REPOS_BASE/$repo"
@@ -378,7 +405,7 @@ execute_entry() {
     # Double-check path stays within REPOS_BASE
     if ! validate_path_within "$repo_path" "$REPOS_BASE"; then
         echo "  SKIP: $pattern_id (repo path escapes base)"
-        ((SKIPPED++)) || true
+        count SKIPPED
         return
     fi
 
@@ -387,7 +414,7 @@ execute_entry() {
     for tp in "${THIRD_PARTY_PATHS[@]}"; do
         if [[ "$rel_repo_path" == "$tp" || "$rel_repo_path" == "$tp/"* ]]; then
             echo "  SKIP: $repo (third-party path: $tp)"
-            ((SKIPPED++)) || true
+            count SKIPPED
             return
         fi
     done
@@ -416,7 +443,7 @@ execute_entry() {
             echo "  REFUSED: $pattern_id → $repo (license/SPDX auto-edits forbidden per estate policy 2026-06-02)"
             echo "           recipe_id=$recipe_id category=$category"
             echo "           Owner must approve and apply licence changes manually, per-file."
-            ((SKIPPED++)) || true
+            count SKIPPED
             record_outcome "$pattern_id" "$recipe_id" "$repo" "" "refused_license_policy"
             return
             ;;
@@ -425,7 +452,7 @@ execute_entry() {
     # Skip if repo doesn't exist locally
     if [[ ! -d "$repo_path" ]]; then
         echo "  SKIP: $repo (not found at $repo_path)"
-        ((SKIPPED++)) || true
+        count SKIPPED
         return
     fi
 
@@ -477,9 +504,9 @@ execute_entry() {
                 verdict=$(outcome_verdict "$rc" "$before" "$after")
                 echo "        $verdict (exit $rc, targets $before -> $after)"
                 if [[ "$verdict" == failed || "$verdict" == incomplete ]]; then
-                    ((FAILED++)) || true
+                    count FAILED
                 else
-                    ((SUCCEEDED++)) || true
+                    count SUCCEEDED
                 fi
                 record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" "$before" "$after"
 
@@ -497,16 +524,16 @@ execute_entry() {
                 verdict=$(outcome_verdict "$rc" NA NA)
                 echo "        $verdict (exit $rc)"
                 if [[ "$verdict" == failed ]]; then
-                    ((FAILED++)) || true
+                    count FAILED
                 else
-                    ((SUCCEEDED++)) || true
+                    count SUCCEEDED
                 fi
                 record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc"
             else
                 echo "        SKIP: No fix mechanism available (no fix_script, no $RRA_BIN)"
-                ((SKIPPED++)) || true
+                count SKIPPED
             fi
-            ((EXECUTED++)) || true
+            count EXECUTED
             ;;
 
         review)
@@ -526,7 +553,7 @@ execute_entry() {
             local finding_file="$findings_dir/${repo}--${safe_pattern_id}.json"
             echo "$entry" | jq '. + {dispatch_strategy: "review", needs_pr: true}' > "$finding_file"
             echo "        Written: $finding_file"
-            ((EXECUTED++)) || true
+            count EXECUTED
             ;;
 
         report_only)
@@ -542,12 +569,12 @@ execute_entry() {
 
             local advisory_file="$advisory_dir/$(date -u +%Y-%m).jsonl"
             echo "$entry" | jq '. + {dispatch_strategy: "report_only"}' >> "$advisory_file"
-            ((EXECUTED++)) || true
+            count EXECUTED
             ;;
 
         *)
             echo "  UNKNOWN strategy: $strategy"
-            ((SKIPPED++)) || true
+            count SKIPPED
             ;;
     esac
 }
@@ -589,7 +616,7 @@ run_entry() {
             wait -n 2>/dev/null || true
             ((ACTIVE_JOBS--)) || true
         done
-        execute_entry "$line" &
+        IN_JOB=1 execute_entry "$line" &
         ((ACTIVE_JOBS++)) || true
     fi
 }
@@ -641,6 +668,7 @@ done < "$MANIFEST_PATH"
 # Wait for all background jobs to finish
 if [[ "$PARALLEL" -gt 1 ]]; then
     wait
+    fold_counts
 fi
 rm -rf "$PARALLEL_TMPDIR" 2>/dev/null || true
 

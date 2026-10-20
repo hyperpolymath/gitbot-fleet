@@ -18,6 +18,10 @@
 # Predicates mirror the fixers' own (their --check modes, applied with
 # `git grep` to a revision instead of a working tree). Recipes without one
 # print NA.
+#
+# Rows are replayed repo-wide, as the fixers run: a row naming one `file` is
+# a narrower claim than the predicate measures, so it is skipped (and counted
+# on stderr) rather than refuted by a target in some other file.
 set -euo pipefail
 LOG=$1; shift
 # The fixers' own exclusion list (lib/third-party-excludes.sh), as glob
@@ -59,7 +63,9 @@ pred() { # repo rev pattern -> count of remaining hits, or NA
 printf 'repo\tpattern\toutcome\tfixed_at\trev_at\thits_at\thits_plus7d\thits_head\n'
 for repo in "$@"; do
   name=$(basename "$repo"); head=$(git -C "$repo" rev-parse origin/main)
-  jq -r --arg r "$name" 'select(.repo==$r) | [.pattern // .recipe_id // .pattern_id, .outcome, .fixed_at // .timestamp] | select(.[2] != null) | @tsv' "$LOG" | sort -u |
+  skipped=$(jq -c --arg r "$name" 'select(.repo==$r and (.file // "") != "")' "$LOG" | wc -l)
+  ((skipped == 0)) || echo "audit: $name: $skipped file-scoped row(s) skipped" >&2
+  jq -r --arg r "$name" 'select(.repo==$r and (.file // "") == "") | [.pattern // .recipe_id // .pattern_id, .outcome, .fixed_at // .timestamp] | select(.[2] != null) | @tsv' "$LOG" | sort -u |
   while IFS=$'\t' read -r pat out ts; do
     at=$(git -C "$repo" rev-list -1 --before="$ts" origin/main || true)
     p7=$(git -C "$repo" rev-list -1 --before="$(date -u -d "$ts + 7 days" +%FT%TZ)" origin/main || true)

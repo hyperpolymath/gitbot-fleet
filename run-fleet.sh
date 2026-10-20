@@ -346,6 +346,10 @@ cmd_fix() {
             local ftype fpattern
             ftype=$(echo "$finding" | jq -r '.type // ""')
             fpattern=$(echo "$finding" | jq -r '.pattern // ""')
+            # A deprecated recipe id is looked up and logged as its
+            # replacement, so a verified annotation is never recorded under
+            # the removal recipe it was renamed from.
+            fpattern=$(canonical_recipe_id "$REGISTRY" "$fpattern")
             local fseverity
             fseverity=$(echo "$finding" | jq -r '.severity // "unknown"')
 
