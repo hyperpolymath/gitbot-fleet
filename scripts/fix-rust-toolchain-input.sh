@@ -247,7 +247,7 @@ apply_to_file() {
         }
         # Emit the buffered step, patched if it is a SHA-pinned dtolnay step
         # whose `with:` names no toolchain.
-        function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_empty_eol, tc_nested, tc_await, tc_flow_await, m, pre, post, delim, comment, v, w) {
+        function flush(   i, j, jl, dl, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_empty_eol, tc_nested, tc_await, tc_flow_await, m, pre, post, delim, comment, v, w) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` — alone, or followed only by a comment
@@ -264,6 +264,15 @@ apply_to_file() {
             # parser cannot place (a flow-style step) — that is reported, not guessed.
             uses_i = 0
             for (i = 1; i <= n; i++) {
+                # A double-quoted value continued past an escaped line break
+                # (`uses: "dtolnay/rust-\` then `toolchain@<sha>"`) is the
+                # reference YAML joins from the lines below: a SHA-pinned
+                # toolchain read so is reported, never passed over as no pin.
+                if (yaml_dq_continued(buf[i])) {
+                    jl = buf[i]
+                    for (j = i + 1; j <= n && yaml_dq_continued(jl); j++) jl = yaml_dq_join(jl, buf[j])
+                    if (uses_pin(jl)) unrec[++nunrec] = lnum[i]
+                }
                 # The step'"'"'s own `uses:` with its value continued below the key
                 # (`uses: >-` then `dtolnay/rust-toolchain@<sha>`): the key line
                 # names no action and the value reads as nested text, so a SHA
@@ -299,7 +308,9 @@ apply_to_file() {
                     # at the mapping'"'"'s own depth names inputs — outside quoted
                     # values and nested mappings, and including the rest of a line
                     # on which a nested mapping closes.
-                    v = level_view(line, flow_depth); flow_depth = lv_depth
+                    # Keys are read as YAML reads them: `"tool\x63hain":` is the
+                    # input `toolchain`.
+                    v = level_view(yaml_decode_dq(line), flow_depth); flow_depth = lv_depth
                     # A bare `toolchain:` that ended the previous line is empty
                     # only when the next token closes the mapping or moves on
                     # (`}`, `,`); anything else is its value, spread over lines,
@@ -314,6 +325,7 @@ apply_to_file() {
                 if (in_with) {
                     if (plain(line) && ind <= with_indent) in_with = 0
                     else if (plain(line)) {
+                        dl = yaml_decode_dq(line)
                         # Only a DIRECT child of `with:` is an input: the contents of
                         # another input'"'"'s block scalar (`components: |`) sit deeper.
                         # The first must be a block mapping key: `with:` whose value
@@ -322,28 +334,29 @@ apply_to_file() {
                         # a block child cannot be added to, so the step is reported.
                         if (child_indent < 0) {
                             child_indent = ind
-                            if (line !~ WITH_CHILD_KEY_RE) { with_bad = 1; unrec[++nunrec] = lnum[i] }
+                            if (dl !~ WITH_CHILD_KEY_RE) { with_bad = 1; unrec[++nunrec] = lnum[i] }
                         }
                         # An empty `toolchain:` whose next plain line (blank and
                         # comment lines between them notwithstanding) sits deeper is
                         # a nested mapping, not an empty value: nothing this fixer
                         # can repair.
                         if (tc_await) { tc_await = 0; if (ind > child_indent) tc_nested = 1 }
-                        if (ind == child_indent && line ~ TC_EMPTY_RE) { tc_empty_i = i; tc_await = 1 }
-                        else if (ind == child_indent && line ~ TC_RE) has_tc = 1
+                        if (ind == child_indent && dl ~ TC_EMPTY_RE) { tc_empty_i = i; tc_await = 1 }
+                        else if (ind == child_indent && dl ~ TC_RE) has_tc = 1
                     }
                 }
+                dl = yaml_decode_dq(line)
                 if (!in_with && !has_with && length(key_indent_of(line)) == skey) {
-                    if (line ~ WITH_BLOCK_RE) {
+                    if (dl ~ WITH_BLOCK_RE) {
                         has_with = 1; with_i = i; with_indent = skey; in_with = 1
-                    } else if (line ~ WITH_FLOW_RE) {
+                    } else if (dl ~ WITH_FLOW_RE) {
                         has_with = 1; with_i = i; with_flow = 1
-                        v = level_view(line, 0); flow_depth = lv_depth
+                        v = level_view(dl, 0); flow_depth = lv_depth
                         if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
                         else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                         else if (v ~ TC_FLOW_RE) has_tc = 1
                         if (flow_depth > 0) in_flow = 1
-                    } else if (line ~ WITH_ANY_RE) {
+                    } else if (dl ~ WITH_ANY_RE) {
                         # `with: &anchor`, `with: *alias`, or any value shape this
                         # parser does not read: a second `with:` would be worse than
                         # none, so the step is reported, not rewritten.

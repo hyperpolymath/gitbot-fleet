@@ -329,6 +329,18 @@ dead_ref_in_file() { # <file>
 # written (lib/yaml-anchors.awk, yaml_decode_dq).
 decode_dq() { awk "$ANCHORS_AWK"'{ print yaml_decode_dq($0) }'; }
 
+# Line <n> of <file> as YAML reads it: double-quoted escapes decoded, and a
+# line ending in an escaped line break inside a double-quoted scalar
+# (`uses: "hyperpolymath/standards/.github/workflows/rust-ci-\`) joined with
+# the lines that continue it (lib/yaml-anchors.awk).
+dq_logical_line() { # <file> <lineno>
+    awk -v ln="$2" "$ANCHORS_AWK"'
+        NR == ln { j = $0 }
+        NR > ln { j = yaml_dq_join(j, $0) }
+        NR >= ln && !yaml_dq_continued(j) { print yaml_decode_dq(j); done = 1; exit }
+        END { if (!done && j != "") print yaml_decode_dq(j) }' "$1"
+}
+
 # Print YAML context markers for workflow file $1, one per line that matters:
 #   K<n>  line n is a `uses:` key of a job under `jobs:` — the one place a
 #         reusable is called;
@@ -545,7 +557,8 @@ while IFS= read -r -d '' wf; do
         done < <(mask_line "$(sed -n "${lineno}p" "$wf" | decode_dq)" | grep -oiE "${REUSABLE_REF_RE}${FALLBACK_REF_END}" | grep -oiE "$REUSABLE_REF_RE" || true)
     done
     # A double-quoted value may spell the reference with escapes (`uses:
-    # "\x68yperpolymath/..."`): GitHub runs the decoded call, but the rewrite
+    # "\x68yperpolymath/..."`, or a line break escaped and continued on the
+    # next line): GitHub runs the decoded call, but the rewrite
     # and the scan above read the bytes as written, find no pin, and would
     # report the file clean. Every line outside data and text that holds an
     # escape is read decoded; a known-dead pin found so at a `uses` key is
@@ -554,7 +567,7 @@ while IFS= read -r -d '' wf; do
     while IFS= read -r numbered; do
         lineno="${numbered%%:*}"
         grep -qx "$lineno" <<<"$textual" && continue
-        decoded=$(printf '%s\n' "${numbered#*:}" | decode_dq)
+        decoded=$(dq_logical_line "$wf" "$lineno")
         [ "$decoded" != "${numbered#*:}" ] || continue
         while IFS= read -r ref; do
             [ -n "$ref" ] || continue
@@ -696,7 +709,8 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                 if (edge_val($0) == e) {
                     q = "'"'"'"; i = index(l, q e q)
                     if (!i) { q = "\""; i = index(l, q e q) }
-                    if (i) moved = substr($0, 1, i + length(repo)) "@" new q
+                    # Everything after the closing quote (a comment) stays.
+                    if (i) moved = substr($0, 1, i + length(repo)) "@" new q substr($0, i + length(e) + 2)
                     else {
                         t = l; sub(/^        - /, "", t); sub(/[[:space:]]+(#.*)?$/, "", t)
                         if (t == e) { i = 1; rest = $0; sub(/^        - [^[:space:]]+/, "", rest); spell = substr($0, 11, length(repo)); moved = "        - " spell "@" new rest }
@@ -731,6 +745,13 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         # record and keeps its SHA.
         awk -v stale="$stale" -v new="$new" -v repo="$repo" -v still="$still" '
             /^dependencies:[[:space:]]*$/ { sec = "d" }
+            # A top-level key (`workflows:` written after `dependencies:`)
+            # ends the section and the record in it: a kept record'"'"'s copy is
+            # written there, inside the section, never after what follows.
+            sec == "d" && /^[^[:space:]#]/ && !/^dependencies:[[:space:]]*$/ {
+                for (c = 1; c <= nc; c++) print copy[c]
+                nc = 0; sec = ""; inrec = 0
+            }
             # The record is the one whose unquoted key IS repo@stale: a key that
             # merely contains it (`evilhyperpolymath/standards@<sha>`) is another
             # record, and so is a plain unquoted key (a hand-written record).

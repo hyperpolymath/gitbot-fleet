@@ -222,8 +222,10 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else next }
                 if (!plain($0)) next
                 # Read as YAML reads it: a double-quoted value spelling the
-                # reference with escapes (`uses: "\x66oo/bar@<sha>"`) runs
-                # the reference it decodes to (lib/yaml-anchors.awk).
+                # reference with escapes (`uses: "\x66oo/bar@<sha>"`), or
+                # continued past an escaped line break onto the lines below,
+                # runs the reference it decodes to (lib/yaml-anchors.awk).
+                while (yaml_dq_continued($0) && (getline nxt) > 0) $0 = yaml_dq_join($0, nxt)
                 $0 = yaml_decode_dq($0)
                 note_anchors($0)
                 if (fdepth > 0) {
@@ -365,7 +367,11 @@ tmp=$(mktemp); cp "$LOCK" "$tmp"
 # key line is not read (kind M): it is reported unless its SHA ref is one to
 # keep, never passed over as no record at all. Block records are kind B.
 records=$(mktemp)
-if ! awk -v sq="'" '
+if ! awk -v sq="'" "$ANCHORS_AWK"'
+    # Each line is read as YAML reads it: a double-quoted key or ref spelled
+    # with escapes (`ref: "\x30..."`) is the value it decodes to. The rewrite
+    # below edits the bytes as written; a ref it cannot reach so is reported.
+    { $0 = yaml_decode_dq($0) }
     # Trailing whitespace after the colon, a carriage return included (a
     # lock with CRLF line endings), is no part of the key.
     # The record key of a flow-mapping record line: repo and SHA, or 0.
@@ -450,7 +456,12 @@ while IFS=$'\t' read -r lineno kind repo sha ref_raw; do
         fixed=$((fixed + 1)); continue
     fi
     if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "^        [\"']?ref[\"']?[[:space:]]*:[[:space:]]*[\"']"; then q="'"; fi
+    before=$(sed -n "${lineno}p" "$tmp")
     sed -i "${lineno}s|^\(        ['\"]\{0,1\}ref['\"]\{0,1\}[[:space:]]*:[[:space:]]*\)\(['\"]\{0,1\}\)$ref_raw\2|\1\2$q$tag$q\2|" "$tmp"
+    if [ "$(sed -n "${lineno}p" "$tmp")" = "$before" ]; then
+        echo "UNRESOLVED  $repo@${sha:0:7}: the record's ref (line $lineno) is not written in a form this fixer rewrites (spelled with escapes?); set it to $tag by hand (record left as is)" >&2
+        unresolved=$((unresolved + 1)); continue
+    fi
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
 done < "$records"

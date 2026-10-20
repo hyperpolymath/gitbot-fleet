@@ -64,6 +64,25 @@ function yaml_decode_dq(s,   out, i, len, c, q) {
     }
     return out
 }
+# Does line s end in an escaped line break inside a double-quoted scalar
+# (`uses: "dtolnay/rust-\`)? YAML then joins the next line to it, the break
+# and that line's leading whitespace removed (yaml_dq_join), so the scalar
+# is read whole only across both lines. A comment ends the line.
+function yaml_dq_continued(s,   i, len, c, q) {
+    i = 1; len = length(s); q = ""
+    while (i <= len) {
+        c = substr(s, i, 1)
+        if (q == "\"" && c == "\\") { if (i == len) return 1; i += 2; continue }
+        if (q != "") { if (c == q) { if (q == "'" && substr(s, i + 1, 1) == "'") { i += 2; continue }; q = "" } }
+        else if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) return 0
+        else if (c == "\"" || c == "'") q = c
+        i++
+    }
+    return 0
+}
+# Line s, ending in an escaped line break (yaml_dq_continued), joined with
+# the line t that continues its scalar.
+function yaml_dq_join(s, t) { sub(/^[[:space:]]+/, "", t); return substr(s, 1, length(s) - 1) t }
 function anchor_defs(s, defs,   n, i, len, c, q, name, v, seen, depth) {
     split("", defs); n = 0; i = 1; q = ""; len = length(s); seen = ""; depth = 0
     while (i <= len) {

@@ -3504,6 +3504,73 @@ while IFS= read -r row; do
 done < <(grep -E '^#[[:space:]]+scripts/fix-[a-z-]+\.sh[[:space:]]' "$fleet/.machine_readable/descriptiles/AGENTIC.a2ml")
 check "every rule AGENTIC assigns to a workflow-pin fixer is registered to it" "[ \$agentic_ok -eq 1 ]"
 
+# ── Review cases (gitbot-fleet#615, round on 780bd7d) ───────────────────────
+# ls44: a self-SHA record whose ref is spelled with escapes is that record:
+# YAML reads the SHA, the rewrite cannot reach the bytes, so it is reported
+# (exit 1, untouched), never passed as no record.
+mkdir -p "$fx/ls44/.github/workflows"
+action_steps "$fx/ls44/.github/workflows" "foo/bar@$SHA_B"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s':\n        ref: \"\\\\x62%s\"\n        commit: 'sha1-%s'\n" "$SHA_B" "$SHA_B" "${SHA_B:1}" "$SHA_B" > "$fx/ls44/.github/workflows/actions.lock"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls44-tags.tsv"
+cp "$fx/ls44/.github/workflows/actions.lock" "$fx/ls44-before.lock"
+TAG_MAP="$fx/ls44-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls44" --offline
+check "ls44 an escaped self-SHA ref is the record: UNRESOLVED, untouched, exit 1, never OK" \
+  "[ \$rc -eq 1 ] && grep -q 'UNRESOLVED  foo/bar@bbbbbbb: the record.s ref (line 7)' <<<\"\$out\" && cmp -s '$fx/ls44-before.lock' '$fx/ls44/.github/workflows/actions.lock'"
+
+# sp57: with `dependencies:` written before `workflows:`, a stale record a
+# caller the table does not cover still needs is copied INSIDE the section;
+# `workflows:` and its edges stay as they were, not swallowed by the copy.
+mkdir -p "$fx/sp57/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp57/.github/workflows/ci.yml"
+printf 'jobs:\n  mirror:\n    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@%s\n' "$STALE_A" > "$fx/sp57/.github/workflows/other.yml"
+printf "version: 'v0.0.3'\ndependencies:\n    'hyperpolymath/standards@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'hyperpolymath/standards@%s'\n    '.github/workflows/other.yml':\n        - 'hyperpolymath/standards@%s'\n" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" > "$fx/sp57/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp57"
+sp57_lock="$fx/sp57/.github/workflows/actions.lock"
+check "sp57 a kept stale record is copied inside dependencies:, before workflows:, which keeps both its entries" \
+  "[ \$rc -eq 3 ] && [ \$(grep -c '^workflows:\$' '$sp57_lock') -eq 1 ] && [ \$(grep -n \"^    'hyperpolymath/standards@$GOOD':\$\" '$sp57_lock' | cut -d: -f1) -lt \$(grep -n '^workflows:\$' '$sp57_lock' | cut -d: -f1) ] && grep -A1 \"^    '.github/workflows/other.yml':\" '$sp57_lock' | grep -q \"@$STALE_A'\" && grep -A1 \"^    '.github/workflows/ci.yml':\" '$sp57_lock' | grep -q \"@$GOOD'\""
+
+# sp58: a quoted workflow edge keeps its trailing comment when it moves.
+mkdir -p "$fx/sp58/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp58/.github/workflows/ci.yml"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'hyperpolymath/standards@%s' # rationale\ndependencies:\n    'hyperpolymath/standards@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" > "$fx/sp58/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp58"
+check "sp58 a quoted edge moved to the replacement keeps its trailing comment" \
+  "[ \$rc -eq 3 ] && grep -qxF \"        - 'hyperpolymath/standards@$GOOD' # rationale\" '$fx/sp58/.github/workflows/actions.lock'"
+
+# sp59 / tc41: a double-quoted `uses:` value continued past an escaped line
+# break is the reference YAML joins: a dead call, or a SHA-pinned toolchain,
+# spelled so is reported (exit 2, untouched), never passed as clean.
+mkdir -p "$fx/sp59/.github/workflows" "$fx/tc41/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: "hyperpolymath/standards/.github/workflows/rust-ci-\\\n      reusable.yml@%s"\n' "$STALE_A" > "$fx/sp59/.github/workflows/ci.yml"
+cp "$fx/sp59/.github/workflows/ci.yml" "$fx/sp59-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp59"
+check "sp59 a dead call continued past an escaped line break is UNSUPPORTED, exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:3: .*written with escapes' <<<\"\$out\" && cmp -s '$fx/sp59-before.yml' '$fx/sp59/.github/workflows/ci.yml'"
+printf 'jobs:\n  check:\n    steps:\n      - uses: "dtolnay/rust-\\\n          toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"\n      - name: "a \\\n          b"\n        run: cargo test\n' > "$fx/tc41/.github/workflows/x.yml"
+cp "$fx/tc41/.github/workflows/x.yml" "$fx/tc41-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc41"
+check "tc41 a toolchain pin continued past an escaped line break is UNSUPPORTED (line 4 only), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 4\\.' <<<\"\$out\" && cmp -s '$fx/tc41-before.yml' '$fx/tc41/.github/workflows/x.yml'"
+
+# tc42: an input key spelled with escapes (`"tool\x63hain":`) is the input
+# `toolchain`: the step is configured, in flow or block form, and no second
+# toolchain key is written.
+mkdir -p "$fx/tc42/.github/workflows"
+cat > "$fx/tc42/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { "tool\x63hain": nightly }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          "tool\x63hain": nightly
+YML
+cp "$fx/tc42/.github/workflows/x.yml" "$fx/tc42-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc42"
+check "tc42 an escaped toolchain key is the input: flow and block steps left as they are, exit 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc42-before.yml' '$fx/tc42/.github/workflows/x.yml'"
+
 dq_out=$(printf '%s\n' 'uses: "\x64tolnay/x@1" # "\x41"' "name: 'a\\x41' \"b\\\"c\"" | awk "$(cat "$fleet/scripts/lib/yaml-anchors.awk")"'{ printf "%s|", yaml_decode_dq($0) }')
 check "yaml_decode_dq decodes double-quoted escapes only, an escaped quote to a byte no reference holds" \
   "[ \"\$dq_out\" = \"\$(printf 'uses: \"dtolnay/x@1\" # \"\\\\x41\"|name: '\"'\"'a\\\\x41'\"'\"' \"b\\001c\"|')\" ]"
