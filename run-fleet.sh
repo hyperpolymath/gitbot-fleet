@@ -294,6 +294,11 @@ cmd_fix() {
         return 78
     fi
 
+    # Fix outcomes are verdicts from each recipe's predicate, not exit codes.
+    # Sourced after the quarantine gate so the gate never depends on it.
+    # shellcheck source=scripts/lib/outcome-verdict.sh
+    source "$SCRIPTS_DIR/lib/outcome-verdict.sh"
+
     preflight
     log_head "Auto-Fix Pipeline"
 
@@ -453,26 +458,33 @@ cmd_fix() {
                 echo "$finding" > "$tmp_finding"
 
                 printf "    [FIX] %-40s " "$fpattern"
-                if "$fix_path" "$repo_path" "$tmp_finding" >/dev/null 2>&1; then
-                    echo -e "${GREEN}OK${NC}"
-                    ((total_applied++)) || true
+                local before after rc verdict
+                before=$(recipe_check_count "$fix_path" "$repo_path")
+                rc=0
+                "$fix_path" "$repo_path" "$tmp_finding" >/dev/null 2>&1 || rc=$?
+                after=$(recipe_check_count "$fix_path" "$repo_path")
+                verdict=$(outcome_verdict "$rc" "$before" "$after")
 
-                    # Log outcome
-                    jq -n --arg repo "$repo_name" --arg pattern "$fpattern" \
-                        --arg script "$fix_script" --arg ts "$(timestamp)" \
-                        --arg severity "$fseverity" \
-                        '{timestamp: $ts, repo: $repo, pattern: $pattern, fix_script: $script, severity: $severity, outcome: "success"}' \
-                        >> "$LEARNING_DIR/fix-outcomes.jsonl"
-                else
+                if [[ "$verdict" == failed ]]; then
                     echo -e "${RED}FAILED${NC}"
                     ((total_failed++)) || true
-
-                    jq -n --arg repo "$repo_name" --arg pattern "$fpattern" \
-                        --arg script "$fix_script" --arg ts "$(timestamp)" \
-                        --arg severity "$fseverity" \
-                        '{timestamp: $ts, repo: $repo, pattern: $pattern, fix_script: $script, severity: $severity, outcome: "failure"}' \
-                        >> "$LEARNING_DIR/fix-outcomes.jsonl"
+                else
+                    echo -e "${GREEN}${verdict}${NC} ($before -> $after)"
+                    ((total_applied++)) || true
                 fi
+
+                # `outcome` is the exit status, kept for older readers;
+                # `verdict` is whether the predicate confirms the fix.
+                jq -cn --arg repo "$repo_name" --arg pattern "$fpattern" \
+                    --arg script "$fix_script" --arg ts "$(timestamp)" \
+                    --arg severity "$fseverity" --arg verdict "$verdict" \
+                    --arg outcome "$(legacy_outcome "$verdict")" \
+                    --argjson exit_code "$rc" --arg before "$before" --arg after "$after" \
+                    '{timestamp: $ts, repo: $repo, pattern: $pattern, fix_script: $script, severity: $severity,
+                      outcome: $outcome, verdict: $verdict, exit_code: $exit_code,
+                      before_hits: (if $before == "NA" then null else ($before | tonumber) end),
+                      after_hits: (if $after == "NA" then null else ($after | tonumber) end)}' \
+                    >> "$LEARNING_DIR/fix-outcomes.jsonl"
 
                 rm -f "$tmp_finding"
             fi

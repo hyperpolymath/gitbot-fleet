@@ -305,13 +305,15 @@ process_findings() {
                 local fixed_count=$(execute_auto_fixes "$repo_name" "$latest_findings")
                 total_auto_fixed=$((total_auto_fixed + fixed_count))
 
-                # Record outcomes for completed fixes
+                # execute_auto_fixes only *generates* fix-batch scripts; nothing
+                # has run yet, so this is not a fix outcome. Record it as
+                # generated/unverified rather than "success" (experiment E1).
                 if [[ $fixed_count -gt 0 ]]; then
-                    log_bot "hypatia" "Recording $fixed_count fix outcomes to learning pipeline"
+                    log_bot "hypatia" "Recording $fixed_count generated fix batches (unverified) to learning pipeline"
                     # Use jq to safely construct JSON (prevents injection via repo_name)
-                    jq -n --arg repo "$repo_name" --argjson count "$fixed_count" \
+                    jq -cn --arg repo "$repo_name" --argjson count "$fixed_count" \
                         --arg fixed_at "$(date -Iseconds)" \
-                        '{pattern: "auto-fix", repo: $repo, outcome: "success", count: $count, fixed_at: $fixed_at, bot: "robot-repo-automaton"}' \
+                        '{pattern: "auto-fix", repo: $repo, outcome: "generated", verdict: "unverified", count: $count, fixed_at: $fixed_at, bot: "robot-repo-automaton"}' \
                         >> "$SHARED_CONTEXT/learning/fix-outcomes.jsonl"
                 fi
             fi

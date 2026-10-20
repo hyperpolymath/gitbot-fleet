@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MPL-2.0
+#
+# Fix outcomes are verdicts from each recipe's own predicate, not exit codes
+# (experiment E1, docs/experiments/E1-fix-outcome-replay-2026-10-20.adoc).
+#
+# Covers:
+#   1. outcome_verdict truth table.
+#   2. recipe_check_count: integer from a --check script, NA without one.
+#   3. The two predicate-carrying fixers, end to end on a fixture repo:
+#      targets > 0 before, 0 after, --check itself changes nothing, and a
+#      second run is a no_op.
+#   4. dispatch-runner's record_outcome row and rescan trigger (extracted,
+#      like hypatia-record-outcome-smoke.sh, so the quarantined main loop
+#      never runs).
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# shellcheck source=../scripts/lib/outcome-verdict.sh
+source "$ROOT/scripts/lib/outcome-verdict.sh"
+
+pass=0
+fail=0
+check() {
+    local label="$1" expected="$2" actual="$3"
+    if [[ "$expected" == "$actual" ]]; then
+        pass=$((pass + 1))
+        echo "PASS: $label"
+    else
+        fail=$((fail + 1))
+        echo "FAIL: $label — expected '$expected', got '$actual'"
+    fi
+}
+
+# --- 1. truth table -------------------------------------------------------
+check "exit 0, work found, none left"      verified   "$(outcome_verdict 0 3 0)"
+check "exit 0, nothing to fix"             no_op      "$(outcome_verdict 0 0 0)"
+check "exit 0, work remains"               incomplete "$(outcome_verdict 0 3 1)"
+check "exit 0, no predicate"               unverified "$(outcome_verdict 0 NA NA)"
+check "exit 0, predicate lost after fix"   unverified "$(outcome_verdict 0 3 NA)"
+check "non-zero exit wins over counts"     failed     "$(outcome_verdict 1 3 0)"
+check "legacy outcome of a failure"        failure    "$(legacy_outcome failed)"
+check "legacy outcome of a no-op"          success    "$(legacy_outcome no_op)"
+
+# --- 2. recipe_check_count ------------------------------------------------
+cat > "$TMP/no-check.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "=== fixer without a predicate ==="
+EOF
+chmod +x "$TMP/no-check.sh"
+mkdir -p "$TMP/empty"
+check "script without --check is NA" NA "$(recipe_check_count "$TMP/no-check.sh" "$TMP/empty")"
+
+# A fixer that has not opted in must never be run with --check: it would take
+# "--check" as its repo path and could run its edits.
+cat > "$TMP/unmarked.sh" <<EOF
+#!/usr/bin/env bash
+touch "$TMP/unmarked-was-run"
+echo 0
+EOF
+chmod +x "$TMP/unmarked.sh"
+check "unmarked fixer is NA" NA "$(recipe_check_count "$TMP/unmarked.sh" "$TMP/empty")"
+check "unmarked fixer is never invoked" absent "$([[ -e "$TMP/unmarked-was-run" ]] && echo present || echo absent)"
+check "missing repo path is NA" NA \
+    "$(recipe_check_count "$ROOT/scripts/fix-shell-quoting.sh" "$TMP/does-not-exist")"
+
+# --- 3. fixers end to end -------------------------------------------------
+repo="$TMP/repo"
+mkdir -p "$repo/src" "$repo/node_modules/dep"
+echo '{}' > "$TMP/finding.json"
+printf '#!/bin/sh\ncd $HOME\nrm $TMPDIR && echo $X\nmv "$A" b\n' > "$repo/run.sh"
+printf 'cd $VENDORED\n' > "$repo/node_modules/dep/vendored.sh"
+printf 'module M\nf : Int\nf = believe_me 1\n-- believe_me in a comment\ng = believe_me 2\n' \
+    > "$repo/src/A.idr"
+
+for spec in "fix-shell-quoting.sh 3" "fix-believe-me.sh 2"; do
+    read -r script expected_before <<< "$spec"
+    fixer="$ROOT/scripts/$script"
+    snapshot=$(find "$repo" -type f -exec sha256sum {} + | sort)
+    before=$(recipe_check_count "$fixer" "$repo")
+    check "$script: --check changes nothing" "$snapshot" "$(find "$repo" -type f -exec sha256sum {} + | sort)"
+    check "$script: targets before" "$expected_before" "$before"
+
+    rc=0
+    "$fixer" "$repo" "$TMP/finding.json" > /dev/null 2>&1 || rc=$?
+    after=$(recipe_check_count "$fixer" "$repo")
+    check "$script: first run verified" verified "$(outcome_verdict "$rc" "$before" "$after")"
+
+    rc=0
+    "$fixer" "$repo" "$TMP/finding.json" > /dev/null 2>&1 || rc=$?
+    check "$script: second run is a no-op" no_op \
+        "$(outcome_verdict "$rc" "$after" "$(recipe_check_count "$fixer" "$repo")")"
+done
+check "vendored file left alone" 'cd $VENDORED' "$(cat "$repo/node_modules/dep/vendored.sh")"
+
+# --- 4. dispatch-runner record_outcome ------------------------------------
+awk '
+  /^# --- Hypatia closed-loop contract ---/ { capture = 1 }
+  capture { print }
+  /^record_outcome\(\)/ && capture { seen = 1 }
+  seen && /^}/ { exit }
+' "$ROOT/scripts/dispatch-runner.sh" > "$TMP/extracted.sh"
+export REPOS_BASE="$TMP/repos" HYPATIA_OUTCOME_REPORT=off
+OUTCOME_FILE="$TMP/outcomes.jsonl"
+export OUTCOME_FILE_CENTRAL="$OUTCOME_FILE"  # read by the sourced record_outcome
+RESCAN_REPOS_FILE="$TMP/rescan"
+: > "$RESCAN_REPOS_FILE"
+# shellcheck disable=SC1091
+source "$TMP/extracted.sh"
+
+record_outcome "PA009" "recipe-shell-quote-vars" "repo-a" "" verified 0 3 0
+record_outcome "PA009" "recipe-shell-quote-vars" "repo-b" "" no_op 0 0 0
+record_outcome "PA009" "recipe-x" "repo-c" "" unverified 0
+record_outcome "PA009" "recipe-license-hygiene" "repo-d" "" refused_license_policy
+
+check "verified row" '{"verdict":"verified","outcome":"success","exit_code":0,"before_hits":3,"after_hits":0}' \
+    "$(sed -n 1p "$OUTCOME_FILE" | jq -c '{verdict, outcome, exit_code, before_hits, after_hits}')"
+check "unverified row has no counts" '{"verdict":"unverified","before_hits":null,"after_hits":null}' \
+    "$(sed -n 3p "$OUTCOME_FILE" | jq -c '{verdict, before_hits, after_hits}')"
+check "refusal keeps its own outcome" '{"verdict":"refused_license_policy","outcome":"refused_license_policy","exit_code":null}' \
+    "$(sed -n 4p "$OUTCOME_FILE" | jq -c '{verdict, outcome, exit_code}')"
+check "only verified repos trigger a rescan" "repo-a" "$(cat "$RESCAN_REPOS_FILE")"
+
+echo ""
+echo "Results: $pass passed, $fail failed"
+[[ "$fail" -eq 0 ]]
