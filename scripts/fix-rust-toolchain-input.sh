@@ -179,7 +179,8 @@ apply_to_file() {
             return (length(m) == 40 && (nxt == "" || nxt ~ /["'"'"'[:space:],}\]]/))
         }
         # The line with its comment dropped and every quoted scalar that is
-        # neither a key nor the value of a `uses` key blanked to `""`.
+        # neither a key nor the value of a `uses` key (past any anchor or tag)
+        # blanked to `""`.
         function site_view(s,   out, i, n, c, j, body) {
             out = ""; n = length(s); i = 1
             while (i <= n) {
@@ -190,7 +191,7 @@ apply_to_file() {
                     if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
                     else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
                     body = substr(s, i + 1, j - i - 1)
-                    if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*$/) out = out c body c
+                    if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
                     else out = out c c
                     i = j + 1; continue
                 }
@@ -383,12 +384,15 @@ apply_to_file() {
             SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
             # Matched against the line in lower case.
             USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
-            USES_SITE_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:],}]+[[:space:]]+)?" Q "dtolnay/rust-toolchain@[0-9a-f]+"
+            # The value may carry YAML node properties, an anchor or a tag
+            # (`uses: &rust ...`, `uses: !!str ...`): still the step'"'"'s pin, but
+            # not one USES_RE places, so such a step is reported.
+            USES_SITE_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
             # A `uses:` whose value is an alias, `*name` (matched in lower case).
             USES_ALIAS_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*\\*[a-z0-9_.-]+"
             # A `uses:` key whose value is not on its line: a block scalar
             # (`uses: >-`) or nothing at all, the reference on the lines below.
-            USES_OPEN_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:],}]+[[:space:]]*)?([|>][-+0-9]*)?[[:space:]]*$"
+            USES_OPEN_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]*)*([|>][-+0-9]*)?[[:space:]]*$"
             WITH_BLOCK_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*(#.*)?$"
             WITH_FLOW_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*\\{"
             WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"

@@ -90,7 +90,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
             function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
             function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
-            function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^[:space:]]+[[:space:]]+)?["'"'"']?/, "", s); sub(/["'"'"'[:space:]].*$/, "", s); return s }
+            function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:]]*[[:space:]]+)*["'"'"']?/, "", s); sub(/["'"'"'[:space:]].*$/, "", s); return s }
             # A `uses:` whose value is not on its line — a block scalar
             # (`uses: >-`), or nothing but a comment — names its site on the
             # lines below, which this reader skips as scalar text. Such a site
@@ -132,7 +132,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                         if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
                         else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
                         body = substr(s, i + 1, j - i - 1)
-                        if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*$/) out = out c body c
+                        if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
                         else out = out c c
                         i = j + 1; continue
                     }
@@ -148,10 +148,10 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             # (0 at the start of the line), for flow_kind/3.
             function flow_uses_all(s, out,   n, r, t, base) {
                 n = 0; split("", out); split("", out_at); t = s; base = 0
-                while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^"'"'"'[:space:],}]+[[:space:]]+)?["'"'"']?[^"'"'"'[:space:],}]+/)) {
+                while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^"'"'"'[:space:],}]*[[:space:]]+)*["'"'"']?[^"'"'"'[:space:],}]+/)) {
                     r = substr(t, RSTART, RLENGTH)
                     out_at[n + 1] = (r ~ /^[{,]/) ? base + RSTART : 0
-                    sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^"'"'"'[:space:],}]+[[:space:]]+)?["'"'"']?/, "", r)
+                    sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^"'"'"'[:space:],}]*[[:space:]]+)*["'"'"']?/, "", r)
                     out[++n] = r; base += RSTART + RLENGTH - 1; t = substr(t, RSTART + RLENGTH)
                 }
                 return n

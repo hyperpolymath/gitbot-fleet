@@ -347,14 +347,14 @@ FALLBACK_REF_END="([\"'[:space:],}]|]|$)"
 # looked up in lower case and rewritten as written.
 REUSABLE_REF_RE="(${TABLE_OWNERS_RE})/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-fA-F]{40}"
 # A line with its comment dropped and every quoted scalar that is neither a
-# key nor the value of a `uses` key emptied, quote-aware. The fallback scan
+# key nor the value of a `uses` key (past any anchor or tag) emptied, quote-aware. The fallback scan
 # for pins the parser cannot place reads this, so a dead pin named in a
 # trailing comment or inside a `name:` string is data, not an UNSUPPORTED
 # caller.
 mask_line() {
     printf '%s\n' "$1" | awk -v sq="'" '{
         s = $0; out = ""; n = length(s); i = 1
-        tail = "(^|[-{,[:space:]])[\"" sq "]?uses[\"" sq "]?[[:space:]]*:[[:space:]]*$"
+        tail = "(^|[-{,[:space:]])[\"" sq "]?uses[\"" sq "]?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$"
         while (i <= n) {
             c = substr(s, i, 1)
             if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
@@ -371,10 +371,12 @@ mask_line() {
         print out
     }'
 }
-# The value may carry a YAML anchor (`uses: &call owner/repo/...@<sha>`).
-# The rewrite does not edit anchored values, since every alias of the
-# anchor would change with it, so such a value is reported, never skipped.
-ANCHOR_RE="&[^[:space:],}]+[[:space:]]+"
+# The value may carry YAML node properties — an anchor or a tag, in either
+# order (`uses: &call owner/repo/...@<sha>`, `uses: !!str owner/...@<sha>`).
+# The rewrite does not edit such values (every alias of an anchor would
+# change with it, and the rewrite reads the reference right after the
+# colon), so such a value is reported, never skipped as clean.
+ANCHOR_RE="([&!][^[:space:],}]*[[:space:]]+)+"
 FALLBACK_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*(${ANCHOR_RE})?[\"']?${REUSABLE_REF_RE}${FALLBACK_REF_END}"
 ANCHORED_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*${ANCHOR_RE}[\"']?${REUSABLE_REF_RE}${FALLBACK_REF_END}"
 # The dead reference a job-level `uses:` line carries, as written, or "".
@@ -432,7 +434,7 @@ while IFS= read -r -d '' wf; do
             [ -n "$ref" ] || continue
             sha="${ref##*@}"
             if lookup_replacement "${ref%@*}" "${sha,,}"; then
-                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (a flow-style job mapping, or an anchored value). Fix by hand; the file was not changed." >&2
+                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (a flow-style job mapping, or a value carrying an anchor or tag). Fix by hand; the file was not changed." >&2
                 skip=1
             fi
         done < <(mask_line "${numbered#*:}" | grep -oiE "$FALLBACK_USES_RE" | grep -oiE "$REUSABLE_REF_RE" || true)

@@ -2694,7 +2694,7 @@ printf 'jobs:\n  rust:\n    uses: &call %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$f
 cp "$fx/sp33/.github/workflows/ci.yml" "$fx/sp33-before.yml"
 run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp33"
 check "sp33 an anchored dead reusable value is UNSUPPORTED: exit 2, file untouched, never OK" \
-  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*anchored value' <<<\"\$out\" && cmp -s '$fx/sp33-before.yml' '$fx/sp33/.github/workflows/ci.yml'"
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*a value carrying an anchor or tag' <<<\"\$out\" && cmp -s '$fx/sp33-before.yml' '$fx/sp33/.github/workflows/ci.yml'"
 printf 'jobs:\n  check:\n    steps:\n      - uses: &rt dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/tc22/.github/workflows/x.yml"
 cp "$fx/tc22/.github/workflows/x.yml" "$fx/tc22-before.yml"
 run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc22"
@@ -3178,6 +3178,38 @@ cp "$fx/ls38/.github/workflows/actions.lock" "$fx/ls38-before.lock"
 TAG_MAP="$fx/ls38-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls38" --offline
 check "ls38 a record no workflow uses is UNRESOLVED and left as is, never rewritten on a guess" \
   "[ \$rc -eq 1 ] && grep -q 'UNRESOLVED  third/party@aaaaaaa: no workflow here uses it' <<<\"\$out\" && cmp -s '$fx/ls38-before.lock' '$fx/ls38/.github/workflows/actions.lock'"
+
+# tc35 / sp46: a `uses:` value carrying a YAML tag (`!!str`), alone or with
+# an anchor, is still the step's or job's pin, but not one the rewrite
+# places: reported UNSUPPORTED, exit 2, the file untouched — never passed as
+# OK. (hypatia WF026/WF027 route such findings to review.)
+mkdir -p "$fx/tc35/.github/workflows" "$fx/sp46/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: !!str dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n      - uses: !!str &rust "dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"\n' > "$fx/tc35/.github/workflows/x.yml"
+cp "$fx/tc35/.github/workflows/x.yml" "$fx/tc35-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc35"
+check "tc35 a tagged uses: value is reported UNSUPPORTED, exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 4 5' <<<\"\$out\" && cmp -s '$fx/tc35-before.yml' '$fx/tc35/.github/workflows/x.yml'"
+printf 'jobs:\n  rust:\n    uses: !!str hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp46/.github/workflows/ci.yml"
+cp "$fx/sp46/.github/workflows/ci.yml" "$fx/sp46-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp46"
+check "sp46 a tagged job uses: holding a known-dead pin is UNSUPPORTED, exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:3: .*a value carrying an anchor or tag' <<<\"\$out\" && cmp -s '$fx/sp46-before.yml' '$fx/sp46/.github/workflows/ci.yml'"
+
+mkdir -p "$fx/sp46b/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: !!str "hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s"\n' "$STALE_A" > "$fx/sp46b/.github/workflows/ci.yml"
+cp "$fx/sp46b/.github/workflows/ci.yml" "$fx/sp46b-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp46b"
+check "sp46 a quoted value after a tag is the job's value too: UNSUPPORTED, exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:3: ' <<<\"\$out\" && cmp -s '$fx/sp46b-before.yml' '$fx/sp46b/.github/workflows/ci.yml'"
+# ls39: a step whose `uses:` value carries a tag still proves its record an
+# action: the lock's self-SHA ref gets its tag.
+mkdir -p "$fx/ls39/.github/workflows"
+printf 'jobs:\n  build:\n    steps:\n      - uses: !!str "foo/bar@%s"\n' "$SHA_B" > "$fx/ls39/.github/workflows/ci.yml"
+lock_records "$fx/ls39" "foo/bar@$SHA_B"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls39-tags.tsv"
+TAG_MAP="$fx/ls39-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls39" --offline
+check "ls39 a tagged step value still classifies its record as an action: the ref gets its tag" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls39/.github/workflows/actions.lock'"
 
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
