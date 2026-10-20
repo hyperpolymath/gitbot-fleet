@@ -107,8 +107,10 @@ apply_to_file() {
     local f="$1" tmp rc
     [ -f "$f" ] || { echo "SKIP (not a file): $f" >&2; return 0; }
     # GitHub resolves `Dtolnay/Rust-Toolchain` to the same action: the name is
-    # matched in either case here and in the parser below.
-    grep -qiE 'dtolnay/rust-toolchain@[0-9a-fA-F]{40}' "$f" || return 0
+    # matched in either case here and in the parser below. A double-quoted
+    # scalar may spell it with escapes (`"\x64tolnay/..."`), which only the
+    # parser decodes, so a file holding such an escape is read too.
+    grep -qiE 'dtolnay/rust-toolchain@[0-9a-fA-F]{40}|\\[xuU][0-9a-fA-F]' "$f" || return 0
 
     tmp=$(mktemp)
     set +e

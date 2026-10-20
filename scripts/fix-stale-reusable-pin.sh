@@ -182,19 +182,21 @@ merge_duplicate_records() {
             if (length(ref) == 40 && ref !~ /[^0-9A-Fa-f]/) ref = tolower(ref)
             return tolower(substr(s, 1, at)) ref
         }
-        function record_key(s) { sub(/[[:space:]]+#.*$/, "", s); return (s ~ /^    ["'"'"'][^"'"'"']+["'"'"']:$/ || s ~ /^    [^[:space:]"'"'"'#][^[:space:]]*:$/) }
+        function record_key(s) { sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return (s ~ /^    ["'"'"'][^"'"'"']+["'"'"']:$/ || s ~ /^    [^[:space:]"'"'"'#][^[:space:]]*:$/) }
         # A nested `uses:` entry, quoted or plain, with or without a trailing
         # comment; it is deduplicated on its value, the comment kept with
         # the first spelling seen.
-        function uses_entry(s) { return (s ~ /^            - ["'"'"'][^"'"'"']+["'"'"']([[:space:]]+#.*)?$/ || s ~ /^            - [^[:space:]"'"'"'#][^[:space:]]*([[:space:]]+#.*)?$/) }
-        function entry_value(s) { sub(/^            - /, "", s); sub(/[[:space:]]+#.*$/, "", s); return unq(s) }
+        # Trailing whitespace (a carriage return too) is no part of a key or
+        # an entry: `owner/repo@sha:   ` is the record `owner/repo@sha`.
+        function uses_entry(s) { return (s ~ /^            - ["'"'"'][^"'"'"']+["'"'"']([[:space:]]+#.*|[[:space:]]*)$/ || s ~ /^            - [^[:space:]"'"'"'#][^[:space:]]*([[:space:]]+#.*|[[:space:]]*)$/) }
+        function entry_value(s) { sub(/^            - /, "", s); sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return unq(s) }
         BEGIN { indep = 0; cur = ""; in_uses = 0 }
         /^dependencies:[[:space:]]*$/ { indep = 1; print; next }
         !indep { print; next }
         # A record key or one of its own fields ends a nested `uses:` list.
         /^    [^[:space:]]/ || /^        [^[:space:]]/ { in_uses = 0 }
         record_key($0) {
-            key = $0; sub(/[[:space:]]+#.*$/, "", key); key = unq(key)
+            key = $0; sub(/[[:space:]]+#.*$/, "", key); sub(/[[:space:]]+$/, "", key); key = unq(key)
             sub(/^ +/, "", key); sub(/:$/, "", key); key = dep_id(key)
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             nrec[key]++; cur = key; next

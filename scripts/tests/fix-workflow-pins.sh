@@ -3284,6 +3284,56 @@ run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp48-cr"
 check "sp48 a CRLF lock is repaired and merged exactly as its LF twin, and keeps CRLF" \
   "[ \$rc -eq 3 ] && tr -d '\\r' < '$fx/sp48-cr/.github/workflows/actions.lock' | cmp -s - '$fx/sp48-lf/.github/workflows/actions.lock' && [ \$(grep -c \$'\\r\$' '$fx/sp48-cr/.github/workflows/actions.lock') -eq \$(wc -l < '$fx/sp48-cr/.github/workflows/actions.lock') ] && grep -q 'ossf/scorecard-action@' '$fx/sp48-cr/.github/workflows/actions.lock'"
 
+# ── Review cases (gitbot-fleet#615, round on 01ee2aa) ───────────────────────
+# pl5: a fixer with flock and one without contend for the same sentinel. A
+# run that has flock still waits on the directory a flock-less run holds,
+# reports it and exits 2 with nothing changed; once it is free the run
+# repairs and removes the sentinel it took.
+mkdir -p "$fx/pl5/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/pl5/.github/workflows/ci.yml"
+cp "$fx/pl5/.github/workflows/ci.yml" "$fx/pl5-before.yml"
+pl5_key=$(cd "$fx/pl5" && pwd -P | tr -d '\n' | sha256sum | cut -c1-16)
+mkdir "$fx/pin-fixer-$pl5_key.lock.d"; echo 4343 > "$fx/pin-fixer-$pl5_key.lock.d/pid"
+PIN_FIXER_LOCK_DIR="$fx" PIN_FIXER_LOCK_WAIT=1 run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl5"
+check "pl5 a run with flock waits on the sentinel a flock-less run holds: exit 2, nothing changed" \
+  "[ \$rc -eq 2 ] && grep -q 'held by pid 4343' <<<\"\$out\" && cmp -s '$fx/pl5-before.yml' '$fx/pl5/.github/workflows/ci.yml'"
+rm -rf "$fx/pin-fixer-$pl5_key.lock.d"
+PIN_FIXER_LOCK_DIR="$fx" PIN_FIXER_LOCK_WAIT=1 run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl5"
+check "pl5 with the sentinel free the run with flock repairs and removes the sentinel it took" \
+  "[ \$rc -eq 0 ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/pl5/.github/workflows/ci.yml' && [ ! -e '$fx/pin-fixer-$pl5_key.lock.d' ]"
+
+# sp49: a dependency record key followed by trailing spaces is a record: the
+# merger keeps it, with its fields, when it rewrites the lock.
+sp_flow_fixture "$fx/sp49" "        uses:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n" "        uses:\n            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\n    'other/action@3d3c42e5aac5ba805825da76410c181273ba90b1':   \n        ref: 'v7.0.1'\n        commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp49"
+check "sp49 a record key with trailing spaces survives the merge with its fields" \
+  "[ \$rc -eq 3 ] && grep -q \"^    'other/action@3d3c42e5aac5ba805825da76410c181273ba90b1':\" '$fx/sp49/.github/workflows/actions.lock' && grep -q \"^        ref: 'v7.0.1'\$\" '$fx/sp49/.github/workflows/actions.lock'"
+
+# tc38 / sp50: an anchor whose double-quoted value hides the reference behind
+# YAML escapes (`"\x64tolnay/..."`) holds that reference, decoded as YAML
+# reads it: the alias of it is reported (exit 2), never passed as OK.
+mkdir -p "$fx/tc38/.github/workflows" "$fx/sp50/.github/workflows"
+cat > "$fx/tc38/.github/workflows/x.yml" <<'YML'
+env:
+  RUST: &rust "\x64tolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"
+jobs:
+  check:
+    steps:
+      - uses: *rust
+YML
+cp "$fx/tc38/.github/workflows/x.yml" "$fx/tc38-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc38"
+check "tc38 an alias of an escaped double-quoted toolchain anchor is reported, exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 6' <<<\"\$out\" && cmp -s '$fx/tc38-before.yml' '$fx/tc38/.github/workflows/x.yml'"
+printf 'env:\n  CALL: &call "\\x68yperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s"\njobs:\n  rust:\n    uses: *call\n' "$STALE_A" > "$fx/sp50/.github/workflows/ci.yml"
+cp "$fx/sp50/.github/workflows/ci.yml" "$fx/sp50-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp50"
+check "sp50 an alias of an escaped double-quoted reusable anchor holding a dead pin is UNSUPPORTED, exit 2" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:5: .*known-dead pin held by the anchor' <<<\"\$out\" && cmp -s '$fx/sp50-before.yml' '$fx/sp50/.github/workflows/ci.yml'"
+ya_out=$(printf '%s\n' 'A: &a "\x6fcto/r\u0065po@\"x\"\\\/"' 'B: &b "x\ny\U0001F600z"' | awk "$(cat "$fleet/scripts/lib/yaml-anchors.awk")"'{ anchor_defs($0, d); for (k in d) printf "%s=%s|", k, d[k] }')
+check "yaml-anchors decodes ASCII escapes and maps anything else to a byte no reference holds" \
+  "[ \"\$ya_out\" = \"\$(printf 'a=octo/repo@\"x\"\\\\/|b=x\\001y\\001z|')\" ]"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

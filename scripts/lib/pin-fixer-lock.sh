@@ -10,10 +10,12 @@
 # repository before it reads anything: their edits never interleave (one's
 # `sed -i` landing between another's read and write).
 #
-# Sourced, then `pin_fixer_lock <repo-path>`. The lock file lives outside the
-# checkout, named by the checkout's real path, so every fixer run on the same
-# checkout — by any path that reaches it — contends for the same file. It is
-# held until the fixer exits. A holder that does not go away within
+# Sourced, then `pin_fixer_lock <repo-path>`. The lock — a sentinel directory,
+# `pin-fixer-<key>.lock.d`, that every fixer holds, and with flock installed a
+# `pin-fixer-<key>.lock` file it takes first — lives outside the checkout,
+# keyed by the checkout's real path, so every fixer run on the same checkout
+# — by any path that reaches it, with or without flock — contends for the
+# same sentinel. It is held until the fixer exits. A holder that does not go away within
 # PIN_FIXER_LOCK_WAIT seconds (default 600) is reported and the fixer exits 2
 # having changed nothing: a dispatcher must not record that run as a clean
 # repair.
@@ -41,29 +43,33 @@ pin_fixer_lock() {
     wait="${PIN_FIXER_LOCK_WAIT:-600}"
     key=$(cd "$repo" 2>/dev/null && pwd -P || printf '%s' "$repo")
     key=$(printf '%s' "$key" | sha256sum | cut -c1-16)
-    if ! command -v flock >/dev/null 2>&1; then
-        pin_fixer_lock_mkdir "$repo" "$dir/pin-fixer-$key.lock.d" "$wait"
-        return 0
+    # Every fixer holds the directory sentinel; one that has flock takes the
+    # flock first, as well. A run with flock and one without (a host and a
+    # minimal container sharing the checkout) therefore contend for the same
+    # object, the directory, and still never hold the checkout together.
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"$dir/pin-fixer-$key.lock"
+        flock -w "$wait" 9 || {
+            echo "fix-workflow-pins: another workflow-pin fixer holds $repo (waited ${wait}s); nothing was changed" >&2
+            exit 2
+        }
     fi
-    exec 9>"$dir/pin-fixer-$key.lock"
-    flock -w "$wait" 9 || {
-        echo "fix-workflow-pins: another workflow-pin fixer holds $repo (waited ${wait}s); nothing was changed" >&2
-        exit 2
-    }
+    pin_fixer_lock_mkdir "$repo" "$dir/pin-fixer-$key.lock.d" "$wait"
 }
 
-# Without flock the same lock is a directory: `mkdir` either creates it or
-# fails because another fixer has, atomically, so two runs still never hold
-# it together. The holder's EXIT trap removes it (an interrupt or termination
-# exits through that trap too). A run killed outright leaves it behind; the
-# next fixer then waits, reports the directory and its recorded holder, and
-# exits 2 with nothing changed — it is never taken over silently, and never
-# skipped.
+# The lock every fixer holds is a directory: `mkdir` either creates it or
+# fails because another fixer has, atomically, so two runs never hold it
+# together, whether or not either has flock. The holder's EXIT trap removes
+# it (an interrupt or termination exits through that trap too). A run killed
+# outright leaves it behind; the next fixer then waits, reports the directory
+# and its recorded holder, and exits 2 with nothing changed — it is never
+# taken over silently (a recorded pid may belong to another pid namespace, so
+# a holder cannot be judged gone), and never skipped.
 pin_fixer_lock_mkdir() { # <repo> <lock-dir> <wait>
     local repo="$1" ldir="$2" wait="$3" waited=0
     until mkdir "$ldir" 2>/dev/null; do
         if [ "$waited" -ge "$wait" ]; then
-            echo "fix-workflow-pins: another workflow-pin fixer holds $repo (waited ${wait}s; flock is not installed, so the lock is the directory $ldir, held by pid $(cat "$ldir/pid" 2>/dev/null || echo unknown) — remove it by hand only if that run is gone); nothing was changed" >&2
+            echo "fix-workflow-pins: another workflow-pin fixer holds $repo (waited ${wait}s; the lock is the directory $ldir, held by pid $(cat "$ldir/pid" 2>/dev/null || echo unknown) — remove it by hand only if that run is gone); nothing was changed" >&2
             exit 2
         fi
         sleep 1
