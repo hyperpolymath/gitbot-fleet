@@ -476,7 +476,7 @@ execute_entry() {
                 if [[ "$PARALLEL" -gt 1 ]]; then repo_unlock; fi
                 verdict=$(outcome_verdict "$rc" "$before" "$after")
                 echo "        $verdict (exit $rc, targets $before -> $after)"
-                if [[ "$verdict" == failed ]]; then
+                if [[ "$verdict" == failed || "$verdict" == incomplete ]]; then
                     ((FAILED++)) || true
                 else
                     ((SUCCEEDED++)) || true

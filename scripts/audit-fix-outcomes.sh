@@ -20,17 +20,39 @@
 # print NA.
 set -euo pipefail
 LOG=$1; shift
-EX=(':!:**/.git/**' ':!:**/target/**' ':!:**/node_modules/**' ':!:**/_build/**' ':!:**/.lake/**' ':!:**/deps/**' ':!:**/vendor/**' ':!:**/dist/**' ':!:**/build/**' ':!:**/winget-pkgs/**')
-pred() { # repo rev pattern -> count of remaining hits
-  local repo=$1 rev=$2 pat=$3
+# The fixers' own exclusion list (lib/third-party-excludes.sh), as glob
+# pathspecs: with `glob` magic `**/` also matches no directory, so a
+# root-level vendor/ is excluded exactly as the fixers' find excludes it.
+# shellcheck source=lib/third-party-excludes.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/third-party-excludes.sh"
+EX=()
+for d in "${THIRD_PARTY_SKIP_DIRS[@]}"; do EX+=(":(exclude,glob)**/$d/**"); done
+IDR_EX=("${EX[@]}" ':(exclude,glob)**/.pack/**') # fix-believe-me.sh also skips .pack
+# grep_hits <repo> <git-grep args...>: the git grep output, or exit 1 when
+# git grep itself failed (status > 1: no PCRE, unreadable revision). Status 1
+# is "no match", which is a count of 0, not an error.
+grep_hits() {
+  local repo=$1 rc=0 out; shift
+  out=$(git -C "$repo" grep "$@" 2>/dev/null) || rc=$?
+  ((rc <= 1)) || return 1
+  printf '%s\n' "$out"
+}
+sum_counts() { awk -F: 'NF { s += $NF } END { print s + 0 }'; }
+pred() { # repo rev pattern -> count of remaining hits, or NA
+  local repo=$1 rev=$2 pat=$3 out
   case $pat in
-    recipe-shell-quote-vars) git -C "$repo" grep -P -h -c '\b(cd|cp|mv|rm|mkdir|rmdir|chmod|chown|echo) \$[A-Z_][A-Z0-9_]*' "$rev" -- '*.sh' '*.bash' "${EX[@]}" 2>/dev/null | awk -F: '{s+=$NF} END{print s+0}';;
+    recipe-shell-quote-vars)
+      out=$(grep_hits "$repo" -P -h -c '\b(cd|cp|mv|rm|mkdir|rmdir|chmod|chown|echo) \$[A-Z_][A-Z0-9_]*' "$rev" -- '*.sh' '*.bash' "${EX[@]}") || { echo NA; return; }
+      sum_counts <<< "$out";;
     # The removal recipe claimed to remove believe_me, so an annotated call
     # still counts against it. The annotate recipe is measured as its fixer's
     # --check measures it: a call is discharged by a PROOF_TODO line above.
-    recipe-remove-believe-me) git -C "$repo" grep -P -h -c '^(?!\s*--).*believe_me' "$rev" -- '*.idr' "${EX[@]}" 2>/dev/null | awk -F: '{s+=$NF} END{print s+0}';;
-    recipe-annotate-believe-me) git -C "$repo" grep -h -B1 -e believe_me "$rev" -- '*.idr' "${EX[@]}" 2>/dev/null |
-      awk '/^--$/ { prev = ""; next } !/^[[:space:]]*--/ && /believe_me/ && prev !~ /PROOF_TODO/ { n++ } { prev = $0 } END { print n + 0 }';;
+    recipe-remove-believe-me)
+      out=$(grep_hits "$repo" -P -h -c '^(?!\s*--).*believe_me' "$rev" -- '*.idr' "${IDR_EX[@]}") || { echo NA; return; }
+      sum_counts <<< "$out";;
+    recipe-annotate-believe-me)
+      out=$(grep_hits "$repo" -h -B1 -e believe_me "$rev" -- '*.idr' "${IDR_EX[@]}") || { echo NA; return; }
+      awk '/^--$/ { prev = ""; next } !/^[[:space:]]*--/ && /believe_me/ && prev !~ /PROOF_TODO/ { n++ } { prev = $0 } END { print n + 0 }' <<< "$out";;
     *) echo NA;;
   esac
 }

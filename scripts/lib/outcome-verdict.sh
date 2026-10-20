@@ -19,8 +19,8 @@
 #
 # Verdicts:
 #   verified    work found before, none after
-#   no_op       nothing to fix before the run
-#   incomplete  work remains after the run
+#   no_op       nothing to fix before the run, nothing after
+#   incomplete  work remains after the run (even if none was found before)
 #   unverified  the script has no predicate (no evidence either way)
 #   failed      the fix script exited non-zero
 #
@@ -45,12 +45,14 @@ outcome_verdict() {
         echo failed
     elif [[ "$before" == NA || "$after" == NA ]]; then
         echo unverified
+    elif ((after > 0)); then
+        # Work left after the run, including 0 -> n: a fixer that creates
+        # its own targets, or a tree changed under it, is not a no-op.
+        echo incomplete
     elif ((before == 0)); then
         echo no_op
-    elif ((after == 0)); then
-        echo verified
     else
-        echo incomplete
+        echo verified
     fi
 }
 

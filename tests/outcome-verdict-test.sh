@@ -16,6 +16,8 @@
 #      never runs).
 #   5. Deprecated recipe ids report under their replacement.
 #   6. Two parallel jobs on one repo record one fix, not two (repo_lock).
+#   7. The E1 replay (audit-fix-outcomes.sh) counts as the fixers do, and
+#      reads NA when git grep cannot run.
 
 set -euo pipefail
 
@@ -43,6 +45,7 @@ check() {
 check "exit 0, work found, none left"      verified   "$(outcome_verdict 0 3 0)"
 check "exit 0, nothing to fix"             no_op      "$(outcome_verdict 0 0 0)"
 check "exit 0, work remains"               incomplete "$(outcome_verdict 0 3 1)"
+check "exit 0, targets appear (0 -> n)"    incomplete "$(outcome_verdict 0 0 2)"
 check "exit 0, no predicate"               unverified "$(outcome_verdict 0 NA NA)"
 check "exit 0, predicate lost after fix"   unverified "$(outcome_verdict 0 3 NA)"
 check "non-zero exit wins over counts"     failed     "$(outcome_verdict 1 3 0)"
@@ -174,6 +177,32 @@ job() {
 job 1 & job 2 & wait
 check "two jobs on one repo record one fix" "no_op verified" \
     "$(sort "$TMP/job1" "$TMP/job2" | paste -sd' ')"
+
+# --- 7. the E1 replay agrees with the fixers ------------------------------
+# A root-level vendor/ (and .pack/ for Idris) is excluded as the fixers'
+# find excludes it, and a git grep that cannot run reads NA, never 0.
+ar="$TMP/audit/ar"
+mkdir -p "$ar/vendor" "$ar/.pack" "$TMP/shim-git"
+printf 'cd $A\n' > "$ar/vendor/a.sh"
+printf 'f = believe_me 1\n' > "$ar/A.idr"
+printf 'g = believe_me 2\n' > "$ar/.pack/B.idr"
+git -C "$ar" init -q -b main
+git -C "$ar" add -A
+GIT_COMMITTER_DATE=2026-01-01T00:00:00Z git -C "$ar" -c user.email=t@t -c user.name=t \
+    commit -q --date=2026-01-01T00:00:00Z -m fixture
+git -C "$ar" update-ref refs/remotes/origin/main HEAD
+printf '%s\n' \
+    '{"repo":"ar","pattern":"recipe-shell-quote-vars","outcome":"success","fixed_at":"2026-02-01T00:00:00Z"}' \
+    '{"repo":"ar","pattern_id":"PA004","recipe_id":"recipe-annotate-believe-me","outcome":"success","timestamp":"2026-02-01T00:00:00Z"}' \
+    > "$TMP/audit/log.jsonl"
+audit() { "$ROOT/scripts/audit-fix-outcomes.sh" "$TMP/audit/log.jsonl" "$ar" | awk -F'\t' 'NR > 1 { print $2 "=" $6 }' | sort | paste -sd' '; }
+check "replay counts as the fixers do" \
+    "recipe-annotate-believe-me=$(recipe_check_count "$ROOT/scripts/fix-believe-me.sh" "$ar") recipe-shell-quote-vars=$(recipe_check_count "$fixer" "$ar")" \
+    "$(audit)"
+printf '#!/bin/sh\nfor a; do [ "$a" = grep ] && exit 128; done\nexec %s "$@"\n' "$(command -v git)" > "$TMP/shim-git/git"
+chmod +x "$TMP/shim-git/git"
+check "replay predicate failure is NA" "recipe-annotate-believe-me=NA recipe-shell-quote-vars=NA" \
+    "$(PATH="$TMP/shim-git:$PATH" audit)"
 
 echo ""
 echo "Results: $pass passed, $fail failed"

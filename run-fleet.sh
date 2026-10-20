@@ -465,8 +465,8 @@ cmd_fix() {
                 after=$(recipe_check_count "$fix_path" "$repo_path")
                 verdict=$(outcome_verdict "$rc" "$before" "$after")
 
-                if [[ "$verdict" == failed ]]; then
-                    echo -e "${RED}FAILED${NC}"
+                if [[ "$verdict" == failed || "$verdict" == incomplete ]]; then
+                    echo -e "${RED}${verdict^^}${NC} ($before -> $after)"
                     ((total_failed++)) || true
                 else
                     echo -e "${GREEN}${verdict}${NC} ($before -> $after)"

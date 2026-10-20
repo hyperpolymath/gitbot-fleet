@@ -91,8 +91,8 @@ They went in commit `8225e55f` (2026-02-27, "Auto-commit: Sync changes", owner).
 
 * *Verdicts, not exit codes.* `scripts/lib/outcome-verdict.sh` computes a verdict from the recipe's predicate before and after the fix:
 ** `verified`: work found before, none after.
-** `no_op`: nothing to fix before.
-** `incomplete`: work remains.
+** `no_op`: nothing to fix before, and nothing after.
+** `incomplete`: work remains after the run, including targets that appear during it (0 → n). Run summaries count it with the failures.
 ** `unverified`: no predicate.
 ** `failed`: non-zero exit.
 * *Writers.*
@@ -109,7 +109,7 @@ They went in commit `8225e55f` (2026-02-27, "Auto-commit: Sync changes", owner).
 ** `recipe-annotate-believe-me` is the canonical id. `recipe-remove-believe-me` stays as a registry alias, listed under `deprecated_recipe_ids`, because Hypatia still emits it. `dispatch-runner.sh` reports outcomes under the canonical id, so a verified annotation never raises the removal recipe's confidence.
 ** The script's predicate measures what it actually does: un-annotated `believe_me` calls. E1 above measured the claimed effect (removal).
 * *Reporting.* `learning-monitor.sh` counted a `.success` field that no row has. It now reports per verdict, with pre-verdict rows shown as legacy.
-* *Replay.* `scripts/audit-fix-outcomes.sh` reruns this experiment. It reads the rows of all three writers. It measures `recipe-remove-believe-me` by removal and `recipe-annotate-believe-me` by annotation, as each claims. `E1-replay-2026-10-20.tsv` is its output for the rows above. The HEAD column moves as the repos do.
+* *Replay.* `scripts/audit-fix-outcomes.sh` reruns this experiment. It reads the rows of all three writers. It excludes the fixers' own third-party directories (`lib/third-party-excludes.sh`), and reports NA, not 0, when `git grep` cannot run. Rerun with those changes, it reproduces `E1-replay-2026-10-20.tsv` byte for byte. It measures `recipe-remove-believe-me` by removal and `recipe-annotate-believe-me` by annotation, as each claims. `E1-replay-2026-10-20.tsv` is its output for the rows above. The HEAD column moves as the repos do.
 
 All of this sits behind the automation quarantine (exit 78), which this change does not lift. It is a precondition for lifting it.
 
