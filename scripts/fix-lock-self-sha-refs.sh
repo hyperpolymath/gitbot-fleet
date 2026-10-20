@@ -93,9 +93,23 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             # lines below, which this reader skips as scalar text. Such a site
             # cannot be classified; the caller refuses (exit 2) rather than
             # read the record it names as `unknown`.
+            # A value given as an alias (`uses: *call`) is the anchor'"'"'s value
+            # (`CALL: &call owner/repo/.github/workflows/x.yml@<sha>`), which
+            # YAML requires to come first; an alias of no anchor read here
+            # cannot be classified either.
             function site(kind, r) {
+                if (r ~ /^\*/) r = (substr(r, 2) in anchor) ? anchor[substr(r, 2)] : ""
                 if (r == "" || r ~ /^#/ || r ~ /^[|>][-+0-9]*$/) print "F\t" FILENAME ":" FNR
                 else print kind "\t" r
+            }
+            # Every anchor on line s whose value is a reference (`&name a/b@ref`).
+            function note_anchors(s,   t, a, v) {
+                t = s
+                while (match(t, /&[A-Za-z0-9_.-]+[[:space:]]+["'"'"']?[A-Za-z0-9_.-]+\/[^[:space:]"'"'"',}]*@[^[:space:]"'"'"',}]+/)) {
+                    a = substr(t, RSTART + 1, RLENGTH - 1); t = substr(t, RSTART + RLENGTH)
+                    v = a; sub(/^[^[:space:]]+[[:space:]]+["'"'"']?/, "", v); sub(/[[:space:]].*$/, "", a)
+                    anchor[a] = v
+                }
             }
             function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }
             # The line with its trailing comment dropped and every quoted
@@ -175,7 +189,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 m = flow_uses_all(s, fe)
                 for (j = 1; j <= m; j++) {
                     fk = flow_kind(s, out_at[j], parent, item)
-                    if (fk != "" && (!item || steps)) print fk "\t" fe[j]
+                    if (fk != "" && (!item || steps)) site(fk, fe[j])
                 }
             }
             # A flow collection that opens on line s and does not close there
@@ -199,6 +213,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 ind = indent_of($0)
                 if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else next }
                 if (!plain($0)) next
+                note_anchors($0)
                 if (fdepth > 0) {
                     ml = masked($0); facc = facc " " ml; fdepth += depth_of(ml)
                     if (fdepth <= 0) { fdepth = 0; flow_emit(facc, fparent, fitem, fsteps) }

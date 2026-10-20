@@ -353,6 +353,23 @@ while IFS= read -r -d '' wf; do
             fi
         done < <(mask_line "$(sed -n "${lineno}p" "$wf")" | grep -oiE "${REUSABLE_REF_RE}${FALLBACK_REF_END}" | grep -oiE "$REUSABLE_REF_RE" || true)
     done
+    # A job's `uses:` given as an alias (`uses: *call`) runs the anchor's
+    # value, defined elsewhere in the file (`CALL: &call owner/repo/...@<sha>`):
+    # the rewrite reads no reference on the key line. A known-dead pin as
+    # that value is reported; the anchor is not rewritten from here.
+    for lineno in $klines; do
+        alias=$(sed -n "${lineno}p" "$wf" | grep -oE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*\*[A-Za-z0-9_.-]+" | sed 's/.*\*//' || true)
+        [ -n "$alias" ] || continue
+        alias_re=$(printf '%s' "$alias" | sed 's/\./\\./g')
+        while IFS= read -r ref; do
+            [ -n "$ref" ] || continue
+            sha="${ref##*@}"
+            if lookup_replacement "${ref%@*}" "${sha,,}"; then
+                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` runs $ref, a known-dead pin held by the anchor \`&$alias\`. Fix by hand; the file was not changed." >&2
+                skip=1
+            fi
+        done < <(grep -oE "&${alias_re}[[:space:]]+[\"']?[^[:space:]\"',}]+" "$wf" | grep -oiE "${REUSABLE_REF_RE}" || true)
+    done
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()
     for lineno in $klines; do

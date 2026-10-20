@@ -2846,6 +2846,58 @@ TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls31 a folded uses: inside run: | is text: the action's record still gets its tag" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls31/.github/workflows/actions.lock'"
 
+# tc27: an alias of an anchor that holds the SHA-pinned toolchain reference
+# (`uses: *rust`) runs that action all the same: UNSUPPORTED, never "fine".
+mkdir -p "$fx/tc27/.github/workflows"
+printf 'env: { ACTION: &rust dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 }\njobs:\n  check:\n    steps:\n      - uses: *rust\n' > "$fx/tc27/.github/workflows/x.yml"
+cp "$fx/tc27/.github/workflows/x.yml" "$fx/tc27-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc27"
+check "tc27 an aliased SHA-pinned toolchain step is UNSUPPORTED: exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 5\\.' <<<\"\$out\" && cmp -s '$fx/tc27-before.yml' '$fx/tc27/.github/workflows/x.yml'"
+
+# tc28 / tc29: TOOLCHAIN is written as a YAML value, so it must be a
+# toolchain name; a number YAML would read as a float is written quoted.
+mkdir -p "$fx/tc28/.github/workflows" "$fx/tc29/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/tc28/.github/workflows/x.yml"
+cp "$fx/tc28/.github/workflows/x.yml" "$fx/tc28-before.yml"
+cp "$fx/tc28/.github/workflows/x.yml" "$fx/tc29/.github/workflows/x.yml"
+run_fix env TOOLCHAIN=$'stable\n        timeout-minutes: 1' bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc28"
+check "tc28 a TOOLCHAIN that is not a toolchain name is refused: exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'is not a toolchain name' <<<\"\$out\" && cmp -s '$fx/tc28-before.yml' '$fx/tc28/.github/workflows/x.yml'"
+run_fix env TOOLCHAIN=1.80 bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc29"
+check "tc29 TOOLCHAIN=1.80 is written quoted, never read as the float 1.8" \
+  "[ \$rc -eq 0 ] && grep -q \"^          toolchain: '1.80'\$\" '$fx/tc29/.github/workflows/x.yml'"
+
+# sp37: a job calling `uses: *call`, the anchor holding a known-dead pin:
+# UNSUPPORTED, never "OK" with the dead caller left in place.
+mkdir -p "$fx/sp37/.github/workflows"
+printf 'env: { CALL: &call %s@%s }\njobs:\n  rust:\n    uses: *call\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp37/.github/workflows/ci.yml"
+cp "$fx/sp37/.github/workflows/ci.yml" "$fx/sp37-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp37"
+check "sp37 an aliased dead reusable call is UNSUPPORTED: exit 2, file untouched, never OK" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*ci.yml:4:.*uses: \\*call' <<<\"\$out\" && ! grep -q '^OK' <<<\"\$out\" && cmp -s '$fx/sp37-before.yml' '$fx/sp37/.github/workflows/ci.yml'"
+
+# ls32 / ls33: an aliased job call is classified by its anchor's value, so a
+# reusable called through `uses: *call` keeps its SHA ref; an alias with no
+# anchor read before it cannot be classified and the lock is left alone.
+mkdir -p "$fx/ls32/.github/workflows" "$fx/ls33/.github/workflows"
+cat > "$fx/ls32/.github/workflows/ci.yml" <<YML
+env: { CALL: &call foo/reus/.github/workflows/x.yml@$SHA_A }
+jobs:
+  call:
+    uses: *call
+YML
+lock_records "$fx/ls32" "foo/reus@$SHA_A"
+TAG_MAP="$fx/ls29-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls32" --offline
+check "ls32 a reusable called through an alias keeps its SHA ref" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: '$SHA_A'\$\" '$fx/ls32/.github/workflows/actions.lock'"
+printf 'jobs:\n  check:\n    steps:\n      - uses: *nowhere\n' > "$fx/ls33/.github/workflows/ci.yml"
+lock_records "$fx/ls33" "foo/reus@$SHA_A"
+cp "$fx/ls33/.github/workflows/actions.lock" "$fx/ls33-before.lock"
+TAG_MAP="$fx/ls29-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls33" --offline
+check "ls33 an alias of no anchor is refused: exit 2, lock untouched" \
+  "[ \$rc -eq 2 ] && cmp -s '$fx/ls33-before.lock' '$fx/ls33/.github/workflows/actions.lock'"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

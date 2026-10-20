@@ -42,7 +42,8 @@
 #   * a step written as a flow mapping (`- { name: x, uses: ... }`), a
 #     one-line `steps: [ { uses: ... } ]`, a `uses:` whose value continues
 #     below its key (`uses: >-`, or the reference alone on the next line),
-#     or a `with:` whose value this
+#     a `uses: *alias` of an anchored pinned reference, or a `with:` whose
+#     value this
 #     parser does not read (`with: &anchor`, `with: *alias`) is NOT
 #     rewritten: the script names the line as UNSUPPORTED and exits 2 rather
 #     than report the file as clean. Fix it by hand.
@@ -57,6 +58,8 @@
 #   fix-rust-toolchain-input.sh <workflow.yml>
 #   fix-rust-toolchain-input.sh <repo-path>   (every .github/workflows/*.yml)
 #   TOOLCHAIN=1.85.0 fix-rust-toolchain-input.sh <repo-path>
+#     (a toolchain name only — letters, digits, `.`, `_`, `-`; anything else
+#     exits 2 having changed nothing)
 #
 # Pairs with Hypatia.Rules.WorkflowAudit.check_sha_pinned_toolchain_without_input/1
 # (WF026) and recipe id `WF026` in fix-script-registry.json.
@@ -64,6 +67,17 @@
 set -euo pipefail
 
 TOOLCHAIN="${TOOLCHAIN:-stable}"
+# The override is written into the workflow as a YAML value, so only a
+# rustup toolchain name is accepted (`stable`, `1.85.0`, `nightly-2026-01-01`,
+# `stable-x86_64-unknown-linux-gnu`): never text that could end the value,
+# add a key or reach awk'"'"'s replacement syntax. A number YAML would read as a
+# float (`1.80` is 1.8) is written quoted.
+if [[ ! "$TOOLCHAIN" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    printf 'fix-rust-toolchain-input: TOOLCHAIN=%q is not a toolchain name (letters, digits, ., _, -); nothing was changed\n' "$TOOLCHAIN" >&2
+    exit 2
+fi
+TOOLCHAIN_YAML="$TOOLCHAIN"
+if [[ "$TOOLCHAIN" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then TOOLCHAIN_YAML="'$TOOLCHAIN'"; fi
 TARGET="${1:?Usage: fix-rust-toolchain-input.sh <workflow.yml | repo-path>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh):
@@ -93,7 +107,7 @@ apply_to_file() {
 
     tmp=$(mktemp)
     set +e
-    awk -v toolchain="$TOOLCHAIN" '
+    awk -v toolchain="$TOOLCHAIN_YAML" '
         # Return the number of leading spaces in source line s.
         function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
         # Column of a key, with a list dash counted as indentation: `  - with:` -> 4.
@@ -229,6 +243,14 @@ apply_to_file() {
                 if (!flow_item && length(key_indent_of(buf[i])) == skey && tolower(site_view(buf[i])) ~ USES_OPEN_RE)
                     for (j = i + 1; j <= n && !(plain(buf[j]) && indent_of(buf[j]) <= skey); j++)
                         if (sha_ref(buf[j])) unrec[++nunrec] = lnum[j]
+                # The step'"'"'s own `uses:` given as an alias (`uses: *rust`) of an
+                # anchor that holds a SHA-pinned toolchain reference: the step
+                # runs that action, but the reference is not where the parser
+                # places a step'"'"'s action. Reported, never passed over.
+                if ((flow_item || length(key_indent_of(buf[i])) == skey) && match(tolower(site_view(buf[i])), USES_ALIAS_RE)) {
+                    m = substr(tolower(site_view(buf[i])), RSTART, RLENGTH); sub(/^.*\*/, "", m)
+                    if (m in tc_anchor) unrec[++nunrec] = lnum[i]
+                }
                 if (!sha_ref(buf[i])) continue
                 if (!flow_item && tolower(buf[i]) ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
                 if (!flow_item && i > 1 && indent_of(buf[i]) > skey) continue
@@ -347,6 +369,8 @@ apply_to_file() {
             # Matched against the line in lower case.
             USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
             USES_SITE_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:],}]+[[:space:]]+)?" Q "dtolnay/rust-toolchain@[0-9a-f]+"
+            # A `uses:` whose value is an alias, `*name` (matched in lower case).
+            USES_ALIAS_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*\\*[a-z0-9_.-]+"
             # A `uses:` key whose value is not on its line: a block scalar
             # (`uses: >-`) or nothing at all, the reference on the lines below.
             USES_OPEN_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:],}]+[[:space:]]*)?([|>][-+0-9]*)?[[:space:]]*$"
@@ -372,6 +396,17 @@ apply_to_file() {
         }
         {
             ind = indent_of($0)
+            # Every anchor whose value is a SHA-pinned toolchain reference
+            # (`ACTION: &rust dtolnay/rust-toolchain@<sha>`), wherever it is
+            # defined: an alias of it is that reference.
+            if (plain($0)) {
+                t = $0
+                while (match(t, /&[A-Za-z0-9_.-]+[[:space:]]+["'"'"']?[^[:space:]"'"'"',}]+/)) {
+                    a = substr(t, RSTART + 1, RLENGTH - 1); t = substr(t, RSTART + RLENGTH)
+                    v = a; sub(/^[^[:space:]]+[[:space:]]+["'"'"']?/, "", v); sub(/[[:space:]].*$/, "", a)
+                    if (sha_ref(v)) tc_anchor[tolower(a)] = 1
+                }
+            }
             # A block scalar outside any step (`FIXTURE: |` under `env:`) is text
             # until a plain line at its key'"'"'s indentation or shallower.
             if (!in_step && in_scalar) {
@@ -405,7 +440,7 @@ apply_to_file() {
         END {
             flush()
             if (nunrec) {
-                printf "UNSUPPORTED  %s: %d SHA-pinned dtolnay/rust-toolchain reference(s) the parser cannot place as a block-style step key (a flow-style `- { ... }` step, or a `uses:` value continued below its key?), line(s):", FILENAME, nunrec > "/dev/stderr"
+                printf "UNSUPPORTED  %s: %d SHA-pinned dtolnay/rust-toolchain reference(s) the parser cannot place as a block-style step key (a flow-style `- { ... }` step, a `uses:` value continued below its key, or an alias of an anchored reference?), line(s):", FILENAME, nunrec > "/dev/stderr"
                 for (j = 1; j <= nunrec; j++) printf " %d", unrec[j] > "/dev/stderr"
                 printf ". Fix by hand; the file was not changed.\n" > "/dev/stderr"
                 exit 2
