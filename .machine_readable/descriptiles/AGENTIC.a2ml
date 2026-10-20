@@ -42,7 +42,8 @@ release-claim-requires-hard-pass = true
 # by rust.yml), and two data files that carry the SAME facts hypatia detects
 # on, so detection and repair cannot drift apart:
 #   scripts/fix-rust-toolchain-input.sh   WF026  SHA-pinned dtolnay/rust-toolchain with no toolchain: input
-#   scripts/fix-stale-reusable-pin.sh     WF027, PIN-003, WF016  a caller pinned at a reusable revision the estate has MEASURED dead
+#   scripts/fix-stale-reusable-pin.sh     WF027, PIN-003  a caller pinned at a reusable revision the estate has MEASURED dead
+#                                         (not WF016: its orphan SHAs have no recorded replacement in the table)
 #   scripts/fix-lock-self-sha-refs.sh     PI006  actions.lock record whose ref is its own SHA (GitHub: "invalid lockfile pin")
 #   scripts/lib/stale-reusable-pins.tsv   the dead revisions and the one replacement each moves to
 #   scripts/lib/action-ref-tags.tsv       the tag that resolves to each commit the estate pins by SHA

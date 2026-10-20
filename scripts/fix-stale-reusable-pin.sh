@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 # fix-stale-reusable-pin.sh — move a caller off a reusable-workflow pin that is
-# KNOWN DEAD. Hypatia rules WF016 (orphan pin) and PI001 via PIN-003 (standards
-# pins in a measured dead window); the auto-fix half of
+# KNOWN DEAD. Hypatia rules WF027 and PI001 via PIN-003 (standards pins in a
+# measured dead window), for the pins scripts/lib/stale-reusable-pins.tsv
+# names. WF016's orphan pins are not in that table, so they are not this
+# script's until a human records each one's replacement there; the auto-fix half of
 # `reusable_workflow_sha_bump_needs_propagation` for pins the estate has already
 # diagnosed.
 #
@@ -367,7 +369,7 @@ yaml_context() { # <workflow.yml>
                 if ((c == "\"" || c == sq) && scalar_start(seen, d)) {
                     j = i + 1
                     if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
-                    else { while (j <= n && substr(s, j, 1) != sq) j++ }
+                    else { while (j <= n && (substr(s, j, 1) != sq || substr(s, j + 1, 1) == sq)) j += (substr(s, j, 1) == sq ? 2 : 1) }
                     seen = seen "x"; i = j + 1; continue
                 }
                 if ((c == "{" || c == "[") && (d > 0 || seen ~ VALUE_START_RE)) d++
@@ -451,7 +453,7 @@ mask_line() {
             if (c == "\"" || c == sq) {
                 j = i + 1
                 if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
-                else { while (j <= n && substr(s, j, 1) != sq) j++ }
+                else { while (j <= n && (substr(s, j, 1) != sq || substr(s, j + 1, 1) == sq)) j += (substr(s, j, 1) == sq ? 2 : 1) }
                 if (substr(s, j + 1) ~ /^[[:space:]]*:/ || tolower(out) ~ tail || out ~ /^[[:space:]]*$/) out = out substr(s, i, j - i + 1)
                 else out = out c c
                 i = j + 1; continue
@@ -739,7 +741,16 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                 while ((i = index(l, o)) > 0) { out = out substr(s, 1, i - 1) new; s = substr(s, i + length(old)); l = substr(l, i + length(old)) }
                 return out s
             }
-            sec == "d" && /^    [^[:space:]#]/ { k = $0; sub(/^    /, "", k); sub(/[[:space:]]+#.*$/, "", k); sub(/:[[:space:]]*$/, "", k); gsub(/["'"'"']/, "", k); inrec = (tolower(k) == tolower(repo "@" stale)) }
+            # The key is read up to its own colon, so a record written as a
+            # flow mapping on its key line (`'"'"'repo@sha'"'"': { ref: ..., commit:
+            # ... }`) is the record too: the whole line is then its key, ref and
+            # commit, and is moved as one.
+            sec == "d" && /^    [^[:space:]#]/ {
+                k = $0; sub(/^    /, "", k); sub(/[[:space:]]+#.*$/, "", k)
+                if (k ~ /^["'"'"']/) { q = substr(k, 1, 1); k = substr(k, 2); k = substr(k, 1, index(k, q) - 1) }
+                else sub(/:([[:space:]].*)?$/, "", k)
+                inrec = (tolower(k) == tolower(repo "@" stale))
+            }
             # The field keys may be quoted (`"ref": ...`, `'"'"'commit'"'"': ...`), as
             # a hand-written record may write them: the same fields.
             sec == "d" && inrec && (/^    [^[:space:]#]/ || /^        ["'"'"']?(ref|commit)["'"'"']?[[:space:]]*:/) {

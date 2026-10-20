@@ -108,9 +108,10 @@ apply_to_file() {
     [ -f "$f" ] || { echo "SKIP (not a file): $f" >&2; return 0; }
     # GitHub resolves `Dtolnay/Rust-Toolchain` to the same action: the name is
     # matched in either case here and in the parser below. A double-quoted
-    # scalar may spell it with escapes (`"\x64tolnay/..."`), which only the
-    # parser decodes, so a file holding such an escape is read too.
-    grep -qiE 'dtolnay/rust-toolchain@[0-9a-fA-F]{40}|\\[xuU][0-9a-fA-F]' "$f" || return 0
+    # scalar may spell it with escapes (`"\x64tolnay/..."`, `"dtolnay\/..."`),
+    # which only the parser decodes, so a file holding any backslash is read
+    # too.
+    grep -qiE 'dtolnay/rust-toolchain@[0-9a-fA-F]{40}|[\]' "$f" || return 0
 
     tmp=$(mktemp)
     set +e
@@ -149,7 +150,7 @@ apply_to_file() {
                 if (c == "\"" || c == "'"'"'") {
                     j = i + 1
                     if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
-                    else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
+                    else { while (j <= n && (substr(s, j, 1) != "'"'"'" || substr(s, j + 1, 1) == "'"'"'")) j += (substr(s, j, 1) == "'"'"'" ? 2 : 1) }
                     body = substr(s, i + 1, j - i - 1)
                     if (depth == 1) {
                         if (substr(s, j + 1) ~ /^[[:space:]]*:/) out = out c body c
@@ -193,7 +194,7 @@ apply_to_file() {
                 if (c == "\"" || c == "'"'"'") {
                     j = i + 1
                     if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
-                    else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
+                    else { while (j <= n && (substr(s, j, 1) != "'"'"'" || substr(s, j + 1, 1) == "'"'"'")) j += (substr(s, j, 1) == "'"'"'" ? 2 : 1) }
                     body = substr(s, i + 1, j - i - 1)
                     if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
                     else out = out c c

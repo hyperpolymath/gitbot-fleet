@@ -130,7 +130,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     if (c == "\"" || c == "'"'"'") {
                         j = i + 1
                         if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
-                        else { while (j <= n && substr(s, j, 1) != "'"'"'") j++ }
+                        else { while (j <= n && (substr(s, j, 1) != "'"'"'" || substr(s, j + 1, 1) == "'"'"'")) j += (substr(s, j, 1) == "'"'"'" ? 2 : 1) }
                         body = substr(s, i + 1, j - i - 1)
                         if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
                         else out = out c c
@@ -221,6 +221,10 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 ind = indent_of($0)
                 if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else next }
                 if (!plain($0)) next
+                # Read as YAML reads it: a double-quoted value spelling the
+                # reference with escapes (`uses: "\x66oo/bar@<sha>"`) runs
+                # the reference it decodes to (lib/yaml-anchors.awk).
+                $0 = yaml_decode_dq($0)
                 note_anchors($0)
                 if (fdepth > 0) {
                     ml = masked($0); facc = facc " " ml; fdepth += depth_of(ml)

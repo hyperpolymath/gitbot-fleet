@@ -3450,6 +3450,60 @@ TAG_MAP="$fx/ls42-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls42 control: a reusable's flow-mapping record keeps its SHA ref, exit 0" \
   "[ \$rc -eq 0 ] && cmp -s '$fx/ls42c-before.lock' '$fx/ls42c/.github/workflows/actions.lock'"
 
+# ── Review cases (gitbot-fleet#615, round on 23e1337) ───────────────────────
+# sp55: a doubled quote inside a single-quoted sibling is a quote, not the
+# scalar's end: its braces are text, the flow job stays open, and the
+# column-0 dead call below it is reported (exit 2), never passed as data.
+mkdir -p "$fx/sp55/.github/workflows"
+printf "jobs: {\nrust: {\nname: 'it''s }}',\nuses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n}\n}\n" "$STALE_A" > "$fx/sp55/.github/workflows/ci.yml"
+cp "$fx/sp55/.github/workflows/ci.yml" "$fx/sp55-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp55"
+check "sp55 braces inside a single-quoted scalar with a doubled quote keep the flow job open: UNSUPPORTED, exit 2" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:4:' <<<\"\$out\" && cmp -s '$fx/sp55-before.yml' '$fx/sp55/.github/workflows/ci.yml'"
+
+# sp56: a stale dependency record written as a flow mapping on its key line
+# moves with its caller: key, ref and commit, on that line.
+mkdir -p "$fx/sp56/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp56/.github/workflows/ci.yml"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'hyperpolymath/standards@%s'\ndependencies:\n    'hyperpolymath/standards@%s': { ref: '%s', commit: 'sha1-%s' }\n" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" > "$fx/sp56/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp56"
+check "sp56 a flow-mapping stale record is renamed with its caller: key, ref and commit, no stale SHA left" \
+  "[ \$rc -eq 3 ] && grep -qxF \"    'hyperpolymath/standards@$GOOD': { ref: '$GOOD', commit: 'sha1-$GOOD' }\" '$fx/sp56/.github/workflows/actions.lock' && ! grep -q \"$STALE_A\" '$fx/sp56/.github/workflows/actions.lock'"
+
+# tc40: `\/` is a YAML escape too: `"dtolnay\/rust-toolchain@<sha>"` is the
+# SHA-pinned step, read past the prefilter, and gets its input.
+mkdir -p "$fx/tc40/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: "dtolnay\\/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"\n' > "$fx/tc40/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc40"
+check "tc40 a \\/-escaped toolchain reference reaches the parser and the step gets toolchain:, exit 0" \
+  "[ \$rc -eq 0 ] && grep -q '^          toolchain: stable\$' '$fx/tc40/.github/workflows/x.yml'"
+
+# ls43: a step's `uses:` spelling the action with escapes is that action: the
+# self-SHA record it proves gets its tag.
+mkdir -p "$fx/ls43/.github/workflows"
+printf 'jobs:\n  build:\n    steps:\n      - uses: "\\x66oo/bar@%s"\n' "$SHA_B" > "$fx/ls43/.github/workflows/ci.yml"
+lock_records "$fx/ls43" "foo/bar@$SHA_B"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls43-tags.tsv"
+TAG_MAP="$fx/ls43-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls43" --offline
+check "ls43 an escaped step reference proves the action: its self-SHA record gets its tag, exit 0" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls43/.github/workflows/actions.lock'"
+
+# The rules AGENTIC.a2ml assigns to each workflow-pin fixer are the ones the
+# registry routes to it: a rule advertised but not registered is never
+# dispatched, and one registered for a fixer that cannot repair it is a
+# silent clean run.
+agentic_ok=1
+while IFS= read -r row; do
+  script=$(awk '{print $2}' <<<"$row"); script=${script#scripts/}
+  rules=$(sed -E 's/^#[[:space:]]+scripts\/[^[:space:]]+[[:space:]]+//; s/[[:space:]]{2,}.*$//' <<<"$row")
+  IFS=', ' read -r -a rule_list <<<"$rules"
+  for rule in "${rule_list[@]}"; do
+    [ -n "$rule" ] || continue
+    jq -e --arg k "$rule" --arg v "$script" '.registry.by_recipe[$k] == $v' "$fleet/scripts/fix-script-registry.json" >/dev/null || { agentic_ok=0; echo "  (AGENTIC assigns $rule to $script; the registry does not)" >&2; }
+  done
+done < <(grep -E '^#[[:space:]]+scripts/fix-[a-z-]+\.sh[[:space:]]' "$fleet/.machine_readable/descriptiles/AGENTIC.a2ml")
+check "every rule AGENTIC assigns to a workflow-pin fixer is registered to it" "[ \$agentic_ok -eq 1 ]"
+
 dq_out=$(printf '%s\n' 'uses: "\x64tolnay/x@1" # "\x41"' "name: 'a\\x41' \"b\\\"c\"" | awk "$(cat "$fleet/scripts/lib/yaml-anchors.awk")"'{ printf "%s|", yaml_decode_dq($0) }')
 check "yaml_decode_dq decodes double-quoted escapes only, an escaped quote to a byte no reference holds" \
   "[ \"\$dq_out\" = \"\$(printf 'uses: \"dtolnay/x@1\" # \"\\\\x41\"|name: '\"'\"'a\\\\x41'\"'\"' \"b\\001c\"|')\" ]"
