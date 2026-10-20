@@ -45,6 +45,8 @@ LOCK="$REPO_PATH/.github/workflows/actions.lock"
 [ -f "$LOCK" ] || { echo "OK (no actions.lock): $REPO_PATH"; exit 0; }
 # One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh).
 . "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
+# anchor_defs/2: the anchors a line defines, outside quoted scalars and comments.
+ANCHORS_AWK=$(cat "$SCRIPT_DIR/lib/yaml-anchors.awk")
 pin_fixer_lock "$REPO_PATH"
 
 # Read tag names from stdin and print the most specific: more dots, then longer.
@@ -83,7 +85,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
     local wf
     for wf in "$REPO_PATH"/.github/workflows/*.yml "$REPO_PATH"/.github/workflows/*.yaml; do
         [ -f "$wf" ] || continue
-        awk '
+        awk "$ANCHORS_AWK"'
             function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
             function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
             function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
@@ -102,13 +104,15 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 if (r == "" || r ~ /^#/ || r ~ /^[|>][-+0-9]*$/) print "F\t" FILENAME ":" FNR
                 else print kind "\t" r
             }
-            # Every anchor on line s whose value is a reference (`&name a/b@ref`).
-            function note_anchors(s,   t, a, v) {
-                t = s
-                while (match(t, /&[A-Za-z0-9_.-]+[[:space:]]+["'"'"']?[A-Za-z0-9_.-]+\/[^[:space:]"'"'"',}]*@[^[:space:]"'"'"',}]+/)) {
-                    a = substr(t, RSTART + 1, RLENGTH - 1); t = substr(t, RSTART + RLENGTH)
-                    v = a; sub(/^[^[:space:]]+[[:space:]]+["'"'"']?/, "", v); sub(/[[:space:]].*$/, "", a)
-                    anchor[a] = v
+            # Every anchor line s defines (lib/yaml-anchors.awk: outside quoted
+            # scalars and comments), kept when its value is a reference
+            # (`&name a/b@ref`); a later anchor of the same name replaces it,
+            # as it does for the aliases after it.
+            function note_anchors(s,   d, k) {
+                anchor_defs(s, d)
+                for (k in d) {
+                    if (d[k] ~ /^[A-Za-z0-9_.-]+\/[^@[:space:]]*@[^[:space:]]+$/) anchor[k] = d[k]
+                    else delete anchor[k]
                 }
             }
             function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }

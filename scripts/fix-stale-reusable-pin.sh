@@ -79,6 +79,28 @@ validate_table
 [ -d "$REPO_PATH/.github/workflows" ] || { echo "OK (no workflows): $REPO_PATH"; exit 0; }
 # One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh).
 . "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
+# anchor_defs/2: the anchors a line defines, outside quoted scalars and comments.
+ANCHORS_AWK=$(cat "$SCRIPT_DIR/lib/yaml-anchors.awk")
+
+# The value of anchor <name> as an alias on line <n> of <file> sees it: the
+# last `&name` defined above that line (lib/yaml-anchors.awk reads anchors
+# outside quoted scalars and comments, and a block scalar's content is
+# skipped as text), or "" when there is none.
+anchor_value() { # <file> <name> <line>
+    awk -v want="$2" -v upto="$3" "$ANCHORS_AWK"'
+        function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
+        BEGIN { blk = -1; got = "" }
+        NR >= upto { exit }
+        {
+            plain = ($0 !~ /^[[:space:]]*$/ && $0 !~ /^[[:space:]]*#/)
+            if (blk >= 0 && (!plain || indent_of($0) > blk)) next
+            blk = -1
+            if (!plain) next
+            if (anchor_defs($0, d) && (want in d)) got = d[want]
+            if ($0 ~ /:[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$/) { t = $0; sub(/[^[:space:]-].*$/, "", t); blk = length(t) }
+        }
+        END { print got }' "$1"
+}
 pin_fixer_lock "$REPO_PATH"
 
 LOCK="$REPO_PATH/.github/workflows/actions.lock"
@@ -360,7 +382,6 @@ while IFS= read -r -d '' wf; do
     for lineno in $klines; do
         alias=$(sed -n "${lineno}p" "$wf" | grep -oE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*\*[A-Za-z0-9_.-]+" | sed 's/.*\*//' || true)
         [ -n "$alias" ] || continue
-        alias_re=$(printf '%s' "$alias" | sed 's/\./\\./g')
         while IFS= read -r ref; do
             [ -n "$ref" ] || continue
             sha="${ref##*@}"
@@ -368,7 +389,7 @@ while IFS= read -r -d '' wf; do
                 echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` runs $ref, a known-dead pin held by the anchor \`&$alias\`. Fix by hand; the file was not changed." >&2
                 skip=1
             fi
-        done < <(grep -oE "&${alias_re}[[:space:]]+[\"']?[^[:space:]\"',}]+" "$wf" | grep -oiE "${REUSABLE_REF_RE}" || true)
+        done < <(anchor_value "$wf" "$alias" "$lineno" | grep -oiE "^${REUSABLE_REF_RE}\$" || true)
     done
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()

@@ -2898,6 +2898,42 @@ TAG_MAP="$fx/ls29-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls33 an alias of no anchor is refused: exit 2, lock untouched" \
   "[ \$rc -eq 2 ] && cmp -s '$fx/ls33-before.lock' '$fx/ls33/.github/workflows/actions.lock'"
 
+# tc30: TOOLCHAIN=null is a name YAML reads as null: written quoted, so the
+# input is the string, and a second run finds it present (no FIXED again).
+mkdir -p "$fx/tc30/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/tc30/.github/workflows/x.yml"
+run_fix env TOOLCHAIN=null bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc30"
+first_rc=$rc
+run_fix env TOOLCHAIN=null bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc30"
+check "tc30 TOOLCHAIN=null is written quoted, and a rerun repairs nothing" \
+  "[ $first_rc -eq 0 ] && [ \$rc -eq 0 ] && grep -q \"^          toolchain: 'null'\$\" '$fx/tc30/.github/workflows/x.yml' && ! grep -q '^FIXED' <<<\"\$out\""
+
+# tc31 / sp38 / ls34: anchor-like text inside a quoted scalar is text, not
+# the anchor an alias resolves to (lib/yaml-anchors.awk).
+mkdir -p "$fx/tc31/.github/workflows" "$fx/sp38/.github/workflows" "$fx/ls34/.github/workflows"
+printf 'env:\n  ACTION: &rust dtolnay/rust-toolchain@stable\n  NOTE: "fixture &rust dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"\njobs:\n  check:\n    steps:\n      - uses: *rust\n' > "$fx/tc31/.github/workflows/x.yml"
+cp "$fx/tc31/.github/workflows/x.yml" "$fx/tc31-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc31"
+check "tc31 a quoted &rust is no anchor: the alias of a tag-pinned anchor is fine, not UNSUPPORTED" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/tc31-before.yml' '$fx/tc31/.github/workflows/x.yml'"
+printf 'env:\n  CALL: &call %s@%s\n  NOTE: "fixture &call %s@%s"\njobs:\n  rust:\n    uses: *call\n' "$RC_REUSABLE" "$GOOD" "$RC_REUSABLE" "$STALE_A" > "$fx/sp38/.github/workflows/ci.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp38"
+check "sp38 a quoted &call naming a dead pin is no anchor: the live alias is not UNSUPPORTED" \
+  "[ \$rc -eq 0 ] && ! grep -q UNSUPPORTED <<<\"\$out\""
+cat > "$fx/ls34/.github/workflows/ci.yml" <<YML
+env:
+  CALL: &call octo/repo/.github/workflows/x.yml@$SHA_A
+  NOTE: "fixture &call octo/repo@$SHA_A"
+jobs:
+  call:
+    uses: *call
+YML
+lock_records "$fx/ls34" "octo/repo@$SHA_A"
+printf 'octo/repo\t%s\tv1.2.3\n' "$SHA_A" > "$fx/ls34-tags.tsv"
+TAG_MAP="$fx/ls34-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls34" --offline
+check "ls34 a quoted &call does not replace the real anchor: the aliased reusable keeps its SHA ref" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: '$SHA_A'\$\" '$fx/ls34/.github/workflows/actions.lock'"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

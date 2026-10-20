@@ -70,14 +70,20 @@ TOOLCHAIN="${TOOLCHAIN:-stable}"
 # The override is written into the workflow as a YAML value, so only a
 # rustup toolchain name is accepted (`stable`, `1.85.0`, `nightly-2026-01-01`,
 # `stable-x86_64-unknown-linux-gnu`): never text that could end the value,
-# add a key or reach awk'"'"'s replacement syntax. A number YAML would read as a
-# float (`1.80` is 1.8) is written quoted.
+# add a key or reach awk's replacement syntax. A name YAML would read as
+# anything but a string is written single-quoted: a number (`1.80` is the
+# float 1.8, `0x1f` an integer) or a null or boolean spelling (`null`, `true`,
+# `no`, ... as YAML 1.1 and the core schema read them), which would otherwise
+# leave the input empty or wrong.
 if [[ ! "$TOOLCHAIN" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     printf 'fix-rust-toolchain-input: TOOLCHAIN=%q is not a toolchain name (letters, digits, ., _, -); nothing was changed\n' "$TOOLCHAIN" >&2
     exit 2
 fi
 TOOLCHAIN_YAML="$TOOLCHAIN"
-if [[ "$TOOLCHAIN" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then TOOLCHAIN_YAML="'$TOOLCHAIN'"; fi
+if [[ "$TOOLCHAIN" =~ ^([0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9]+)?|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$ ]] \
+   || [[ "${TOOLCHAIN,,}" =~ ^(null|true|false|yes|no|on|off|y|n)$ ]]; then
+    TOOLCHAIN_YAML="'$TOOLCHAIN'"
+fi
 TARGET="${1:?Usage: fix-rust-toolchain-input.sh <workflow.yml | repo-path>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh):
@@ -85,6 +91,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the file'"'"'s directory (`<checkout>/.github/workflows/<file>`, relative or
 # absolute), so every fixer on that checkout contends for the same lock.
 . "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
+# anchor_defs/2: the anchors a line defines, outside quoted scalars and comments.
+ANCHORS_AWK=$(cat "$SCRIPT_DIR/lib/yaml-anchors.awk")
 if [ -d "$TARGET" ]; then
     pin_fixer_lock "$TARGET"
 else
@@ -107,7 +115,7 @@ apply_to_file() {
 
     tmp=$(mktemp)
     set +e
-    awk -v toolchain="$TOOLCHAIN_YAML" '
+    awk -v toolchain="$TOOLCHAIN_YAML" "$ANCHORS_AWK"'
         # Return the number of leading spaces in source line s.
         function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
         # Column of a key, with a list dash counted as indentation: `  - with:` -> 4.
@@ -361,7 +369,7 @@ apply_to_file() {
             n = 0
         }
         BEGIN {
-            n = 0; in_step = 0; in_scalar = 0; fixed = 0; nunrec = 0
+            n = 0; in_step = 0; in_scalar = 0; fixed = 0; nunrec = 0; anc_scalar = -1
             Q = "[\"'"'"']?"
             LIST_RE = "^[[:space:]]*-([[:space:]]|$)"
             KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
@@ -398,13 +406,17 @@ apply_to_file() {
             ind = indent_of($0)
             # Every anchor whose value is a SHA-pinned toolchain reference
             # (`ACTION: &rust dtolnay/rust-toolchain@<sha>`), wherever it is
-            # defined: an alias of it is that reference.
-            if (plain($0)) {
-                t = $0
-                while (match(t, /&[A-Za-z0-9_.-]+[[:space:]]+["'"'"']?[^[:space:]"'"'"',}]+/)) {
-                    a = substr(t, RSTART + 1, RLENGTH - 1); t = substr(t, RSTART + RLENGTH)
-                    v = a; sub(/^[^[:space:]]+[[:space:]]+["'"'"']?/, "", v); sub(/[[:space:]].*$/, "", a)
-                    if (sha_ref(v)) tc_anchor[tolower(a)] = 1
+            # defined: an alias of it is that reference. Anchors are read by
+            # lib/yaml-anchors.awk (outside quoted scalars and comments) and
+            # never from a block scalar'"'"'s content (`run: |` text); a later
+            # anchor of the same name replaces an earlier one.
+            if (anc_scalar >= 0 && (!plain($0) || ind > anc_scalar)) { }
+            else {
+                anc_scalar = -1
+                if (plain($0)) {
+                    anchor_defs($0, d)
+                    for (a in d) { if (sha_ref(d[a])) tc_anchor[tolower(a)] = 1; else delete tc_anchor[tolower(a)] }
+                    if ($0 ~ SCALAR_RE) anc_scalar = length(key_indent_of($0))
                 }
             }
             # A block scalar outside any step (`FIXTURE: |` under `env:`) is text
