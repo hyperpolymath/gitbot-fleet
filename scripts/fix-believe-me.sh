@@ -20,14 +20,16 @@ source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
 # recipe-annotate-believe-me; see lib/outcome-verdict.sh).
 if [[ "${1:-}" == "--check" ]]; then
     [[ -d "${2:-}" ]] || { echo "--check: not a directory: ${2:-}" >&2; exit 2; }
-    count=$( { find "${2:?Usage: $0 --check <repo-path>}" -type f -name "*.idr" -not -path "*/.git/*" \
-        "${FIND_THIRD_PARTY_EXCLUDES[@]}" -not -path "*/.pack/*" -print0 2>/dev/null \
+    # One count per xargs batch. A find or awk failure exits non-zero here,
+    # so the caller records NA instead of a zero that would read as "fixed".
+    counts=$(find "$2" -type f -name "*.idr" -not -path "*/.git/*" \
+        "${FIND_THIRD_PARTY_EXCLUDES[@]}" -not -path "*/.pack/*" -print0 \
         | xargs -0 -r awk 'FNR == 1 { prev = "" }
             $0 !~ /^[[:space:]]*--/ && /believe_me/ && prev !~ /PROOF_TODO/ { n++ }
             { prev = $0 }
-            END { print n + 0 }' 2>/dev/null \
-        || true; } | awk '{ s += $1 } END { print s + 0 }')
-    echo "$count"
+            END { print n + 0 }') \
+        || { echo "--check: predicate failed" >&2; exit 2; }
+    printf '%s\n' "$counts" | awk '{ s += $1 } END { print s + 0 }'
     exit 0
 fi
 

@@ -159,6 +159,13 @@ RESCAN_REPOS_FILE="$(mktemp /tmp/dispatch-rescan-repos.XXXXXX)"
 # shellcheck source=lib/outcome-verdict.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib/outcome-verdict.sh"
 
+# Parallel jobs on one repo take a per-repo lock around check/fix/check
+# (repo_lock), so --parallel needs flock. Refuse rather than run unlocked.
+if [[ "$PARALLEL" -gt 1 ]] && ! command -v flock &>/dev/null; then
+    echo "ERROR: --parallel $PARALLEL needs flock (util-linux) to serialise fixes per repo" >&2
+    exit 1
+fi
+
 # --- Hypatia closed-loop contract ---
 #
 # Per hypatia/docs/operations/dispatch-runner-contract.adoc, after each
@@ -333,6 +340,9 @@ execute_entry() {
     repo=$(echo "$entry" | jq -r '.repo')
     pattern_id=$(echo "$entry" | jq -r '.pattern_id')
     recipe_id=$(echo "$entry" | jq -r '.recipe_id // "none"')
+    # Report under the canonical id: a deprecated alias must not earn credit
+    # for the recipe it was renamed from.
+    recipe_id=$(canonical_recipe_id "$FLEET_SCRIPTS/fix-script-registry.json" "$recipe_id")
     confidence=$(echo "$entry" | jq -r '.confidence // 0')
     auto_fixable=$(echo "$entry" | jq -r '.auto_fixable // false')
     fix_script=$(echo "$entry" | jq -r '.fix_script // "none"')
@@ -454,6 +464,7 @@ execute_entry() {
                 echo "$entry" > "$tmp_finding"
 
                 local before after rc verdict
+                if [[ "$PARALLEL" -gt 1 ]]; then repo_lock "$PARALLEL_TMPDIR" "$repo_path"; fi
                 before=$(recipe_check_count "$FLEET_SCRIPTS/$fix_script" "$repo_path")
 
                 echo "        Running: $fix_script $repo_path $tmp_finding"
@@ -462,6 +473,7 @@ execute_entry() {
                     || rc=${PIPESTATUS[0]}
 
                 after=$(recipe_check_count "$FLEET_SCRIPTS/$fix_script" "$repo_path")
+                if [[ "$PARALLEL" -gt 1 ]]; then repo_unlock; fi
                 verdict=$(outcome_verdict "$rc" "$before" "$after")
                 echo "        $verdict (exit $rc, targets $before -> $after)"
                 if [[ "$verdict" == failed ]]; then

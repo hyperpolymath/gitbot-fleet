@@ -25,14 +25,19 @@ pred() { # repo rev pattern -> count of remaining hits
   local repo=$1 rev=$2 pat=$3
   case $pat in
     recipe-shell-quote-vars) git -C "$repo" grep -P -h -c '\b(cd|cp|mv|rm|mkdir|rmdir|chmod|chown|echo) \$[A-Z_][A-Z0-9_]*' "$rev" -- '*.sh' '*.bash' "${EX[@]}" 2>/dev/null | awk -F: '{s+=$NF} END{print s+0}';;
+    # The removal recipe claimed to remove believe_me, so an annotated call
+    # still counts against it. The annotate recipe is measured as its fixer's
+    # --check measures it: a call is discharged by a PROOF_TODO line above.
     recipe-remove-believe-me) git -C "$repo" grep -P -h -c '^(?!\s*--).*believe_me' "$rev" -- '*.idr' "${EX[@]}" 2>/dev/null | awk -F: '{s+=$NF} END{print s+0}';;
+    recipe-annotate-believe-me) git -C "$repo" grep -h -B1 -e believe_me "$rev" -- '*.idr' "${EX[@]}" 2>/dev/null |
+      awk '/^--$/ { prev = ""; next } !/^[[:space:]]*--/ && /believe_me/ && prev !~ /PROOF_TODO/ { n++ } { prev = $0 } END { print n + 0 }';;
     *) echo NA;;
   esac
 }
 printf 'repo\tpattern\toutcome\tfixed_at\trev_at\thits_at\thits_plus7d\thits_head\n'
 for repo in "$@"; do
   name=$(basename "$repo"); head=$(git -C "$repo" rev-parse origin/main)
-  jq -r --arg r "$name" 'select(.repo==$r) | [.pattern,.outcome,.fixed_at] | @tsv' "$LOG" | sort -u |
+  jq -r --arg r "$name" 'select(.repo==$r) | [.pattern // .recipe_id // .pattern_id, .outcome, .fixed_at // .timestamp] | select(.[2] != null) | @tsv' "$LOG" | sort -u |
   while IFS=$'\t' read -r pat out ts; do
     at=$(git -C "$repo" rev-list -1 --before="$ts" origin/main || true)
     p7=$(git -C "$repo" rev-list -1 --before="$(date -u -d "$ts + 7 days" +%FT%TZ)" origin/main || true)

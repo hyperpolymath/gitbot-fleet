@@ -6,13 +6,16 @@
 #
 # Covers:
 #   1. outcome_verdict truth table.
-#   2. recipe_check_count: integer from a --check script, NA without one.
+#   2. recipe_check_count: integer from a --check script, NA without one,
+#      and NA when the predicate itself fails (never a false 0).
 #   3. The two predicate-carrying fixers, end to end on a fixture repo:
 #      targets > 0 before, 0 after, --check itself changes nothing, and a
 #      second run is a no_op.
 #   4. dispatch-runner's record_outcome row and rescan trigger (extracted,
 #      like hypatia-record-outcome-smoke.sh, so the quarantined main loop
 #      never runs).
+#   5. Deprecated recipe ids report under their replacement.
+#   6. Two parallel jobs on one repo record one fix, not two (repo_lock).
 
 set -euo pipefail
 
@@ -67,6 +70,22 @@ check "unmarked fixer is NA" NA "$(recipe_check_count "$TMP/unmarked.sh" "$TMP/e
 check "unmarked fixer is never invoked" absent "$([[ -e "$TMP/unmarked-was-run" ]] && echo present || echo absent)"
 check "missing repo path is NA" NA \
     "$(recipe_check_count "$ROOT/scripts/fix-shell-quoting.sh" "$TMP/does-not-exist")"
+
+# A predicate that could not run must not report 0: after a fix, 0 reads as
+# verified. Shims stand in for a failing find and a grep without PCRE.
+mkdir -p "$TMP/shim-find" "$TMP/shim-grep" "$TMP/hits"
+printf '#!/bin/sh\nexit 1\n' > "$TMP/shim-find/find"
+printf '#!/bin/sh\nexit 2\n' > "$TMP/shim-grep/grep"
+chmod +x "$TMP/shim-find/find" "$TMP/shim-grep/grep"
+printf 'cd $HOME\n' > "$TMP/hits/a.sh"
+printf 'f = believe_me 1\n' > "$TMP/hits/A.idr"
+for script in fix-shell-quoting.sh fix-believe-me.sh; do
+    check "$script: find failure is NA" NA \
+        "$(PATH="$TMP/shim-find:$PATH" recipe_check_count "$ROOT/scripts/$script" "$TMP/hits")"
+done
+rc=0
+out=$(PATH="$TMP/shim-grep:$PATH" "$ROOT/scripts/fix-shell-quoting.sh" --check "$TMP/hits" 2>/dev/null) || rc=$?
+check "grep error fails --check, prints no count" "2:" "$rc:$out"
 
 # --- 3. fixers end to end -------------------------------------------------
 repo="$TMP/repo"
@@ -124,6 +143,37 @@ check "unverified row has no counts" '{"verdict":"unverified","before_hits":null
 check "refusal keeps its own outcome" '{"verdict":"refused_license_policy","outcome":"refused_license_policy","exit_code":null}' \
     "$(sed -n 4p "$OUTCOME_FILE" | jq -c '{verdict, outcome, exit_code}')"
 check "only verified repos trigger a rescan" "repo-a" "$(cat "$RESCAN_REPOS_FILE")"
+
+# --- 5. deprecated recipe ids ---------------------------------------------
+registry="$ROOT/scripts/fix-script-registry.json"
+check "deprecated id reports as its replacement" recipe-annotate-believe-me \
+    "$(canonical_recipe_id "$registry" recipe-remove-believe-me)"
+check "canonical id unchanged" recipe-annotate-believe-me \
+    "$(canonical_recipe_id "$registry" recipe-annotate-believe-me)"
+check "unknown id unchanged" recipe-x "$(canonical_recipe_id "$registry" recipe-x)"
+check "no registry, id unchanged" recipe-x "$(canonical_recipe_id "$TMP/none.json" recipe-x)"
+
+# --- 6. parallel jobs on one repo -----------------------------------------
+# Without repo_lock both jobs count 3 before either fix and both record
+# verified for one fix (measured: "verified verified"). With it, the second
+# job counts what the first left.
+par="$TMP/par"
+mkdir -p "$par" "$TMP/locks"
+printf 'cd $A\nrm $B\necho $C\n' > "$par/x.sh"
+fixer="$ROOT/scripts/fix-shell-quoting.sh"
+job() {
+    repo_lock "$TMP/locks" "$par"
+    local b a
+    b=$(recipe_check_count "$fixer" "$par")
+    sleep 0.3
+    "$fixer" "$par" "$TMP/finding.json" > /dev/null 2>&1
+    a=$(recipe_check_count "$fixer" "$par")
+    repo_unlock
+    outcome_verdict 0 "$b" "$a" > "$TMP/job$1"
+}
+job 1 & job 2 & wait
+check "two jobs on one repo record one fix" "no_op verified" \
+    "$(sort "$TMP/job1" "$TMP/job2" | paste -sd' ')"
 
 echo ""
 echo "Results: $pass passed, $fail failed"

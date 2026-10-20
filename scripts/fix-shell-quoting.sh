@@ -18,11 +18,15 @@ source "$SCRIPT_DIR/lib/third-party-excludes.sh" 2>/dev/null || true
 # change nothing. This is the recipe's predicate (see lib/outcome-verdict.sh).
 if [[ "${1:-}" == "--check" ]]; then
     [[ -d "${2:-}" ]] || { echo "--check: not a directory: ${2:-}" >&2; exit 2; }
-    count=$( { find "${2:?Usage: $0 --check <repo-path>}" -type f \( -name "*.sh" -o -name "*.bash" \) \
-        -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 2>/dev/null \
-        | xargs -0 -r grep -ohP '\b(cd|cp|mv|rm|mkdir|rmdir|chmod|chown|echo) \$[A-Z_][A-Z0-9_]*' 2>/dev/null \
-        || true; } | wc -l)
-    echo "$count"
+    # grep exits 1 for a batch with no match, which is a count, not an error.
+    # Any other failure (find, grep 2, no PCRE) exits non-zero here, so the
+    # caller records NA instead of a zero that would read as "fixed".
+    hits=$(find "$2" -type f \( -name "*.sh" -o -name "*.bash" \) \
+        -not -path "*/.git/*" "${FIND_THIRD_PARTY_EXCLUDES[@]}" -print0 \
+        | xargs -0 -r sh -c 'grep -ohP -- "$0" "$@"; [ $? -le 1 ]' \
+            '\b(cd|cp|mv|rm|mkdir|rmdir|chmod|chown|echo) \$[A-Z_][A-Z0-9_]*') \
+        || { echo "--check: predicate failed" >&2; exit 2; }
+    if [[ -n "$hits" ]]; then printf '%s\n' "$hits" | wc -l; else echo 0; fi
     exit 0
 fi
 
