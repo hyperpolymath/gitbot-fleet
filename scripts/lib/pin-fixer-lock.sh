@@ -89,11 +89,16 @@ pin_fixer_replace() { # <tmp> <dest>
 }
 
 # Would YAML read <value>, written as a plain (unquoted) scalar, as anything
-# but a string? A number (`1`, `1.80` the float 1.8, `1e3`, `0x1f`, `0o17`,
-# `0b1`) or a null or boolean spelling as YAML 1.1 and the core schema read
-# them (`null`, `true`, `no`, `on`, `y`, ... in any case). A fixer writing
-# such a value into a workflow or lock quotes it.
+# but a string? As YAML 1.1 and the core schema read them: a number (`1`,
+# `1.80` the float 1.8, `1e3`, `-1`, `.5`, `0x1f`, `0o17`, `0b1`, `1:30` base
+# 60, `.inf`, `.nan`), a timestamp (`2026-10-20`, the date — a tag may be
+# spelled so — with or without a time), or a null or boolean spelling
+# (`null`, `~`, nothing, `true`, `no`, `on`, `y`, ... in any case). A fixer
+# writing such a value into a workflow or lock quotes it.
 pin_fixer_yaml_nonstring() { # <value>
-    [[ "$1" =~ ^([0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9]+)?|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$ ]] \
+    [[ -z "$1" || "$1" == "~" ]] \
+        || [[ "$1" =~ ^[-+]?([0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9]+)?|\.[0-9][0-9_]*([eE][-+]?[0-9]+)?|[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|\.(inf|Inf|INF))$ ]] \
+        || [[ "$1" =~ ^\.(nan|NaN|NAN)$ ]] \
+        || [[ "$1" =~ ^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(([Tt]|[[:space:]]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(\.[0-9]*)?([[:space:]]*(Z|[-+][0-9]{1,2}(:[0-9]{2})?))?)?$ ]] \
         || [[ "${1,,}" =~ ^(null|true|false|yes|no|on|off|y|n)$ ]]
 }

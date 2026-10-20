@@ -295,7 +295,14 @@ apply_to_file() {
                     else if (plain(line)) {
                         # Only a DIRECT child of `with:` is an input: the contents of
                         # another input'"'"'s block scalar (`components: |`) sit deeper.
-                        if (child_indent < 0) child_indent = ind
+                        # The first must be a block mapping key: `with:` whose value
+                        # is a flow mapping, an alias or anything else written on the
+                        # next line (`{ components: rustfmt }`, `*inputs`) is a shape
+                        # a block child cannot be added to, so the step is reported.
+                        if (child_indent < 0) {
+                            child_indent = ind
+                            if (line !~ WITH_CHILD_KEY_RE) { with_bad = 1; unrec[++nunrec] = lnum[i] }
+                        }
                         # An empty `toolchain:` whose next plain line (blank and
                         # comment lines between them notwithstanding) sits deeper is
                         # a nested mapping, not an empty value: nothing this fixer
@@ -385,6 +392,7 @@ apply_to_file() {
             WITH_BLOCK_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*(#.*)?$"
             WITH_FLOW_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*\\{"
             WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"
+            WITH_CHILD_KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             TC_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:]]"
             TC_FLOW_RE = "[{,][[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:],}]"
             # The key present with no value — YAML null in the spellings the core

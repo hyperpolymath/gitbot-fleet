@@ -73,8 +73,9 @@ lookup_tag() { # <owner/repo> <sha>
 # `uses: owner/repo[/path]@<ref>` is an action (the SHA ref is the defect).
 # One repository can be both at different revisions (cicd-suite ships gates
 # AND composite actions), so the class is per repository@revision. A record no
-# workflow uses directly (a nested dependency, a tree without workflows) falls
-# back to the two estate reusable sources by name.
+# workflow uses directly (a nested dependency, a tree without workflows) is
+# not classified by guess: the two estate reusable sources keep their SHA ref
+# by name, and any other such record is reported UNRESOLVED and left as is.
 #
 # Only a `uses:` that is a real key counts: a job's key under `jobs:` is a
 # reusable call (R), a step's key under `steps:` is an action (A). The same
@@ -318,14 +319,20 @@ usage_of() { # <owner/repo> <sha>  -> reusable | action | unknown
         END { print (reusable ? "reusable" : (action ? "action" : "unknown")) }' "$SITES"
 }
 
-# Return 0 if owner/repo $1 at SHA $2 should keep its SHA ref, or 1 otherwise.
-# Use workflow classification, then the estate source fallback for unknown use.
-keeps_sha_ref() { # <owner/repo> <sha>
+# How the record for owner/repo $1 at SHA $2 is treated: `keep` its SHA ref
+# (a reusable workflow, whose lock ref is the SHA), `rewrite` it to a tag (an
+# action), or `unknown`. Only a site in this repository's workflows proves an
+# action: a record no workflow here uses is a transitive dependency (a
+# reusable's own `uses:`), whose edge `owner/repo@sha` says nothing of its
+# kind, and a nested reusable's SHA ref is legitimate. Such a record is left
+# as is and reported, never rewritten on a guess; the estate's two reusable
+# sources are known reusables.
+sha_ref_disposition() { # <owner/repo> <sha>  -> keep | rewrite | unknown
     case "$(usage_of "$1" "$2")" in
-        reusable) return 0 ;;
-        action) return 1 ;;
+        reusable) echo keep ;;
+        action) echo rewrite ;;
         # GitHub reads `Hyperpolymath/Standards` as hyperpolymath/standards.
-        *) case "${1,,}" in hyperpolymath/standards|hyperpolymath/cicd-suite) return 0 ;; esac; return 1 ;;
+        *) case "${1,,}" in hyperpolymath/standards|hyperpolymath/cicd-suite) echo keep ;; *) echo unknown ;; esac ;;
     esac
 }
 
@@ -366,7 +373,12 @@ if ! awk '
 fi
 while IFS=$'\t' read -r lineno repo sha ref_raw; do
     sha_lc="${sha,,}"
-    if keeps_sha_ref "$repo" "$sha_lc"; then continue; fi
+    case "$(sha_ref_disposition "$repo" "$sha_lc")" in
+        keep) continue ;;
+        unknown)
+            echo "UNRESOLVED  $repo@${sha:0:7}: no workflow here uses it (a transitive dependency), so whether it is an action or a reusable workflow cannot be told; record left as is" >&2
+            unresolved=$((unresolved + 1)); continue ;;
+    esac
     tag=$(lookup_tag "$repo" "$sha_lc")
     if [ -z "$tag" ]; then
         echo "UNRESOLVED  $repo@${sha:0:7}: no tag found for this commit (record left as is; GitHub rejects it)" >&2

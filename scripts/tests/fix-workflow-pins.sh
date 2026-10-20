@@ -1150,7 +1150,16 @@ fixture/reusable/.github/workflows/../ci.yml	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 TSV
 
 # ── 3. fix-lock-self-sha-refs.sh ─────────────────────────────────────────────
+# Only a workflow site proves a record is an action (a record no workflow
+# uses is a transitive dependency, which the fixer will not classify by
+# guess), so each action fixture carries the step that uses it.
+action_steps() { # <workflows-dir> <owner/repo@sha>... : a ci.yml with one step per action
+    { printf 'jobs:\n  build:\n    steps:\n'
+      for a in "${@:2}"; do printf '      - uses: %s\n' "$a"; done
+    } > "$1/ci.yml"
+}
 mkdir -p "$fx/ls/.github/workflows"
+action_steps "$fx/ls/.github/workflows" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 cat > "$fx/ls/.github/workflows/actions.lock" <<'LOCK'
 version: 'v0.0.3'
 workflows:
@@ -1245,6 +1254,7 @@ check "same repository, two revisions: the reusable call keeps its SHA ref, the 
   "[ \$rc5 -eq 0 ] && grep -A1 \"'hyperpolymath/cicd-suite@$SHA_A':\" '$fx/ls5/.github/workflows/actions.lock' | grep -q \"ref: '$SHA_A'\" && grep -A1 \"'hyperpolymath/cicd-suite@$SHA_B':\" '$fx/ls5/.github/workflows/actions.lock' | grep -q \"ref: 'v1.2.3'\" && ! grep -q UNRESOLVED '$fx/ls5.out'"
 # A double-quoted record is the same record: repaired, quote style kept.
 mkdir -p "$fx/ls6/.github/workflows"
+action_steps "$fx/ls6/.github/workflows" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
 printf 'version: "v0.0.3"\nworkflows:\n    ".github/workflows/ci.yml":\n        - "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"\ndependencies:\n    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1":\n        ref: "3d3c42e5aac5ba805825da76410c181273ba90b1"\n        commit: "sha1-3d3c42e5aac5ba805825da76410c181273ba90b1"\n        owner_id: 44036562\n        repo_id: 197814629\n' > "$fx/ls6/.github/workflows/actions.lock"
 set +e
 bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls6" --offline > "$fx/ls6.out" 2>&1; rc6=$?
@@ -1254,6 +1264,7 @@ check "a double-quoted self-SHA record is parsed and repaired, keeping its quote
 # A tag Git allows but this fixer will not write (`&`, `|`, a quote) is refused.
 SHA_C=cccccccccccccccccccccccccccccccccccccccc
 mkdir -p "$fx/ls7/.github/workflows"
+action_steps "$fx/ls7/.github/workflows" "nobody/weird@$SHA_C"
 printf "version: 'v0.0.3'\nworkflows: {}\ndependencies:\n    'nobody/weird@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n        owner_id: 1\n        repo_id: 1\n" "$SHA_C" "$SHA_C" "$SHA_C" > "$fx/ls7/.github/workflows/actions.lock"
 printf 'nobody/weird\t%s\trelease&stable\n' "$SHA_C" > "$fx/ls7-tags.tsv"
 cp "$fx/ls7/.github/workflows/actions.lock" "$fx/ls7-before.lock"
@@ -1280,6 +1291,7 @@ LOCK
 lookup_repo="$fx/tag lookup"
 lookup_lock="$lookup_repo/.github/workflows/actions.lock"
 mkdir -p "$lookup_repo/.github/workflows" "$fx/git-bin"
+action_steps "$lookup_repo/.github/workflows" "fixture/action@$SHA_A"
 cat > "$fx/git-bin/git" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -1529,6 +1541,7 @@ check "without the reusable call the subdirectory action in a .yaml workflow get
 # stop that repair, alter neighboring records, or hide the unresolved status.
 ls_partial="$fx/ls-partial/.github/workflows"
 mkdir -p "$ls_partial"
+action_steps "$ls_partial" "fixture/missing@$SHA_A" "fixture/resolved@$SHA_B" "fixture/unsafe@$SHA_C"
 cat > "$ls_partial/actions.lock" <<LOCK
 version: 'v0.0.3'
 workflows: {}
@@ -1583,6 +1596,7 @@ check "a fully resolved mixed lock is an idempotent success" \
 if command -v mawk >/dev/null; then
     mkdir -p "$fx/mawk-bin" "$fx/ls2/.github/workflows"; ln -sf "$(command -v mawk)" "$fx/mawk-bin/awk"
     cp "$fx/ls1.lock" "$fx/ls2/.github/workflows/actions.lock"
+    cp "$fx/ls/.github/workflows/ci.yml" "$fx/ls2/.github/workflows/ci.yml"
     sed -i "s/ref: 'v7.0.1'/ref: '3d3c42e5aac5ba805825da76410c181273ba90b1'/" "$fx/ls2/.github/workflows/actions.lock"
     sed -i '0,/ref: .3d3c42e5aac5ba805825da76410c181273ba90b1./!{0,/ref: .3d3c42e5aac5ba805825da76410c181273ba90b1./s//ref: '"'"'v7.0.1'"'"'/}' "$fx/ls2/.github/workflows/actions.lock"
     printf "    'x/thirty-nine@123456789012345678901234567890123456789':\n        ref: '123456789012345678901234567890123456789'\n        commit: 'sha1-123456789012345678901234567890123456789'\n" >> "$fx/ls2/.github/workflows/actions.lock"
@@ -3061,6 +3075,109 @@ rm -rf "$fx/pin-fixer-$pl4_key.lock.d"
 PATH="$nofl" PIN_FIXER_LOCK_DIR="$fx" PIN_FIXER_LOCK_WAIT=1 run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl4"
 check "pl4 without flock a free lock is taken, the run repairs, and the lock directory is gone afterwards" \
   "[ \$rc -eq 0 ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/pl4/.github/workflows/ci.yml' && [ ! -e '$fx/pin-fixer-$pl4_key.lock.d' ]"
+
+# ── Review cases (gitbot-fleet#615, round on ccfc924) ───────────────────────
+# sp44: a stale record spelled `Hyperpolymath/Standards@<stale>` renamed onto
+# the replacement that `hyperpolymath/standards@<good>` already holds is the
+# same dependency — GitHub reads the repository in either case — so the two
+# records merge into one, the first spelling kept.
+mkdir -p "$fx/sp44/.github/workflows"
+printf 'jobs:\n  governance:\n    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s\n' "$STALE_B" > "$fx/sp44/.github/workflows/governance.yml"
+cat > "$fx/sp44/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/governance.yml':
+        - 'Hyperpolymath/Standards@$STALE_B'
+dependencies:
+    'hyperpolymath/standards@$GOOD':
+        ref: '$GOOD'
+        commit: 'sha1-$GOOD'
+    'Hyperpolymath/Standards@$STALE_B':
+        ref: '$STALE_B'
+        commit: 'sha1-$STALE_B'
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp44"
+check "sp44 dependency keys differing only in the repository's case merge into one record, first spelling kept" \
+  "[ \$rc -eq 3 ] && [ \$(grep -ciE \"^    'hyperpolymath/standards@$GOOD':\" '$fx/sp44/.github/workflows/actions.lock') -eq 1 ] && grep -q \"^    'hyperpolymath/standards@$GOOD':\" '$fx/sp44/.github/workflows/actions.lock'"
+
+# tc34: `with:` whose value is written on the next line as a flow mapping or
+# an alias is not a block mapping a `toolchain:` child can join: reported,
+# exit 2, the file untouched. A block child on the next line is repaired.
+mkdir -p "$fx/tc34/.github/workflows" "$fx/tc34b/.github/workflows"
+cat > "$fx/tc34/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          { components: rustfmt }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          # shared inputs
+          *inputs
+YML
+cp "$fx/tc34/.github/workflows/x.yml" "$fx/tc34-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc34"
+check "tc34 with: holding a flow mapping or an alias on the next line is reported, exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 6 10' <<<\"\$out\" && cmp -s '$fx/tc34-before.yml' '$fx/tc34/.github/workflows/x.yml'"
+printf 'jobs:\n  check:\n    steps:\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n        with:\n          components: rustfmt\n' > "$fx/tc34b/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc34b"
+check "tc34 (control) a block child on the next line is a block mapping: toolchain added beside it" \
+  "[ \$rc -eq 0 ] && grep -q '^          toolchain: stable\$' '$fx/tc34b/.github/workflows/x.yml' && grep -q '^          components: rustfmt\$' '$fx/tc34b/.github/workflows/x.yml'"
+
+# sp45: an anchor defined after another item of a flow sequence begun on an
+# earlier line is one the line-local anchor reader does not see; a job's
+# `uses: *call` naming it, in a file that holds a known-dead pin, is
+# reported (exit 2, untouched), never passed as OK. The same unreadable
+# alias in a file with no known-dead pin is no finding.
+mkdir -p "$fx/sp45/.github/workflows" "$fx/sp45b/.github/workflows"
+cat > "$fx/sp45/.github/workflows/ci.yml" <<YML
+on:
+  push:
+    branches: [main,
+      release, &call hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@$STALE_A]
+jobs:
+  rust:
+    uses: *call
+YML
+cp "$fx/sp45/.github/workflows/ci.yml" "$fx/sp45-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp45"
+check "sp45 an alias the reader cannot resolve, in a file holding a known-dead pin, is UNSUPPORTED, exit 2" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:7: \`uses: \*call\` names an anchor this parser cannot read' <<<\"\$out\" && cmp -s '$fx/sp45-before.yml' '$fx/sp45/.github/workflows/ci.yml'"
+sed "s/@$STALE_A/@$GOOD/" "$fx/sp45/.github/workflows/ci.yml" > "$fx/sp45b/.github/workflows/ci.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp45b"
+check "sp45 (control) the same alias in a file with no known-dead pin is no finding" \
+  "[ \$rc -eq 0 ] && grep -q '^OK (no known-dead reusable pins)' <<<\"\$out\""
+
+# pin_fixer_yaml_nonstring: the YAML 1.1 / core-schema plain scalars that are
+# not strings — timestamps, signed and dotted numbers, base 60, .inf/.nan,
+# ~ and nothing — and names that only look like them.
+yn_out=$(bash -c '. "$1"; for v in 2026-10-20 "2026-10-20T10:00:00Z" -1 +2 .5 1:30 .inf -.Inf .NaN "~" "" 0x1F 1e3 null Yes; do pin_fixer_yaml_nonstring "$v" || echo "STRING:$v"; done; for v in v2026-10-20 nightly-2026-10-20 2026-10 1.2.3 stable release v1 1.85.0 .nanx; do pin_fixer_yaml_nonstring "$v" && echo "NONSTRING:$v"; done; true' _ "$fleet/scripts/lib/pin-fixer-lock.sh")
+check "pin_fixer_yaml_nonstring reads timestamps, signed/dotted numbers, base 60, .inf/.nan and ~ as non-strings, and only those" \
+  "[ -z \"\$yn_out\" ]"
+
+# ls37: a tag spelled as a date is written quoted into a plain ref field, so
+# the lock holds the tag string, not a timestamp.
+mkdir -p "$fx/ls37/.github/workflows"
+action_steps "$fx/ls37/.github/workflows" "foo/bar@$SHA_B"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s':\n        ref: %s\n        commit: 'sha1-%s'\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls37/.github/workflows/actions.lock"
+printf 'foo/bar\t%s\t2026-10-20\n' "$SHA_B" > "$fx/ls37-tags.tsv"
+TAG_MAP="$fx/ls37-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls37" --offline
+check "ls37 a tag spelled as a date is written quoted into a plain ref field" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: '2026-10-20'\$\" '$fx/ls37/.github/workflows/actions.lock'"
+
+# ls38: a self-SHA record no workflow here uses (a transitive dependency: a
+# reusable's own call, which may be a reusable whose SHA ref is legitimate)
+# is not rewritten to a tag on a guess, even with a tag to hand: reported
+# UNRESOLVED, the record unchanged, exit 1.
+mkdir -p "$fx/ls38/.github/workflows"
+action_steps "$fx/ls38/.github/workflows" "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+lock_records "$fx/ls38" "third/party@$SHA_A"
+printf 'third/party\t%s\tv1.0.0\n' "$SHA_A" > "$fx/ls38-tags.tsv"
+cp "$fx/ls38/.github/workflows/actions.lock" "$fx/ls38-before.lock"
+TAG_MAP="$fx/ls38-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls38" --offline
+check "ls38 a record no workflow uses is UNRESOLVED and left as is, never rewritten on a guess" \
+  "[ \$rc -eq 1 ] && grep -q 'UNRESOLVED  third/party@aaaaaaa: no workflow here uses it' <<<\"\$out\" && cmp -s '$fx/ls38-before.lock' '$fx/ls38/.github/workflows/actions.lock'"
 
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 

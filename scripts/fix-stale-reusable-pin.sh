@@ -111,7 +111,9 @@ rewrites=0; lock_touched=0
 # so after substitution the lock can hold the same dependency key twice. A
 # duplicate key is a lockfile GitHub refuses. Keep the first record, fold the
 # others' nested `uses:` into it (deduplicated, sorted as gh actions-lock sorts),
-# and drop them. Rewrite lockfile $1 in place, preserving gh-actions-lock's
+# and drop them. Keys and entries compare as GitHub resolves them — the
+# repository and a commit ID in either case — so `Fixture/Repo@<sha>` and
+# `fixture/repo@<sha>` are one record, written back as first spelled. Rewrite lockfile $1 in place, preserving gh-actions-lock's
 # 4-space layout and leaving the file alone when the output is identical.
 #
 # The nested list may be written flow-style on one line (`uses: []`,
@@ -159,7 +161,7 @@ merge_duplicate_records() {
                 if (!(it ~ ("^" sq "[^\"" sq "]+" sq "$") || it ~ ("^\"[^\"" sq "]+\"$") || it ~ ("^[^][{}:,\"" sq "#[:space:]]+$"))) return 0
                 parts[i] = it
             }
-            for (i = 1; i <= n; i++) if (parts[i] != "") { k = cur SUBSEP unq(parts[i]); if (!(k in uses_of)) uses_of[k] = parts[i] }
+            for (i = 1; i <= n; i++) if (parts[i] != "") { k = cur SUBSEP dep_id(unq(parts[i])); if (!(k in uses_of)) uses_of[k] = parts[i] }
             return 1
         }
         # A record key is the dependency between its quotes — or a plain
@@ -170,6 +172,16 @@ merge_duplicate_records() {
         # merger did not recognise was not kept: every line of it fell to the
         # catch-all below with no current record, and was dropped.
         function unq(s) { gsub(/["'"'"']/, "", s); return s }
+        # The dependency a record key or entry names, as GitHub resolves it:
+        # the repository in either case (`Fixture/Repo` is `fixture/repo`),
+        # a commit ID in either case; a tag or branch is a name, kept as is.
+        function dep_id(s,   at, j, ref) {
+            at = 0; while ((j = index(substr(s, at + 1), "@")) > 0) at += j
+            if (!at) return tolower(s)
+            ref = substr(s, at + 1)
+            if (length(ref) == 40 && ref !~ /[^0-9A-Fa-f]/) ref = tolower(ref)
+            return tolower(substr(s, 1, at)) ref
+        }
         function record_key(s) { sub(/[[:space:]]+#.*$/, "", s); return (s ~ /^    ["'"'"'][^"'"'"']+["'"'"']:$/ || s ~ /^    [^[:space:]"'"'"'#][^[:space:]]*:$/) }
         # A nested `uses:` entry, quoted or plain, with or without a trailing
         # comment; it is deduplicated on its value, the comment kept with
@@ -183,6 +195,7 @@ merge_duplicate_records() {
         /^    [^[:space:]]/ || /^        [^[:space:]]/ { in_uses = 0 }
         record_key($0) {
             key = $0; sub(/[[:space:]]+#.*$/, "", key); key = unq(key)
+            sub(/^ +/, "", key); sub(/:$/, "", key); key = dep_id(key)
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             nrec[key]++; cur = key; next
         }
@@ -199,7 +212,7 @@ merge_duplicate_records() {
         }
         # Any other `uses:` value is one the merger cannot read.
         /^        uses:/ { odd[cur] = 1 }
-        in_uses && uses_entry($0) { u = $0; sub(/^            - /, "", u); k = cur SUBSEP entry_value($0); if (!(k in uses_of)) uses_of[k] = u; next }
+        in_uses && uses_entry($0) { u = $0; sub(/^            - /, "", u); k = cur SUBSEP dep_id(entry_value($0)); if (!(k in uses_of)) uses_of[k] = u; next }
         # Any other line inside the list (a comment, a shape this merger has
         # no rule for) stays under the `uses:` header it came from: moved
         # above it, it would be a child with no parent key.
@@ -213,7 +226,7 @@ merge_duplicate_records() {
         }
         END {
             for (k = 1; k <= norder; k++) if (odd[order[k]] && nrec[order[k]] > 1) {
-                name = order[k]; sub(/^ +/, "", name); sub(/:$/, "", name)
+                name = spelled[order[k]]; sub(/[[:space:]]+#.*$/, "", name); name = unq(name); sub(/^ +/, "", name); sub(/:$/, "", name)
                 printf "UNSUPPORTED  .github/workflows/actions.lock: the record %s is listed %d times and its uses: is a shape the merger cannot fold (a flow list over several lines, an alias, a scalar); the duplicates were left in place. Merge them by hand.\n", name, nrec[order[k]] > "/dev/stderr"
                 refused = 1
             }
@@ -245,6 +258,18 @@ lookup_replacement() { # <reusable-path> <stale-sha>
             replacement="$t_new"; reason="$t_reason"; return 0
         fi
     done < "$PINS_TABLE"
+    return 1
+}
+
+# Does <file> hold, anywhere in its text, a reusable pin the table names as
+# known-dead?
+dead_ref_in_file() { # <file>
+    local ref sha
+    while IFS= read -r ref; do
+        [ -n "$ref" ] || continue
+        sha="${ref##*@}"
+        lookup_replacement "${ref%@*}" "${sha,,}" && return 0
+    done < <(grep -oiE "$REUSABLE_REF_RE" "$1" || true)
     return 1
 }
 
@@ -428,10 +453,19 @@ while IFS= read -r -d '' wf; do
     # A job's `uses:` given as an alias (`uses: *call`) runs the anchor's
     # value, defined elsewhere in the file (`CALL: &call owner/repo/...@<sha>`):
     # the rewrite reads no reference on the key line. A known-dead pin as
-    # that value is reported; the anchor is not rewritten from here.
+    # that value is reported; the anchor is not rewritten from here. An alias
+    # whose anchor this reader cannot find (the anchor reader is line-local:
+    # `&call` after another item of a flow sequence begun on an earlier line
+    # is not seen) may be that pin: in a file that holds a known-dead pin
+    # anywhere, it is reported too, never passed as OK.
     for lineno in $klines; do
         alias=$(sed -n "${lineno}p" "$wf" | grep -oE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*\*[A-Za-z0-9_.-]+" | sed 's/.*\*//' || true)
         [ -n "$alias" ] || continue
+        value=$(anchor_value "$wf" "$alias" "$lineno")
+        if [ -z "$value" ] && dead_ref_in_file "$wf"; then
+            echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` names an anchor this parser cannot read, and the file holds a known-dead pin it may hold. Fix by hand; the file was not changed." >&2
+            skip=1; continue
+        fi
         while IFS= read -r ref; do
             [ -n "$ref" ] || continue
             sha="${ref##*@}"
@@ -439,7 +473,7 @@ while IFS= read -r -d '' wf; do
                 echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` runs $ref, a known-dead pin held by the anchor \`&$alias\`. Fix by hand; the file was not changed." >&2
                 skip=1
             fi
-        done < <(anchor_value "$wf" "$alias" "$lineno" | grep -oiE "^${REUSABLE_REF_RE}\$" || true)
+        done < <(printf '%s\n' "$value" | grep -oiE "^${REUSABLE_REF_RE}\$" || true)
     done
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()
