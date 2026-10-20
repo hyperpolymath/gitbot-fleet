@@ -62,3 +62,13 @@ pin_fixer_replace() { # <tmp> <dest>
     chown --reference="$2" "$1" 2>/dev/null || true
     mv -f "$1" "$2"
 }
+
+# Would YAML read <value>, written as a plain (unquoted) scalar, as anything
+# but a string? A number (`1`, `1.80` the float 1.8, `1e3`, `0x1f`, `0o17`,
+# `0b1`) or a null or boolean spelling as YAML 1.1 and the core schema read
+# them (`null`, `true`, `no`, `on`, `y`, ... in any case). A fixer writing
+# such a value into a workflow or lock quotes it.
+pin_fixer_yaml_nonstring() { # <value>
+    [[ "$1" =~ ^([0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9]+)?|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$ ]] \
+        || [[ "${1,,}" =~ ^(null|true|false|yes|no|on|off|y|n)$ ]]
+}

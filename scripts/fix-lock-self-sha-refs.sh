@@ -381,7 +381,11 @@ while IFS=$'\t' read -r lineno repo sha ref_raw; do
     # lineno is the ref: line itself; its quote style (or none) is kept, and
     # the SHA is matched as that line spells it (its case may differ from the
     # key's).
-    sed -i "${lineno}s|^\(        ['\"]\{0,1\}ref['\"]\{0,1\}[[:space:]]*:[[:space:]]*\)\(['\"]\{0,1\}\)$ref_raw\2|\1\2$tag\2|" "$tmp"
+    # A plain field whose tag YAML would read as a non-string (`true`, `1`,
+    # `null`) is written quoted, so the lock keeps a tag, not a boolean.
+    q=""
+    if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "^        [\"']?ref[\"']?[[:space:]]*:[[:space:]]*[\"']"; then q="'"; fi
+    sed -i "${lineno}s|^\(        ['\"]\{0,1\}ref['\"]\{0,1\}[[:space:]]*:[[:space:]]*\)\(['\"]\{0,1\}\)$ref_raw\2|\1\2$q$tag$q\2|" "$tmp"
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
     fixed=$((fixed + 1))
 done < "$records"

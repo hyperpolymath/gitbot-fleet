@@ -2934,6 +2934,71 @@ TAG_MAP="$fx/ls34-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls34 a quoted &call does not replace the real anchor: the aliased reusable keeps its SHA ref" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: '$SHA_A'\$\" '$fx/ls34/.github/workflows/actions.lock'"
 
+# tc32 / tc33: anchor names are case-sensitive (`&Rust` is not `&rust`), and
+# an alias of no anchor read could be the pinned toolchain: UNSUPPORTED.
+mkdir -p "$fx/tc32/.github/workflows" "$fx/tc33/.github/workflows"
+printf 'env:\n  A: &Rust dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n  B: &rust dtolnay/rust-toolchain@stable\njobs:\n  check:\n    steps:\n      - uses: *Rust\n' > "$fx/tc32/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc32"
+check "tc32 *Rust is the SHA-pinned &Rust, not the tag-pinned &rust: UNSUPPORTED" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 7\\.' <<<\"\$out\""
+# The anchor sits mid-line in a flow sequence continued from the line
+# above, where the line-local reader does not take `&` for an anchor; the
+# file does carry the pinned reference, so the unread alias is reported.
+printf 'x-list: [a,\n  b, &rust dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772]\njobs:\n  check:\n    steps:\n      - uses: *rust\n' > "$fx/tc33/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc33"
+check "tc33 an alias of no anchor read, in a file carrying a SHA-pinned toolchain ref, is UNSUPPORTED" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\""
+
+# sp39: a nested `uses: # rationale` header is the list header: two records
+# merging onto the replacement leave one header, its comment kept.
+mkdir -p "$fx/sp39/.github/workflows"
+printf 'jobs:\n  governance:\n    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s\n' "$STALE_B" > "$fx/sp39/.github/workflows/governance.yml"
+printf 'jobs:\n  scorecard:\n    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@%s\n' "$STALE_C" > "$fx/sp39/.github/workflows/scorecard.yml"
+cat > "$fx/sp39/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/governance.yml':
+        - 'hyperpolymath/standards@$STALE_B'
+    '.github/workflows/scorecard.yml':
+        - 'hyperpolymath/standards@$STALE_C'
+dependencies:
+    'hyperpolymath/standards@$STALE_B':
+        ref: '$STALE_B'
+        commit: 'sha1-$STALE_B'
+        uses: # transitive actions of the reusable
+            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+    'hyperpolymath/standards@$STALE_C':
+        ref: '$STALE_C'
+        commit: 'sha1-$STALE_C'
+        uses:
+            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'
+LOCK
+bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp39" >/dev/null 2>&1 || true
+check "sp39 a commented nested uses: header is the one header of the merged record" \
+  "[ \$(grep -c '^        uses:' '$fx/sp39/.github/workflows/actions.lock') -eq 1 ] && grep -q '^        uses: # transitive actions of the reusable\$' '$fx/sp39/.github/workflows/actions.lock' && grep -q 'ossf/scorecard-action' '$fx/sp39/.github/workflows/actions.lock'"
+
+# ls35 / ls36: `&call` inside a plain scalar is text; a tag YAML would read
+# as a non-string is written quoted into a plain ref field.
+mkdir -p "$fx/ls35/.github/workflows" "$fx/ls36/.github/workflows"
+cat > "$fx/ls35/.github/workflows/ci.yml" <<YML
+env:
+  CALL: &call octo/repo/.github/workflows/x.yml@$SHA_A
+  NOTE: fixture &call octo/repo@$SHA_A
+jobs:
+  call:
+    uses: *call
+YML
+lock_records "$fx/ls35" "octo/repo@$SHA_A"
+TAG_MAP="$fx/ls34-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls35" --offline
+check "ls35 &call inside a plain scalar is text: the aliased reusable keeps its SHA ref" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: '$SHA_A'\$\" '$fx/ls35/.github/workflows/actions.lock'"
+printf 'jobs:\n  check:\n    steps:\n      - uses: foo/bar@%s\n' "$SHA_B" > "$fx/ls36/.github/workflows/ci.yml"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s':\n        ref: %s\n        commit: 'sha1-%s'\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls36/.github/workflows/actions.lock"
+printf 'foo/bar\t%s\ttrue\n' "$SHA_B" > "$fx/ls36-tags.tsv"
+TAG_MAP="$fx/ls36-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls36" --offline
+check "ls36 a tag YAML reads as a boolean is written quoted into a plain ref field" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'true'\$\" '$fx/ls36/.github/workflows/actions.lock'"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

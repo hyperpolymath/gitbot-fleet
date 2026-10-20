@@ -79,11 +79,6 @@ if [[ ! "$TOOLCHAIN" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     printf 'fix-rust-toolchain-input: TOOLCHAIN=%q is not a toolchain name (letters, digits, ., _, -); nothing was changed\n' "$TOOLCHAIN" >&2
     exit 2
 fi
-TOOLCHAIN_YAML="$TOOLCHAIN"
-if [[ "$TOOLCHAIN" =~ ^([0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9]+)?|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$ ]] \
-   || [[ "${TOOLCHAIN,,}" =~ ^(null|true|false|yes|no|on|off|y|n)$ ]]; then
-    TOOLCHAIN_YAML="'$TOOLCHAIN'"
-fi
 TARGET="${1:?Usage: fix-rust-toolchain-input.sh <workflow.yml | repo-path>}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # One workflow-pin fixer per checkout at a time (see lib/pin-fixer-lock.sh):
@@ -91,6 +86,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the file'"'"'s directory (`<checkout>/.github/workflows/<file>`, relative or
 # absolute), so every fixer on that checkout contends for the same lock.
 . "$SCRIPT_DIR/lib/pin-fixer-lock.sh"
+TOOLCHAIN_YAML="$TOOLCHAIN"
+if pin_fixer_yaml_nonstring "$TOOLCHAIN"; then TOOLCHAIN_YAML="'$TOOLCHAIN'"; fi
 # anchor_defs/2: the anchors a line defines, outside quoted scalars and comments.
 ANCHORS_AWK=$(cat "$SCRIPT_DIR/lib/yaml-anchors.awk")
 if [ -d "$TARGET" ]; then
@@ -255,9 +252,12 @@ apply_to_file() {
                 # anchor that holds a SHA-pinned toolchain reference: the step
                 # runs that action, but the reference is not where the parser
                 # places a step'"'"'s action. Reported, never passed over.
+                # An alias of no anchor read here could be that reference too.
+                # Anchor names are case-sensitive: matched in lower case for
+                # the key, the name is taken as written.
                 if ((flow_item || length(key_indent_of(buf[i])) == skey) && match(tolower(site_view(buf[i])), USES_ALIAS_RE)) {
-                    m = substr(tolower(site_view(buf[i])), RSTART, RLENGTH); sub(/^.*\*/, "", m)
-                    if (m in tc_anchor) unrec[++nunrec] = lnum[i]
+                    m = substr(site_view(buf[i]), RSTART, RLENGTH); sub(/^.*\*/, "", m)
+                    if ((m in tc_anchor) || !(m in any_anchor)) unrec[++nunrec] = lnum[i]
                 }
                 if (!sha_ref(buf[i])) continue
                 if (!flow_item && tolower(buf[i]) ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
@@ -415,7 +415,7 @@ apply_to_file() {
                 anc_scalar = -1
                 if (plain($0)) {
                     anchor_defs($0, d)
-                    for (a in d) { if (sha_ref(d[a])) tc_anchor[tolower(a)] = 1; else delete tc_anchor[tolower(a)] }
+                    for (a in d) { any_anchor[a] = 1; if (sha_ref(d[a])) tc_anchor[a] = 1; else delete tc_anchor[a] }
                     if ($0 ~ SCALAR_RE) anc_scalar = length(key_indent_of($0))
                 }
             }

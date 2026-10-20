@@ -125,7 +125,7 @@ merge_duplicate_records() {
             n = 0
             for (u in uses_of) if (index(u, cur SUBSEP) == 1) n++
             if (n > 0 || nextra[cur] > 0) {
-                print "        uses:"
+                print (cur in uses_head ? uses_head[cur] : "        uses:")
                 fflush()
                 cmd = "sort"
                 for (u in uses_of) if (index(u, cur SUBSEP) == 1) print "            - " uses_of[u] | cmd
@@ -157,8 +157,10 @@ merge_duplicate_records() {
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             cur = key; next
         }
-        /^        uses:[[:space:]]*$/ { in_uses = 1; next }
-        uses_entry($0) { u = $0; sub(/^            - /, "", u); k = cur SUBSEP entry_value($0); if (!(k in uses_of)) uses_of[k] = u; next }
+        # The nested list header, with or without a trailing comment (kept as
+        # first spelled); only lines inside a list it opens are its entries.
+        /^        uses:[[:space:]]*(#.*)?$/ { in_uses = 1; if (!(cur in uses_head)) uses_head[cur] = $0; next }
+        in_uses && uses_entry($0) { u = $0; sub(/^            - /, "", u); k = cur SUBSEP entry_value($0); if (!(k in uses_of)) uses_of[k] = u; next }
         # Any other line inside the list (a comment, a shape this merger has
         # no rule for) stays under the `uses:` header it came from: moved
         # above it, it would be a child with no parent key.
