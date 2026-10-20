@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+# gitleaks fingerprints (commit:file:rule:line) of historical false positives.
+# Each is a documented placeholder, not a credential; the sustainabot file no
+# longer exists (deleted in ded43d0) and the seambot literal is `ghs_xxx…`.
+d1d8e1db885c6bf15833d413cdae42a5710d7ff4:bots/seambot/tests/github_integration.rs:github-app-token:154
+37db42f48f7f85f2558a57e3f6643a62f39da2bc:bots/seambot/tests/github_integration.rs:github-app-token:154
+f1b3dc853aa9c13e47fde308681c4a1e0bb58eb1:bots/seambot/tests/github_integration.rs:github-app-token:154
+d1d8e1db885c6bf15833d413cdae42a5710d7ff4:bots/sustainabot/docs/GITHUB_APP_SETUP.md:private-key:89
+37db42f48f7f85f2558a57e3f6643a62f39da2bc:bots/sustainabot/docs/GITHUB_APP_SETUP.md:private-key:89
+f1b3dc853aa9c13e47fde308681c4a1e0bb58eb1:bots/sustainabot/docs/GITHUB_APP_SETUP.md:private-key:89

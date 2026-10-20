@@ -69,6 +69,8 @@ JSONL=""
 ONE_REPO=""
 FINDING_FILE=""        # dispatch-runner contract: $2 is the finding JSON
 STD_REPO="hyperpolymath/standards"
+allowlist_tmp=""
+trap 'if [ -n "$allowlist_tmp" ]; then rm -f "$allowlist_tmp"; fi' EXIT
 
 die() { echo "fix-actions-policy: $*" >&2; exit "${2:-2}"; }
 
@@ -222,9 +224,10 @@ for R in $REPOS; do
     # a healthy `selected` repo.
     SRC="$ALLOWLIST"
     if [ -z "$SRC" ]; then
-      gh api "repos/${STD_REPO}/actions/permissions/selected-actions" > "/tmp/allow.$$.json" 2>/dev/null \
+      allowlist_tmp="$(mktemp)"
+      gh api "repos/${STD_REPO}/actions/permissions/selected-actions" > "$allowlist_tmp" 2>/dev/null \
         || die "cannot read the standards allowlist; pass --allowlist FILE instead"
-      SRC="/tmp/allow.$$.json"
+      SRC="$allowlist_tmp"
     fi
     [ -s "$SRC" ] || die "allowlist '$SRC' is missing or empty"
     jq -e '(.patterns_allowed|length) > 0' "$SRC" >/dev/null 2>&1 \
@@ -232,7 +235,10 @@ for R in $REPOS; do
     gh api --method PUT "repos/${FULL}/actions/permissions/selected-actions" --input "$SRC" >/dev/null
     # `&& rm` alone would return 1 when the test is false and, under `set -e`,
     # abort the sweep on the --allowlist path. Keep the guard total.
-    if [ "$SRC" = "/tmp/allow.$$.json" ]; then rm -f "/tmp/allow.$$.json"; fi
+    if [ -n "$allowlist_tmp" ]; then
+      rm -f "$allowlist_tmp"
+      allowlist_tmp=""
+    fi
   fi
 
   # GET-verify. Trading sha_pinning away for permissiveness is never acceptable,

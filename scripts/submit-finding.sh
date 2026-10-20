@@ -40,7 +40,7 @@ REPO_SLUG=$(echo "$REPO_NAME" | tr '/' '-' | tr -cd 'a-zA-Z0-9._-')
 TARGET_FILE="shared-context/findings/${REPO_SLUG}/${TIMESTAMP}.json"
 
 # Clone or update fleet repo
-FLEET_DIR="/tmp/gitbot-fleet-$$"
+FLEET_DIR="$(mktemp -d)"
 trap 'rm -rf "$FLEET_DIR"' EXIT
 
 if [ -n "$PUSH_TOKEN" ]; then

@@ -31,8 +31,10 @@ permissions:
 
 jobs:
   hypatia:
-    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@da2c748aad55c1a1dcba00b60fe4a35017bc6540
-    secrets: inherit
+    uses: hyperpolymath/standards/.github/workflows/hypatia-scan-reusable.yml@75bd5994470661a099df562d6d5ad2fe744dbd66
+    # hypatia-scan-reusable declares one secret; pass that one, not everything.
+    secrets:
+      HYPATIA_SCAN_PAT: ${{ secrets.HYPATIA_SCAN_PAT }}
     # Total caller-side wall-clock cap for the reusable. Matches
     # Hypatia's `missing_timeout_minutes` rule expectation. The scan is
     # typically ~3 min; the cap leaves headroom for slow estate builds.
