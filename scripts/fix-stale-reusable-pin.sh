@@ -88,7 +88,11 @@ ANCHORS_AWK=$(cat "$SCRIPT_DIR/lib/yaml-anchors.awk")
 # The value of anchor <name> as an alias on line <n> of <file> sees it: the
 # last `&name` defined above that line (lib/yaml-anchors.awk reads anchors
 # outside quoted scalars and comments, and a block scalar's content is
-# skipped as text), or "" when there is none.
+# skipped as text), or "" when there is none. A line ending in an escaped
+# line break inside a double-quoted scalar (`CALL: &call "a/b/.github/\`) is
+# read joined with the lines that continue it, as YAML reads the value; a
+# value still open at its line's end (folded into the next line) is not read,
+# "" as well.
 anchor_value() { # <file> <name> <line>
     awk -v want="$2" -v upto="$3" "$ANCHORS_AWK"'
         function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
@@ -99,10 +103,12 @@ anchor_value() { # <file> <name> <line>
             if (blk >= 0 && (!plain || indent_of($0) > blk)) next
             blk = -1
             if (!plain) next
-            if (anchor_defs($0, d) && (want in d)) got = d[want]
-            if ($0 ~ /:[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$/) { t = $0; sub(/[^[:space:]-].*$/, "", t); blk = length(t) }
+            s = $0
+            while (yaml_dq_continued(s) && (getline t) > 0) s = yaml_dq_join(s, t)
+            if (anchor_defs(s, d) && (want in d)) got = d[want]
+            if (s ~ /:[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$/) { t = s; sub(/[^[:space:]-].*$/, "", t); blk = length(t) }
         }
-        END { print got }' "$1"
+        END { if (index(got, "\002")) got = ""; print got }' "$1"
 }
 pin_fixer_lock "$REPO_PATH"
 
@@ -586,22 +592,32 @@ while IFS= read -r -d '' wf; do
     # `&call` after another item of a flow sequence begun on an earlier line
     # is not seen) may be that pin: in a file that holds a known-dead pin
     # anywhere, it is reported too, never passed as OK.
-    for lineno in $klines; do
-        alias=$(sed -n "${lineno}p" "$wf" | grep -oE "^[[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*\*[A-Za-z0-9_.-]+" | sed 's/.*\*//' || true)
-        [ -n "$alias" ] || continue
-        value=$(anchor_value "$wf" "$alias" "$lineno")
-        if [ -z "$value" ] && dead_ref_in_file "$wf"; then
-            echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` names an anchor this parser cannot read, and the file holds a known-dead pin it may hold. Fix by hand; the file was not changed." >&2
-            skip=1; continue
-        fi
-        while IFS= read -r ref; do
-            [ -n "$ref" ] || continue
-            sha="${ref##*@}"
-            if lookup_replacement "${ref%@*}" "${sha,,}"; then
-                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` runs $ref, a known-dead pin held by the anchor \`&$alias\`. Fix by hand; the file was not changed." >&2
-                skip=1
+    # A flow-style job (`rust: { uses: *call }`, `jobs: { rust: { uses:
+    # *call } }`) is no key the parser places, but runs its alias all the
+    # same: every `uses: *name` outside comments and quoted text, on a line
+    # that is neither data nor text, is read the same way.
+    alias_lines=$klines
+    while IFS= read -r numbered; do
+        lineno="${numbered%%:*}"
+        grep -qx "$lineno" <<<"$placed" || alias_lines="$alias_lines $lineno"
+    done < <(grep -n '[*]' "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
+    for lineno in $alias_lines; do
+        while IFS= read -r alias; do
+            [ -n "$alias" ] || continue
+            value=$(anchor_value "$wf" "$alias" "$lineno")
+            if [ -z "$value" ] && dead_ref_in_file "$wf"; then
+                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` names an anchor this parser cannot read, and the file holds a known-dead pin it may hold. Fix by hand; the file was not changed." >&2
+                skip=1; continue
             fi
-        done < <(printf '%s\n' "$value" | grep -oiE "^${REUSABLE_REF_RE}\$" || true)
+            while IFS= read -r ref; do
+                [ -n "$ref" ] || continue
+                sha="${ref##*@}"
+                if lookup_replacement "${ref%@*}" "${sha,,}"; then
+                    echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: \`uses: *$alias\` runs $ref, a known-dead pin held by the anchor \`&$alias\`. Fix by hand; the file was not changed." >&2
+                    skip=1
+                fi
+            done < <(printf '%s\n' "$value" | grep -oiE "^${REUSABLE_REF_RE}\$" || true)
+        done < <(mask_line "$(sed -n "${lineno}p" "$wf")" | grep -oE "(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*\*[A-Za-z0-9_.-]+" | sed 's/.*\*//' || true)
     done
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()
@@ -755,17 +771,82 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             # The record is the one whose unquoted key IS repo@stale: a key that
             # merely contains it (`evilhyperpolymath/standards@<sha>`) is another
             # record, and so is a plain unquoted key (a hand-written record).
-            # The SHA is replaced wherever it stands on the line, in either
-            # case; the rest of the line keeps its spelling.
+            # The SHA is replaced in either case wherever it stands in the
+            # record'"'"'s own key, ref and commit (own_sub); the rest of the line
+            # keeps its spelling.
             function isub(s, old, new,   l, o, i, out) {
                 out = ""; l = tolower(s); o = tolower(old)
                 while ((i = index(l, o)) > 0) { out = out substr(s, 1, i - 1) new; s = substr(s, i + length(old)); l = substr(l, i + length(old)) }
                 return out s
             }
-            # The key is read up to its own colon, so a record written as a
-            # flow mapping on its key line (`'"'"'repo@sha'"'"': { ref: ..., commit:
-            # ... }`) is the record too: the whole line is then its key, ref and
-            # commit, and is moved as one.
+            # The length of the quoted scalar t starts with (`'"'"''"'"'` is a quote
+            # inside single quotes, `\` escapes inside double quotes); all of t
+            # when it does not close.
+            function qlen(t,   q, i, n) {
+                q = substr(t, 1, 1); n = length(t); i = 2
+                while (i <= n) {
+                    if (q == "\"" && substr(t, i, 1) == "\\") { i += 2; continue }
+                    if (substr(t, i, 1) == q) { if (q == "'"'"'" && substr(t, i + 1, 1) == "'"'"'") { i += 2; continue }; return i }
+                    i++
+                }
+                return n
+            }
+            # The length of the flow value t starts with: up to the `,`, `}` or
+            # `]` that ends it, or a comment, quoted text and nested brackets
+            # passed over.
+            function vlen(t,   i, n, c, d) {
+                n = length(t); i = 1; d = 0
+                while (i <= n) {
+                    c = substr(t, i, 1)
+                    if (c == "\"" || c == "'"'"'") { i += qlen(substr(t, i)); continue }
+                    if (d == 0 && (c == "," || c == "}" || c == "]")) return i - 1
+                    if (c == "#" && i > 1 && substr(t, i - 1, 1) ~ /[[:space:]]/) return i - 1
+                    if (c == "{" || c == "[") d++
+                    else if (c == "}" || c == "]") d--
+                    i++
+                }
+                return n
+            }
+            # The SHA replaced in the parts of record line s that are the
+            # record'"'"'s own: its key, read up to its own colon, and the values
+            # of its `ref` and `commit` fields — on their own lines, or as
+            # entries of a flow mapping written on the key line (`'"'"'repo@sha'"'"':
+            # { ref: ..., commit: ... }`). A nested `uses:` list in that mapping
+            # names other revisions, which this fixer does not recompute
+            # (`uses: ['"'"'other/action@<sha>'"'"']` at the same SHA is another
+            # repository'"'"'s edge), and a comment is text: both are kept as
+            # written.
+            function own_sub(s,   k, q, j, out, rest, i, n, c, d) {
+                if (s !~ /^    [^[:space:]#]/) {
+                    # A field line: its key and value, not a comment after them.
+                    k = s; s = ""
+                    while (k != "") {
+                        c = substr(k, 1, 1)
+                        if (c == "\"" || c == "'"'"'") { j = qlen(k); s = s substr(k, 1, j); k = substr(k, j + 1); continue }
+                        if (c == "#" && s ~ /[[:space:]]$/) break
+                        s = s c; k = substr(k, 2)
+                    }
+                    return isub(s, stale, new) k
+                }
+                k = substr(s, 5)
+                if (k ~ /^["'"'"']/) { q = substr(k, 1, 1); j = index(substr(k, 2), q) + 1 }
+                else { match(k, /:([[:space:]]|$)/); j = RSTART - 1 }
+                out = isub(substr(s, 1, 4 + j), stale, new); rest = substr(s, 5 + j)
+                n = length(rest); i = 1; d = 0
+                while (i <= n) {
+                    c = substr(rest, i, 1)
+                    if (c == "\"" || c == "'"'"'") { j = qlen(substr(rest, i)); out = out substr(rest, i, j); i += j; continue }
+                    if (c == "#" && (i == 1 || substr(rest, i - 1, 1) ~ /[[:space:]]/)) { out = out substr(rest, i); break }
+                    if (c == "{" || c == "[") d++
+                    else if (c == "}" || c == "]") d--
+                    out = out c; i++
+                    if (d == 1 && (c == "{" || c == ",") && match(substr(rest, i), /^[[:space:]]*["'"'"']?(ref|commit)["'"'"']?[[:space:]]*:[[:space:]]*/)) {
+                        out = out substr(rest, i, RLENGTH); i += RLENGTH
+                        j = vlen(substr(rest, i)); out = out isub(substr(rest, i, j), stale, new); i += j
+                    }
+                }
+                return out
+            }
             sec == "d" && /^    [^[:space:]#]/ {
                 k = $0; sub(/^    /, "", k); sub(/[[:space:]]+#.*$/, "", k)
                 if (k ~ /^["'"'"']/) { q = substr(k, 1, 1); k = substr(k, 2); k = substr(k, 1, index(k, q) - 1) }
@@ -775,8 +856,8 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             # The field keys may be quoted (`"ref": ...`, `'"'"'commit'"'"': ...`), as
             # a hand-written record may write them: the same fields.
             sec == "d" && inrec && (/^    [^[:space:]#]/ || /^        ["'"'"']?(ref|commit)["'"'"']?[[:space:]]*:/) {
-                if (still == 0) $0 = isub($0, stale, new)
-                else copy[++nc] = isub($0, stale, new)
+                if (still == 0) $0 = own_sub($0)
+                else copy[++nc] = own_sub($0)
             }
             sec == "d" && inrec && still != 0 && !(/^    [^[:space:]#]/ || /^        ["'"'"']?(ref|commit)["'"'"']?[[:space:]]*:/) { copy[++nc] = $0 }
             { print }

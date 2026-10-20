@@ -16,8 +16,11 @@
 # read to its closing quote (`''` is a quote inside single quotes; inside
 # double quotes each `\` escape is decoded, yaml_unescape/1), a plain one up
 # to whitespace, `,`, `}`, `]` or a comment; "" when the anchor names a
-# mapping or sequence that follows. The caller skips the content lines of
-# block scalars (`run: |`), which are text throughout.
+# mapping or sequence that follows; "\002", which no reference holds, when a
+# quoted value runs past the line's end — continued past an escaped line
+# break or folded into the next line, it is not the value YAML reads, and a
+# caller that wants it joins the line first (yaml_dq_join). The caller skips
+# the content lines of block scalars (`run: |`), which are text throughout.
 #
 # The character a double-quoted escape stands for, `t` being the text after
 # its backslash; esc_len is set to how much of `t` it spans. YAML resolves
@@ -114,6 +117,7 @@ function anchor_defs(s, defs,   n, i, len, c, q, name, v, seen, depth) {
                     }
                     v = v c; i++
                 }
+                if (i > len) v = "\002"
                 q = ""; i++
             } else {
                 while (i <= len && substr(s, i, 1) !~ /[],}[:space:]]/) { v = v substr(s, i, 1); i++ }

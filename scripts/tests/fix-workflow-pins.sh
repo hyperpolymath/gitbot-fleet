@@ -3571,6 +3571,138 @@ run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc42"
 check "tc42 an escaped toolchain key is the input: flow and block steps left as they are, exit 0" \
   "[ \$rc -eq 0 ] && cmp -s '$fx/tc42-before.yml' '$fx/tc42/.github/workflows/x.yml'"
 
+# ── Review cases (gitbot-fleet#615, round on a5cd438) ───────────────────────
+# sp60 / tc43: an anchor whose double-quoted value is continued past an
+# escaped line break holds the value YAML joins. A dead call read so through
+# `uses: *call` is reported; the toolchain fixer, which reads anchors a line
+# at a time, counts an alias of such an anchor as possibly the pin. Both exit
+# 2 with the file untouched, never pass the alias as a known other value.
+mkdir -p "$fx/sp60/.github/workflows" "$fx/tc43/.github/workflows"
+printf 'env:\n  CALL: &call "hyperpolymath/standards/.github/workflows/rust-ci-\\\n    reusable.yml@%s"\njobs:\n  rust:\n    uses: *call\n' "$STALE_A" > "$fx/sp60/.github/workflows/ci.yml"
+cp "$fx/sp60/.github/workflows/ci.yml" "$fx/sp60-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp60"
+check "sp60 an aliased dead call held by a continued anchor value is UNSUPPORTED, exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:6: .uses: \\*call. runs hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@$STALE_A' <<<\"\$out\" && cmp -s '$fx/sp60-before.yml' '$fx/sp60/.github/workflows/ci.yml'"
+printf 'env:\n  ACTION: &rust "dtolnay/rust-\\\n    toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"\njobs:\n  check:\n    steps:\n      - uses: *rust\n' > "$fx/tc43/.github/workflows/x.yml"
+cp "$fx/tc43/.github/workflows/x.yml" "$fx/tc43-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc43"
+check "tc43 an alias of a continued anchor value is UNSUPPORTED (line 7), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 7\\.' <<<\"\$out\" && cmp -s '$fx/tc43-before.yml' '$fx/tc43/.github/workflows/x.yml'"
+
+# ls45: a self-SHA ref carrying YAML node properties (`ref: !!str '<sha>'`)
+# is that SHA: the record gets its tag, block or flow, the tag kept.
+mkdir -p "$fx/ls45/.github/workflows" "$fx/ls45f/.github/workflows"
+action_steps "$fx/ls45/.github/workflows" "foo/bar@$SHA_B"
+action_steps "$fx/ls45f/.github/workflows" "foo/bar@$SHA_B"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s':\n        ref: !!str '%s'\n        commit: 'sha1-%s'\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls45/.github/workflows/actions.lock"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s': { ref: !!str '%s', commit: 'sha1-%s' }\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls45f/.github/workflows/actions.lock"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls45-tags.tsv"
+TAG_MAP="$fx/ls45-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls45" --offline
+check "ls45 a tagged block self-SHA ref is the record: it gets its tag, the tag property kept, exit 0" \
+  "[ \$rc -eq 0 ] && grep -qxF \"        ref: !!str 'v1.0.0'\" '$fx/ls45/.github/workflows/actions.lock'"
+TAG_MAP="$fx/ls45-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls45f" --offline
+check "ls45f a tagged flow self-SHA ref is the record: it gets its tag in its braces, exit 0" \
+  "[ \$rc -eq 0 ] && grep -qxF \"    'foo/bar@$SHA_B': { ref: !!str 'v1.0.0', commit: 'sha1-$SHA_B' }\" '$fx/ls45f/.github/workflows/actions.lock'"
+
+# tc44: a quoted key or value of a flow `with: {` left open at its line's
+# end — continued past an escaped line break, or folded onto the next line —
+# hides the keys the next line names: the step is reported (exit 2,
+# untouched), never given a second `toolchain`.
+mkdir -p "$fx/tc44/.github/workflows" "$fx/tc44b/.github/workflows"
+cat > "$fx/tc44/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { "toolch\
+          ain": nightly }
+YML
+cat > "$fx/tc44b/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: {
+          components: "rustfmt,
+            clippy", toolchain: nightly }
+YML
+cp "$fx/tc44/.github/workflows/x.yml" "$fx/tc44-before.yml"
+cp "$fx/tc44b/.github/workflows/x.yml" "$fx/tc44b-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc44"
+check "tc44 a flow input key continued past an escaped line break is UNSUPPORTED (line 5), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 5\\.' <<<\"\$out\" && cmp -s '$fx/tc44-before.yml' '$fx/tc44/.github/workflows/x.yml'"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc44b"
+check "tc44b a flow value folded onto the next line is UNSUPPORTED (line 6), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 6\\.' <<<\"\$out\" && cmp -s '$fx/tc44b-before.yml' '$fx/tc44b/.github/workflows/x.yml'"
+
+# tc45 / ls46: `steps: [uses: ...]` is a list of one step, a mapping written
+# without braces. The toolchain fixer reports such a SHA-pinned step (exit 2,
+# untouched), on the key's line or the next; the self-SHA fixer reads it as
+# the action site it is, and the record it proves gets its tag.
+mkdir -p "$fx/tc45/.github/workflows" "$fx/ls46/.github/workflows"
+cat > "$fx/tc45/.github/workflows/x.yml" <<'YML'
+jobs:
+  a:
+    steps: [uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772]
+  b:
+    steps:
+      [uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772]
+YML
+cp "$fx/tc45/.github/workflows/x.yml" "$fx/tc45-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc45"
+check "tc45 a step written straight into steps: [ ] is UNSUPPORTED (lines 3 and 6), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 3 6\\.' <<<\"\$out\" && cmp -s '$fx/tc45-before.yml' '$fx/tc45/.github/workflows/x.yml'"
+printf 'jobs:\n  build:\n    steps: [uses: foo/bar@%s]\n' "$SHA_B" > "$fx/ls46/.github/workflows/ci.yml"
+lock_records "$fx/ls46" "foo/bar@$SHA_B"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls46-tags.tsv"
+TAG_MAP="$fx/ls46-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls46" --offline
+check "ls46 steps: [uses: ...] proves the action: its self-SHA record gets its tag, exit 0" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls46/.github/workflows/actions.lock'"
+
+# tc46 / sp62: an alias given as the `uses` of a flow-style step or job —
+# `steps: [uses: *rust]`, `steps: [{ uses: *rust }]`, a step of a `[` opened
+# on the line above, `rust: { uses: *call }`, `jobs: { rust: { uses: *call }
+# }` — runs the anchor's value like a block key's alias: an anchored
+# SHA-pinned toolchain, or a known-dead call, is reported (exit 2,
+# untouched), never passed as clean.
+mkdir -p "$fx/tc46/.github/workflows" "$fx/sp62/.github/workflows" "$fx/sp62b/.github/workflows"
+cat > "$fx/tc46/.github/workflows/x.yml" <<'YML'
+env: { ACTION: &rust dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 }
+jobs:
+  a:
+    steps: [uses: *rust]
+  b:
+    steps: [{ uses: *rust }]
+  c:
+    steps: [
+      { uses: *rust }
+    ]
+YML
+cp "$fx/tc46/.github/workflows/x.yml" "$fx/tc46-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc46"
+check "tc46 aliased flow steps of an anchored toolchain pin are UNSUPPORTED (lines 4 6 9), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 4 6 9\\.' <<<\"\$out\" && cmp -s '$fx/tc46-before.yml' '$fx/tc46/.github/workflows/x.yml'"
+printf 'env: { CALL: &call %s@%s }\njobs:\n  rust: { uses: *call }\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp62/.github/workflows/ci.yml"
+printf 'env: { CALL: &call %s@%s }\njobs: { rust: { uses: *call } }\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp62b/.github/workflows/ci.yml"
+cp "$fx/sp62/.github/workflows/ci.yml" "$fx/sp62-before.yml"
+cp "$fx/sp62b/.github/workflows/ci.yml" "$fx/sp62b-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp62"
+check "sp62 a flow job calling an alias of a dead pin is UNSUPPORTED, exit 2, untouched, never OK" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:3: .uses: \\*call. runs' <<<\"\$out\" && cmp -s '$fx/sp62-before.yml' '$fx/sp62/.github/workflows/ci.yml'"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp62b"
+check "sp62b a job of a one-line jobs: { } calling an alias of a dead pin is UNSUPPORTED, exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:2: .uses: \\*call. runs' <<<\"\$out\" && cmp -s '$fx/sp62b-before.yml' '$fx/sp62b/.github/workflows/ci.yml'"
+
+# sp61: a stale record written as a flow mapping on its key line moves its
+# own key, ref and commit; a nested `uses:` edge at the same SHA (another
+# repository's revision, not recomputed here) and a comment stay as written.
+mkdir -p "$fx/sp61/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp61/.github/workflows/ci.yml"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'hyperpolymath/standards@%s'\ndependencies:\n    'hyperpolymath/standards@%s': { ref: '%s', commit: 'sha1-%s', uses: ['other/action@%s'] } # pinned at %s\n" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" > "$fx/sp61/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp61"
+check "sp61 a flow-mapping record moves its key, ref and commit; its nested edge and comment stay as written" \
+  "[ \$rc -eq 3 ] && grep -qxF \"    'hyperpolymath/standards@$GOOD': { ref: '$GOOD', commit: 'sha1-$GOOD', uses: ['other/action@$STALE_A'] } # pinned at $STALE_A\" '$fx/sp61/.github/workflows/actions.lock'"
+
 dq_out=$(printf '%s\n' 'uses: "\x64tolnay/x@1" # "\x41"' "name: 'a\\x41' \"b\\\"c\"" | awk "$(cat "$fleet/scripts/lib/yaml-anchors.awk")"'{ printf "%s|", yaml_decode_dq($0) }')
 check "yaml_decode_dq decodes double-quoted escapes only, an escaped quote to a byte no reference holds" \
   "[ \"\$dq_out\" = \"\$(printf 'uses: \"dtolnay/x@1\" # \"\\\\x41\"|name: '\"'\"'a\\\\x41'\"'\"' \"b\\001c\"|')\" ]"

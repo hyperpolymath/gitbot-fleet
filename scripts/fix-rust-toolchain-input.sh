@@ -141,9 +141,13 @@ apply_to_file() {
         # on the same line (`channel: beta }, toolchain: nightly`) is read at
         # the mapping'"'"'s level like any other entry. The depth the line leaves
         # is left in lv_depth: the walk that reads the entries is the one that
-        # counts the braces, so the two can never disagree.
+        # counts the braces, so the two can never disagree. lv_open is set
+        # when a quoted scalar is still open at the line'"'"'s end — continued
+        # past an escaped line break (`"toolch\` then `ain": nightly`) or
+        # folded onto the next line: the next line then starts inside it, and
+        # no line-by-line view reads the keys around it.
         function level_view(s, depth,   out, i, n, c, j, body) {
-            out = ""; n = length(s); i = 1
+            out = ""; n = length(s); i = 1; lv_open = 0
             while (i <= n) {
                 c = substr(s, i, 1)
                 if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
@@ -152,6 +156,7 @@ apply_to_file() {
                     if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
                     else { while (j <= n && (substr(s, j, 1) != "'"'"'" || substr(s, j + 1, 1) == "'"'"'")) j += (substr(s, j, 1) == "'"'"'" ? 2 : 1) }
                     body = substr(s, i + 1, j - i - 1)
+                    if (j > n) lv_open = 1
                     if (depth == 1) {
                         if (substr(s, j + 1) ~ /^[[:space:]]*:/) out = out c body c
                         else out = out c (body == "" ? "" : "v") c
@@ -196,7 +201,7 @@ apply_to_file() {
                     if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
                     else { while (j <= n && (substr(s, j, 1) != "'"'"'" || substr(s, j + 1, 1) == "'"'"'")) j += (substr(s, j, 1) == "'"'"'" ? 2 : 1) }
                     body = substr(s, i + 1, j - i - 1)
-                    if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
+                    if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
                     else out = out c c
                     i = j + 1; continue
                 }
@@ -208,6 +213,18 @@ apply_to_file() {
         # only pin the parser can be asked to place. The same text inside
         # another key'"'"'s string (`name: "fixture dtolnay/...@<sha>"`) is data.
         function uses_pin(s) { return sha_ref(s) && tolower(site_view(yaml_decode_dq(s))) ~ USES_SITE_RE }
+        # Does line s give a `uses` key, block or flow, an alias that may be
+        # the SHA-pinned toolchain reference — of an anchor that holds it, or
+        # of no anchor read so far? Every such alias on the line is weighed.
+        function bad_alias(s,   v, m) {
+            v = site_view(yaml_decode_dq(s))
+            while (match(tolower(v), USES_ALIAS_RE)) {
+                m = substr(v, RSTART, RLENGTH); sub(/^.*\*/, "", m)
+                if ((m in tc_anchor) || !(m in any_anchor)) return 1
+                v = substr(v, RSTART + RLENGTH)
+            }
+            return 0
+        }
         # Buffer line $0 of the current step as buf[n], with the verdict on
         # its `uses:` alias, if any, as the anchors read so far give it —
         # YAML resolves an alias to the latest anchor of that name BEFORE it,
@@ -247,7 +264,7 @@ apply_to_file() {
         }
         # Emit the buffered step, patched if it is a SHA-pinned dtolnay step
         # whose `with:` names no toolchain.
-        function flush(   i, j, jl, dl, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_empty_eol, tc_nested, tc_await, tc_flow_await, m, pre, post, delim, comment, v, w) {
+        function flush(   i, j, jl, dl, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_empty_eol, tc_nested, tc_await, tc_flow_await, m, pre, post, delim, comment, v, w, lv_rep) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` — alone, or followed only by a comment
@@ -297,7 +314,7 @@ apply_to_file() {
             }
             if (!uses_i) { for (i = 1; i <= n; i++) print buf[i]; n = 0; return }
             has_with = 0; with_bad = 0; with_i = 0; with_flow = 0; with_indent = -1; in_with = 0; in_flow = 0; child_indent = -1; has_tc = 0
-            tc_empty_i = 0; tc_empty_flow = 0; tc_empty_eol = 0; tc_nested = 0; tc_await = 0; tc_flow_await = 0
+            tc_empty_i = 0; tc_empty_flow = 0; tc_empty_eol = 0; tc_nested = 0; tc_await = 0; tc_flow_await = 0; lv_rep = 0
             for (i = 1; i <= n; i++) {
                 line = buf[i]; ind = indent_of(line)
                 if (in_flow) {
@@ -311,6 +328,10 @@ apply_to_file() {
                     # Keys are read as YAML reads them: `"tool\x63hain":` is the
                     # input `toolchain`.
                     v = level_view(yaml_decode_dq(line), flow_depth); flow_depth = lv_depth
+                    # A quoted key or value left open at this line'"'"'s end hides
+                    # what the next line names: the inputs are not read here.
+                    # The step is reported once, at the line the scalar opens on.
+                    if (lv_open && !lv_rep) { lv_rep = 1; with_bad = 1; unrec[++nunrec] = lnum[i] }
                     # A bare `toolchain:` that ended the previous line is empty
                     # only when the next token closes the mapping or moves on
                     # (`}`, `,`); anything else is its value, spread over lines,
@@ -352,6 +373,7 @@ apply_to_file() {
                     } else if (dl ~ WITH_FLOW_RE) {
                         has_with = 1; with_i = i; with_flow = 1
                         v = level_view(dl, 0); flow_depth = lv_depth
+                        if (lv_open) { lv_rep = 1; with_bad = 1; unrec[++nunrec] = lnum[i] }
                         if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
                         else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                         else if (v ~ TC_FLOW_RE) has_tc = 1
@@ -419,10 +441,12 @@ apply_to_file() {
             USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
             # The value may carry YAML node properties, an anchor or a tag
             # (`uses: &rust ...`, `uses: !!str ...`): still the step'"'"'s pin, but
-            # not one USES_RE places, so such a step is reported.
-            USES_SITE_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
+            # not one USES_RE places, so such a step is reported. A flow entry
+            # starts after `{`, `,` or `[`: `steps: [uses: ...]` is a list of
+            # one step, a mapping written without its braces.
+            USES_SITE_RE = "(^|[-{,[[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
             # A `uses:` whose value is an alias, `*name` (matched in lower case).
-            USES_ALIAS_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*\\*[a-z0-9_.-]+"
+            USES_ALIAS_RE = "(^|[-{,[[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*\\*[a-z0-9_.-]+"
             # A `uses:` key whose value is not on its line: a block scalar
             # (`uses: >-`) or nothing at all, the reference on the lines below.
             USES_OPEN_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]*)*([|>][-+0-9]*)?[[:space:]]*$"
@@ -454,13 +478,16 @@ apply_to_file() {
             # defined: an alias of it is that reference. Anchors are read by
             # lib/yaml-anchors.awk (outside quoted scalars and comments) and
             # never from a block scalar'"'"'s content (`run: |` text); a later
-            # anchor of the same name replaces an earlier one.
+            # anchor of the same name replaces an earlier one. An anchor whose
+            # quoted value runs on past its line (`&rust "dtolnay/rust-\`) is
+            # not read from the one line, so its alias may be that reference
+            # too: it counts as one.
             if (anc_scalar >= 0 && (!plain($0) || ind > anc_scalar)) { }
             else {
                 anc_scalar = -1
                 if (plain($0)) {
                     anchor_defs($0, d)
-                    for (a in d) { any_anchor[a] = 1; if (sha_ref(d[a])) tc_anchor[a] = 1; else delete tc_anchor[a] }
+                    for (a in d) { any_anchor[a] = 1; if (sha_ref(d[a]) || index(d[a], "\002")) tc_anchor[a] = 1; else delete tc_anchor[a] }
                     if ($0 ~ SCALAR_RE) anc_scalar = length(key_indent_of($0))
                 }
             }
@@ -490,8 +517,10 @@ apply_to_file() {
                 # on one line, a key of a flow-style step spread over lines) is a
                 # step this parser cannot place. The pin inside some other value
                 # (a workflow-level `env:` string naming the action) is data.
-                if (uses_pin($0) && (parent_is_steps(ind) || under_steps(ind))) unrec[++nunrec] = NR
-            } else if (uses_pin($0) && parent_is_steps(ind)) unrec[++nunrec] = NR
+                # So is an alias such a step gives its `uses` (`steps: [uses:
+                # *rust]`) of an anchor that may hold the pin.
+                if ((uses_pin($0) || bad_alias($0)) && (parent_is_steps(ind) || under_steps(ind))) unrec[++nunrec] = NR
+            } else if ((uses_pin($0) || bad_alias($0)) && parent_is_steps(ind)) unrec[++nunrec] = NR
             print
         }
         END {

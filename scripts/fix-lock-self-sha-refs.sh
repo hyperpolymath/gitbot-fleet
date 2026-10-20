@@ -132,7 +132,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                         if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
                         else { while (j <= n && (substr(s, j, 1) != "'"'"'" || substr(s, j + 1, 1) == "'"'"'")) j += (substr(s, j, 1) == "'"'"'" ? 2 : 1) }
                         body = substr(s, i + 1, j - i - 1)
-                        if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
+                        if (substr(s, j + 1) ~ /^[[:space:]]*:/ || out ~ /(^|[{,[[:space:]])["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*$/) out = out c body c
                         else out = out c c
                         i = j + 1; continue
                     }
@@ -144,13 +144,13 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             # line (`call: { uses: ... }`, `- { uses: ... }`, `jobs: { a: { uses: ... },
             # b: { uses: ... } }`), into out[1..n]; returns n. Given the MASKED
             # line: the raw one carries its comment and its strings.
-            # out_at[i] is the column of the `{` or `,` that precedes entry i
-            # (0 at the start of the line), for flow_kind/3.
+            # out_at[i] is the column of the `{`, `,` or `[` that precedes
+            # entry i (0 at the start of the line), for flow_kind/3.
             function flow_uses_all(s, out,   n, r, t, base) {
                 n = 0; split("", out); split("", out_at); t = s; base = 0
-                while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^"'"'"'[:space:],}]*[[:space:]]+)*["'"'"']?[^"'"'"'[:space:],}]+/)) {
+                while (match(t, /(^|[{,[])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^"'"'"'[:space:],}]*[[:space:]]+)*["'"'"']?[^]"'"'"'[:space:],}]+/)) {
                     r = substr(t, RSTART, RLENGTH)
-                    out_at[n + 1] = (r ~ /^[{,]/) ? base + RSTART : 0
+                    out_at[n + 1] = (r ~ /^[{,[]/) ? base + RSTART : 0
                     sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*([&!][^"'"'"'[:space:],}]*[[:space:]]+)*["'"'"']?/, "", r)
                     out[++n] = r; base += RSTART + RLENGTH - 1; t = substr(t, RSTART + RLENGTH)
                 }
@@ -181,6 +181,9 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                 # `steps:` opens: its own `uses` is the action. A `uses` deeper
                 # inside it (`with: { uses: ... }`) is an input'"'"'s data.
                 if (d >= 2 && kind[d] == "{" && kname[d] == "" && kind[d - 1] == "[" && kname[d - 1] == "steps") return "A"
+                # So is an entry written straight into that `[` (`steps: [uses:
+                # ...]`): YAML reads it as a mapping of that one pair, a step.
+                if (d >= 1 && kind[d] == "[" && kname[d] == "steps") return "A"
                 if (d >= 1 && kind[d] == "{" && kname[d] != "") {
                     if (d >= 2 && kind[d - 1] == "{" && kname[d - 1] == "jobs") return "R"
                     if (d == 1 && parent == "jobs") return "R"
@@ -387,10 +390,11 @@ if ! awk -v sq="'" "$ANCHORS_AWK"'
         body = $0; sub(/^[^{]*\{/, "", body)
         if (body !~ /\}[[:space:]]*(#.*)?$/) { print NR "\tM\t" f_repo "\t" f_sha "\t"; next }
         # The `ref` entry: after `{` or `,`, its key quoted or not, its value
-        # quoted or plain up to `,` or `}`.
+        # quoted or plain up to `,` or `}`, past any node properties.
         r = "{" body
         if (match(r, "[{,][[:space:]]*[\"" sq "]?ref[\"" sq "]?[[:space:]]*:[[:space:]]*[^,}]*")) {
             r = substr(r, RSTART, RLENGTH); sub(/^[{,][[:space:]]*["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*/, "", r)
+            sub(/^([&!][^[:space:],}]*[[:space:]]+)+/, "", r)
             gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
             if (tolower(r) == tolower(f_sha)) print NR "\tI\t" f_repo "\t" f_sha "\t" r
         }
@@ -405,8 +409,10 @@ if ! awk -v sq="'" "$ANCHORS_AWK"'
     /^[^[:space:]]/ || /^    [^[:space:]]/ { inrec = 0 }
     inrec && /^        ["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]/ {
         # Quoted either way, or a plain scalar, in either case of hex: the
-        # same ref to GitHub. The key may be quoted too (`"ref": ...`).
-        r = $0; sub(/^        ["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*/, "", r); sub(/[[:space:]]+#.*$/, "", r); gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
+        # same ref to GitHub. The key may be quoted too (`"ref": ...`), and
+        # the value may carry YAML node properties, a tag or an anchor
+        # (`ref: !!str '"'"'<sha>'"'"'`): the scalar after them is the ref.
+        r = $0; sub(/^        ["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*/, "", r); sub(/^([&!][^[:space:]]*[[:space:]]+)+/, "", r); sub(/[[:space:]]+#.*$/, "", r); gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
         if (tolower(r) == tolower(key_sha)) print NR "\tB\t" key_repo "\t" key_sha "\t" r
     }
 ' "$LOCK" > "$records"; then
@@ -445,9 +451,9 @@ while IFS=$'\t' read -r lineno kind repo sha ref_raw; do
     if [ "$kind" = I ]; then
         # The `ref` entry inside the braces, its value as written (quoted or
         # plain) up to the `,` or `}` that ends it; nothing else on the line.
-        if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "[{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*[\"']"; then q="'"; fi
+        if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "[{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*[\"']"; then q="'"; fi
         before=$(sed -n "${lineno}p" "$tmp")
-        sed -i -E "${lineno}s~([{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*)([\"']?)$ref_raw\2([[:space:]]*[,}])~\1\2$q$tag$q\2\3~" "$tmp"
+        sed -i -E "${lineno}s~([{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*)([\"']?)$ref_raw\3([[:space:]]*[,}])~\1\3$q$tag$q\3\4~" "$tmp"
         if [ "$(sed -n "${lineno}p" "$tmp")" = "$before" ]; then
             echo "UNRESOLVED  $repo@${sha:0:7}: the ref inside the record's flow mapping (line $lineno) is not written in a form this fixer rewrites; set it to $tag by hand (record left as is)" >&2
             unresolved=$((unresolved + 1)); continue
@@ -455,9 +461,10 @@ while IFS=$'\t' read -r lineno kind repo sha ref_raw; do
         echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
         fixed=$((fixed + 1)); continue
     fi
-    if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "^        [\"']?ref[\"']?[[:space:]]*:[[:space:]]*[\"']"; then q="'"; fi
+    if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "^        [\"']?ref[\"']?[[:space:]]*:[[:space:]]*([&!][^[:space:]]*[[:space:]]+)*[\"']"; then q="'"; fi
     before=$(sed -n "${lineno}p" "$tmp")
-    sed -i "${lineno}s|^\(        ['\"]\{0,1\}ref['\"]\{0,1\}[[:space:]]*:[[:space:]]*\)\(['\"]\{0,1\}\)$ref_raw\2|\1\2$q$tag$q\2|" "$tmp"
+    # Any node properties before the value (`!!str`, an anchor) are kept.
+    sed -i -E "${lineno}s~^(        [\"']?ref[\"']?[[:space:]]*:[[:space:]]*([&!][^[:space:]]*[[:space:]]+)*)([\"']?)$ref_raw\3~\1\3$q$tag$q\3~" "$tmp"
     if [ "$(sed -n "${lineno}p" "$tmp")" = "$before" ]; then
         echo "UNRESOLVED  $repo@${sha:0:7}: the record's ref (line $lineno) is not written in a form this fixer rewrites (spelled with escapes?); set it to $tag by hand (record left as is)" >&2
         unresolved=$((unresolved + 1)); continue
