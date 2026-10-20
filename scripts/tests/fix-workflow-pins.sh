@@ -3703,6 +3703,106 @@ run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp61"
 check "sp61 a flow-mapping record moves its key, ref and commit; its nested edge and comment stay as written" \
   "[ \$rc -eq 3 ] && grep -qxF \"    'hyperpolymath/standards@$GOOD': { ref: '$GOOD', commit: 'sha1-$GOOD', uses: ['other/action@$STALE_A'] } # pinned at $STALE_A\" '$fx/sp61/.github/workflows/actions.lock'"
 
+# ── Review cases (gitbot-fleet#615, round on 8978704) ───────────────────────
+# tc47 / sp63: an anchor name is every character up to whitespace or a flow
+# indicator: `&rust/tool` names `rust/tool`, and `*rust/tool` is its alias,
+# never `*rust`. The aliased SHA-pinned toolchain, or dead call, is reported
+# (exit 2, untouched), never passed as an alias of some other value.
+mkdir -p "$fx/tc47/.github/workflows" "$fx/sp63/.github/workflows"
+printf 'env:\n  ACTION: &rust/tool dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\njobs:\n  check:\n    steps:\n      - uses: *rust/tool\n' > "$fx/tc47/.github/workflows/x.yml"
+cp "$fx/tc47/.github/workflows/x.yml" "$fx/tc47-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc47"
+check "tc47 an alias read to its whole name is the anchored toolchain pin: UNSUPPORTED (line 6), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 6\\.' <<<\"\$out\" && cmp -s '$fx/tc47-before.yml' '$fx/tc47/.github/workflows/x.yml'"
+printf 'env:\n  CALL: &call/x %s@%s\njobs:\n  rust:\n    uses: *call/x\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp63/.github/workflows/ci.yml"
+cp "$fx/sp63/.github/workflows/ci.yml" "$fx/sp63-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp63"
+check "sp63 an alias read to its whole name runs the anchored dead call: UNSUPPORTED, exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:5: .uses: \\*call/x. runs' <<<\"\$out\" && cmp -s '$fx/sp63-before.yml' '$fx/sp63/.github/workflows/ci.yml'"
+
+# tc48: a toolchain value carrying node properties is read past them. Null
+# or empty after them (`&channel null`, `!!null null`, `!!str ""`) is no
+# input, and is reported rather than filled in place (every alias of the
+# anchor would change with it): exit 2, untouched. A value after them is
+# the input (`!!str null` is the string null): left as it is, exit 0.
+mkdir -p "$fx/tc48/.github/workflows" "$fx/tc48b/.github/workflows"
+cat > "$fx/tc48/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: &channel null
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: !!null null }
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: !!str ""
+YML
+cat > "$fx/tc48b/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: !!str null
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with: { toolchain: &channel nightly }
+YML
+cp "$fx/tc48/.github/workflows/x.yml" "$fx/tc48-before.yml"
+cp "$fx/tc48b/.github/workflows/x.yml" "$fx/tc48b-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc48"
+check "tc48 a null or empty toolchain behind node properties is UNSUPPORTED (lines 6 8 11), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 6 8 11\\.' <<<\"\$out\" && cmp -s '$fx/tc48-before.yml' '$fx/tc48/.github/workflows/x.yml'"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc48b"
+check "tc48b a toolchain value behind node properties is the input: left as it is, exit 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc48b-before.yml' '$fx/tc48b/.github/workflows/x.yml'"
+
+# tc49: a step given as an alias (`- *rust`, `steps: [*rust]`) is the
+# mapping its anchor holds, which may be the SHA-pinned toolchain step: in a
+# file that holds such a pin it is reported (exit 2, untouched). Control:
+# with no pinned toolchain anywhere, an aliased step is nothing to repair.
+mkdir -p "$fx/tc49/.github/workflows" "$fx/tc49b/.github/workflows"
+cat > "$fx/tc49/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    strategy:
+      matrix:
+        include:
+          - step: &rust { uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 }
+    steps:
+      - *rust
+  b:
+    steps: [*rust]
+YML
+printf 'x: &chk { uses: actions/checkout@v4 }\njobs:\n  b:\n    steps: [*chk]\n  c:\n    steps:\n      - *chk\n' > "$fx/tc49b/.github/workflows/x.yml"
+cp "$fx/tc49/.github/workflows/x.yml" "$fx/tc49-before.yml"
+cp "$fx/tc49b/.github/workflows/x.yml" "$fx/tc49b-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc49"
+check "tc49 aliased steps in a file with a pinned toolchain are UNSUPPORTED (lines 8 10), exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 8 10\\.' <<<\"\$out\" && cmp -s '$fx/tc49-before.yml' '$fx/tc49/.github/workflows/x.yml'"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc49b"
+check "tc49b aliased steps with no pinned toolchain in the file are left as they are, exit 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/tc49b-before.yml' '$fx/tc49b/.github/workflows/x.yml'"
+
+# ls47: the `ref` of a flow-mapping record is its top-level entry: a
+# `ref:` written inside a quoted string beside it is text. The record's own
+# self-SHA ref gets its tag and the string keeps its text; a record whose
+# own ref is a tag is left as it is.
+mkdir -p "$fx/ls47/.github/workflows" "$fx/ls47b/.github/workflows"
+action_steps "$fx/ls47/.github/workflows" "foo/bar@$SHA_B"
+action_steps "$fx/ls47b/.github/workflows" "foo/bar@$SHA_B"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s': { note: \"hello, ref: %s, fixture\", ref: '%s', commit: 'sha1-%s' }\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls47/.github/workflows/actions.lock"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s': { note: \"hello, ref: %s, fixture\", ref: 'v1', commit: 'sha1-%s' }\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls47b/.github/workflows/actions.lock"
+cp "$fx/ls47b/.github/workflows/actions.lock" "$fx/ls47b-before.lock"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls47-tags.tsv"
+TAG_MAP="$fx/ls47-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls47" --offline
+check "ls47 the record's top-level ref gets its tag; a ref: inside its quoted note stays as written, exit 0" \
+  "[ \$rc -eq 0 ] && grep -qxF \"    'foo/bar@$SHA_B': { note: \\\"hello, ref: $SHA_B, fixture\\\", ref: 'v1.0.0', commit: 'sha1-$SHA_B' }\" '$fx/ls47/.github/workflows/actions.lock'"
+TAG_MAP="$fx/ls47-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls47b" --offline
+check "ls47b a record whose own ref is a tag is no self-SHA record: its quoted note is not rewritten, exit 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/ls47b-before.lock' '$fx/ls47b/.github/workflows/actions.lock'"
+
 dq_out=$(printf '%s\n' 'uses: "\x64tolnay/x@1" # "\x41"' "name: 'a\\x41' \"b\\\"c\"" | awk "$(cat "$fleet/scripts/lib/yaml-anchors.awk")"'{ printf "%s|", yaml_decode_dq($0) }')
 check "yaml_decode_dq decodes double-quoted escapes only, an escaped quote to a byte no reference holds" \
   "[ \"\$dq_out\" = \"\$(printf 'uses: \"dtolnay/x@1\" # \"\\\\x41\"|name: '\"'\"'a\\\\x41'\"'\"' \"b\\001c\"|')\" ]"

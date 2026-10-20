@@ -94,9 +94,9 @@ ANCHORS_AWK=$(cat "$SCRIPT_DIR/lib/yaml-anchors.awk")
 # value still open at its line's end (folded into the next line) is not read,
 # "" as well.
 anchor_value() { # <file> <name> <line>
-    awk -v want="$2" -v upto="$3" "$ANCHORS_AWK"'
+    WANT="$2" awk -v upto="$3" "$ANCHORS_AWK"'
         function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
-        BEGIN { blk = -1; got = "" }
+        BEGIN { blk = -1; got = ""; want = ENVIRON["WANT"] }
         NR >= upto { exit }
         {
             plain = ($0 !~ /^[[:space:]]*$/ && $0 !~ /^[[:space:]]*#/)
@@ -617,7 +617,7 @@ while IFS= read -r -d '' wf; do
                     skip=1
                 fi
             done < <(printf '%s\n' "$value" | grep -oiE "^${REUSABLE_REF_RE}\$" || true)
-        done < <(mask_line "$(sed -n "${lineno}p" "$wf")" | grep -oE "(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*\*[A-Za-z0-9_.-]+" | sed 's/.*\*//' || true)
+        done < <(mask_line "$(sed -n "${lineno}p" "$wf")" | grep -oE "(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*\*[^],[{}[:space:]]+" | sed 's/^[^*]*\*//' || true)
     done
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()

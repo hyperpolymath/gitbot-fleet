@@ -213,13 +213,31 @@ apply_to_file() {
         # only pin the parser can be asked to place. The same text inside
         # another key'"'"'s string (`name: "fixture dtolnay/...@<sha>"`) is data.
         function uses_pin(s) { return sha_ref(s) && tolower(site_view(yaml_decode_dq(s))) ~ USES_SITE_RE }
+        # A `toolchain` value that carries YAML node properties (`&channel
+        # null`, `!!str ""`), as `val` writes it from its first property:
+        # "set" when the scalar after them is one the action reads (`!!str
+        # null` is the string null), "bad" when it is null or empty. A "bad"
+        # value is reported, never filled in place: every alias of its anchor
+        # would change with it.
+        function after_key(t) { sub(/^[^:]*:[[:space:]]*/, "", t); return t }
+        function tc_props(val,   tags) {
+            tags = ""
+            while (match(val, /^[&!][^[:space:],}]*/)) {
+                if (substr(val, 1, 1) == "!") tags = tags " " substr(val, 1, RLENGTH)
+                val = substr(val, RLENGTH + 1); sub(/^[[:space:]]+/, "", val)
+            }
+            sub(/(^|[[:space:]]+)#.*$/, "", val); sub(/[[:space:]]+$/, "", val)
+            if ((tags " ") ~ / !!null /) return "bad"
+            if ((tags " ") ~ / !!str /) return (val == "" || val == "\"\"" || val == "'"'"''"'"'") ? "bad" : "set"
+            return (val ~ /^(null|Null|NULL|~|""|'"'"''"'"')?$/) ? "bad" : "set"
+        }
         # Does line s give a `uses` key, block or flow, an alias that may be
         # the SHA-pinned toolchain reference — of an anchor that holds it, or
         # of no anchor read so far? Every such alias on the line is weighed.
         function bad_alias(s,   v, m) {
             v = site_view(yaml_decode_dq(s))
             while (match(tolower(v), USES_ALIAS_RE)) {
-                m = substr(v, RSTART, RLENGTH); sub(/^.*\*/, "", m)
+                m = substr(v, RSTART, RLENGTH); sub(/^[^*]*\*/, "", m)
                 if ((m in tc_anchor) || !(m in any_anchor)) return 1
                 v = substr(v, RSTART + RLENGTH)
             }
@@ -237,7 +255,7 @@ apply_to_file() {
             buf[++n] = $0; lnum[n] = NR; alias_state[n] = ""
             v = site_view(yaml_decode_dq($0))
             if (match(tolower(v), USES_ALIAS_RE)) {
-                m = substr(v, RSTART, RLENGTH); sub(/^.*\*/, "", m)
+                m = substr(v, RSTART, RLENGTH); sub(/^[^*]*\*/, "", m)
                 alias_state[n] = ((m in tc_anchor) || !(m in any_anchor)) ? "bad" : "ok"
             }
         }
@@ -266,6 +284,10 @@ apply_to_file() {
         # whose `with:` names no toolchain.
         function flush(   i, j, jl, dl, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_empty_eol, tc_nested, tc_await, tc_flow_await, m, pre, post, delim, comment, v, w, lv_rep) {
             if (n == 0) return
+            # A step given as an alias (`- *rust`) is the mapping its anchor
+            # holds, which may be a SHA-pinned toolchain step: noted, and
+            # reported at the end when the file holds such a pin anywhere.
+            if (buf[1] ~ STEP_ALIAS_RE) alias_step[++nalias] = lnum[1]
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
             # `uses`), or for a bare `-` — alone, or followed only by a comment
             # (`- # install Rust`) — the indentation of the first plain line under it.
@@ -337,7 +359,8 @@ apply_to_file() {
                     # (`}`, `,`); anything else is its value, spread over lines,
                     # and not this fixer'"'"'s to place.
                     if (tc_flow_await) { w = code_only(line); sub(/^[[:space:]]*/, "", w); if (w != "") { tc_flow_await = 0; if (w !~ /^[,}]/) tc_nested = 1 } }
-                    if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                    if (match(v, TC_FLOW_PROP_RE)) { if (tc_props(after_key(substr(v, RSTART, RLENGTH))) == "set") has_tc = 1; else { with_bad = 1; unrec[++nunrec] = lnum[i] } }
+                    else if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
                     else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                     else if (v ~ TC_RE || v ~ TC_FLOW_RE) has_tc = 1
                     if (flow_depth <= 0) in_flow = 0
@@ -362,7 +385,8 @@ apply_to_file() {
                         # a nested mapping, not an empty value: nothing this fixer
                         # can repair.
                         if (tc_await) { tc_await = 0; if (ind > child_indent) tc_nested = 1 }
-                        if (ind == child_indent && dl ~ TC_EMPTY_RE) { tc_empty_i = i; tc_await = 1 }
+                        if (ind == child_indent && match(dl, TC_PROP_RE)) { if (tc_props(after_key(dl)) == "set") has_tc = 1; else { with_bad = 1; unrec[++nunrec] = lnum[i] } }
+                        else if (ind == child_indent && dl ~ TC_EMPTY_RE) { tc_empty_i = i; tc_await = 1 }
                         else if (ind == child_indent && dl ~ TC_RE) has_tc = 1
                     }
                 }
@@ -374,7 +398,8 @@ apply_to_file() {
                         has_with = 1; with_i = i; with_flow = 1
                         v = level_view(dl, 0); flow_depth = lv_depth
                         if (lv_open) { lv_rep = 1; with_bad = 1; unrec[++nunrec] = lnum[i] }
-                        if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
+                        if (match(v, TC_FLOW_PROP_RE)) { if (tc_props(after_key(substr(v, RSTART, RLENGTH))) == "set") has_tc = 1; else { with_bad = 1; unrec[++nunrec] = lnum[i] } }
+                        else if (v ~ TC_FLOW_EMPTY_RE) { tc_empty_i = i; tc_empty_flow = 1 }
                         else if (v ~ TC_FLOW_EOL_RE) { tc_empty_i = i; tc_empty_eol = 1; if (v ~ TC_FLOW_BARE_EOL_RE) tc_flow_await = 1 }
                         else if (v ~ TC_FLOW_RE) has_tc = 1
                         if (flow_depth > 0) in_flow = 1
@@ -445,8 +470,13 @@ apply_to_file() {
             # starts after `{`, `,` or `[`: `steps: [uses: ...]` is a list of
             # one step, a mapping written without its braces.
             USES_SITE_RE = "(^|[-{,[[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
-            # A `uses:` whose value is an alias, `*name` (matched in lower case).
-            USES_ALIAS_RE = "(^|[-{,[[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*\\*[a-z0-9_.-]+"
+            # A `uses:` whose value is an alias, `*name` (matched in lower case),
+            # the name read whole: up to whitespace or a flow indicator.
+            USES_ALIAS_RE = "(^|[-{,[[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*\\*[^],[{}[:space:]]+"
+            # A whole step given as an alias: a block item (`- *rust`), or an
+            # entry of a flow `steps:` sequence (`[*rust]`, `, *rust`).
+            STEP_ALIAS_RE = "^[[:space:]]*-[[:space:]]+\\*[^],[{}[:space:]]+[[:space:]]*(#.*)?$"
+            FLOW_ALIAS_RE = "(^|[[,])[[:space:]]*\\*[^],[{}[:space:]]+"
             # A `uses:` key whose value is not on its line: a block scalar
             # (`uses: >-`) or nothing at all, the reference on the lines below.
             USES_OPEN_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]*)*([|>][-+0-9]*)?[[:space:]]*$"
@@ -456,6 +486,11 @@ apply_to_file() {
             WITH_CHILD_KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             TC_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:]]"
             TC_FLOW_RE = "[{,][[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[^[:space:],}]"
+            # The key with a value that starts with node properties (an
+            # anchor or a tag): read by tc_props/1 rather than the patterns
+            # below, which see `&channel null` as a value.
+            TC_PROP_RE = "^[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[&!]"
+            TC_FLOW_PROP_RE = "(^|[{,])[[:space:]]*" Q "toolchain" Q "[[:space:]]*:[[:space:]]*[&!][^,}]*"
             # The key present with no value — YAML null in the spellings the core
             # schema admits unquoted (`toolchain:`, `null`, `Null`, `NULL`, `~`)
             # or the empty string (`""`, `'"'"''"'"'`): not an input the action can
@@ -473,6 +508,9 @@ apply_to_file() {
         }
         {
             ind = indent_of($0)
+            # Any SHA-pinned toolchain reference anywhere in the file: an
+            # aliased step may be one.
+            if (sha_ref($0)) any_pin = 1
             # Every anchor whose value is a SHA-pinned toolchain reference
             # (`ACTION: &rust dtolnay/rust-toolchain@<sha>`), wherever it is
             # defined: an alias of it is that reference. Anchors are read by
@@ -520,13 +558,20 @@ apply_to_file() {
                 # So is an alias such a step gives its `uses` (`steps: [uses:
                 # *rust]`) of an anchor that may hold the pin.
                 if ((uses_pin($0) || bad_alias($0)) && (parent_is_steps(ind) || under_steps(ind))) unrec[++nunrec] = NR
-            } else if ((uses_pin($0) || bad_alias($0)) && parent_is_steps(ind)) unrec[++nunrec] = NR
+                # A step written into `steps: [*rust]` as an alias, as `- *rust`.
+                if (keyat[ind] == "steps" && site_view(yaml_decode_dq($0)) ~ FLOW_ALIAS_RE) alias_step[++nalias] = NR
+            } else if (parent_is_steps(ind)) {
+                if (uses_pin($0) || bad_alias($0)) unrec[++nunrec] = NR
+                # A line of a `steps: [` sequence spread over lines.
+                if (site_view(yaml_decode_dq($0)) ~ FLOW_ALIAS_RE) alias_step[++nalias] = NR
+            }
             print
         }
         END {
             flush()
+            if (any_pin) for (j = 1; j <= nalias; j++) unrec[++nunrec] = alias_step[j]
             if (nunrec) {
-                printf "UNSUPPORTED  %s: %d SHA-pinned dtolnay/rust-toolchain reference(s) the parser cannot place as a block-style step key (a flow-style `- { ... }` step, a `uses:` value continued below its key, or an alias of an anchored reference?), line(s):", FILENAME, nunrec > "/dev/stderr"
+                printf "UNSUPPORTED  %s: %d SHA-pinned dtolnay/rust-toolchain reference(s) the parser cannot place as a block-style step key (a flow-style `- { ... }` step, a `uses:` value continued below its key, an alias of an anchored reference, or a step given as an alias?), line(s):", FILENAME, nunrec > "/dev/stderr"
                 for (j = 1; j <= nunrec; j++) printf " %d", unrec[j] > "/dev/stderr"
                 printf ". Fix by hand; the file was not changed.\n" > "/dev/stderr"
                 exit 2

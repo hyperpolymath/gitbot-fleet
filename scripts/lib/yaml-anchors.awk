@@ -6,7 +6,9 @@
 # mawk reads it as gawk does.
 #
 # anchor_defs(s, defs) clears defs and sets defs[name] = value for every
-# `&name value` on line s, and returns how many there are. An anchor is
+# `&name value` on line s, and returns how many there are. A name is every
+# character up to whitespace or a flow indicator (`,[]{}`), as YAML reads
+# one: `&rust/tool` names `rust/tool`, never `rust`. An anchor is
 # `&name` where a YAML node starts, outside any quoted scalar and before any
 # comment: at the line's start or after its list dashes, after `key: `, or
 # inside a flow collection after `[`, `{` or `,`, past any tag (`!!map &x`).
@@ -102,7 +104,7 @@ function anchor_defs(s, defs,   n, i, len, c, q, name, v, seen, depth) {
         if (c == "\"" || c == "'") { q = c; seen = seen "x"; i++; continue }
         if (c == "{" || c == "[") depth++
         else if ((c == "}" || c == "]") && depth > 0) depth--
-        if (c == "&" && anchor_at(seen, depth) && match(substr(s, i + 1), /^[A-Za-z0-9_.-]+/)) {
+        if (c == "&" && anchor_at(seen, depth) && match(substr(s, i + 1), /^[^],[{}[:space:]]+/)) {
             name = substr(s, i + 1, RLENGTH); i += RLENGTH + 1
             while (i <= len && substr(s, i, 1) ~ /[[:space:]]/) i++
             c = substr(s, i, 1); v = ""

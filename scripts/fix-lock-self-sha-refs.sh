@@ -385,18 +385,42 @@ if ! awk -v sq="'" "$ANCHORS_AWK"'
         i = index(t, "@"); f_repo = substr(t, 1, i - 1); f_sha = substr(t, i + 1)
         return length(f_sha) == 40
     }
+    # The `ref` entry at the top level of the flow mapping whose `{` is at
+    # column o of s: returns the column its scalar starts at (past any node
+    # properties; its opening quote when quoted) and sets rv to the scalar as
+    # written, or returns 0. Quoted scalars and nested brackets are walked
+    # over, so a `ref:` written inside a string (`note: "a, ref: <sha>"`) or
+    # a nested mapping is not the record'"'"'s field. The line is already
+    # decoded: no escapes are left in its double-quoted scalars.
+    function top_ref(s, o,   n, i, c, d, q, j, t) {
+        n = length(s); d = 0; q = ""
+        for (i = o; i <= n; i++) {
+            c = substr(s, i, 1)
+            if (q != "") {
+                if (c == q) { if (q == sq && substr(s, i + 1, 1) == sq) { i++; continue }; q = "" }
+                continue
+            }
+            if (c == "\"" || c == sq) { q = c; continue }
+            if (c == "#" && substr(s, i - 1, 1) ~ /[[:space:]]/) return 0
+            if (c == "{" || c == "[") d++
+            else if (c == "}" || c == "]") { if (--d == 0) return 0 }
+            if (d == 1 && (c == "{" || c == ",") && match(substr(s, i + 1), /^[[:space:]]*["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*/)) {
+                j = i + 1 + RLENGTH; t = substr(s, j)
+                if (match(t, /^"[^"]*"/) || match(t, /^'"'"'([^'"'"']|'"'"''"'"')*'"'"'/) || match(t, /^[^,}[:space:]]+/)) { rv = substr(t, 1, RLENGTH); return j }
+                return 0
+            }
+        }
+        return 0
+    }
     flow_key($0) {
         inrec = 0
         body = $0; sub(/^[^{]*\{/, "", body)
         if (body !~ /\}[[:space:]]*(#.*)?$/) { print NR "\tM\t" f_repo "\t" f_sha "\t"; next }
-        # The `ref` entry: after `{` or `,`, its key quoted or not, its value
-        # quoted or plain up to `,` or `}`, past any node properties.
-        r = "{" body
-        if (match(r, "[{,][[:space:]]*[\"" sq "]?ref[\"" sq "]?[[:space:]]*:[[:space:]]*[^,}]*")) {
-            r = substr(r, RSTART, RLENGTH); sub(/^[{,][[:space:]]*["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*/, "", r)
-            sub(/^([&!][^[:space:],}]*[[:space:]]+)+/, "", r)
-            gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
-            if (tolower(r) == tolower(f_sha)) print NR "\tI\t" f_repo "\t" f_sha "\t" r
+        # The `ref` entry of the record'"'"'s own braces, and the column of its
+        # SHA, where the rewrite below puts the tag.
+        if ((at = top_ref($0, index($0, "{"))) > 0) {
+            r = rv; gsub(/["'"'"']/, "", r)
+            if (tolower(r) == tolower(f_sha)) print NR "\tI\t" f_repo "\t" f_sha "\t" r "\t" (rv ~ /^["'"'"']/ ? at + 1 : at)
         }
         next
     }
@@ -419,7 +443,7 @@ if ! awk -v sq="'" "$ANCHORS_AWK"'
     echo "fix-lock-self-sha-refs: could not parse $LOCK (awk failed); lock left unchanged" >&2
     rm -f "$tmp" "$records" "$SITES"; exit 2
 fi
-while IFS=$'\t' read -r lineno kind repo sha ref_raw; do
+while IFS=$'\t' read -r lineno kind repo sha ref_raw col; do
     sha_lc="${sha,,}"
     case "$(sha_ref_disposition "$repo" "$sha_lc")" in
         keep) continue ;;
@@ -449,15 +473,25 @@ while IFS=$'\t' read -r lineno kind repo sha ref_raw; do
     # `null`) is written quoted, so the lock keeps a tag, not a boolean.
     q=""
     if [ "$kind" = I ]; then
-        # The `ref` entry inside the braces, its value as written (quoted or
-        # plain) up to the `,` or `}` that ends it; nothing else on the line.
-        if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "[{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*[\"']"; then q="'"; fi
-        before=$(sed -n "${lineno}p" "$tmp")
-        sed -i -E "${lineno}s~([{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*([&!][^[:space:],}]*[[:space:]]+)*)([\"']?)$ref_raw\3([[:space:]]*[,}])~\1\3$q$tag$q\3\4~" "$tmp"
-        if [ "$(sed -n "${lineno}p" "$tmp")" = "$before" ]; then
+        # The SHA of the top-level `ref` entry, at the column the reader found
+        # it, as that line spells it; nothing else on the line. The reader saw
+        # the line decoded, so a line that spells anything before it with
+        # escapes no longer has the SHA there, and is reported.
+        nonstring=0
+        if pin_fixer_yaml_nonstring "$tag"; then nonstring=1; fi
+        if ! awk -v ln="$lineno" -v col="$col" -v old="$ref_raw" -v new="$tag" -v nonstring="$nonstring" -v sq="'" '
+            NR == ln {
+                if (substr($0, col, length(old)) != old) exit 3
+                pre = substr($0, col - 1, 1)
+                if (nonstring && pre != "\"" && pre != sq) new = sq new sq
+                $0 = substr($0, 1, col - 1) new substr($0, col + length(old))
+            }
+            { print }' "$tmp" > "$tmp.ref"; then
+            rm -f "$tmp.ref"
             echo "UNRESOLVED  $repo@${sha:0:7}: the ref inside the record's flow mapping (line $lineno) is not written in a form this fixer rewrites; set it to $tag by hand (record left as is)" >&2
             unresolved=$((unresolved + 1)); continue
         fi
+        mv "$tmp.ref" "$tmp"
         echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
         fixed=$((fixed + 1)); continue
     fi
