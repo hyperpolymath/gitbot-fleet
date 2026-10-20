@@ -35,10 +35,14 @@
 #     closing brace — without `toolchain` gets it as its first entry;
 #   * a step with no `with:` at all gets one, directly under `uses:`;
 #   * keys may be quoted (`"uses":`, "with":) — the same key to GitHub;
+#   * the action is matched in either case (`Dtolnay/Rust-Toolchain@<sha>`
+#     is the same action to GitHub) and its spelling is kept;
 #   * a tag-pinned step (`@stable`, `@1.85.0`) and a step that already names a
 #     toolchain are left alone;
 #   * a step written as a flow mapping (`- { name: x, uses: ... }`), a
-#     one-line `steps: [ { uses: ... } ]`, or a `with:` whose value this
+#     one-line `steps: [ { uses: ... } ]`, a `uses:` whose value continues
+#     below its key (`uses: >-`, or the reference alone on the next line),
+#     or a `with:` whose value this
 #     parser does not read (`with: &anchor`, `with: *alias`) is NOT
 #     rewritten: the script names the line as UNSUPPORTED and exits 2 rather
 #     than report the file as clean. Fix it by hand.
@@ -83,7 +87,9 @@ fi
 apply_to_file() {
     local f="$1" tmp rc
     [ -f "$f" ] || { echo "SKIP (not a file): $f" >&2; return 0; }
-    grep -qE 'dtolnay/rust-toolchain@[0-9a-fA-F]{40}' "$f" || return 0
+    # GitHub resolves `Dtolnay/Rust-Toolchain` to the same action: the name is
+    # matched in either case here and in the parser below.
+    grep -qiE 'dtolnay/rust-toolchain@[0-9a-fA-F]{40}' "$f" || return 0
 
     tmp=$(mktemp)
     set +e
@@ -143,11 +149,12 @@ apply_to_file() {
         # channel and the step is not ours.
         # The 40 hex characters must END the ref: `@<sha>-patched` is a tag
         # that merely begins with one, and carries its own channel. Either
-        # case: git resolves a commit ID written in upper-case hex too.
+        # case, for the commit ID (git resolves upper-case hex too) and for the
+        # action name (GitHub resolves `Dtolnay/Rust-Toolchain` too).
         function sha_ref(s,   t, m, nxt) {
             if (!plain(s)) return 0
-            t = s; sub(/[[:space:]]#.*$/, "", t)
-            if (!match(t, /dtolnay\/rust-toolchain@[0-9a-fA-F]+/)) return 0
+            t = tolower(s); sub(/[[:space:]]#.*$/, "", t)
+            if (!match(t, /dtolnay\/rust-toolchain@[0-9a-f]+/)) return 0
             m = substr(t, RSTART + 23, RLENGTH - 23)
             nxt = substr(t, RSTART + RLENGTH, 1)
             return (length(m) == 40 && (nxt == "" || nxt ~ /["'"'"'[:space:],}\]]/))
@@ -175,7 +182,7 @@ apply_to_file() {
         # A SHA pin that is the value of a `uses` key, block or flow: the
         # only pin the parser can be asked to place. The same text inside
         # another key'"'"'s string (`name: "fixture dtolnay/...@<sha>"`) is data.
-        function uses_pin(s) { return sha_ref(s) && site_view(s) ~ USES_SITE_RE }
+        function uses_pin(s) { return sha_ref(s) && tolower(site_view(s)) ~ USES_SITE_RE }
         # YAML context outside list items: the key at each indentation, so a
         # list item opens a step only when its parent key is `steps:`.
         function record_key(s,   ind, k, t) {
@@ -215,8 +222,15 @@ apply_to_file() {
             # parser cannot place (a flow-style step) — that is reported, not guessed.
             uses_i = 0
             for (i = 1; i <= n; i++) {
+                # The step'"'"'s own `uses:` with its value continued below the key
+                # (`uses: >-` then `dtolnay/rust-toolchain@<sha>`): the key line
+                # names no action and the value reads as nested text, so a SHA
+                # pin there is reported, never passed over as a step that is fine.
+                if (!flow_item && length(key_indent_of(buf[i])) == skey && tolower(site_view(buf[i])) ~ USES_OPEN_RE)
+                    for (j = i + 1; j <= n && !(plain(buf[j]) && indent_of(buf[j]) <= skey); j++)
+                        if (sha_ref(buf[j])) unrec[++nunrec] = lnum[j]
                 if (!sha_ref(buf[i])) continue
-                if (!flow_item && buf[i] ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
+                if (!flow_item && tolower(buf[i]) ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
                 if (!flow_item && i > 1 && indent_of(buf[i]) > skey) continue
                 if (!uses_pin(buf[i])) continue
                 unrec[++nunrec] = lnum[i]
@@ -330,8 +344,12 @@ apply_to_file() {
             LIST_RE = "^[[:space:]]*-([[:space:]]|$)"
             KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
-            USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-fA-F]+"
-            USES_SITE_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:],}]+[[:space:]]+)?" Q "dtolnay/rust-toolchain@[0-9a-fA-F]+"
+            # Matched against the line in lower case.
+            USES_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*" Q "dtolnay/rust-toolchain@[0-9a-f]+"
+            USES_SITE_RE = "(^|[-{,[:space:]])" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:],}]+[[:space:]]+)?" Q "dtolnay/rust-toolchain@[0-9a-f]+"
+            # A `uses:` key whose value is not on its line: a block scalar
+            # (`uses: >-`) or nothing at all, the reference on the lines below.
+            USES_OPEN_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:],}]+[[:space:]]*)?([|>][-+0-9]*)?[[:space:]]*$"
             WITH_BLOCK_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*(#.*)?$"
             WITH_FLOW_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:[[:space:]]*\\{"
             WITH_ANY_RE = "^[[:space:]]*(-[[:space:]]+)?" Q "with" Q "[[:space:]]*:"
@@ -387,7 +405,7 @@ apply_to_file() {
         END {
             flush()
             if (nunrec) {
-                printf "UNSUPPORTED  %s: %d SHA-pinned dtolnay/rust-toolchain reference(s) the parser cannot place as a block-style step key (a flow-style `- { ... }` step?), line(s):", FILENAME, nunrec > "/dev/stderr"
+                printf "UNSUPPORTED  %s: %d SHA-pinned dtolnay/rust-toolchain reference(s) the parser cannot place as a block-style step key (a flow-style `- { ... }` step, or a `uses:` value continued below its key?), line(s):", FILENAME, nunrec > "/dev/stderr"
                 for (j = 1; j <= nunrec; j++) printf " %d", unrec[j] > "/dev/stderr"
                 printf ". Fix by hand; the file was not changed.\n" > "/dev/stderr"
                 exit 2

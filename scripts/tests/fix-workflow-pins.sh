@@ -2752,6 +2752,100 @@ TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "mode: the self-SHA fixer's repaired lock keeps its 0640" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/mode-ls/.github/workflows/actions.lock' && [ \$(stat -c %a '$fx/mode-ls/.github/workflows/actions.lock') = 640 ]"
 
+# tc23: GitHub resolves `Dtolnay/Rust-Toolchain` to the same action, so the
+# step lacks its input all the same: it is repaired, its spelling kept.
+mkdir -p "$fx/tc23/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: Dtolnay/Rust-Toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/tc23/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc23"
+check "tc23 a SHA-pinned toolchain step spelled in another case is repaired, the spelling kept" \
+  "[ \$rc -eq 0 ] && grep -q '^      - uses: Dtolnay/Rust-Toolchain@6c977a6' '$fx/tc23/.github/workflows/x.yml' && grep -q '^          toolchain: stable\$' '$fx/tc23/.github/workflows/x.yml'"
+
+# tc24 / tc25: a step's `uses:` whose value continues below the key (a
+# folded scalar, or the reference alone on the next line) names its action
+# where the parser does not read it: UNSUPPORTED, never "every step is fine".
+mkdir -p "$fx/tc24/.github/workflows" "$fx/tc25/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - uses: >-\n          dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n      - run: cargo check\n' > "$fx/tc24/.github/workflows/x.yml"
+cp "$fx/tc24/.github/workflows/x.yml" "$fx/tc24-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc24"
+check "tc24 a folded uses: >- toolchain pin is UNSUPPORTED: exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 5\\.' <<<\"\$out\" && cmp -s '$fx/tc24-before.yml' '$fx/tc24/.github/workflows/x.yml'"
+printf 'jobs:\n  check:\n    steps:\n      - name: tc\n        uses:\n          dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/tc25/.github/workflows/x.yml"
+cp "$fx/tc25/.github/workflows/x.yml" "$fx/tc25-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc25"
+check "tc25 a uses: whose reference sits on the next line is UNSUPPORTED: exit 2, file untouched" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/tc25-before.yml' '$fx/tc25/.github/workflows/x.yml'"
+
+# tc26 (control): the same text inside a `run: |` script is the script's,
+# and a real step after it is still repaired.
+mkdir -p "$fx/tc26/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - run: |\n          cat > fx.yml <<EOF\n          uses: >-\n            dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n          EOF\n      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/tc26/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc26"
+check "tc26 a folded uses: inside a run: | script is text: the real step is repaired, the script unchanged" \
+  "[ \$rc -eq 0 ] && [ \$(grep -c 'toolchain: stable' '$fx/tc26/.github/workflows/x.yml') -eq 1 ] && grep -q '^          uses: >-\$' '$fx/tc26/.github/workflows/x.yml'"
+
+# sp35: a job's `uses:` written as a folded scalar holds the call on the
+# line below: a dead pin there is UNSUPPORTED, never "OK" and left dead.
+mkdir -p "$fx/sp35/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: >-\n      %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp35/.github/workflows/ci.yml"
+cp "$fx/sp35/.github/workflows/ci.yml" "$fx/sp35-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp35"
+check "sp35 a folded uses: >- dead reusable pin is UNSUPPORTED: exit 2, file untouched, never OK" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*ci.yml:4:.*continued below its key' <<<\"\$out\" && ! grep -q '^OK' <<<\"\$out\" && cmp -s '$fx/sp35-before.yml' '$fx/sp35/.github/workflows/ci.yml'"
+
+# sp36: a caller at `<stale>-patched` is another ref, not the stale SHA: it
+# does not keep the stale lock edge next to the replacement.
+mkdir -p "$fx/sp36/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: %s@%s\n  other:\n    uses: hyperpolymath/standards/.github/workflows/other.yml@%s-patched\n' "$RC_REUSABLE" "$STALE_A" "$STALE_A" > "$fx/sp36/.github/workflows/ci.yml"
+lock_records "$fx/sp36" "hyperpolymath/standards@$STALE_A"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp36"
+check "sp36 a <stale>-patched caller keeps no stale edge: the edge moves to the replacement" \
+  "grep -q \"^        - 'hyperpolymath/standards@$GOOD'\$\" '$fx/sp36/.github/workflows/actions.lock' && ! grep -q \"standards@$STALE_A'\" '$fx/sp36/.github/workflows/actions.lock'"
+
+# ls29 / ls30: a `uses:` site whose value continues below the key cannot be
+# classified, so the record it names would read `unknown` and a reusable's
+# SHA ref be retagged as if it were an action's: the lock is left alone.
+mkdir -p "$fx/ls29/.github/workflows" "$fx/ls30/.github/workflows"
+cat > "$fx/ls29/.github/workflows/ci.yml" <<YML
+jobs:
+  call:
+    uses: >-
+      foo/reus/.github/workflows/x.yml@$SHA_A
+YML
+lock_records "$fx/ls29" "foo/reus@$SHA_A"
+printf 'foo/reus\t%s\tv1.2.3\n' "$SHA_A" > "$fx/ls29-tags.tsv"
+cp "$fx/ls29/.github/workflows/actions.lock" "$fx/ls29-before.lock"
+TAG_MAP="$fx/ls29-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls29" --offline
+check "ls29 a folded job uses: is refused: exit 2, the reusable's SHA ref not retagged" \
+  "[ \$rc -eq 2 ] && grep -q 'ci.yml:3 is a block scalar or continues' <<<\"\$out\" && cmp -s '$fx/ls29-before.lock' '$fx/ls29/.github/workflows/actions.lock'"
+cat > "$fx/ls30/.github/workflows/ci.yml" <<YML
+jobs:
+  check:
+    steps:
+      - uses:
+          foo/bar@$SHA_B
+YML
+lock_records "$fx/ls30" "foo/bar@$SHA_B"
+cp "$fx/ls30/.github/workflows/actions.lock" "$fx/ls30-before.lock"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls30" --offline
+check "ls30 a step uses: with its reference on the next line is refused: exit 2, lock untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'block scalar or continues' <<<\"\$out\" && cmp -s '$fx/ls30-before.lock' '$fx/ls30/.github/workflows/actions.lock'"
+
+# ls31 (control): a folded uses: inside a run: | script is the script's text.
+mkdir -p "$fx/ls31/.github/workflows"
+cat > "$fx/ls31/.github/workflows/ci.yml" <<YML
+jobs:
+  check:
+    steps:
+      - run: |
+          uses: >-
+            foo/reus/.github/workflows/x.yml@$SHA_A
+      - uses: foo/bar@$SHA_B
+YML
+lock_records "$fx/ls31" "foo/bar@$SHA_B"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls31" --offline
+check "ls31 a folded uses: inside run: | is text: the action's record still gets its tag" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls31/.github/workflows/actions.lock'"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

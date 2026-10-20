@@ -88,6 +88,15 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
             function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
             function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^[:space:]]+[[:space:]]+)?["'"'"']?/, "", s); sub(/["'"'"'[:space:]].*$/, "", s); return s }
+            # A `uses:` whose value is not on its line — a block scalar
+            # (`uses: >-`), or nothing but a comment — names its site on the
+            # lines below, which this reader skips as scalar text. Such a site
+            # cannot be classified; the caller refuses (exit 2) rather than
+            # read the record it names as `unknown`.
+            function site(kind, r) {
+                if (r == "" || r ~ /^#/ || r ~ /^[|>][-+0-9]*$/) print "F\t" FILENAME ":" FNR
+                else print kind "\t" r
+            }
             function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }
             # The line with its trailing comment dropped and every quoted
             # scalar that is neither a key nor the value of a `uses` key
@@ -215,7 +224,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     # key line. A deeper `uses:` belongs to `with:`, `env:` or some
                     # other input and is data.
                     item_key = (t == "") ? -1 : length($0) - length(t)
-                    if (t ~ USES_RE) { if (item_steps) print "A\t" ref_of(t) }
+                    if (t ~ USES_RE) { if (item_steps) site("A", ref_of(t)) }
                     else if (t ~ /^\{/) flow_open(masked(t), "", 1, item_steps)
                     else if (t ~ KEY_RE) {
                         keyat[ind + 2] = keyname(t)
@@ -233,8 +242,8 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     if (item_steps && item_key < 0 && ind > item_indent) item_key = ind
                     if (key == "uses") {
                         p = nearest_below(ind); g = (p >= 0) ? nearest_below(p) : -1
-                        if (p >= 0 && g >= 0 && keyat[g] == "jobs") print "R\t" ref_of($0)
-                        else if (item_steps && ind == item_key) print "A\t" ref_of($0)
+                        if (p >= 0 && g >= 0 && keyat[g] == "jobs") site("R", ref_of($0))
+                        else if (item_steps && ind == item_key) site("A", ref_of($0))
                     } else if ((ml = masked($0)) ~ KEY_FLOW_RE) {
                         # A flow collection as the key'"'"'s value: a job written
                         # `call: { uses: ... }`, or the whole `jobs: { ... }` mapping
@@ -265,6 +274,10 @@ SITES=$(mktemp)
 uses_sites > "$SITES"
 if grep -q '^X' "$SITES"; then
     echo "fix-lock-self-sha-refs: a flow collection in $(grep -m1 '^X' "$SITES" | cut -f2) never closes, so its uses: sites cannot be classified; lock left unchanged" >&2
+    rm -f "$SITES"; exit 2
+fi
+if grep -q '^F' "$SITES"; then
+    echo "fix-lock-self-sha-refs: the uses: value at $(grep -m1 '^F' "$SITES" | cut -f2) is a block scalar or continues on the next line, so the site it names cannot be classified; lock left unchanged" >&2
     rm -f "$SITES"; exit 2
 fi
 

@@ -181,7 +181,10 @@ lookup_replacement() { # <reusable-path> <stale-sha>
 #   K<n>  line n is a `uses:` key of a job under `jobs:` — the one place a
 #         reusable is called;
 #   D<n>  line n is a `uses:` key under some other key (`env:`) — data;
-#   S<n>  line n is inside a block scalar (`run: |`, a fixture in `env:`) — text.
+#   S<n>  line n is inside a block scalar (`run: |`, a fixture in `env:`) — text;
+#   U<n>  line n continues the value of a job's `uses:` key that holds none on
+#         its own line (`uses: >-`, or `uses:` then the reference below): the
+#         call is there, but not where the rewrite reads it.
 # A line with none of these that still carries a known-dead pin is one the
 # parser cannot place (a flow-style job `rust: { uses: ... }`).
 yaml_context() { # <workflow.yml>
@@ -195,10 +198,13 @@ yaml_context() { # <workflow.yml>
             KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             ITEM_KEY_RE = "^[[:space:]]*-[[:space:]]+" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             SCALAR_RE = ":[[:space:]]*[|>][-+0-9]*[[:space:]]*(#.*)?$"
+            # A `uses:` key with no value on its line (a block scalar, or nothing).
+            OPEN_RE = "^[[:space:]]*" Q "uses" Q "[[:space:]]*:[[:space:]]*(&[^[:space:]]+[[:space:]]*)?([|>][-+0-9]*)?[[:space:]]*(#.*)?$"
         }
         {
             ind = indent_of($0)
-            if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else { print "S" NR; next } }
+            if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else { print (in_uses ? "U" : "S") NR; next } }
+            in_uses = 0
             if (!plain($0)) next
             if ($0 ~ KEY_RE) {
                 key = $0; sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*:.*$/, "", key); gsub(/["'"'"']/, "", key)
@@ -206,7 +212,11 @@ yaml_context() { # <workflow.yml>
                 if (key == "uses") {
                     p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0
                     g = -1; for (k in keyat) if (k + 0 < p && k + 0 > g) g = k + 0
-                    if (p >= 0 && g >= 0 && keyat[g] == "jobs") print "K" NR; else print "D" NR
+                    if (p >= 0 && g >= 0 && keyat[g] == "jobs") {
+                        print "K" NR
+                        # The value continues below the key: its lines are the call.
+                        if ($0 ~ OPEN_RE) { in_scalar = 1; scalar_indent = ind; in_uses = 1; keyat[ind] = key; next }
+                    } else print "D" NR
                 }
                 keyat[ind] = key
                 if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
@@ -330,6 +340,19 @@ while IFS= read -r -d '' wf; do
             fi
         done < <(mask_line "${numbered#*:}" | grep -oiE "$FALLBACK_USES_RE" | grep -oiE "$REUSABLE_REF_RE" || true)
     done < <(grep -niE "${REUSABLE_REF_RE}${FALLBACK_REF_END}" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
+    # A job's `uses:` whose value continues below the key (`uses: >-`): the
+    # rewrite reads the reference on the key line, finds none, and would
+    # report the file clean. A known-dead pin on such a line is reported.
+    for lineno in $(grep -o '^U[0-9]*' <<<"$ctx" | tr -d U || true); do
+        while IFS= read -r ref; do
+            [ -n "$ref" ] || continue
+            sha="${ref##*@}"
+            if lookup_replacement "${ref%@*}" "${sha,,}"; then
+                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin in a \`uses:\` value continued below its key (a block scalar such as \`uses: >-\`). Fix by hand; the file was not changed." >&2
+                skip=1
+            fi
+        done < <(mask_line "$(sed -n "${lineno}p" "$wf")" | grep -oiE "${REUSABLE_REF_RE}${FALLBACK_REF_END}" | grep -oiE "$REUSABLE_REF_RE" || true)
+    done
     if [ "$skip" -eq 1 ]; then unsupported=$((unsupported + 1)); continue; fi
     pending=()
     for lineno in $klines; do
@@ -359,8 +382,11 @@ while IFS= read -r -d '' wf; do
     for entry in ${pending[@]+"${pending[@]}"}; do
         IFS=$'\t' read -r stale replacement repo_prefix <<<"$entry"
         keep=0
+        # The repository matched literally and the SHA to its end, as the
+        # caller matcher does: `<stale>-patched` is another ref, not this one.
+        repo_re=$(printf '%s' "$repo_prefix" | sed -E 's/[][\.^$*+?(){}|~\\]/\\&/g')
         for other in $klines; do
-            sed -n "${other}p" "$wf" | grep -qiE "${USES_KEY_RE}${repo_prefix}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}" && keep=1
+            sed -n "${other}p" "$wf" | grep -qiE "${USES_KEY_RE}${repo_re}/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@${stale}${REF_END}" && keep=1
         done
         printf '%s\t%s\t%s\t%s\t%s\n' ".github/workflows/${wf##*/}" "$stale" "$replacement" "$keep" "$repo_prefix" >> "$edits"
     done
