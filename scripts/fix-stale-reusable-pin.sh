@@ -152,7 +152,7 @@ merge_duplicate_records() {
         # nothing stored, when an item is any other shape — a nested
         # collection, a key, an embedded quote.
         function flow_items(s,   body, n, parts, i, it, k) {
-            body = s; sub(/^        uses:[[:space:]]*\[/, "", body); sub(/\][[:space:]]*(#.*)?$/, "", body)
+            body = s; sub(/^        ["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*\[/, "", body); sub(/\][[:space:]]*(#.*)?$/, "", body)
             if (body ~ /^[[:space:]]*$/) return 1
             n = split(body, parts, ",")
             for (i = 1; i <= n; i++) {
@@ -167,7 +167,7 @@ merge_duplicate_records() {
         # A record key is the dependency between its quotes — or a plain
         # scalar, as a hand-added record may write it (`actions/checkout@<sha>:`,
         # exactly the kind of record this fixer meets); the key is compared
-        # unquoted so `'a@sha':`, `"a@sha":` and `a@sha:` are one record, and
+        # unquoted so `'"'"'a@sha'"'"':`, `"a@sha":` and `a@sha:` are one record, and
         # the first spelling seen is the one written back. A record this
         # merger did not recognise was not kept: every line of it fell to the
         # catch-all below with no current record, and was dropped.
@@ -199,10 +199,11 @@ merge_duplicate_records() {
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             nrec[key]++; cur = key; next
         }
-        # The nested list header, with or without a trailing comment (kept as
-        # first spelled); only lines inside a list it opens are its entries.
-        /^        uses:[[:space:]]*(#.*)?$/ { in_uses = 1; nlists[cur]++; if (!(cur in uses_head)) uses_head[cur] = $0; next }
-        /^        uses:[[:space:]]*\[.*\][[:space:]]*(#.*)?$/ && flow_items($0) {
+        # The nested list header, quoted or not, with or without a trailing
+        # comment (kept as first spelled); only lines inside a list it opens
+        # are its entries.
+        /^        ["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(#.*)?$/ { in_uses = 1; nlists[cur]++; if (!(cur in uses_head)) uses_head[cur] = $0; next }
+        /^        ["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*\[.*\][[:space:]]*(#.*)?$/ && flow_items($0) {
             nlists[cur]++
             if (!(cur in flow_line)) {
                 flow_line[cur] = $0; c = $0; sub(/^.*\]/, "", c)
@@ -210,8 +211,9 @@ merge_duplicate_records() {
             }
             next
         }
-        # Any other `uses:` value is one the merger cannot read.
-        /^        uses:/ { odd[cur] = 1 }
+        # Any other `uses:` value is one the merger cannot read. The key may
+        # be quoted (`"uses":`, `'"'"'uses'"'"':`), as `ref` and `commit` may.
+        /^        ["'"'"']?uses["'"'"']?[[:space:]]*:/ { odd[cur] = 1 }
         in_uses && uses_entry($0) { u = $0; sub(/^            - /, "", u); k = cur SUBSEP dep_id(entry_value($0)); if (!(k in uses_of)) uses_of[k] = u; next }
         # Any other line inside the list (a comment, a shape this merger has
         # no rule for) stays under the `uses:` header it came from: moved

@@ -3211,6 +3211,37 @@ TAG_MAP="$fx/ls39-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls39 a tagged step value still classifies its record as an action: the ref gets its tag" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\$\" '$fx/ls39/.github/workflows/actions.lock'"
 
+# ── Review cases (gitbot-fleet#615, round on dcfca15) ───────────────────────
+# tc36: an alias names the anchor defined before it. A step whose `uses:
+# *rust` follows `&rust dtolnay/rust-toolchain@<sha>` runs that reference,
+# even when a later line of the same step defines `&rust` again: reported,
+# exit 2, file untouched — not judged by the later definition and passed.
+mkdir -p "$fx/tc36/.github/workflows"
+cat > "$fx/tc36/.github/workflows/x.yml" <<'YML'
+env:
+  RUST: &rust dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+jobs:
+  check:
+    steps:
+      - uses: *rust
+        env:
+          OTHER: &rust actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+YML
+cp "$fx/tc36/.github/workflows/x.yml" "$fx/tc36-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc36"
+check "tc36 an alias is judged by the anchor before it, not a later redefinition in the step" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*line(s): 6' <<<\"\$out\" && cmp -s '$fx/tc36-before.yml' '$fx/tc36/.github/workflows/x.yml'"
+
+# sp47: a record whose nested list key is quoted (`"uses":`, `'uses':`) is
+# the same list: merging a renamed record into it leaves one `uses` key.
+for qk in '"uses"' "'uses'"; do
+    d="$fx/sp47-$([ "$qk" = '"uses"' ] && echo dq || echo sq)"
+    sp_flow_fixture "$d" "        $qk:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n" "        uses:\n            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\n"
+    run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$d"
+    check "sp47 a quoted $qk key is the nested list: one uses key after the merge, both entries kept" \
+      "[ \$rc -eq 3 ] && [ \$(grep -cE \"^        [\\\"']?uses[\\\"']?:\" '$d/.github/workflows/actions.lock') -eq 1 ] && grep -q 'ossf/scorecard-action@' '$d/.github/workflows/actions.lock' && grep -q 'actions/checkout@' '$d/.github/workflows/actions.lock'"
+done
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

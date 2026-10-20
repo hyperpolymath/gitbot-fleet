@@ -286,6 +286,7 @@ cat > "$maintenance/repo/scripts/maintenance/run-maintenance.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$@" > "$MAINTENANCE_CASE/args"
+umask > "$MAINTENANCE_CASE/umask"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --repo) shift 2 ;;
@@ -306,6 +307,8 @@ report=$(cat "$maintenance/case/output-path")
 check "maintenance default report lives under XDG_STATE_HOME" \
     test "$(dirname "$report")" = "$maintenance/state with spaces/gitbot-fleet/maintenance"
 check "maintenance default report is private despite the caller's umask" test "$(stat -c %a "$report")" = 600
+check "the maintenance runner runs under the caller's umask, not the report's" test "$(cat "$maintenance/case/umask")" = 0022
+check "the default report directory is private" test "$(stat -c %a "$(dirname "$report")")" = 700
 check "maintenance passes the strict gate to its runner" grep -qx -- --strict "$maintenance/case/args"
 check "maintenance passes the warning gate to its runner" grep -qx -- --fail-on-warn "$maintenance/case/args"
 run_fix env XDG_STATE_HOME="$maintenance/unused-state" REPOS_BASE="$maintenance/no-repos" \

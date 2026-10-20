@@ -203,6 +203,22 @@ apply_to_file() {
         # only pin the parser can be asked to place. The same text inside
         # another key'"'"'s string (`name: "fixture dtolnay/...@<sha>"`) is data.
         function uses_pin(s) { return sha_ref(s) && tolower(site_view(s)) ~ USES_SITE_RE }
+        # Buffer line $0 of the current step as buf[n], with the verdict on
+        # its `uses:` alias, if any, as the anchors read so far give it —
+        # YAML resolves an alias to the latest anchor of that name BEFORE it,
+        # so the verdict cannot wait for the end of the step, when a later
+        # line may have redefined the name: "bad" when the anchor holds a
+        # SHA-pinned toolchain reference or no anchor of that name has been
+        # seen, else "ok". Anchor names are case-sensitive: the key is
+        # matched in lower case, the name is taken as written.
+        function buffer(   v, m) {
+            buf[++n] = $0; lnum[n] = NR; alias_state[n] = ""
+            v = site_view($0)
+            if (match(tolower(v), USES_ALIAS_RE)) {
+                m = substr(v, RSTART, RLENGTH); sub(/^.*\*/, "", m)
+                alias_state[n] = ((m in tc_anchor) || !(m in any_anchor)) ? "bad" : "ok"
+            }
+        }
         # YAML context outside list items: the key at each indentation, so a
         # list item opens a step only when its parent key is `steps:`.
         function record_key(s,   ind, k, t) {
@@ -254,12 +270,10 @@ apply_to_file() {
                 # runs that action, but the reference is not where the parser
                 # places a step'"'"'s action. Reported, never passed over.
                 # An alias of no anchor read here could be that reference too.
-                # Anchor names are case-sensitive: matched in lower case for
-                # the key, the name is taken as written.
-                if ((flow_item || length(key_indent_of(buf[i])) == skey) && match(tolower(site_view(buf[i])), USES_ALIAS_RE)) {
-                    m = substr(site_view(buf[i]), RSTART, RLENGTH); sub(/^.*\*/, "", m)
-                    if ((m in tc_anchor) || !(m in any_anchor)) unrec[++nunrec] = lnum[i]
-                }
+                # The verdict was taken when the line was read (alias_state):
+                # an alias names the anchor defined before it, not one a later
+                # line of the step defines again under the same name.
+                if ((flow_item || length(key_indent_of(buf[i])) == skey) && alias_state[i] == "bad") unrec[++nunrec] = lnum[i]
                 if (!sha_ref(buf[i])) continue
                 if (!flow_item && tolower(buf[i]) ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
                 if (!flow_item && i > 1 && indent_of(buf[i]) > skey) continue
@@ -444,9 +458,9 @@ apply_to_file() {
                 if ($0 ~ LIST_RE && ind <= step_indent) { flush(); in_step = 0 }
                 else if (plain($0) && ind < step_indent) { flush(); in_step = 0 }
             }
-            if (in_step) { buf[++n] = $0; lnum[n] = NR; next }
+            if (in_step) { buffer(); next }
             if ($0 ~ LIST_RE) {
-                if (parent_is_steps(ind)) { in_step = 1; step_indent = ind; n = 0; buf[++n] = $0; lnum[n] = NR; next }
+                if (parent_is_steps(ind)) { in_step = 1; step_indent = ind; n = 0; buffer(); next }
                 # A list item whose parent is not `steps:` (a matrix, a fixture) is data.
                 print; next
             }

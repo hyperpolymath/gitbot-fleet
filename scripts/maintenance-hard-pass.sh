@@ -59,9 +59,18 @@ repo_name="$(basename "$repo")"
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
 
 if [[ -z "$output" ]]; then
-    # Reports persist between runs; keep them in the user's state directory.
-    umask 077
+    # Reports persist between runs; keep them in the user's state directory,
+    # private to this user. Only the report is: its directory and the empty
+    # report are created under umask 077, and the caller's umask is back in
+    # force before the runner starts, so whatever else the runner creates is
+    # as the caller would have it. The runner writes into the existing file,
+    # which keeps its mode.
     output="${XDG_STATE_HOME:-$HOME/.local/state}/gitbot-fleet/maintenance/${repo_name}-${ts}.json"
+    caller_umask=$(umask)
+    umask 077
+    mkdir -p "$(dirname "$output")"
+    : > "$output"
+    umask "$caller_umask"
 fi
 mkdir -p "$(dirname "$output")"
 
