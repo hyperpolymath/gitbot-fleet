@@ -525,6 +525,14 @@ done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml
 # said, and the run ends 3 (the lock needs `gh actions-lock`), never 0.
 if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     sort -u "$edits" -o "$edits"
+    # A lock with CRLF line endings is edited as LF — every pass below reads
+    # `$`-anchored lines, and a carriage return would hide each record and
+    # edge from them — and written back with CRLF once the edits are done.
+    lock_crlf=0
+    if grep -q $'\r$' "$LOCK"; then
+        lock_crlf=1; tmp=$(mktemp)
+        sed 's/\r$//' "$LOCK" > "$tmp" && pin_fixer_replace "$tmp" "$LOCK"
+    fi
     while IFS=$'\t' read -r wfkey stale new keep repo; do
         # The workflow key in either quote style, or none (`gh actions-lock`
         # writes single quotes; a hand edit may not): compared unquoted.
@@ -638,6 +646,10 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     # A kept stale edge means the new edge was ADDED, so the stale record is
     # kept too (the branch above copies it); nothing else to do here.
     [ "$lock_touched" -eq 1 ] && merge_duplicate_records "$LOCK"
+    if [ "$lock_crlf" -eq 1 ]; then
+        tmp=$(mktemp)
+        sed 's/$/\r/' "$LOCK" > "$tmp" && pin_fixer_replace "$tmp" "$LOCK"
+    fi
 fi
 rm -f "$edits"
 

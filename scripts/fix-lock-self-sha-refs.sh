@@ -158,8 +158,8 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             }
             # The kind of the flow `uses` entry whose mapping is open at
             # column `at` of masked line s, from the keys that open the
-            # brackets around it: under a `[` that `steps:` opens it is an
-            # action (A); directly in a mapping a job key opens — inside the
+            # brackets around it: in a mapping that is an item of a `[` that
+            # `steps:` opens it is an action (A); directly in a mapping a job key opens — inside the
             # `{` that `jobs:` opens on this line, or on a job line (`call:
             # { uses: ... }`) whose block parent is `jobs:` — it is a reusable
             # call (R); anywhere else (`with: { uses: ... }`) it is data ("").
@@ -177,7 +177,10 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
                     else if ((c == "}" || c == "]") && d > 0) d--
                 }
                 if (item) return (d == 1 && kind[1] == "{") ? "A" : ""
-                for (k = 1; k <= d; k++) if (kind[k] == "[" && kname[k] == "steps") return "A"
+                # A step is a mapping that is itself an item of the `[` that
+                # `steps:` opens: its own `uses` is the action. A `uses` deeper
+                # inside it (`with: { uses: ... }`) is an input'"'"'s data.
+                if (d >= 2 && kind[d] == "{" && kname[d] == "" && kind[d - 1] == "[" && kname[d - 1] == "steps") return "A"
                 if (d >= 1 && kind[d] == "{" && kname[d] != "") {
                     if (d >= 2 && kind[d - 1] == "{" && kname[d - 1] == "jobs") return "R"
                     if (d == 1 && parent == "jobs") return "R"
@@ -354,8 +357,10 @@ tmp=$(mktemp); cp "$LOCK" "$tmp"
 # line spells it.
 records=$(mktemp)
 if ! awk '
-    /^    ["'"'"']?[^"'"'"'@[:space:]#]+@[0-9a-fA-F]+["'"'"']?:([[:space:]]+#.*)?$/ {
-        s = $0; sub(/^    ["'"'"']?/, "", s); sub(/["'"'"']?:([[:space:]]+#.*)?$/, "", s)
+    # Trailing whitespace after the colon, a carriage return included (a
+    # lock with CRLF line endings), is no part of the key.
+    /^    ["'"'"']?[^"'"'"'@[:space:]#]+@[0-9a-fA-F]+["'"'"']?:([[:space:]]+#.*|[[:space:]]*)$/ {
+        s = $0; sub(/^    ["'"'"']?/, "", s); sub(/["'"'"']?:([[:space:]]+#.*|[[:space:]]*)$/, "", s)
         i = index(s, "@"); repo = substr(s, 1, i - 1); sha = substr(s, i + 1)
         if (length(sha) == 40) { inrec = 1; key_repo = repo; key_sha = sha } else inrec = 0
         next

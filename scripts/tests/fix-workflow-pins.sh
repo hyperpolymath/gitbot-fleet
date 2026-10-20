@@ -3242,6 +3242,48 @@ for qk in '"uses"' "'uses'"; do
       "[ \$rc -eq 3 ] && [ \$(grep -cE \"^        [\\\"']?uses[\\\"']?:\" '$d/.github/workflows/actions.lock') -eq 1 ] && grep -q 'ossf/scorecard-action@' '$d/.github/workflows/actions.lock' && grep -q 'actions/checkout@' '$d/.github/workflows/actions.lock'"
 done
 
+# ── Review cases (gitbot-fleet#615, round on d83bce8) ───────────────────────
+# ls40: a record key followed by trailing spaces, in a lock with CRLF line
+# endings, is a record: the self-SHA action ref gets its tag, CRLF kept.
+mkdir -p "$fx/ls40/.github/workflows"
+action_steps "$fx/ls40/.github/workflows" "foo/bar@$SHA_B"
+printf "version: 'v0.0.3'\r\nworkflows:\r\n    '.github/workflows/ci.yml':\r\n        - 'foo/bar@%s'\r\ndependencies:\r\n    'foo/bar@%s':  \r\n        ref: '%s'\r\n        commit: 'sha1-%s'\r\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls40/.github/workflows/actions.lock"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls40-tags.tsv"
+TAG_MAP="$fx/ls40-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls40" --offline
+check "ls40 a CRLF lock's record key with trailing spaces is a record: its ref gets its tag, CRLF kept" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v1.0.0'\"\$'\\r'\"\$\" '$fx/ls40/.github/workflows/actions.lock' && [ \$(grep -c \$'\\r\$' '$fx/ls40/.github/workflows/actions.lock') -eq 8 ]"
+
+# ls41: in a flow `steps:` sequence only the step mapping's own `uses` is an
+# action; a `uses` inside a step input (`with: { uses: ... }`) is data and
+# proves nothing — that record stays UNRESOLVED, untouched, exit 1.
+mkdir -p "$fx/ls41/.github/workflows"
+printf 'jobs:\n  build:\n    steps: [{ uses: fixture/wrapper@v1, with: { uses: foo/bar/.github/workflows/x.yml@%s } }]\n' "$SHA_A" > "$fx/ls41/.github/workflows/ci.yml"
+lock_records "$fx/ls41" "foo/bar@$SHA_A"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_A" > "$fx/ls41-tags.tsv"
+cp "$fx/ls41/.github/workflows/actions.lock" "$fx/ls41-before.lock"
+TAG_MAP="$fx/ls41-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls41" --offline
+check "ls41 a uses inside a flow step's input proves no action: the record stays UNRESOLVED and untouched" \
+  "[ \$rc -eq 1 ] && grep -q 'UNRESOLVED  foo/bar@aaaaaaa' <<<\"\$out\" && cmp -s '$fx/ls41-before.lock' '$fx/ls41/.github/workflows/actions.lock'"
+
+# tc37: a step opened by `- # comment`, its `uses:` on the next line, is the
+# bare `-` layout: repaired, not reported UNSUPPORTED.
+mkdir -p "$fx/tc37/.github/workflows"
+printf 'jobs:\n  check:\n    steps:\n      - # install Rust\n        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n      - run: cargo test\n' > "$fx/tc37/.github/workflows/x.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc37"
+check "tc37 a step opened by '- # comment' is repaired like a bare '-' step" \
+  "[ \$rc -eq 0 ] && grep -q '^        with:\$' '$fx/tc37/.github/workflows/x.yml' && grep -q '^          toolchain: stable\$' '$fx/tc37/.github/workflows/x.yml'"
+
+# sp48: a lock with CRLF line endings is edited and merged as one with LF
+# endings would be — no record dropped — and written back with CRLF.
+for v in lf cr; do
+    sp_flow_fixture "$fx/sp48-$v" "        uses:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n" "        uses:\n            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\n"
+done
+sed -i 's/$/\r/' "$fx/sp48-cr/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp48-lf"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp48-cr"
+check "sp48 a CRLF lock is repaired and merged exactly as its LF twin, and keeps CRLF" \
+  "[ \$rc -eq 3 ] && tr -d '\\r' < '$fx/sp48-cr/.github/workflows/actions.lock' | cmp -s - '$fx/sp48-lf/.github/workflows/actions.lock' && [ \$(grep -c \$'\\r\$' '$fx/sp48-cr/.github/workflows/actions.lock') -eq \$(wc -l < '$fx/sp48-cr/.github/workflows/actions.lock') ] && grep -q 'ossf/scorecard-action@' '$fx/sp48-cr/.github/workflows/actions.lock'"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

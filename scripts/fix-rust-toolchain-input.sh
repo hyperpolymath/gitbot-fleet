@@ -245,9 +245,10 @@ apply_to_file() {
         function flush(   i, j, line, ind, uses_i, has_with, with_bad, with_i, with_flow, with_indent, in_with, in_flow, flow_depth, child_indent, has_tc, key_indent, skey, flow_item, tc_empty_i, tc_empty_flow, tc_empty_eol, tc_nested, tc_await, tc_flow_await, m, pre, post, delim, comment, v, w) {
             if (n == 0) return
             # The step'"'"'s key column: the opener'"'"'s key (`- uses:` -> the column of
-            # `uses`), or for a bare `-` the indentation of the first plain line under it.
+            # `uses`), or for a bare `-` — alone, or followed only by a comment
+            # (`- # install Rust`) — the indentation of the first plain line under it.
             flow_item = (buf[1] ~ /^[[:space:]]*-[[:space:]]*\{/)
-            if (buf[1] ~ /^[[:space:]]*-[[:space:]]+[^[:space:]]/) skey = length(key_indent_of(buf[1]))
+            if (buf[1] ~ /^[[:space:]]*-[[:space:]]+[^[:space:]#]/) skey = length(key_indent_of(buf[1]))
             else {
                 skey = -1
                 for (j = 2; j <= n; j++) if (plain(buf[j])) { skey = indent_of(buf[j]); break }
