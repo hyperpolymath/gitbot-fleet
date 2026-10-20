@@ -2624,6 +2624,85 @@ run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp29"
 check "sp29 a commented record key survives the merger, and a commented workflow key still moves its edge" \
   "[ \$rc -eq 3 ] && grep -q \"^    'actions/checkout@$SHA_A': # pinned by hand\$\" '$fx/sp29/.github/workflows/actions.lock' && grep -q \"^        ref: 'v4.2.2'\$\" '$fx/sp29/.github/workflows/actions.lock' && grep -q \"^        - 'hyperpolymath/standards@$GOOD'\$\" '$fx/sp29/.github/workflows/actions.lock' && ! grep -q 'already out of sync' <<<\"\$out\""
 
+# sp30: first-match rows may send two reusables of one repository at one
+# stale SHA to two replacements. One lock edge and one record cannot carry
+# both, so the run refuses before any rewrite; one caller alone (the
+# sp-order cases above) is still applied in table order.
+mkdir -p "$fx/sp30/.github/workflows"
+printf 'jobs:\n  a:\n    uses: fixture/reusable/.github/workflows/ci.yml@%s\n  b:\n    uses: fixture/reusable/.github/workflows/other.yml@%s\n' "$STALE_A" "$STALE_A" > "$fx/sp30/.github/workflows/ci.yml"
+cp "$fx/sp30/.github/workflows/ci.yml" "$fx/sp30-before.yml"
+printf 'fixture/reusable/.github/workflows/ci.yml\t%s\t%s\texact\nfixture/reusable/.github/workflows/*\t%s\t%s\twildcard\n' "$STALE_A" "$GOOD" "$STALE_A" "$SHA_B" > "$fx/sp30-pins.tsv"
+run_fix env PINS_TABLE="$fx/sp30-pins.tsv" bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp30"
+check "sp30 one repository@stale sent to two replacements: CONFLICT, exit 2, nothing rewritten" \
+  "[ \$rc -eq 2 ] && grep -q 'CONFLICT' <<<\"\$out\" && ! grep -q '^FIXED' <<<\"\$out\" && cmp -s '$fx/sp30-before.yml' '$fx/sp30/.github/workflows/ci.yml'"
+
+# sp31: the stale edge quoted in another edge's trailing comment is not the
+# edge: the entry that lacks it is reported out of sync, and the other edge
+# is kept as written (it used to be moved, then dropped as a duplicate).
+mkdir -p "$fx/sp31/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp31/.github/workflows/ci.yml"
+cat > "$fx/sp31/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'actions/checkout@$SHA_A' # was 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'actions/checkout@$SHA_A':
+        ref: 'v4.2.2'
+        commit: 'sha1-$SHA_A'
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp31"
+check "sp31 a stale edge named only in another edge's comment: out of sync said (exit 3), that edge kept as written" \
+  "[ \$rc -eq 3 ] && grep -q 'already out of sync' <<<\"\$out\" && grep -q \"^        - 'actions/checkout@$SHA_A' # was 'hyperpolymath/standards@$STALE_A'\$\" '$fx/sp31/.github/workflows/actions.lock'"
+
+# sp32: a hand-written record may quote its field keys; its ref and commit
+# move with its key, so the record is not left naming the stale SHA.
+mkdir -p "$fx/sp32/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp32/.github/workflows/ci.yml"
+cat > "$fx/sp32/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        "ref": '$STALE_A'
+        'commit': 'sha1-$STALE_A'
+LOCK
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp32"
+check "sp32 quoted ref/commit field keys move with the record: no stale SHA left, quotes kept" \
+  "[ \$rc -eq 3 ] && grep -q \"^        \\\"ref\\\": '$GOOD'\$\" '$fx/sp32/.github/workflows/actions.lock' && grep -q \"^        'commit': 'sha1-$GOOD'\$\" '$fx/sp32/.github/workflows/actions.lock' && ! grep -q '$STALE_A' '$fx/sp32/.github/workflows/actions.lock'"
+
+# sp33 / tc22: a `uses:` value carrying a YAML anchor is not one the
+# rewrites read (its aliases would change with it): reported, never OK.
+mkdir -p "$fx/sp33/.github/workflows" "$fx/tc22/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: &call %s@%s\n' "$RC_REUSABLE" "$STALE_A" > "$fx/sp33/.github/workflows/ci.yml"
+cp "$fx/sp33/.github/workflows/ci.yml" "$fx/sp33-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp33"
+check "sp33 an anchored dead reusable value is UNSUPPORTED: exit 2, file untouched, never OK" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*anchored value' <<<\"\$out\" && cmp -s '$fx/sp33-before.yml' '$fx/sp33/.github/workflows/ci.yml'"
+printf 'jobs:\n  check:\n    steps:\n      - uses: &rt dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772\n' > "$fx/tc22/.github/workflows/x.yml"
+cp "$fx/tc22/.github/workflows/x.yml" "$fx/tc22-before.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc22"
+check "tc22 an anchored SHA-pinned toolchain step is UNSUPPORTED: exit 2, file untouched, never OK" \
+  "[ \$rc -eq 2 ] && grep -q UNSUPPORTED <<<\"\$out\" && cmp -s '$fx/tc22-before.yml' '$fx/tc22/.github/workflows/x.yml'"
+
+# ls27: the self-SHA fixer reads an anchored `uses:` value as the site it
+# is: the step is an action (tag written), the job call a reusable (kept).
+mkdir -p "$fx/ls27/.github/workflows"
+cat > "$fx/ls27/.github/workflows/ci.yml" <<YML
+jobs:
+  check:
+    steps:
+      - uses: &act hyperpolymath/standards@$SHA_A
+  call:
+    uses: &rc hyperpolymath/cicd-suite/.github/workflows/x.yml@$SHA_C
+YML
+lock_records "$fx/ls27" "hyperpolymath/standards@$SHA_A" "hyperpolymath/cicd-suite@$SHA_C"
+TAG_MAP="$fx/ls20-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls27" --offline
+check "ls27 anchored uses: values are read: the anchored step is an action (tag), the anchored job call keeps its SHA" \
+  "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v2.0.0'\$\" '$fx/ls27/.github/workflows/actions.lock' && grep -q \"^        ref: '$SHA_C'\$\" '$fx/ls27/.github/workflows/actions.lock'"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

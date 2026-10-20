@@ -87,7 +87,7 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
             function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
             function keyname(s) { sub(/^[[:space:]]*(-[[:space:]]+)?/, "", s); sub(/[[:space:]]*:.*$/, "", s); gsub(/["'"'"']/, "", s); return s }
-            function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", s); sub(/["'"'"'[:space:]#].*$/, "", s); return s }
+            function ref_of(s) { sub(/^[[:space:]]*(-[[:space:]]+)?["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^[:space:]]+[[:space:]]+)?["'"'"']?/, "", s); sub(/["'"'"'[:space:]#].*$/, "", s); return s }
             function nearest_below(ind,   k, p) { p = -1; for (k in keyat) if (k + 0 < ind && k + 0 > p) p = k + 0; return p }
             # The line with its trailing comment dropped and every quoted
             # scalar that is neither a key nor the value of a `uses` key
@@ -120,10 +120,10 @@ uses_sites() { # -> lines "R<TAB>owner/repo/.github/workflows/x.yml@ref" | "A<TA
             # (0 at the start of the line), for flow_kind/3.
             function flow_uses_all(s, out,   n, r, t, base) {
                 n = 0; split("", out); split("", out_at); t = s; base = 0
-                while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?[^"'"'"'[:space:],}]+/)) {
+                while (match(t, /(^|[{,])[[:space:]]*["'"'"']?uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^"'"'"'[:space:],}]+[[:space:]]+)?["'"'"']?[^"'"'"'[:space:],}]+/)) {
                     r = substr(t, RSTART, RLENGTH)
                     out_at[n + 1] = (r ~ /^[{,]/) ? base + RSTART : 0
-                    sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*["'"'"']?/, "", r)
+                    sub(/^.*uses["'"'"']?[[:space:]]*:[[:space:]]*(&[^"'"'"'[:space:],}]+[[:space:]]+)?["'"'"']?/, "", r)
                     out[++n] = r; base += RSTART + RLENGTH - 1; t = substr(t, RSTART + RLENGTH)
                 }
                 return n

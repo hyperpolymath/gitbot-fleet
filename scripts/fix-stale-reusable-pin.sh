@@ -262,7 +262,39 @@ mask_line() {
         print out
     }'
 }
-FALLBACK_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?${REUSABLE_REF_RE}${FALLBACK_REF_END}"
+# The value may carry a YAML anchor (`uses: &call owner/repo/...@<sha>`).
+# The rewrite does not edit anchored values, since every alias of the
+# anchor would change with it, so such a value is reported, never skipped.
+ANCHOR_RE="&[^[:space:],}]+[[:space:]]+"
+FALLBACK_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*(${ANCHOR_RE})?[\"']?${REUSABLE_REF_RE}${FALLBACK_REF_END}"
+ANCHORED_USES_RE="(^|[-{,[:space:]])[\"']?uses[\"']?[[:space:]]*:[[:space:]]*${ANCHOR_RE}[\"']?${REUSABLE_REF_RE}${FALLBACK_REF_END}"
+# The dead reference a job-level `uses:` line carries, as written, or "".
+k_ref() { grep -oiE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$1" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]]\$//" | head -1 || true; }
+
+# Every replacement the run would write, before one is written. Overlapping
+# table rows are applied first match first, so two reusables of one
+# repository at one stale SHA can be sent to two different replacements.
+# One lock edge and one dependency record per repository@SHA cannot carry
+# both, and which caller gets which cannot be said in the lock: the run
+# refuses, and nothing is changed.
+declare -A move_to=()
+conflict=0
+while IFS= read -r -d '' wf; do
+    for lineno in $(yaml_context "$wf" | grep -o '^K[0-9]*' | tr -d K | sort -n || true); do
+        ref=$(k_ref "$(sed -n "${lineno}p" "$wf")")
+        [ -n "$ref" ] || continue
+        stale="${ref##*@}"; stale="${stale,,}"
+        lookup_replacement "${ref%@*}" "$stale" || continue
+        key="${ref%%/.github/workflows/*}"; key="${key,,}@$stale"
+        if [ -n "${move_to[$key]:-}" ] && [ "${move_to[$key]}" != "$replacement" ]; then
+            echo "CONFLICT  ${wf#"$REPO_PATH"/}:$lineno: $key would move to ${move_to[$key]:0:7} here and to ${replacement:0:7} elsewhere; one lock edge and one record cannot carry both. Fix the table or the callers by hand; nothing was changed." >&2
+            conflict=1
+        fi
+        move_to[$key]="$replacement"
+    done
+done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
+[ "$conflict" -eq 0 ] || exit 2
+
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge<TAB>repository
 lock_stale=0      # a rewritten caller whose lock entry never had the edge: the lock was already out of sync
 unsupported=0
@@ -273,7 +305,12 @@ while IFS= read -r -d '' wf; do
     skip=0
     while IFS= read -r numbered; do
         lineno="${numbered%%:*}"
-        grep -qx "$lineno" <<<"$placed" && continue
+        # A placed `uses:` key is the rewrite's, unless its value is anchored:
+        # the rewrite reads the reference right after the colon, finds none
+        # there, and would otherwise report the file clean.
+        if grep -qx "$lineno" <<<"$placed"; then
+            mask_line "${numbered#*:}" | grep -qiE "$ANCHORED_USES_RE" || continue
+        fi
         # Only a `uses:` key outside comments and other scalars can be a
         # caller the parser failed to place (a flow-style job); a dead pin
         # named in a comment or a `name:` string is text.
@@ -285,7 +322,7 @@ while IFS= read -r -d '' wf; do
             [ -n "$ref" ] || continue
             sha="${ref##*@}"
             if lookup_replacement "${ref%@*}" "${sha,,}"; then
-                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (flow-style job mapping?). Fix by hand; the file was not changed." >&2
+                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin but not a \`uses\` key the parser can place (a flow-style job mapping, or an anchored value). Fix by hand; the file was not changed." >&2
                 skip=1
             fi
         done < <(mask_line "${numbered#*:}" | grep -oiE "$FALLBACK_USES_RE" | grep -oiE "$REUSABLE_REF_RE" || true)
@@ -297,7 +334,7 @@ while IFS= read -r -d '' wf; do
         # A job-level call pinned by tag (`@v1`) carries no SHA: nothing for a
         # SHA table to move, so it is a no-op here — not a grep exit 1 that
         # `set -e` would turn into a silent exit 1 of the whole run.
-        ref=$(grep -oiE "${USES_KEY_RE}${REUSABLE_REF_RE}${REF_END}" <<<"$line" | sed -E "s/${USES_KEY_RE}//; s/[\"'[:space:]]\$//" | head -1 || true)
+        ref=$(k_ref "$line")
         [ -n "$ref" ] || continue
         path="${ref%@*}"; stale_raw="${ref##*@}"; stale="${stale_raw,,}"
         lookup_replacement "$path" "$stale" || continue
@@ -346,7 +383,9 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                 /^workflows:[[:space:]]*$/ { sec = "w" }
                 /^dependencies:[[:space:]]*$/ { sec = "d" }
                 sec == "w" && /^    [^[:space:]#]/ { inwf = (keyv($0) == "    " wfkey ":") }
-                sec == "w" && inwf && /^        - / { l = tolower($0); if (index(l, "'"'"'" edge "'"'"'") || index(l, "\"" edge "\"") || bare(l) == edge) found = 1 }
+                # The edge is the list item'"'"'s own value: the same text quoted in
+                # a trailing comment of another edge is not it.
+                sec == "w" && inwf && /^        - / { if (tolower(unq(bare($0))) == edge) found = 1 }
                 END { exit !found }' "$LOCK"; then
             echo "WARN: actions.lock has no edge '$repo@${stale:0:7}' under '$wfkey': the lock was already out of sync with this caller — run \`gh actions-lock\` or scripts/check-lock-sync.sh before pushing." >&2
             lock_stale=1
@@ -376,13 +415,18 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
             sec == "w" && inwf && /^        - / {
                 # Either quote style, or none (a hand-written edge); the edge
                 # keeps the spelling it has.
-                l = tolower($0); e = tolower(repo "@" stale)
-                q = "'"'"'"; i = index(l, q e q)
-                if (!i) { q = "\""; i = index(l, q e q) }
-                if (i) moved = substr($0, 1, i + length(repo)) "@" new q
-                else {
-                    t = l; sub(/^        - /, "", t); sub(/[[:space:]]+(#.*)?$/, "", t)
-                    if (t == e) { i = 1; rest = $0; sub(/^        - [^[:space:]]+/, "", rest); spell = substr($0, 11, length(repo)); moved = "        - " spell "@" new rest }
+                l = tolower($0); e = tolower(repo "@" stale); i = 0
+                # Only an item whose own value is the stale edge moves; the
+                # same text in its comment is not the edge. Its first quoted
+                # occurrence is then the value, before any comment.
+                if (edge_val($0) == e) {
+                    q = "'"'"'"; i = index(l, q e q)
+                    if (!i) { q = "\""; i = index(l, q e q) }
+                    if (i) moved = substr($0, 1, i + length(repo)) "@" new q
+                    else {
+                        t = l; sub(/^        - /, "", t); sub(/[[:space:]]+(#.*)?$/, "", t)
+                        if (t == e) { i = 1; rest = $0; sub(/^        - [^[:space:]]+/, "", rest); spell = substr($0, 11, length(repo)); moved = "        - " spell "@" new rest }
+                    }
                 }
                 if (i) {
                     # keep: an uncovered caller in this workflow still pins the stale
@@ -403,9 +447,10 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
     while IFS=$'\t' read -r stale new repo; do
         grep -qiF "$repo@$stale" "$LOCK" || continue
         still=$(awk -v edge="$repo@$stale" '
+            function unq(s) { gsub(/["'"'"']/, "", s); return s }
             function bare(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+(#.*)?$/, "", s); return s }
             BEGIN { edge = tolower(edge) }
-            /^ +- / { l = tolower($0); if (index(l, "'"'"'" edge "'"'"'") || index(l, "\"" edge "\"") || bare(l) == edge) n++ } END { print n + 0 }' "$LOCK")
+            /^ +- / { if (tolower(unq(bare($0))) == edge) n++ } END { print n + 0 }' "$LOCK")
         tmp=$(mktemp)
         # Only THIS repository'"'"'s record moves: its key line, and its ref: and
         # commit: lines. Another repository at the same SHA is a different
@@ -423,11 +468,13 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
                 return out s
             }
             sec == "d" && /^    [^[:space:]#]/ { k = $0; sub(/^    /, "", k); sub(/[[:space:]]+#.*$/, "", k); sub(/:[[:space:]]*$/, "", k); gsub(/["'"'"']/, "", k); inrec = (tolower(k) == tolower(repo "@" stale)) }
-            sec == "d" && inrec && (/^    [^[:space:]#]/ || /^        (ref|commit):/) {
+            # The field keys may be quoted (`"ref": ...`, `'"'"'commit'"'"': ...`), as
+            # a hand-written record may write them: the same fields.
+            sec == "d" && inrec && (/^    [^[:space:]#]/ || /^        ["'"'"']?(ref|commit)["'"'"']?[[:space:]]*:/) {
                 if (still == 0) $0 = isub($0, stale, new)
                 else copy[++nc] = isub($0, stale, new)
             }
-            sec == "d" && inrec && still != 0 && !(/^    [^[:space:]#]/ || /^        (ref|commit):/) { copy[++nc] = $0 }
+            sec == "d" && inrec && still != 0 && !(/^    [^[:space:]#]/ || /^        ["'"'"']?(ref|commit)["'"'"']?[[:space:]]*:/) { copy[++nc] = $0 }
             { print }
             END { for (i = 1; i <= nc; i++) print copy[i] }' "$LOCK" > "$tmp"
         [ "$still" -eq 0 ] || echo "NOTE: actions.lock keeps the record for ${stale:0:7}: a workflow the table does not cover still pins it; the replacement got its own record." >&2
