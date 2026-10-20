@@ -2999,6 +2999,69 @@ TAG_MAP="$fx/ls36-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls36 a tag YAML reads as a boolean is written quoted into a plain ref field" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: 'true'\$\" '$fx/ls36/.github/workflows/actions.lock'"
 
+# sp40 / sp41: a nested `uses:` list written flow-style merges like a block
+# one — the merged record keeps ONE `uses:` key and every entry: `uses: []`
+# on the first record does not stand beside the block list folded into it,
+# and a flow list on the record folded away is not dropped with it.
+sp_flow_fixture() { # <dir> <governance uses: lines> <scorecard uses: lines>
+    mkdir -p "$1/.github/workflows"
+    printf 'jobs:\n  governance:\n    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s\n' "$STALE_B" > "$1/.github/workflows/governance.yml"
+    printf 'jobs:\n  scorecard:\n    uses: hyperpolymath/standards/.github/workflows/scorecard-reusable.yml@%s\n' "$STALE_C" > "$1/.github/workflows/scorecard.yml"
+    printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/governance.yml':\n        - 'hyperpolymath/standards@%s'\n    '.github/workflows/scorecard.yml':\n        - 'hyperpolymath/standards@%s'\ndependencies:\n    'hyperpolymath/standards@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n%b    'hyperpolymath/standards@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n%b" \
+        "$STALE_B" "$STALE_C" "$STALE_B" "$STALE_B" "$STALE_B" "$2" "$STALE_C" "$STALE_C" "$STALE_C" "$3" > "$1/.github/workflows/actions.lock"
+}
+sp_flow_fixture "$fx/sp40" "        uses: []\n" "        uses:\n            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp40"
+check "sp40 uses: [] on the first record and a block list on the merged one leave one uses: key holding the entry" \
+  "[ \$rc -eq 3 ] && [ \$(grep -c '^        uses:' '$fx/sp40/.github/workflows/actions.lock') -eq 1 ] && grep -q \"^            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\\\$\" '$fx/sp40/.github/workflows/actions.lock'"
+sp_flow_fixture "$fx/sp41" "        uses:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n" "        uses: ['ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc', \"actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\"]\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp41"
+check "sp41 a one-line flow list on the record folded away merges into the block list: one key, each entry once" \
+  "[ \$rc -eq 3 ] && [ \$(grep -c '^        uses:' '$fx/sp41/.github/workflows/actions.lock') -eq 1 ] && grep -q \"^            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\\\$\" '$fx/sp41/.github/workflows/actions.lock' && [ \$(grep -c 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' '$fx/sp41/.github/workflows/actions.lock') -eq 1 ]"
+sp_flow_fixture "$fx/sp41b" "        uses: [] # none yet\n" "        uses: []\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp41b"
+check "sp41b two empty flow lists merge to the first one as written" \
+  "[ \$rc -eq 3 ] && [ \$(grep -c '^        uses:' '$fx/sp41b/.github/workflows/actions.lock') -eq 1 ] && grep -q '^        uses: \\[\\] # none yet\$' '$fx/sp41b/.github/workflows/actions.lock'"
+
+# sp42: a record listed twice whose `uses:` is a flow list over several lines
+# is a shape the merger cannot fold. It is not folded with its entries lost:
+# the duplicates stay, the record is named UNSUPPORTED, exit 2.
+sp_flow_fixture "$fx/sp42" "        uses:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n" "        uses: [\n            'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc' ]\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp42"
+check "sp42 a duplicated record with a multi-line flow uses: is refused, named and left with every entry" \
+  "[ \$rc -eq 2 ] && grep -q \"UNSUPPORTED .*actions.lock: the record hyperpolymath/standards@$GOOD is listed 2 times\" <<<\"\$out\" && grep -q 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc' '$fx/sp42/.github/workflows/actions.lock' && grep -q 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' '$fx/sp42/.github/workflows/actions.lock'"
+
+# sp43 (control): a record with a flow list and nothing merged into it is
+# written back exactly as it was, not re-spelled as a block list.
+mkdir -p "$fx/sp43/.github/workflows"
+printf 'jobs:\n  governance:\n    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@%s\n' "$STALE_B" > "$fx/sp43/.github/workflows/governance.yml"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/governance.yml':\n        - 'hyperpolymath/standards@%s'\ndependencies:\n    'hyperpolymath/standards@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n        uses: ['b/b@3d3c42e5aac5ba805825da76410c181273ba90b1', 'a/a@3d3c42e5aac5ba805825da76410c181273ba90b1']\n" \
+    "$STALE_B" "$STALE_B" "$STALE_B" "$STALE_B" > "$fx/sp43/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp43"
+check "sp43 a flow list nothing was merged into is kept as written" \
+  "[ \$rc -eq 3 ] && grep -qF \"        uses: ['b/b@3d3c42e5aac5ba805825da76410c181273ba90b1', 'a/a@3d3c42e5aac5ba805825da76410c181273ba90b1']\" '$fx/sp43/.github/workflows/actions.lock'"
+
+# pl4: without flock the lock is a directory created with mkdir — still one
+# fixer per checkout. A held lock is waited for, reported with its holder,
+# and the run exits 2 having changed nothing; a free one is taken, and the
+# run removes it on exit.
+nofl="$fx/no-flock-bin"; mkdir -p "$nofl"
+IFS=: read -ra pl4_dirs <<<"$PATH"
+for d in "${pl4_dirs[@]}"; do [ -d "$d" ] && { ln -s "$d"/* "$nofl"/ 2>/dev/null || true; }; done
+rm -f "$nofl/flock"
+mkdir -p "$fx/pl4/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/pl4/.github/workflows/ci.yml"
+cp "$fx/pl4/.github/workflows/ci.yml" "$fx/pl4-before.yml"
+pl4_key=$(cd "$fx/pl4" && pwd -P | tr -d '\n' | sha256sum | cut -c1-16)
+mkdir "$fx/pin-fixer-$pl4_key.lock.d"; echo 4242 > "$fx/pin-fixer-$pl4_key.lock.d/pid"
+PATH="$nofl" PIN_FIXER_LOCK_DIR="$fx" PIN_FIXER_LOCK_WAIT=1 run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl4"
+check "pl4 without flock a held lock directory makes the fixer report its holder, exit 2 and change nothing" \
+  "[ \$rc -eq 2 ] && grep -q 'another workflow-pin fixer holds.*held by pid 4242' <<<\"\$out\" && cmp -s '$fx/pl4-before.yml' '$fx/pl4/.github/workflows/ci.yml'"
+rm -rf "$fx/pin-fixer-$pl4_key.lock.d"
+PATH="$nofl" PIN_FIXER_LOCK_DIR="$fx" PIN_FIXER_LOCK_WAIT=1 run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/pl4"
+check "pl4 without flock a free lock is taken, the run repairs, and the lock directory is gone afterwards" \
+  "[ \$rc -eq 0 ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/pl4/.github/workflows/ci.yml' && [ ! -e '$fx/pin-fixer-$pl4_key.lock.d' ]"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

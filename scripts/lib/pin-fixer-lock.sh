@@ -42,7 +42,7 @@ pin_fixer_lock() {
     key=$(cd "$repo" 2>/dev/null && pwd -P || printf '%s' "$repo")
     key=$(printf '%s' "$key" | sha256sum | cut -c1-16)
     if ! command -v flock >/dev/null 2>&1; then
-        echo "WARN: flock not found; workflow-pin fixers on $repo are not serialised" >&2
+        pin_fixer_lock_mkdir "$repo" "$dir/pin-fixer-$key.lock.d" "$wait"
         return 0
     fi
     exec 9>"$dir/pin-fixer-$key.lock"
@@ -50,6 +50,31 @@ pin_fixer_lock() {
         echo "fix-workflow-pins: another workflow-pin fixer holds $repo (waited ${wait}s); nothing was changed" >&2
         exit 2
     }
+}
+
+# Without flock the same lock is a directory: `mkdir` either creates it or
+# fails because another fixer has, atomically, so two runs still never hold
+# it together. The holder's EXIT trap removes it (an interrupt or termination
+# exits through that trap too). A run killed outright leaves it behind; the
+# next fixer then waits, reports the directory and its recorded holder, and
+# exits 2 with nothing changed — it is never taken over silently, and never
+# skipped.
+pin_fixer_lock_mkdir() { # <repo> <lock-dir> <wait>
+    local repo="$1" ldir="$2" wait="$3" waited=0
+    until mkdir "$ldir" 2>/dev/null; do
+        if [ "$waited" -ge "$wait" ]; then
+            echo "fix-workflow-pins: another workflow-pin fixer holds $repo (waited ${wait}s; flock is not installed, so the lock is the directory $ldir, held by pid $(cat "$ldir/pid" 2>/dev/null || echo unknown) — remove it by hand only if that run is gone); nothing was changed" >&2
+            exit 2
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    PIN_FIXER_LOCK_HELD="$ldir"
+    echo "$$" > "$ldir/pid"
+    trap 'rm -f "$PIN_FIXER_LOCK_HELD/pid"; rmdir "$PIN_FIXER_LOCK_HELD" 2>/dev/null' EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
 }
 
 # Replace <dest> with the rewritten <tmp> the way `sed -i` does: by a rename

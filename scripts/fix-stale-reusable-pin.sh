@@ -28,9 +28,10 @@
 # Idempotent. Rewrites nothing it does not recognise. Exit 0 whether or not
 # anything changed; exit 2 when the table is unreadable or a file carries a
 # known-dead pin the parser cannot place as a `uses` key (that file is left
-# untouched and named); exit 3 when the pins were rewritten but actions.lock
-# was touched and still needs `gh actions-lock` — a dispatcher must not
-# record either as a clean success.
+# untouched and named), or when actions.lock is left listing a dependency
+# twice that the record merger cannot fold (named); exit 3 when the pins were
+# rewritten but actions.lock was touched and still needs `gh actions-lock` —
+# a dispatcher must not record either as a clean success.
 #
 # Usage:
 #   fix-stale-reusable-pin.sh <repo-path>
@@ -112,10 +113,19 @@ rewrites=0; lock_touched=0
 # others' nested `uses:` into it (deduplicated, sorted as gh actions-lock sorts),
 # and drop them. Rewrite lockfile $1 in place, preserving gh-actions-lock's
 # 4-space layout and leaving the file alone when the output is identical.
+#
+# The nested list may be written flow-style on one line (`uses: []`,
+# `uses: ['a@x', 'b@y']`); its entries merge like a block list's, and a
+# record keeps ONE `uses:` key — the block form when lists were merged, the
+# line as written when there was only the one. A record listed twice whose
+# `uses:` is a shape this merger cannot read (a flow list over several lines,
+# an alias, a scalar) is not folded at all: merging it could drop its entries
+# or leave two `uses:` keys. The merger then changes nothing, names the record
+# (UNSUPPORTED) and sets merge_refused.
 merge_duplicate_records() {
     local lock="$1" tmp
     tmp=$(mktemp)
-    awk '
+    if ! awk -v sq="'" '
         # Print dependency cur using its saved header and sorted, unique uses.
         function emit_record(   i, n, out) {
             if (!cur) return
@@ -124,14 +134,33 @@ merge_duplicate_records() {
             for (i = 1; i <= nhead[cur]; i++) print head[cur, i]
             n = 0
             for (u in uses_of) if (index(u, cur SUBSEP) == 1) n++
+            # One flow list and nothing merged into it: kept as written.
+            if (nlists[cur] == 1 && (cur in flow_line) && nextra[cur] == 0) { print flow_line[cur]; return }
             if (n > 0 || nextra[cur] > 0) {
-                print (cur in uses_head ? uses_head[cur] : "        uses:")
+                print (cur in uses_head ? uses_head[cur] : "        uses:" flow_cmt[cur])
                 fflush()
                 cmd = "sort"
                 for (u in uses_of) if (index(u, cur SUBSEP) == 1) print "            - " uses_of[u] | cmd
                 close(cmd)
                 for (i = 1; i <= nextra[cur]; i++) print uses_extra[cur, i]
+            } else if (cur in flow_line) print flow_line[cur]
+        }
+        # A one-line flow list: its items, each a quoted or plain scalar (sq is
+        # the single quote), go into uses_of as block entries would. 0, with
+        # nothing stored, when an item is any other shape — a nested
+        # collection, a key, an embedded quote.
+        function flow_items(s,   body, n, parts, i, it, k) {
+            body = s; sub(/^        uses:[[:space:]]*\[/, "", body); sub(/\][[:space:]]*(#.*)?$/, "", body)
+            if (body ~ /^[[:space:]]*$/) return 1
+            n = split(body, parts, ",")
+            for (i = 1; i <= n; i++) {
+                it = parts[i]; sub(/^[[:space:]]+/, "", it); sub(/[[:space:]]+$/, "", it)
+                if (it == "" && i == n && n > 1) { parts[i] = ""; continue }
+                if (!(it ~ ("^" sq "[^\"" sq "]+" sq "$") || it ~ ("^\"[^\"" sq "]+\"$") || it ~ ("^[^][{}:,\"" sq "#[:space:]]+$"))) return 0
+                parts[i] = it
             }
+            for (i = 1; i <= n; i++) if (parts[i] != "") { k = cur SUBSEP unq(parts[i]); if (!(k in uses_of)) uses_of[k] = parts[i] }
+            return 1
         }
         # A record key is the dependency between its quotes — or a plain
         # scalar, as a hand-added record may write it (`actions/checkout@<sha>:`,
@@ -155,11 +184,21 @@ merge_duplicate_records() {
         record_key($0) {
             key = $0; sub(/[[:space:]]+#.*$/, "", key); key = unq(key)
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
-            cur = key; next
+            nrec[key]++; cur = key; next
         }
         # The nested list header, with or without a trailing comment (kept as
         # first spelled); only lines inside a list it opens are its entries.
-        /^        uses:[[:space:]]*(#.*)?$/ { in_uses = 1; if (!(cur in uses_head)) uses_head[cur] = $0; next }
+        /^        uses:[[:space:]]*(#.*)?$/ { in_uses = 1; nlists[cur]++; if (!(cur in uses_head)) uses_head[cur] = $0; next }
+        /^        uses:[[:space:]]*\[.*\][[:space:]]*(#.*)?$/ && flow_items($0) {
+            nlists[cur]++
+            if (!(cur in flow_line)) {
+                flow_line[cur] = $0; c = $0; sub(/^.*\]/, "", c)
+                flow_cmt[cur] = (c ~ /#/ ? c : "")
+            }
+            next
+        }
+        # Any other `uses:` value is one the merger cannot read.
+        /^        uses:/ { odd[cur] = 1 }
         in_uses && uses_entry($0) { u = $0; sub(/^            - /, "", u); k = cur SUBSEP entry_value($0); if (!(k in uses_of)) uses_of[k] = u; next }
         # Any other line inside the list (a comment, a shape this merger has
         # no rule for) stays under the `uses:` header it came from: moved
@@ -173,12 +212,20 @@ merge_duplicate_records() {
             next
         }
         END {
+            for (k = 1; k <= norder; k++) if (odd[order[k]] && nrec[order[k]] > 1) {
+                name = order[k]; sub(/^ +/, "", name); sub(/:$/, "", name)
+                printf "UNSUPPORTED  .github/workflows/actions.lock: the record %s is listed %d times and its uses: is a shape the merger cannot fold (a flow list over several lines, an alias, a scalar); the duplicates were left in place. Merge them by hand.\n", name, nrec[order[k]] > "/dev/stderr"
+                refused = 1
+            }
+            if (refused) exit 4
             for (k = 1; k <= norder; k++) {
                 cur = order[k]
                 emit_record()
             }
         }
-    ' "$lock" > "$tmp"
+    ' "$lock" > "$tmp"; then
+        rm -f "$tmp"; merge_refused=1; return 0
+    fi
     if ! cmp -s "$lock" "$tmp"; then pin_fixer_replace "$tmp" "$lock"; else rm -f "$tmp"; fi
 }
 
@@ -335,6 +382,7 @@ done < <(find "$REPO_PATH/.github/workflows" -maxdepth 1 -type f \( -name '*.yml
 edits=$(mktemp)   # workflow-key<TAB>stale<TAB>replacement<TAB>keep-stale-edge<TAB>repository
 lock_stale=0      # a rewritten caller whose lock entry never had the edge: the lock was already out of sync
 unsupported=0
+merge_refused=0   # duplicate lock records the merger could not fold (UNSUPPORTED)
 while IFS= read -r -d '' wf; do
     ctx=$(yaml_context "$wf")
     klines=$(grep -o '^K[0-9]*' <<<"$ctx" | tr -d K | sort -n || true)
@@ -561,6 +609,10 @@ if [ "$lock_touched" -eq 1 ]; then
 fi
 if [ "$unsupported" -ne 0 ]; then
     echo "fix-stale-reusable-pin: $unsupported file(s) left untouched (UNSUPPORTED above); not a clean success." >&2
+    exit 2
+fi
+if [ "$merge_refused" -ne 0 ]; then
+    echo "fix-stale-reusable-pin: actions.lock still lists a dependency twice (UNSUPPORTED above); not a clean success." >&2
     exit 2
 fi
 if [ "$lock_stale" -eq 1 ]; then
