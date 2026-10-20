@@ -2444,5 +2444,7 @@ TAG_MAP="$fx/ls19-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.
 check "ls19 a mixed-case action meets its lower-case tag-map row offline: repaired, exit 0" \
   "[ \$rc -eq 0 ] && grep -q \"^        ref: 'v7.0.1'\$\" '$fx/ls19/.github/workflows/actions.lock' && ! grep -q UNRESOLVED <<<\"\$out\""
 
+bash "$fleet/scripts/tests/fix-workflow-resources.sh"
+
 echo "fix-workflow-pins: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
