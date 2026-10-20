@@ -355,10 +355,37 @@ tmp=$(mktemp); cp "$LOCK" "$tmp"
 # `commit:` and the other fields — exactly as a hand-added record might write
 # it. Each finding carries the line of the `ref:` itself, and the ref as that
 # line spells it.
+# A record may also be written as a flow mapping on its key line (`'a/b@<sha>':
+# { ref: '<sha>', commit: 'sha1-<sha>' }`): its `ref` entry is read from the
+# braces, and rewritten there (kind I). One whose braces do not close on the
+# key line is not read (kind M): it is reported unless its SHA ref is one to
+# keep, never passed over as no record at all. Block records are kind B.
 records=$(mktemp)
-if ! awk '
+if ! awk -v sq="'" '
     # Trailing whitespace after the colon, a carriage return included (a
     # lock with CRLF line endings), is no part of the key.
+    # The record key of a flow-mapping record line: repo and SHA, or 0.
+    function flow_key(s,   t, i) {
+        t = s; sub(/^    ["'"'"']?/, "", t)
+        if (!match(t, /^[^"'"'"'@[:space:]#]+@[0-9a-fA-F]+["'"'"']?[[:space:]]*:[[:space:]]*\{/)) return 0
+        t = substr(t, 1, RLENGTH); sub(/["'"'"']?[[:space:]]*:[[:space:]]*\{$/, "", t)
+        i = index(t, "@"); f_repo = substr(t, 1, i - 1); f_sha = substr(t, i + 1)
+        return length(f_sha) == 40
+    }
+    flow_key($0) {
+        inrec = 0
+        body = $0; sub(/^[^{]*\{/, "", body)
+        if (body !~ /\}[[:space:]]*(#.*)?$/) { print NR "\tM\t" f_repo "\t" f_sha "\t"; next }
+        # The `ref` entry: after `{` or `,`, its key quoted or not, its value
+        # quoted or plain up to `,` or `}`.
+        r = "{" body
+        if (match(r, "[{,][[:space:]]*[\"" sq "]?ref[\"" sq "]?[[:space:]]*:[[:space:]]*[^,}]*")) {
+            r = substr(r, RSTART, RLENGTH); sub(/^[{,][[:space:]]*["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*/, "", r)
+            gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
+            if (tolower(r) == tolower(f_sha)) print NR "\tI\t" f_repo "\t" f_sha "\t" r
+        }
+        next
+    }
     /^    ["'"'"']?[^"'"'"'@[:space:]#]+@[0-9a-fA-F]+["'"'"']?:([[:space:]]+#.*|[[:space:]]*)$/ {
         s = $0; sub(/^    ["'"'"']?/, "", s); sub(/["'"'"']?:([[:space:]]+#.*|[[:space:]]*)$/, "", s)
         i = index(s, "@"); repo = substr(s, 1, i - 1); sha = substr(s, i + 1)
@@ -370,13 +397,13 @@ if ! awk '
         # Quoted either way, or a plain scalar, in either case of hex: the
         # same ref to GitHub. The key may be quoted too (`"ref": ...`).
         r = $0; sub(/^        ["'"'"']?ref["'"'"']?[[:space:]]*:[[:space:]]*/, "", r); sub(/[[:space:]]+#.*$/, "", r); gsub(/["'"'"']/, "", r); sub(/[[:space:]]+$/, "", r)
-        if (tolower(r) == tolower(key_sha)) print NR "\t" key_repo "\t" key_sha "\t" r
+        if (tolower(r) == tolower(key_sha)) print NR "\tB\t" key_repo "\t" key_sha "\t" r
     }
 ' "$LOCK" > "$records"; then
     echo "fix-lock-self-sha-refs: could not parse $LOCK (awk failed); lock left unchanged" >&2
     rm -f "$tmp" "$records" "$SITES"; exit 2
 fi
-while IFS=$'\t' read -r lineno repo sha ref_raw; do
+while IFS=$'\t' read -r lineno kind repo sha ref_raw; do
     sha_lc="${sha,,}"
     case "$(sha_ref_disposition "$repo" "$sha_lc")" in
         keep) continue ;;
@@ -384,6 +411,10 @@ while IFS=$'\t' read -r lineno repo sha ref_raw; do
             echo "UNRESOLVED  $repo@${sha:0:7}: no workflow here uses it (a transitive dependency), so whether it is an action or a reusable workflow cannot be told; record left as is" >&2
             unresolved=$((unresolved + 1)); continue ;;
     esac
+    if [ "$kind" = M ]; then
+        echo "UNRESOLVED  $repo@${sha:0:7}: the record is a flow mapping spread over several lines (line $lineno), which this fixer does not read; check its ref by hand (record left as is)" >&2
+        unresolved=$((unresolved + 1)); continue
+    fi
     tag=$(lookup_tag "$repo" "$sha_lc")
     if [ -z "$tag" ]; then
         echo "UNRESOLVED  $repo@${sha:0:7}: no tag found for this commit (record left as is; GitHub rejects it)" >&2
@@ -401,6 +432,19 @@ while IFS=$'\t' read -r lineno repo sha ref_raw; do
     # A plain field whose tag YAML would read as a non-string (`true`, `1`,
     # `null`) is written quoted, so the lock keeps a tag, not a boolean.
     q=""
+    if [ "$kind" = I ]; then
+        # The `ref` entry inside the braces, its value as written (quoted or
+        # plain) up to the `,` or `}` that ends it; nothing else on the line.
+        if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "[{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*[\"']"; then q="'"; fi
+        before=$(sed -n "${lineno}p" "$tmp")
+        sed -i -E "${lineno}s~([{,][[:space:]]*[\"']?ref[\"']?[[:space:]]*:[[:space:]]*)([\"']?)$ref_raw\2([[:space:]]*[,}])~\1\2$q$tag$q\2\3~" "$tmp"
+        if [ "$(sed -n "${lineno}p" "$tmp")" = "$before" ]; then
+            echo "UNRESOLVED  $repo@${sha:0:7}: the ref inside the record's flow mapping (line $lineno) is not written in a form this fixer rewrites; set it to $tag by hand (record left as is)" >&2
+            unresolved=$((unresolved + 1)); continue
+        fi
+        echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"
+        fixed=$((fixed + 1)); continue
+    fi
     if pin_fixer_yaml_nonstring "$tag" && ! sed -n "${lineno}p" "$tmp" | grep -qE "^        [\"']?ref[\"']?[[:space:]]*:[[:space:]]*[\"']"; then q="'"; fi
     sed -i "${lineno}s|^\(        ['\"]\{0,1\}ref['\"]\{0,1\}[[:space:]]*:[[:space:]]*\)\(['\"]\{0,1\}\)$ref_raw\2|\1\2$q$tag$q\2|" "$tmp"
     echo "FIXED  $repo@${sha:0:7}  ref: $sha -> $tag"

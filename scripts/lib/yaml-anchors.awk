@@ -43,6 +43,27 @@ function yaml_unescape(t,   e, n, k, d, code) {
     if (e == "t" || e == "\t") return "\t"
     return "\001"
 }
+# Line s as YAML reads its double-quoted scalars: each `\` escape decoded
+# (yaml_unescape), every other byte kept as written, so a reference spelled
+# with escapes (`uses: "\x64tolnay/rust-toolchain@<sha>"`) is matched as
+# the reference it is. An escaped quote decodes to "\001", never to `"`: the
+# quotes that delimit a scalar stay the only ones, and a reader of the line
+# sees the same scalars. Single-quoted scalars have no escapes; a comment is
+# copied as written.
+function yaml_decode_dq(s,   out, i, len, c, q) {
+    out = ""; i = 1; len = length(s); q = ""
+    while (i <= len) {
+        c = substr(s, i, 1)
+        if (q == "\"" && c == "\\") {
+            c = yaml_unescape(substr(s, i + 1, 9)); out = out (c == "\"" ? "\001" : c); i += 1 + esc_len; continue
+        }
+        if (q != "") { if (c == q) q = "" }
+        else if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) { out = out substr(s, i); break }
+        else if (c == "\"" || c == "'") q = c
+        out = out c; i++
+    }
+    return out
+}
 function anchor_defs(s, defs,   n, i, len, c, q, name, v, seen, depth) {
     split("", defs); n = 0; i = 1; q = ""; len = length(s); seen = ""; depth = 0
     while (i <= len) {

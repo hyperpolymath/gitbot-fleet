@@ -3334,6 +3334,126 @@ ya_out=$(printf '%s\n' 'A: &a "\x6fcto/r\u0065po@\"x\"\\\/"' 'B: &b "x\ny\U0001F
 check "yaml-anchors decodes ASCII escapes and maps anything else to a byte no reference holds" \
   "[ \"\$ya_out\" = \"\$(printf 'a=octo/repo@\"x\"\\\\/|b=x\\001y\\001z|')\" ]"
 
+# ── Review cases (gitbot-fleet#615, round on 7547098) ───────────────────────
+# sp51: a dependency record written as a flow mapping on its key line, after
+# the duplicate the merger folds away, is a record of its own: kept as
+# written, in its place, never dropped with the duplicate's lines.
+sp51_inline="    'other/action@3d3c42e5aac5ba805825da76410c181273ba90b1': { ref: 'v7.0.1', commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1' }"
+sp_flow_fixture "$fx/sp51" "        uses:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n" "        uses:\n            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\n$sp51_inline\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp51"
+check "sp51 a flow-mapping record after a folded duplicate survives the merge as written" \
+  "[ \$rc -eq 3 ] && grep -qxF \"\$sp51_inline\" '$fx/sp51/.github/workflows/actions.lock' && [ \$(grep -c \"^    'hyperpolymath/standards@$GOOD':\" '$fx/sp51/.github/workflows/actions.lock') -eq 1 ]"
+# sp51b: a flow-mapping record naming the very dependency being folded
+# cannot be folded with it: refused, named, nothing of it lost.
+sp51b_inline="    'hyperpolymath/standards@$GOOD': { ref: '$GOOD', commit: 'sha1-$GOOD' }"
+sp_flow_fixture "$fx/sp51b" "        uses: []\n" "        uses: []\n$sp51b_inline\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp51b"
+check "sp51b a flow-mapping record of the dependency being folded is refused, named, and kept" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED .*actions.lock: .*hyperpolymath/standards@$GOOD.*cannot read' <<<\"\$out\" && grep -qxF \"\$sp51b_inline\" '$fx/sp51b/.github/workflows/actions.lock'"
+# sp51c: a duplicate holding a line the merger has no rule for is not folded
+# with that line lost: refused, named, the line kept.
+sp_flow_fixture "$fx/sp51c" "        uses: []\n" "        uses: []\n        provenance:\n            - 'x'\n"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp51c"
+check "sp51c a duplicate holding a line the merger has no rule for is refused, named, the line kept" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED .*the record hyperpolymath/standards@$GOOD is listed 2 times and a duplicate holds a line' <<<\"\$out\" && grep -q '^        provenance:\$' '$fx/sp51c/.github/workflows/actions.lock'"
+# sp51d: `workflows:` written after `dependencies:` ends that section: the
+# merged records come first, the workflow edges after them, as they stood.
+sp_flow_fixture "$fx/sp51d" "        uses: []\n" "        uses: []\n"
+awk '/^workflows:/ { w = 1 } /^dependencies:/ { w = 0 } w { wf = wf $0 "\n"; next } { print } END { printf "%s", wf }' "$fx/sp51d/.github/workflows/actions.lock" > "$fx/sp51d.lock" && mv "$fx/sp51d.lock" "$fx/sp51d/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp51d"
+check "sp51d workflows: after dependencies: stays a section after the merged records, its edges moved" \
+  "[ \$rc -eq 3 ] && [ \$(grep -c \"^    'hyperpolymath/standards@$GOOD':\" '$fx/sp51d/.github/workflows/actions.lock') -eq 1 ] && tail -5 '$fx/sp51d/.github/workflows/actions.lock' | head -1 | grep -qx 'workflows:' && [ \$(grep -c \"^        - 'hyperpolymath/standards@$GOOD'\$\" '$fx/sp51d/.github/workflows/actions.lock') -eq 2 ]"
+
+# sp52: a `workflows:` key followed by trailing spaces is that workflow's
+# entry: its edge moves with the caller, no out-of-sync warning.
+mkdir -p "$fx/sp52/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp52/.github/workflows/ci.yml"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':   \n        - 'hyperpolymath/standards@%s'\ndependencies:\n    'hyperpolymath/standards@%s':\n        ref: '%s'\n        commit: 'sha1-%s'\n" "$STALE_A" "$STALE_A" "$STALE_A" "$STALE_A" > "$fx/sp52/.github/workflows/actions.lock"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp52"
+check "sp52 a workflows: key with trailing spaces has its edge moved, no out-of-sync warning" \
+  "[ \$rc -eq 3 ] && ! grep -q 'has no edge' <<<\"\$out\" && grep -q \"^        - 'hyperpolymath/standards@$GOOD'\$\" '$fx/sp52/.github/workflows/actions.lock' && ! grep -q \"$STALE_A\" '$fx/sp52/.github/workflows/actions.lock'"
+
+# sp53: a job's `uses:` that names a dead reusable through double-quoted
+# escapes, or as a quoted value continued below its key, is that call: the
+# rewrite cannot reach either, so each is reported (exit 2), never OK.
+mkdir -p "$fx/sp53/.github/workflows" "$fx/sp53b/.github/workflows" "$fx/sp53c/.github/workflows"
+printf 'jobs:\n  rust:\n    uses: "\\x68yperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s"\n' "$STALE_A" > "$fx/sp53/.github/workflows/ci.yml"
+printf 'jobs:\n  rust:\n    uses:\n      "hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s"\n' "$STALE_A" > "$fx/sp53b/.github/workflows/ci.yml"
+cp "$fx/sp53/.github/workflows/ci.yml" "$fx/sp53-before.yml"; cp "$fx/sp53b/.github/workflows/ci.yml" "$fx/sp53b-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp53"
+check "sp53 a dead reusable spelled with escapes in a double-quoted uses: is UNSUPPORTED, exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:3: .*written with escapes' <<<\"\$out\" && cmp -s '$fx/sp53-before.yml' '$fx/sp53/.github/workflows/ci.yml'"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp53b"
+check "sp53 a dead reusable as a quoted value continued below its key is UNSUPPORTED, exit 2, untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:4: .*continued below its key' <<<\"\$out\" && cmp -s '$fx/sp53b-before.yml' '$fx/sp53b/.github/workflows/ci.yml'"
+# Control: an escaped quote inside a `name:` string beside a live call is
+# text; the escape hides no call.
+printf 'jobs:\n  rust:\n    name: "say \\" uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s"\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" "$GOOD" > "$fx/sp53c/.github/workflows/ci.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp53c"
+check "sp53 control: a dead pin inside a name: string holding an escaped quote is text: OK, exit 0" \
+  "[ \$rc -eq 0 ] && grep -q '^OK' <<<\"\$out\""
+
+# sp54: a job written as flow mappings all in column 0 (`jobs: {`, `rust: {`,
+# `uses: ...`): indentation says nothing there, so the `uses:` cannot be
+# passed over as data: reported, exit 2, untouched. Indented as KYAML
+# indents it, the same call is rewritten.
+mkdir -p "$fx/sp54/.github/workflows" "$fx/sp54b/.github/workflows"
+printf 'jobs: {\nrust: {\nuses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n}\n}\n' "$STALE_A" > "$fx/sp54/.github/workflows/ci.yml"
+printf 'jobs: {\n  rust: {\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n  }\n}\n' "$STALE_A" > "$fx/sp54b/.github/workflows/ci.yml"
+cp "$fx/sp54/.github/workflows/ci.yml" "$fx/sp54-before.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp54"
+check "sp54 a column-0 flow job's dead uses: is UNSUPPORTED, exit 2, untouched, never OK" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED  .github/workflows/ci.yml:3:' <<<\"\$out\" && cmp -s '$fx/sp54-before.yml' '$fx/sp54/.github/workflows/ci.yml'"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp54b"
+check "sp54 control: the same flow job indented as KYAML indents it is rewritten, exit 0" \
+  "[ \$rc -eq 0 ] && grep -q \"rust-ci-reusable.yml@$GOOD\" '$fx/sp54b/.github/workflows/ci.yml'"
+
+# tc39: a step's own `uses:` spelling the SHA-pinned toolchain with
+# double-quoted escapes is that step: it gets its input. An escaped quote in
+# another step's `name:` string hides no step.
+mkdir -p "$fx/tc39/.github/workflows"
+cat > "$fx/tc39/.github/workflows/x.yml" <<'YML'
+jobs:
+  check:
+    steps:
+      - uses: "\x64tolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"
+      - name: "say \" uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"
+        run: cargo test
+YML
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc39"
+check "tc39 an escaped double-quoted toolchain reference is the step's pin: it gets toolchain:, exit 0" \
+  "[ \$rc -eq 0 ] && sed -n '5,6p' '$fx/tc39/.github/workflows/x.yml' | tr '\\n' '|' | grep -qx '        with:|          toolchain: stable|' && [ \$(grep -c 'toolchain: stable' '$fx/tc39/.github/workflows/x.yml') -eq 1 ]"
+cp "$fx/tc39/.github/workflows/x.yml" "$fx/tc39-after1.yml"
+run_fix bash "$fleet/scripts/fix-rust-toolchain-input.sh" "$fx/tc39"
+check "tc39 second run is a no-op" "[ \$rc -eq 0 ] && cmp -s '$fx/tc39-after1.yml' '$fx/tc39/.github/workflows/x.yml'"
+
+# ls42: a self-SHA record written as a flow mapping on its key line has its
+# ref rewritten inside the braces. One spread over several lines is not read:
+# UNRESOLVED, untouched, exit 1. A reusable's flow record keeps its SHA ref.
+mkdir -p "$fx/ls42/.github/workflows" "$fx/ls42b/.github/workflows" "$fx/ls42c/.github/workflows"
+action_steps "$fx/ls42/.github/workflows" "foo/bar@$SHA_B"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s': { ref: '%s', commit: 'sha1-%s' }\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls42/.github/workflows/actions.lock"
+printf 'foo/bar\t%s\tv1.0.0\n' "$SHA_B" > "$fx/ls42-tags.tsv"
+TAG_MAP="$fx/ls42-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls42" --offline
+check "ls42 a flow-mapping self-SHA record gets its tag inside the braces, exit 0" \
+  "[ \$rc -eq 0 ] && grep -qxF \"    'foo/bar@$SHA_B': { ref: 'v1.0.0', commit: 'sha1-$SHA_B' }\" '$fx/ls42/.github/workflows/actions.lock'"
+action_steps "$fx/ls42b/.github/workflows" "foo/bar@$SHA_B"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s': {\n        ref: '%s', commit: 'sha1-%s' }\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls42b/.github/workflows/actions.lock"
+cp "$fx/ls42b/.github/workflows/actions.lock" "$fx/ls42b-before.lock"
+TAG_MAP="$fx/ls42-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls42b" --offline
+check "ls42b a flow-mapping record over several lines is UNRESOLVED, untouched, exit 1, never OK" \
+  "[ \$rc -eq 1 ] && grep -q 'UNRESOLVED  foo/bar@bbbbbbb: the record is a flow mapping spread over several lines' <<<\"\$out\" && cmp -s '$fx/ls42b-before.lock' '$fx/ls42b/.github/workflows/actions.lock'"
+printf 'jobs:\n  call:\n    uses: foo/bar/.github/workflows/x.yml@%s\n' "$SHA_B" > "$fx/ls42c/.github/workflows/ci.yml"
+printf "version: 'v0.0.3'\nworkflows:\n    '.github/workflows/ci.yml':\n        - 'foo/bar@%s'\ndependencies:\n    'foo/bar@%s': { ref: '%s', commit: 'sha1-%s' }\n" "$SHA_B" "$SHA_B" "$SHA_B" "$SHA_B" > "$fx/ls42c/.github/workflows/actions.lock"
+cp "$fx/ls42c/.github/workflows/actions.lock" "$fx/ls42c-before.lock"
+TAG_MAP="$fx/ls42-tags.tsv" run_fix bash "$fleet/scripts/fix-lock-self-sha-refs.sh" "$fx/ls42c" --offline
+check "ls42 control: a reusable's flow-mapping record keeps its SHA ref, exit 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/ls42c-before.lock' '$fx/ls42c/.github/workflows/actions.lock'"
+
+dq_out=$(printf '%s\n' 'uses: "\x64tolnay/x@1" # "\x41"' "name: 'a\\x41' \"b\\\"c\"" | awk "$(cat "$fleet/scripts/lib/yaml-anchors.awk")"'{ printf "%s|", yaml_decode_dq($0) }')
+check "yaml_decode_dq decodes double-quoted escapes only, an escaped quote to a byte no reference holds" \
+  "[ \"\$dq_out\" = \"\$(printf 'uses: \"dtolnay/x@1\" # \"\\\\x41\"|name: '\"'\"'a\\\\x41'\"'\"' \"b\\001c\"|')\" ]"
+
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 
 echo "fix-workflow-pins: $pass passed, $fail failed"

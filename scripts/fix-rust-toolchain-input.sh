@@ -171,10 +171,12 @@ apply_to_file() {
         # The 40 hex characters must END the ref: `@<sha>-patched` is a tag
         # that merely begins with one, and carries its own channel. Either
         # case, for the commit ID (git resolves upper-case hex too) and for the
-        # action name (GitHub resolves `Dtolnay/Rust-Toolchain` too).
+        # action name (GitHub resolves `Dtolnay/Rust-Toolchain` too). The line
+        # is read as YAML reads it: a double-quoted value may spell the
+        # reference with escapes (`"\x64tolnay/..."`), lib/yaml-anchors.awk.
         function sha_ref(s,   t, m, nxt) {
             if (!plain(s)) return 0
-            t = tolower(s); sub(/[[:space:]]#.*$/, "", t)
+            t = tolower(yaml_decode_dq(s)); sub(/[[:space:]]#.*$/, "", t)
             if (!match(t, /dtolnay\/rust-toolchain@[0-9a-f]+/)) return 0
             m = substr(t, RSTART + 23, RLENGTH - 23)
             nxt = substr(t, RSTART + RLENGTH, 1)
@@ -204,7 +206,7 @@ apply_to_file() {
         # A SHA pin that is the value of a `uses` key, block or flow: the
         # only pin the parser can be asked to place. The same text inside
         # another key'"'"'s string (`name: "fixture dtolnay/...@<sha>"`) is data.
-        function uses_pin(s) { return sha_ref(s) && tolower(site_view(s)) ~ USES_SITE_RE }
+        function uses_pin(s) { return sha_ref(s) && tolower(site_view(yaml_decode_dq(s))) ~ USES_SITE_RE }
         # Buffer line $0 of the current step as buf[n], with the verdict on
         # its `uses:` alias, if any, as the anchors read so far give it —
         # YAML resolves an alias to the latest anchor of that name BEFORE it,
@@ -215,7 +217,7 @@ apply_to_file() {
         # matched in lower case, the name is taken as written.
         function buffer(   v, m) {
             buf[++n] = $0; lnum[n] = NR; alias_state[n] = ""
-            v = site_view($0)
+            v = site_view(yaml_decode_dq($0))
             if (match(tolower(v), USES_ALIAS_RE)) {
                 m = substr(v, RSTART, RLENGTH); sub(/^.*\*/, "", m)
                 alias_state[n] = ((m in tc_anchor) || !(m in any_anchor)) ? "bad" : "ok"
@@ -265,7 +267,7 @@ apply_to_file() {
                 # (`uses: >-` then `dtolnay/rust-toolchain@<sha>`): the key line
                 # names no action and the value reads as nested text, so a SHA
                 # pin there is reported, never passed over as a step that is fine.
-                if (!flow_item && length(key_indent_of(buf[i])) == skey && tolower(site_view(buf[i])) ~ USES_OPEN_RE)
+                if (!flow_item && length(key_indent_of(buf[i])) == skey && tolower(site_view(yaml_decode_dq(buf[i]))) ~ USES_OPEN_RE)
                     for (j = i + 1; j <= n && !(plain(buf[j]) && indent_of(buf[j]) <= skey); j++)
                         if (sha_ref(buf[j])) unrec[++nunrec] = lnum[j]
                 # The step'"'"'s own `uses:` given as an alias (`uses: *rust`) of an
@@ -278,7 +280,7 @@ apply_to_file() {
                 # line of the step defines again under the same name.
                 if ((flow_item || length(key_indent_of(buf[i])) == skey) && alias_state[i] == "bad") unrec[++nunrec] = lnum[i]
                 if (!sha_ref(buf[i])) continue
-                if (!flow_item && tolower(buf[i]) ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
+                if (!flow_item && tolower(yaml_decode_dq(buf[i])) ~ USES_RE && length(key_indent_of(buf[i])) == skey) { if (!uses_i) uses_i = i; continue }
                 if (!flow_item && i > 1 && indent_of(buf[i]) > skey) continue
                 if (!uses_pin(buf[i])) continue
                 unrec[++nunrec] = lnum[i]

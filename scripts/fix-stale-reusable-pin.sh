@@ -124,6 +124,17 @@ rewrites=0; lock_touched=0
 # an alias, a scalar) is not folded at all: merging it could drop its entries
 # or leave two `uses:` keys. The merger then changes nothing, names the record
 # (UNSUPPORTED) and sets merge_refused.
+#
+# A record written as a flow mapping on its key line (`'a/b@<sha>': { ref:
+# ..., commit: ... }`), or any other line at record indentation that is no
+# record key this merger reads, is kept as written, in its place, a record of
+# its own: never folded, never moved into the record before it. It refuses
+# instead, changing nothing, when the dependency such a record names is
+# listed again (a fold could not reach it, and the lock would keep the key
+# twice), and when a duplicate being folded away holds a line it has no rule
+# for (folded, that line would be lost). A top-level key after
+# `dependencies:` (`workflows:` written last) ends the section, and what
+# follows it is written after the records, as it stood.
 merge_duplicate_records() {
     local lock="$1" tmp
     tmp=$(mktemp)
@@ -190,8 +201,18 @@ merge_duplicate_records() {
         # an entry: `owner/repo@sha:   ` is the record `owner/repo@sha`.
         function uses_entry(s) { return (s ~ /^            - ["'"'"'][^"'"'"']+["'"'"']([[:space:]]+#.*|[[:space:]]*)$/ || s ~ /^            - [^[:space:]"'"'"'#][^[:space:]]*([[:space:]]+#.*|[[:space:]]*)$/) }
         function entry_value(s) { sub(/^            - /, "", s); sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return unq(s) }
-        BEGIN { indep = 0; cur = ""; in_uses = 0 }
+        # The dependency an unread record line names, or "": its key quoted
+        # either way, or plain, before the colon (sq is the single quote).
+        function line_dep(s,   t) {
+            t = s; sub(/^    /, "", t)
+            if (match(t, "^(\"[^\"]*\"|" sq "[^" sq "]*" sq ")[[:space:]]*:")) { t = substr(t, 1, RLENGTH); sub(/[[:space:]]*:$/, "", t); return dep_id(unq(t)) }
+            if (match(t, "^[^[:space:]\"" sq "#][^[:space:]]*:([[:space:]]|$)")) { t = substr(t, 1, RLENGTH); sub(/:[[:space:]]*$/, "", t); return dep_id(t) }
+            return ""
+        }
+        BEGIN { indep = 0; cur = ""; in_uses = 0; after = 0 }
+        after { tail[++ntail] = $0; next }
         /^dependencies:[[:space:]]*$/ { indep = 1; print; next }
+        indep && /^[^[:space:]#]/ { after = 1; tail[++ntail] = $0; next }
         !indep { print; next }
         # A record key or one of its own fields ends a nested `uses:` list.
         /^    [^[:space:]]/ || /^        [^[:space:]]/ { in_uses = 0 }
@@ -201,6 +222,14 @@ merge_duplicate_records() {
             if (!(key in seen)) { seen[key] = 1; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; first = 1 } else { first = 0 }
             nrec[key]++; cur = key; next
         }
+        /^    [^[:space:]#]/ {
+            key = "\034" NR; order[++norder] = key; spelled[key] = $0; nhead[key] = 0; nrec[key] = 1
+            d = line_dep($0); if (d != "") { opaque_dep[key] = d; nopaque[d]++ }
+            cur = key; first = 1; next
+        }
+        # What stands between `dependencies:` and its first record (a
+        # comment) stays there.
+        cur == "" { print; next }
         # The nested list header, quoted or not, with or without a trailing
         # comment (kept as first spelled); only lines inside a list it opens
         # are its entries.
@@ -224,8 +253,11 @@ merge_duplicate_records() {
         /^        [a-z_]+: / { if (first) { head[cur, ++nhead[cur]] = $0 } ; next }
         {
             # A line the merger does not understand is not the merger'"'"'s to drop:
-            # it is kept where it stands, under the record it follows.
+            # it is kept where it stands, under the record it follows. Under a
+            # duplicate being folded away it has nowhere to stand: unless it is
+            # blank or a comment, the merger refuses.
             if (first) { head[cur, ++nhead[cur]] = $0 }
+            else if ($0 !~ /^[[:space:]]*(#.*)?$/) { lost[cur] = lost[cur] (lost[cur] == "" ? "" : "; ") NR ": " $0 }
             next
         }
         END {
@@ -234,11 +266,24 @@ merge_duplicate_records() {
                 printf "UNSUPPORTED  .github/workflows/actions.lock: the record %s is listed %d times and its uses: is a shape the merger cannot fold (a flow list over several lines, an alias, a scalar); the duplicates were left in place. Merge them by hand.\n", name, nrec[order[k]] > "/dev/stderr"
                 refused = 1
             }
+            for (k = 1; k <= norder; k++) {
+                cur = order[k]
+                if (cur in lost) {
+                    name = spelled[cur]; sub(/[[:space:]]+#.*$/, "", name); name = unq(name); sub(/^ +/, "", name); sub(/:$/, "", name)
+                    printf "UNSUPPORTED  .github/workflows/actions.lock: the record %s is listed %d times and a duplicate holds a line the merger has no rule for (line %s); the duplicates were left in place. Merge them by hand.\n", name, nrec[cur], lost[cur] > "/dev/stderr"
+                    refused = 1
+                }
+                if ((cur in opaque_dep) && (nopaque[opaque_dep[cur]] > 1 || (opaque_dep[cur] in seen))) {
+                    printf "UNSUPPORTED  .github/workflows/actions.lock: %s is a record the merger cannot read (written as a flow mapping?) and its dependency is listed again; the duplicates were left in place. Merge them by hand.\n", spelled[cur] > "/dev/stderr"
+                    refused = 1
+                }
+            }
             if (refused) exit 4
             for (k = 1; k <= norder; k++) {
                 cur = order[k]
                 emit_record()
             }
+            for (k = 1; k <= ntail; k++) print tail[k]
         }
     ' "$lock" > "$tmp"; then
         rm -f "$tmp"; merge_refused=1; return 0
@@ -273,9 +318,14 @@ dead_ref_in_file() { # <file>
         [ -n "$ref" ] || continue
         sha="${ref##*@}"
         lookup_replacement "${ref%@*}" "${sha,,}" && return 0
-    done < <(grep -oiE "$REUSABLE_REF_RE" "$1" || true)
+    done < <(decode_dq < "$1" | grep -oiE "$REUSABLE_REF_RE" || true)
     return 1
 }
+
+# Lines on stdin as YAML reads their double-quoted scalars: escapes decoded
+# (`"\x68yperpolymath/..."` is the reference it spells), every other byte as
+# written (lib/yaml-anchors.awk, yaml_decode_dq).
+decode_dq() { awk "$ANCHORS_AWK"'{ print yaml_decode_dq($0) }'; }
 
 # Print YAML context markers for workflow file $1, one per line that matters:
 #   K<n>  line n is a `uses:` key of a job under `jobs:` — the one place a
@@ -286,14 +336,48 @@ dead_ref_in_file() { # <file>
 #         its own line (`uses: >-`, or `uses:` then the reference below): the
 #         call is there, but not where the rewrite reads it.
 # A line with none of these that still carries a known-dead pin is one the
-# parser cannot place (a flow-style job `rust: { uses: ... }`).
+# parser cannot place (a flow-style job `rust: { uses: ... }`). Keys are
+# placed by indentation, which says nothing inside a flow collection opened
+# on an earlier line: there a `uses:` key line is K when its indentation
+# reads a job key (`rust: {` then `  uses: ...`, as KYAML indents it), and
+# otherwise is left unplaced — never D. `jobs: {`, `rust: {`, `uses: ...` may
+# all stand in column 0, and that call must be reported, not passed as data.
 yaml_context() { # <workflow.yml>
-    awk '
+    awk -v sq="'" '
         # Return the number of leading spaces in source line s.
         function indent_of(s,   t) { t = s; sub(/[^ ].*$/, "", t); return length(t) }
         # Return true when s is neither blank nor a full-line comment.
         function plain(s) { return (s !~ /^[[:space:]]*$/ && s !~ /^[[:space:]]*#/) }
+        # Can a scalar start after `seen` (the line so far) at flow depth d?
+        # Where a value starts (`key: `, a list dash, past any anchor or tag),
+        # or inside a flow collection after `[`, `{`, `,` or `:`.
+        function scalar_start(seen, d) {
+            if (seen ~ VALUE_START_RE) return 1
+            return d > 0 && seen ~ /[][{,:][[:space:]]*([&!][^[:space:]]*[[:space:]]+)*$/
+        }
+        # The flow depth line s leaves, from depth d at its start: `{` and `[`
+        # open a collection where a value starts or inside one already open,
+        # `}` and `]` close one; quoted scalars and a comment are skipped.
+        # (Hypatia reads depth so: PinSites.line_depths/1.)
+        function depth_after(s, d,   i, n, c, j, seen) {
+            n = length(s); i = 1; seen = ""
+            while (i <= n) {
+                c = substr(s, i, 1)
+                if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:]]/)) break
+                if ((c == "\"" || c == sq) && scalar_start(seen, d)) {
+                    j = i + 1
+                    if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
+                    else { while (j <= n && substr(s, j, 1) != sq) j++ }
+                    seen = seen "x"; i = j + 1; continue
+                }
+                if ((c == "{" || c == "[") && (d > 0 || seen ~ VALUE_START_RE)) d++
+                else if ((c == "}" || c == "]") && d > 0) d--
+                seen = seen c; i++
+            }
+            return d
+        }
         BEGIN {
+            VALUE_START_RE = "(^[[:space:]]*(-[[:space:]]+)*|:[[:space:]]+)([&!][^[:space:]]*[[:space:]]+)*$"
             Q = "[\"'"'"']?"
             KEY_RE = "^[[:space:]]*" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
             ITEM_KEY_RE = "^[[:space:]]*-[[:space:]]+" Q "[A-Za-z0-9_.-]+" Q "[[:space:]]*:([[:space:]]|$)"
@@ -306,6 +390,7 @@ yaml_context() { # <workflow.yml>
             if (in_scalar) { if (plain($0) && ind <= scalar_indent) in_scalar = 0; else { print (in_uses ? "U" : "S") NR; next } }
             in_uses = 0
             if (!plain($0)) next
+            d0 = depth; depth = depth_after($0, depth)
             if ($0 ~ KEY_RE) {
                 key = $0; sub(/^[[:space:]]*/, "", key); sub(/[[:space:]]*:.*$/, "", key); gsub(/["'"'"']/, "", key)
                 for (k in keyat) if (k + 0 >= ind) delete keyat[k]
@@ -316,7 +401,7 @@ yaml_context() { # <workflow.yml>
                         print "K" NR
                         # The value continues below the key: its lines are the call.
                         if ($0 ~ OPEN_RE) { in_scalar = 1; scalar_indent = ind; in_uses = 1; keyat[ind] = key; next }
-                    } else print "D" NR
+                    } else if (d0 == 0) print "D" NR
                 }
                 keyat[ind] = key
                 if ($0 ~ SCALAR_RE) { in_scalar = 1; scalar_indent = ind }
@@ -351,7 +436,8 @@ FALLBACK_REF_END="([\"'[:space:],}]|]|$)"
 # looked up in lower case and rewritten as written.
 REUSABLE_REF_RE="(${TABLE_OWNERS_RE})/[A-Za-z0-9_.-]+/\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml@[0-9a-fA-F]{40}"
 # A line with its comment dropped and every quoted scalar that is neither a
-# key nor the value of a `uses` key (past any anchor or tag) emptied, quote-aware. The fallback scan
+# key, the value of a `uses` key (past any anchor or tag) nor the whole start
+# of the line (a value continued from the key above it) emptied, quote-aware. The fallback scan
 # for pins the parser cannot place reads this, so a dead pin named in a
 # trailing comment or inside a `name:` string is data, not an UNSUPPORTED
 # caller.
@@ -366,7 +452,7 @@ mask_line() {
                 j = i + 1
                 if (c == "\"") { while (j <= n && substr(s, j, 1) != "\"") { if (substr(s, j, 1) == "\\") j++; j++ } }
                 else { while (j <= n && substr(s, j, 1) != sq) j++ }
-                if (substr(s, j + 1) ~ /^[[:space:]]*:/ || tolower(out) ~ tail) out = out substr(s, i, j - i + 1)
+                if (substr(s, j + 1) ~ /^[[:space:]]*:/ || tolower(out) ~ tail || out ~ /^[[:space:]]*$/) out = out substr(s, i, j - i + 1)
                 else out = out c c
                 i = j + 1; continue
             }
@@ -454,8 +540,29 @@ while IFS= read -r -d '' wf; do
                 echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin in a \`uses:\` value continued below its key (a block scalar such as \`uses: >-\`). Fix by hand; the file was not changed." >&2
                 skip=1
             fi
-        done < <(mask_line "$(sed -n "${lineno}p" "$wf")" | grep -oiE "${REUSABLE_REF_RE}${FALLBACK_REF_END}" | grep -oiE "$REUSABLE_REF_RE" || true)
+        done < <(mask_line "$(sed -n "${lineno}p" "$wf" | decode_dq)" | grep -oiE "${REUSABLE_REF_RE}${FALLBACK_REF_END}" | grep -oiE "$REUSABLE_REF_RE" || true)
     done
+    # A double-quoted value may spell the reference with escapes (`uses:
+    # "\x68yperpolymath/..."`): GitHub runs the decoded call, but the rewrite
+    # and the scan above read the bytes as written, find no pin, and would
+    # report the file clean. Every line outside data and text that holds an
+    # escape is read decoded; a known-dead pin found so at a `uses` key is
+    # reported, never rewritten through its escapes.
+    textual=$(grep -oE '^[DSU][0-9]*' <<<"$ctx" | tr -d DSU || true)
+    while IFS= read -r numbered; do
+        lineno="${numbered%%:*}"
+        grep -qx "$lineno" <<<"$textual" && continue
+        decoded=$(printf '%s\n' "${numbered#*:}" | decode_dq)
+        [ "$decoded" != "${numbered#*:}" ] || continue
+        while IFS= read -r ref; do
+            [ -n "$ref" ] || continue
+            sha="${ref##*@}"
+            if lookup_replacement "${ref%@*}" "${sha,,}"; then
+                echo "UNSUPPORTED  ${wf#"$REPO_PATH"/}:$lineno: $ref is a known-dead pin written with escapes in a double-quoted \`uses\` value; the rewrite edits a reference as written only. Fix by hand; the file was not changed." >&2
+                skip=1
+            fi
+        done < <(mask_line "$decoded" | grep -oiE "$FALLBACK_USES_RE" | grep -oiE "$REUSABLE_REF_RE" || true)
+    done < <(grep -n "[\\]" "$wf" | grep -vE "^[0-9]+:[[:space:]]*#" || true)
     # A job's `uses:` given as an alias (`uses: *call`) runs the anchor's
     # value, defined elsewhere in the file (`CALL: &call owner/repo/...@<sha>`):
     # the rewrite reads no reference on the key line. A known-dead pin as
@@ -542,7 +649,7 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         # either case); every line keeps the spelling it has.
         if ! awk -v wfkey="$wfkey" -v edge="$repo@$stale" '
                 function unq(s) { gsub(/["'"'"']/, "", s); return s }
-                function keyv(s) { sub(/[[:space:]]+#.*$/, "", s); return unq(s) }
+                function keyv(s) { sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return unq(s) }
                 function bare(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+(#.*)?$/, "", s); return s }
                 BEGIN { edge = tolower(edge) }
                 /^workflows:[[:space:]]*$/ { sec = "w" }
@@ -563,7 +670,7 @@ if [ -f "$LOCK" ] && [ -s "$edits" ]; then
         # never given it a second time.
         awk -v wfkey="$wfkey" -v stale="$stale" -v new="$new" -v keep="$keep" -v repo="$repo" '
             function unq(s) { gsub(/["'"'"']/, "", s); return s }
-            function keyv(s) { sub(/[[:space:]]+#.*$/, "", s); return unq(s) }
+            function keyv(s) { sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return unq(s) }
             # An edge compared by its value: the list dash, a trailing
             # comment, quotes and case are not part of it.
             function edge_val(s) { sub(/^ +- /, "", s); sub(/[[:space:]]+#.*$/, "", s); sub(/[[:space:]]+$/, "", s); return tolower(unq(s)) }
