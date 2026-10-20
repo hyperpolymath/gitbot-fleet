@@ -65,7 +65,7 @@ for file in "${JS_FILES[@]}"; do
                 # Preserve indentation
                 match($0, /^[[:space:]]*/);
                 indent = substr($0, RSTART, RLENGTH);
-                print indent "// SECURITY WARNING: dynamic code execution — consider eliminating eval";
+                print indent "// SECURITY WARNING: dynamic code execution — consider eliminating eval";  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             }
             # Replace simple eval(varName) with Function form
             # Matches eval(identifier) but not eval("string") or eval(complex.expr())
@@ -95,7 +95,7 @@ for file in "${JS_FILES[@]}"; do
             if (prev !~ /SECURITY WARNING: dynamic code execution/) {
                 match($0, /^[[:space:]]*/);
                 indent = substr($0, RSTART, RLENGTH);
-                print indent "// SECURITY WARNING: dynamic code execution — new Function() is equivalent to eval";
+                print indent "// SECURITY WARNING: dynamic code execution — new Function() is equivalent to eval";  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             }
             print
             prev = $0
@@ -170,16 +170,16 @@ for file in "${PY_FILES[@]}"; do
         continue
     fi
 
-    if grep -qP '^\s*[^#]*\b(exec|eval)\(' "$file" 2>/dev/null; then
+    if grep -qP '^\s*[^#]*\b(exec|eval)\(' "$file" 2>/dev/null; then  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
         tmpfile=$(mktemp)
         awk '
         /# SECURITY WARNING: dynamic code execution/ { print; next }
         /^\s*#/ { print; next }
-        /\b(exec|eval)\(/ {
+        /\b(exec|eval)\(/ {  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             if (prev !~ /SECURITY WARNING: dynamic code execution/) {
                 match($0, /^[[:space:]]*/);
                 indent = substr($0, RSTART, RLENGTH);
-                print indent "# SECURITY WARNING: dynamic code execution — avoid exec()/eval() where possible";
+                print indent "# SECURITY WARNING: dynamic code execution — avoid exec()/eval() where possible";  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             }
             print
             prev = $0
@@ -191,7 +191,7 @@ for file in "${PY_FILES[@]}"; do
         if ! diff -q "$file" "$tmpfile" >/dev/null 2>&1; then
             cp "$tmpfile" "$file"
             rel_path="${file#"$REPO_PATH"/}"
-            echo "  Flagged exec/eval in $rel_path"
+            echo "  Flagged exec/eval in $rel_path"  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
             ((FIXED_COUNT++)) || true
         fi
         rm -f "$tmpfile"

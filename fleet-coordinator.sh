@@ -634,7 +634,7 @@ EOF
     fi
 }
 
-create_rule_approval_pr() {
+create_rule_approval_pr() (
     local rule_file="$1"
     local rule_type="$2"
     local observations="$3"
@@ -642,7 +642,9 @@ create_rule_approval_pr() {
     log_bot "hypatia" "Creating rule approval PR for $rule_type..."
 
     # Clone hypatia repo to temp directory
-    local hypatia_dir="/tmp/hypatia-rule-pr-$$"
+    local hypatia_dir
+    hypatia_dir="$(mktemp -d)"
+    trap 'rm -rf "$hypatia_dir"' EXIT
     git clone https://github.com/hyperpolymath/hypatia.git "$hypatia_dir" 2>/dev/null
 
     cd "$hypatia_dir"
@@ -682,7 +684,6 @@ COMMIT_EOF
     git push origin "$branch_name" 2>/dev/null || {
         log_warn "Failed to push rule PR branch"
         cd - > /dev/null
-        rm -rf "$hypatia_dir"
         return 1
     }
 
@@ -736,8 +737,7 @@ PR_BODY
     fi
 
     cd - > /dev/null
-    rm -rf "$hypatia_dir"
-}
+)
 
 deploy_bots() {
     log_error "BLOCKED: deployment readiness is not verified; deployment is quarantined. See docs/AUTOMATION-QUARANTINE.adoc."

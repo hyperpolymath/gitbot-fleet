@@ -384,7 +384,7 @@ cmd_fix() {
                     innerhtml_assignment|*innerHTML*)        registry_key="XSS" ;;
                     rust_unwrap|unwrap_without_check|*unwrap*) registry_key="PanicPath" ;;
                     wildcard_cors|*cors*)                    registry_key="CORSWildcard" ;;
-                    eval_in_shell|*eval*)                    registry_key="DynamicCodeExecution" ;;
+                    eval_in_shell|*eval*)                    registry_key="DynamicCodeExecution" ;;  # hypatia: allow content_patterns/eval_in_shell -- detector or message text naming eval in target files; this line does not run eval
                     hardcoded_tmp|*tmp_path*)                registry_key="UncheckedAllocation" ;;
                     *sql_inject*|*parameteriz*)              registry_key="SQLInjection" ;;
                     *shell_inject*|*shell_quot*)             registry_key="ShellInjection" ;;
