@@ -3,7 +3,7 @@
 //! plus regressions for bugs found in that implementation (P1–P6).
 
 use idris_dependents::catalogue::{classify, is_distinctive, search_stems, Confidence};
-use idris_dependents::ipkg::{depends, package_name};
+use idris_dependents::ipkg::{depends, lex, package_name, Tok};
 use idris_dependents::refs::{gitmodules_refs, pack_toml_refs, points_at};
 
 fn fx(name: &str) -> String {
@@ -302,5 +302,271 @@ fn gitmodules_quoted_and_crlf() {
     assert_eq!(
         gitmodules_refs(t, &own()),
         s(&["https://github.com/hyperpolymath/proven"])
+    );
+}
+
+#[test]
+fn lexer_distinguishes_field_assignment_from_every_version_operator() {
+    assert_eq!(
+        lex("= == < <= > >= && , . 012"),
+        (
+            vec![
+                Tok::Equals,
+                Tok::EqOp,
+                Tok::Lt,
+                Tok::Lte,
+                Tok::Gt,
+                Tok::Gte,
+                Tok::AndOp,
+                Tok::Sep,
+                Tok::Dot,
+                Tok::Int("012".into()),
+            ],
+            0,
+        )
+    );
+}
+
+#[test]
+fn lexer_preserves_identifiers_strings_and_counts_only_unrecognised_characters() {
+    let (tokens, skipped) = lex("\0@$ _pkg' café-lib Data.Module \"a\\\"--{-b\"");
+    assert_eq!(skipped, 3);
+    assert_eq!(
+        tokens,
+        vec![
+            Tok::Ident {
+                text: "_pkg'".into(),
+                dotted: false
+            },
+            Tok::Ident {
+                text: "café-lib".into(),
+                dotted: false
+            },
+            Tok::Ident {
+                text: "Data.Module".into(),
+                dotted: true
+            },
+            Tok::Str("a\\\"--{-b".into()),
+        ]
+    );
+}
+
+#[test]
+fn fake_declarations_in_comments_strings_and_dotted_names_are_ignored() {
+    let text = r#"-- package fake
+{- package hidden -}
+opts = "package quoted depends = bogus \" depends = escaped"
+package Wrong.Module
+package real
+depends = café-lib, _ffi', café-lib
+"#;
+    assert_eq!(package_name(text).as_deref(), Some("real"));
+    assert_eq!(depends(text), s(&["café-lib", "_ffi'"]));
+}
+
+#[test]
+fn depends_requires_an_exact_field_key_and_single_equals() {
+    for text in [
+        "mydepends = ochrance",
+        "Depends = ochrance",
+        "Project.depends = ochrance",
+        "depends == ochrance",
+        "depends >= ochrance",
+        "depends",
+        "depends =",
+        "depends = 123",
+    ] {
+        assert!(depends(text).is_empty(), "{text}");
+    }
+}
+
+#[test]
+fn all_version_bounds_preserve_dependency_order_and_stop_at_fields() {
+    assert_eq!(
+        depends("depends = a < 2, b <= 2.1, c > 0, d >= 1.0, e == 3, f >= 1 && < 2,\nmodules = M\ndepends = e, g"),
+        s(&["a", "b", "c", "d", "e", "f", "g"])
+    );
+}
+
+#[test]
+fn unterminated_block_comment_preserves_only_preceding_dependencies() {
+    let text = "package real\ndepends = ochrance\n{- unfinished {- nested -}\ndepends = fake";
+    assert_eq!(package_name(text).as_deref(), Some("real"));
+    assert_eq!(depends(text), s(&["ochrance"]));
+    assert!(depends("{- depends = fake").is_empty());
+}
+
+#[test]
+fn empty_and_comment_only_files_have_no_package_or_dependencies() {
+    for text in ["", " \t\r\n", "-- package fake\r\n", "{- depends = fake -}"] {
+        assert_eq!(package_name(text), None, "{text}");
+        assert!(depends(text).is_empty(), "{text}");
+    }
+}
+
+#[test]
+fn internal_package_filter_is_case_insensitive_and_respects_affix_boundaries() {
+    for name in [
+        "ABI",
+        "Benchmark",
+        "BENCHMARKS",
+        "Test",
+        "TESTS",
+        "CoreOnly",
+        "FFI-Test",
+        "Integration-Tests",
+        "Property-Tests",
+        "TEST-helper",
+        "Pkg-TEST",
+        "Pkg-TESTS",
+        "Pkg-BENCH",
+        "Pkg-SUITE",
+    ] {
+        assert!(!is_distinctive(name), "{name}");
+    }
+    for name in [
+        "test-",
+        "testing",
+        "contest",
+        "benchmarker",
+        "suite",
+        "abi-tools",
+    ] {
+        assert!(is_distinctive(name), "{name}");
+    }
+}
+
+#[test]
+fn search_stem_boundary_counts_characters_and_returns_sorted_unique_names() {
+    assert_eq!(
+        search_stems(&s(&[
+            "ééééé-core",
+            "éééé-core",
+            "abcde-two",
+            "abcd-two",
+            "abcde-one",
+            "abcde",
+            "abcde-tests",
+            "TEST-helper",
+            "abcd-two",
+        ])),
+        s(&["abcd-two", "abcde", "éééé-core", "ééééé"])
+    );
+    assert!(search_stems(&s(&["test", "abi", "pkg-bench"])).is_empty());
+}
+
+#[test]
+fn classification_accepts_submodules_and_promotes_mixed_evidence() {
+    for (deps, pack, sub, expected) in [
+        (s(&[]), 0, 1, Some(Confidence::High)),
+        (s(&["proven", "trope"]), 0, 0, Some(Confidence::Low)),
+        (s(&["proven", "ochrance"]), 0, 0, Some(Confidence::Medium)),
+        (s(&["trope"]), 1, 0, Some(Confidence::High)),
+        (s(&["ochrance"]), 0, 1, Some(Confidence::High)),
+        (s(&[]), 0, 0, None),
+    ] {
+        assert_eq!(
+            classify(&deps, pack, sub),
+            expected,
+            "{deps:?}, {pack}, {sub}"
+        );
+    }
+}
+
+#[test]
+fn github_references_require_owner_and_host_boundaries() {
+    for url in [
+        "HTTPS://GITHUB.COM/HyperPolymath/repo.git",
+        "git@github.com:METADATASTICIAN/repo.git",
+        "ssh://git@github.com/hyperpolymath/repo.git",
+    ] {
+        assert!(points_at(url, &own()), "{url}");
+        assert!(!points_at(url, &[]), "empty owner list: {url}");
+    }
+    for url in [
+        "https://github.com/hyperpolymath-extra/repo",
+        "https://github.com/not-hyperpolymath/repo",
+        "https://github.com/hyperpolymath",
+        "https://github.com.evil.test/hyperpolymath/repo",
+        "https://github.com@evil.test/hyperpolymath/repo",
+        "https://notgithub.com/hyperpolymath/repo",
+        "../hyperpolymath/repo",
+        "",
+    ] {
+        assert!(!points_at(url, &own()), "{url}");
+    }
+}
+
+#[test]
+fn pack_refs_keep_collection_and_entry_order_and_skip_irrelevant_shapes() {
+    let text = r#"
+[package]
+url = "https://github.com/hyperpolymath/not-custom"
+[custom.z]
+scalar = 3
+wrong-type = { url = 42 }
+local = { path = "." }
+external = { url = "https://github.com/someone/else" }
+z-last-alphabetically = { url = 'https://github.com/hyperpolymath/first' }
+a-first-alphabetically = { url = "git@github.com:metadatastician/second.git" }
+[custom.a.third]
+url = "https://github.com/hyperpolymath/third#readme"
+"#;
+    let refs = pack_toml_refs(text, &own()).unwrap();
+    assert_eq!(
+        refs.iter()
+            .map(|r| (r.name.as_str(), r.url.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "z-last-alphabetically",
+                "https://github.com/hyperpolymath/first"
+            ),
+            (
+                "a-first-alphabetically",
+                "git@github.com:metadatastician/second.git"
+            ),
+            ("third", "https://github.com/hyperpolymath/third#readme"),
+        ]
+    );
+    assert!(pack_toml_refs(text, &[]).unwrap().is_empty());
+}
+
+#[test]
+fn pack_refs_reject_invalid_toml_and_tolerate_absent_custom_tables() {
+    for text in ["[custom", "url = 'unterminated", "custom = 1\ncustom = 2"] {
+        assert!(pack_toml_refs(text, &own()).is_err(), "{text}");
+    }
+    for text in [
+        "",
+        "custom = 1",
+        "custom = []",
+        "[custom]\ncollection = 7",
+        "[package]\nname = 'x'",
+    ] {
+        assert!(pack_toml_refs(text, &own()).unwrap().is_empty(), "{text}");
+    }
+}
+
+#[test]
+fn gitmodules_url_keys_comments_and_quoted_fragments() {
+    let text = r#"
+# url = https://github.com/hyperpolymath/comment
+; url = https://github.com/hyperpolymath/comment
+url-extra = https://github.com/hyperpolymath/not-a-url-key
+path = https://github.com/hyperpolymath/not-a-url
+url = https://github.com/hyperpolymath/first.git ; trailing comment
+url = https://github.com/metadatastician/second.git # trailing comment
+url = "https://github.com/hyperpolymath/third#fragment;part" # comment
+url = https://github.com/hyperpolymathx/not-ours
+url = ""
+"#;
+    assert_eq!(
+        gitmodules_refs(text, &own()),
+        s(&[
+            "https://github.com/hyperpolymath/first.git",
+            "https://github.com/metadatastician/second.git",
+            "https://github.com/hyperpolymath/third#fragment;part",
+        ])
     );
 }
