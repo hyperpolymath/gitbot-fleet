@@ -121,7 +121,7 @@ repo_state() {
   find "$REPO" -type f -exec sha256sum {} + | sort
 }
 repo_before=$(repo_state)
-ECHIDNA_URL= run "$TMP/o1" --summary "$TMP/o1.md"
+ECHIDNA_URL='' run "$TMP/o1" --summary "$TMP/o1.md"
 check "enrolled members each get a file" "accessibilitybot echidnabot finishingbot glambot panicbot rhodibot seambot" \
   "$(find "$TMP/o1" -name '*.json' -printf '%f\n' | sed 's/\.json$//' | sort | tr '\n' ' ' | sed 's/ $//')"
 check "a member marked enrolled:false gets no file" no "$([ -e "$TMP/o1/cipherbot.json" ] && echo yes || echo no)"
@@ -361,9 +361,19 @@ expect_usage() {
 expect_usage "missing required paths"
 expect_usage "nonexistent repository" --repo "$TMP/absent" --out "$TMP/unused"
 expect_usage "unknown option" --unrecognized
-for seconds in -1 1.5 invalid; do
+for seconds in 0 -1 1.5 invalid; do
   expect_usage "invalid timeout $seconds" --repo "$REPO" --out "$TMP/unused" --timeout "$seconds"
 done
+# A member name from the manifest is untrusted: a tab or a path in a key must
+# never become a plan field, an envelope file name or an adapter argument.
+printf '{"reporters":{"rhodibot":{"enrolled":true},"x\\t../../../evil\\tz":{"enrolled":true},"Bad Name":{"enrolled":true}},"schema":1}\n' > "$TMP/hostile.json"
+plan=$(bash "$DRIVER" --plan --enrolment "$TMP/hostile.json" 2> "$TMP/hostile.err")
+check "a member key with a tab or a path never reaches the plan" "rhodibot	rhodibot	rhodibot" "$plan"
+check "...and each dropped name is warned about" 2 "$(grep -c "warning: ignoring member" "$TMP/hostile.err")"
+mkdir -p "$TMP/hostile-out"
+bash "$DRIVER" --repo "$REPO" --out "$TMP/hostile-out" --bin-dir "$BIN" --enrolment "" --member "../escape" > "$TMP/hostile-run.log" 2>&1 || true
+check "an explicit --member that is not a slug writes nothing" "" "$(find "$TMP/hostile-out" -type f | sort | tr "\n" " ")"
+check "...and leaves no file beside the output directory" no "$([ -e "$TMP/escape.json" ] && echo yes || echo no)"
 check "usage errors create no output directory" no "$([ -e "$TMP/unused" ] && echo yes || echo no)"
 check "reporting never changes the scanned tree's files or directories" "$repo_before" "$(repo_state)"
 

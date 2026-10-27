@@ -147,7 +147,9 @@ if [ "$enrol" = "__default__" ]; then
   if [ -n "$repo" ]; then enrol="$repo/.gitbot-fleet/enrolment.json"; else enrol=""; fi
 fi
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 2; }
-[[ "$timeout_s" =~ ^[0-9]+$ ]] || { echo "--timeout must be an integer" >&2; exit 2; }
+# GNU timeout reads 0 as "no limit", which would let one hung adapter spend the
+# whole job; the limit must be a positive integer.
+[[ "$timeout_s" =~ ^[1-9][0-9]*$ ]] || { echo "--timeout must be a positive integer (0 would disable the limit)" >&2; exit 2; }
 
 # ── enrolment ────────────────────────────────────────────────────────────────
 # Which members run. An explicit --member list wins; otherwise every reporter
@@ -186,6 +188,17 @@ else
     members=("${kept[@]+"${kept[@]}"}")
   fi
 fi
+
+# A member name comes from the scanned repository's manifest, so it is untrusted:
+# it becomes a tab-delimited plan field, an envelope file name and an adapter
+# argument. Only a slug may pass; anything else is dropped with a warning (a
+# traversal or a tab in a key must never reach the build or the output tree).
+slugs=()
+for m in "${members[@]+"${members[@]}"}"; do
+  if [[ "$m" =~ ^[a-z][a-z0-9-]{0,63}$ ]]; then slugs+=("$m")
+  else echo "warning: ignoring member $(printf '%q' "$m"): a member name is lowercase letters, digits and hyphens" >&2; fi
+done
+members=("${slugs[@]+"${slugs[@]}"}")
 
 if [ "$plan" = true ]; then
   for m in "${members[@]+"${members[@]}"}"; do

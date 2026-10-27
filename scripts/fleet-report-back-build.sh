@@ -76,6 +76,9 @@ slice() { local r; r=$(remaining); [ "$1" -lt "$r" ] && echo "$1" || echo "$r"; 
 
 built=0 failed=0
 for c in $crates; do
+  if ! [[ "$c" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$ ]]; then
+    warn "unknown crate" "$(printf '%q' "$c") is not a crate directory name; skipped"; failed=$((failed + 1)); continue
+  fi
   if [ ! -f "$fleet/bots/$c/Cargo.toml" ]; then
     warn "unknown crate" "bots/$c has no Cargo.toml; skipped"; failed=$((failed + 1)); continue
   fi

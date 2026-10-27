@@ -182,6 +182,11 @@ check "budget above the per-build limit: the per-build limit applies" "1" "$(gre
 run_build budget-narrow --crates rhodibot --build-budget 100000 --build-timeout 60
 check "per-build limit below the budget: the limit applies" "1" "$(grep -c $'\t60 cargo build --release --locked$' "$FLEET_BUILD_TIMEOUTS" || true)"
 
+# --- a crate name that is a path is refused before any cargo invocation --------
+run_build traversal --crates "../../evil rhodibot"
+check "a path in the crate list is skipped" "1" "$(grep -c 'is not a crate directory name' "$TMP/traversal.log" || true)"
+check "...and only the real crate is built" $'rhodibot\tbuild --release --locked' "$(cat "$FLEET_BUILD_CALLS")"
+
 echo
 echo "fleet-report-back-build-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

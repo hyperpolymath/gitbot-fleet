@@ -198,7 +198,7 @@ else
         BEGIN { while ((getline l < tmpl) > 0) job = job l "\n"; close(tmpl) }
         /^  hypatia:[[:space:]]*$/ && !done { printf "%s", job; done = 1 }
         { print }' "$WORKFLOW" > "$out"
-    mv "$out" "$WORKFLOW"; rm -f "$jobtmp"
+    pin_fixer_replace "$out" "$WORKFLOW"; rm -f "$jobtmp"
     job_inserted=true
     echo "  INSERTED fleet job ($form form) before the hypatia job in fork-governance.yml"
 fi
@@ -224,14 +224,21 @@ if [ -f "$WORKFLOW" ] && grep -qE '^  hypatia:[[:space:]]*$' "$WORKFLOW"; then
         printf '%s\n' "$block" | grep -qE '^    if:' || add="$add"$'\n''    if: ${{ !cancelled() }}'
         out=$(mktemp)
         awk -v add="$add" '{ print } /^  hypatia:[[:space:]]*$/ && !done { print add; done = 1 }' "$WORKFLOW" > "$out"
-        mv "$out" "$WORKFLOW"
+        pin_fixer_replace "$out" "$WORKFLOW"
         echo "  WIRED hypatia: needs: [fleet]"
-    elif needs_has_item "$needs_line" fleet; then
+    elif needs_has_item "$needs_line" fleet || [[ "$needs_line" =~ ^\ \ \ \ needs:[[:space:]]*fleet[[:space:]]*$ ]]; then
         echo "  ok: hypatia already needs fleet"
+    elif [[ "$needs_line" =~ ^\ \ \ \ needs:[[:space:]]*([A-Za-z0-9_-]+)[[:space:]]*$ ]]; then
+        # The scalar form `needs: other` becomes a flow list with fleet appended.
+        other="${BASH_REMATCH[1]}"
+        out=$(mktemp)
+        awk -v other="$other" '!done && /^  hypatia:[[:space:]]*$/ {p=1} p && /^    needs:/ { $0 = "    needs: [" other ", fleet]"; done = 1; p = 0 } { print }' "$WORKFLOW" > "$out"
+        pin_fixer_replace "$out" "$WORKFLOW"
+        echo "  WIRED hypatia: needs: [$other, fleet]"
     elif printf '%s' "$needs_line" | grep -qE '^    needs:[[:space:]]*\[.*\][[:space:]]*$'; then
         out=$(mktemp)
         awk '!done && /^  hypatia:[[:space:]]*$/ {p=1} p && /^    needs:[[:space:]]*\[/ { if ($0 ~ /\[[[:space:]]*\]/) sub(/\[[[:space:]]*\]/, "[fleet]"); else sub(/\]/, ", fleet]"); done = 1; p = 0 } { print }' "$WORKFLOW" > "$out"
-        mv "$out" "$WORKFLOW"
+        pin_fixer_replace "$out" "$WORKFLOW"
         echo "  WIRED hypatia: fleet added to its needs list"
     else
         manual "hypatia's needs: is a block list; add '- fleet' to it by hand"

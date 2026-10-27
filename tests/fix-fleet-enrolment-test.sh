@@ -91,7 +91,7 @@ check_grep "reusable template pins the fleet by placeholder" '@__FLEET_REF__$' "
 
 # ── 1. hyperpolymath repo, canonical workflow, new standards pin ────────────
 A="$TMP/a"; mk_repo "$A" https://github.com/hyperpolymath/example.git
-canonical_workflow "$NEW_SHA" > "$A/.github/workflows/fork-governance.yml"
+canonical_workflow "$NEW_SHA" > "$A/.github/workflows/fork-governance.yml"; chmod 644 "$A/.github/workflows/fork-governance.yml"
 set +e; bash "$FIXER" "$A" > "$TMP/a.out" 2>&1; rc=$?; set -e
 check "A: exit 0 — wired end to end" 0 "$rc"
 check_grep "A: manifest created" 'CREATED \.gitbot-fleet/enrolment\.json' "$TMP/a.out"
@@ -236,6 +236,22 @@ check "K: no second fleet job inserted" "1" "$(grep -cE '^  fleet:$' "$K/.github
 check_no_grep "K: the impostor is not called the producer" 'already has the fleet report-back job' "$TMP/k.out"
 set +e; bash "$FIXER" "$A" > "$TMP/a3.out" 2>&1; set -e
 check_grep "A: the real producer job is recognised" 'ok: fork-governance.yml already has the fleet report-back job' "$TMP/a3.out"
+
+# ── 12. the scalar needs form ───────────────────────────────────────────────
+L="$TMP/l"; mk_repo "$L" https://github.com/hyperpolymath/example.git
+canonical_workflow "$NEW_SHA" | awk '{print} /^    name: Hypatia verdict grid/ {print "    needs: fleet"}' > "$L/.github/workflows/fork-governance.yml"
+set +e; bash "$FIXER" "$L" > "$TMP/l.out" 2>&1; rc=$?; set -e
+check "L: scalar needs: fleet is already wired → exit 0" 0 "$rc"
+check_grep "L: reported as present" 'ok: hypatia already needs fleet' "$TMP/l.out"
+check "L: the scalar line is left as it was" "1" "$(grep -cE '^    needs: fleet$' "$L/.github/workflows/fork-governance.yml" | tr -d ' ')"
+N="$TMP/n"; mk_repo "$N" https://github.com/hyperpolymath/example.git
+canonical_workflow "$NEW_SHA" | awk '{print} /^    name: Hypatia verdict grid/ {print "    needs: workflow-contract"}' > "$N/.github/workflows/fork-governance.yml"
+chmod 644 "$N/.github/workflows/fork-governance.yml"
+set +e; bash "$FIXER" "$N" > "$TMP/n.out" 2>&1; rc=$?; set -e
+check "N: scalar needs: other → exit 0" 0 "$rc"
+check_grep "N: scalar other becomes a flow list with fleet" '^    needs: \[workflow-contract, fleet\]$' "$N/.github/workflows/fork-governance.yml"
+check "N: the rewritten workflow keeps its mode (not mktemp's 0600)" "644" "$(stat -c %a "$N/.github/workflows/fork-governance.yml")"
+check "A: the inserted-job workflow keeps its mode too" "644" "$(stat -c %a "$A/.github/workflows/fork-governance.yml")"
 
 echo
 echo "fix-fleet-enrolment: $pass passed, $fail failed"
