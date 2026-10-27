@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: MPL-2.0
+# fleet-job.inline.yml — the fork-governance `fleet` job fix-fleet-enrolment.sh
+# inserts before the Hypatia lane in a repository whose Actions policy cannot
+# call a reusable workflow from another owner. __FLEET_REF__ and
+# __PANIC_ATTACK_SHA__ are filled in by the fixer. Mirrors rsr-template-repo's
+# .github/workflows/fork-governance.yml and this repository's reusable step for
+# step (tests/fix-fleet-enrolment-test.sh asserts the step names agree).
+  fleet:
+    name: Fleet report-backs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      # hyperpolymath/gitbot-fleet commit whose driver and adapters run.
+      FLEET_REF: __FLEET_REF__
+      # panic-attack commit for panicbot; equal to the standards Hypatia lane's pin.
+      PANIC_ATTACK_SHA: __PANIC_ATTACK_SHA__
+    steps:
+      - name: Checkout the repository to report on
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Checkout gitbot-fleet at the pinned commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: hyperpolymath/gitbot-fleet
+          ref: ${{ env.FLEET_REF }}
+          path: .fleet-src
+          persist-credentials: false
+
+      # The fleet checkout must not sit inside the tree being reported on: walk-
+      # based adapters would scan the fleet's own source and attribute its findings
+      # to this repository. actions/checkout only writes under the workspace, so
+      # the checkout is moved out to RUNNER_TEMP first; the lockfile hash for the
+      # cache key is taken before the move.
+      - name: Move the fleet checkout out of the scanned tree
+        id: fleet
+        run: |
+          set -euo pipefail
+          lockhash=$(cat .fleet-src/bots/*/Cargo.lock .fleet-src/shared-context/Cargo.lock 2>/dev/null | sha256sum | cut -c1-16)
+          mv .fleet-src "$RUNNER_TEMP/fleet-src"
+          echo "dir=$RUNNER_TEMP/fleet-src" >> "$GITHUB_OUTPUT"
+          echo "lockhash=$lockhash" >> "$GITHUB_OUTPUT"
+
+      - name: Plan which adapters to build
+        id: plan
+        run: |
+          set -euo pipefail
+          plan=$(bash "$RUNNER_TEMP/fleet-src/scripts/fleet-report-back.sh" --plan --enrolment .gitbot-fleet/enrolment.json)
+          echo "plan:"; printf '%s\n' "$plan" | sed 's/^/  /'
+          crates=$(printf '%s\n' "$plan" | awk -F'\t' '$2 != "" {print $2}' | sort -u | tr '\n' ' ')
+          echo "crates=${crates% }" >> "$GITHUB_OUTPUT"
+          if printf '%s\n' "$plan" | awk -F'\t' '$1 == "panicbot" {f=1} END {exit !f}'; then echo panicbot=true; else echo panicbot=false; fi >> "$GITHUB_OUTPUT"
+          { echo "workspaces<<WS"; for c in $crates; do echo "$RUNNER_TEMP/fleet-src/bots/$c -> target"; done; echo "$RUNNER_TEMP/fleet-src/shared-context -> target"; echo WS; } >> "$GITHUB_OUTPUT"
+          if [ -n "${crates% }" ]; then echo build=true; else echo build=false; fi >> "$GITHUB_OUTPUT"
+
+      # Rust comes with the GitHub-hosted runner image; the cache is actions/cache
+      # keyed on the fleet commit's lockfiles. Only GitHub-owned, SHA-pinned
+      # actions appear in this job, as in gitbot-fleet's reusable.
+      - name: Cache adapter builds
+        if: steps.plan.outputs.build == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ${{ runner.temp }}/fleet-src/bots/*/target
+          key: fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.fleet.outputs.lockhash }}-${{ steps.plan.outputs.crates }}
+          restore-keys: |
+            fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.fleet.outputs.lockhash }}-
+            fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Report the Rust toolchain in use
+        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
+        run: |
+          set -euo pipefail
+          command -v cargo >/dev/null || { echo "::error::cargo is not on this runner; the adapters cannot be built"; exit 1; }
+          cargo --version; rustc --version
+
+      - name: Restore panic-attack build cache
+        if: steps.plan.outputs.panicbot == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.panic-attack
+          key: panic-attack-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.PANIC_ATTACK_SHA }}
+
+      - name: Build the enrolled adapters
+        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
+        env:
+          CRATES: ${{ steps.plan.outputs.crates }}
+          PANICBOT: ${{ steps.plan.outputs.panicbot }}
+        run: |
+          set -euo pipefail
+          args=(--fleet "$RUNNER_TEMP/fleet-src" --bin-dir "$RUNNER_TEMP/fleet-bin" --crates "$CRATES")
+          [ "$PANICBOT" = true ] && args+=(--panic-attack "$PANIC_ATTACK_SHA")
+          bash "$RUNNER_TEMP/fleet-src/scripts/fleet-report-back-build.sh" "${args[@]}"
+
+      - name: Run the enrolled adapters and write the envelopes
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fleet-bin" "$RUNNER_TEMP/report-backs"
+          bash "$RUNNER_TEMP/fleet-src/scripts/fleet-report-back.sh" --repo . --out "$RUNNER_TEMP/report-backs" \
+            --bin-dir "$RUNNER_TEMP/fleet-bin" --enrolment .gitbot-fleet/enrolment.json \
+            --fleet-ref "$FLEET_REF" --summary "$GITHUB_STEP_SUMMARY"
+          ls "$RUNNER_TEMP/report-backs"/*.json >/dev/null 2>&1 \
+            || echo "No member is enrolled in .gitbot-fleet/enrolment.json." > "$RUNNER_TEMP/report-backs/NONE-ENROLLED.txt"
+
+      - name: Upload the report-backs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fleet-report-backs
+          path: ${{ runner.temp }}/report-backs
+          if-no-files-found: error
+          retention-days: 90
+

@@ -32,3 +32,5 @@ jobs:
         run: bash tests/enroll-discovery-test.sh
       - name: Verify the fleet report-back driver (envelope contract)
         run: bash tests/fleet-report-back-test.sh
+      - name: Fleet enrolment fixer (report-back rollout)
+        run: bash tests/fix-fleet-enrolment-test.sh
