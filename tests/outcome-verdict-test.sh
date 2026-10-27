@@ -193,7 +193,7 @@ GIT_COMMITTER_DATE=2026-01-01T00:00:00Z git -C "$ar" -c user.email=t@t -c user.n
     commit -q --date=2026-01-01T00:00:00Z -m fixture
 git -C "$ar" update-ref refs/remotes/origin/main HEAD
 printf '%s\n' \
-    '{"repo":"ar","pattern":"recipe-shell-quote-vars","outcome":"success","fixed_at":"2026-02-01T00:00:00Z"}' \
+    '{"repo":"ar","pattern":"recipe-shell-quote-vars","file":".","outcome":"success","fixed_at":"2026-02-01T00:00:00Z"}' \
     '{"repo":"ar","pattern_id":"PA004","recipe_id":"recipe-annotate-believe-me","outcome":"success","timestamp":"2026-02-01T00:00:00Z"}' \
     '{"repo":"ar","pattern":"recipe-remove-believe-me","file":"A.idr","outcome":"success","fixed_at":"2026-02-01T00:00:00Z"}' \
     > "$TMP/audit/log.jsonl"
@@ -207,6 +207,8 @@ check "replay predicate failure is NA" "recipe-annotate-believe-me=NA recipe-she
     "$(PATH="$TMP/shim-git:$PATH" audit)"
 # A row naming one file is a narrower claim than a repo-wide predicate: it is
 # skipped (above, no recipe-remove-believe-me row) and the skip is reported.
+# The shell-quote row names "." (dispatch-runner.sh's repo-root marker), so
+# it is repo-scoped and replayed, not skipped.
 check "file-scoped row is skipped, and reported" "audit: ar: 1 file-scoped row(s) skipped" \
     "$("$ROOT/scripts/audit-fix-outcomes.sh" "$TMP/audit/log.jsonl" "$ar" 2>&1 >/dev/null)"
 
