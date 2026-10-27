@@ -382,6 +382,80 @@ jq -n --arg t "$(printf '%0500d' 0)" '{schema: 1, reporters: {cipherbot: {enroll
 run "$TMP/longtitle" --enrolment "$TMP/longtitle.json" --member cipherbot
 check "a 500-character manifest title is cut to 120" 120 "$(field "$TMP/longtitle/cipherbot.json" '.title | length')"
 
+# Analyzer collections may be arrays as well as name-keyed objects. Keep
+# findings from every analyzer, including when the adapter exits nonzero.
+for member in finishingbot glambot; do
+  binary="$member"; [ "$member" != finishingbot ] || binary=finishing-bot
+  stub "$binary" 'printf '\''[{"findings":[{"id":"FIRST","file":"./first.txt"}]},{"findings":[]},{"findings":[{"id":"LAST","file":"./last.txt"}]}]\n'\''; exit 1'
+  run "$TMP/analyzer-array-$member" --enrolment "" --member "$member"
+  check "$member accepts analyzer arrays after a nonzero exit" 'ran|null' \
+    "$(field "$TMP/analyzer-array-$member/$member.json" '"\(.status)|\(.reason)"')"
+  check "$member keeps findings from every analyzer in order" 'FIRST:first.txt LAST:last.txt' \
+    "$(field "$TMP/analyzer-array-$member/$member.json" '[.findings[] | "\(.rule_id):\(.file)"] | join(" ")')"
+
+  # A partial analyzer report must never masquerade as a clean scan. In
+  # particular, validate every analyzer, even when the first one is valid.
+  shape_index=0
+  for shape in '{}' '[]' '{"first":{}}' '{"first":{"findings":null}}' \
+    '{"first":{"findings":{}}}' \
+    '{"first":{"findings":[{"id":"PARTIAL"}]},"second":7}'; do
+    shape_index=$((shape_index + 1))
+    stub "$binary" "printf '%s\n' '$shape'"
+    run "$TMP/analyzer-shape-$member-$shape_index" --enrolment "" --member "$member"
+    check "$member rejects incomplete analyzer shape $shape_index without findings" 'error|0' \
+      "$(field "$TMP/analyzer-shape-$member-$shape_index/$member.json" '"\(.status)|\(.findings | length)"')"
+    check "$member explains the required analyzer shape $shape_index" \
+      'adapter output had an unexpected output shape: expected analyzer objects each with a findings array' \
+      "$(field "$TMP/analyzer-shape-$member-$shape_index/$member.json" .reason)"
+  done
+done
+
+stub seambot 'echo '\''{"findings":[{}, {"check":17,"severity":null,"location":42,"message":23,"line":99}]}'\'''
+run "$TMP/seam-defaults" --member seambot
+check "seambot normalizes missing and nonstring fields and uses repository-level lines" \
+  '[{"file":"","line":0,"message":"","rule_id":"SEAM-?","severity":"unknown"},{"file":"","line":0,"message":"23","rule_id":"SEAM-17","severity":"unknown"}]' \
+  "$(jq -S -c .findings "$TMP/seam-defaults/seambot.json")"
+
+# An explicitly supplied manifest replaces the default manifest's decisions.
+# Quotes, backslashes and newlines in its title remain data in the envelope.
+custom_title=$'Audit "quoted" \\ path\nsecond line'
+jq -n --arg title "$custom_title" \
+  '{reporters:{cipherbot:{enrolled:true,title:$title},rhodibot:{enrolled:false}}}' > "$TMP/override.json"
+run "$TMP/override" --enrolment "$TMP/override.json" --member cipherbot --member rhodibot
+check "explicit manifest overrides the default enrolment and filters selected members" cipherbot.json \
+  "$(find "$TMP/override" -type f -printf '%f\n')"
+check "manifest title metacharacters survive JSON construction" "$custom_title" \
+  "$(field "$TMP/override/cipherbot.json" .title)"
+plan=$(bash "$DRIVER" --plan --enrolment "$TMP/override.json" --member cipherbot --member rhodibot 2> "$TMP/override-plan.err")
+check "planning honours explicit manifest exclusions just like execution" $'cipherbot\tcipherbot\tcipherbot' "$plan"
+
+# The slug limit is inclusive at 64 characters, and validation also applies
+# to explicit members before the plan can reach the build helper.
+slug64="a$(printf '%063d' 0)"
+plan=$(bash "$DRIVER" --plan --enrolment "" --member "$slug64" --member bot-2 \
+  --member "${slug64}a" --member 2bot --member under_score --member Uppercase --member dotted.name \
+  --repo "$REPO" --out "$TMP/plan-only" --summary "$TMP/plan-only.md" 2> "$TMP/slug-limits.err")
+check "planning accepts a 64-character slug and lowercase digits and hyphens" \
+  "$(printf '%s\t\t\nbot-2\t\t' "$slug64")" "$plan"
+check "planning warns for overlong slugs and invalid initial or interior characters" 5 \
+  "$(grep -c 'warning: ignoring member' "$TMP/slug-limits.err")"
+check "planning creates no output directory or summary" no \
+  "$([ -e "$TMP/plan-only" ] || [ -e "$TMP/plan-only.md" ] && echo yes || echo no)"
+run "$TMP/slug-limit" --enrolment "" --member "$slug64" --member "${slug64}a"
+check "execution uses the same inclusive slug limit as planning" "$slug64.json" \
+  "$(find "$TMP/slug-limit" -type f -printf '%f\n')"
+check "a valid unregistered slug receives an explicit error envelope" 'error|unknown fleet member: no adapter is registered under this name' \
+  "$(field "$TMP/slug-limit/$slug64.json" '"\(.status)|\(.reason)"')"
+
+# PATH fallback is already covered above; conflicting executables verify
+# that an explicitly selected adapter directory takes precedence.
+mkdir -p "$TMP/shadow-bin"
+printf '#!/usr/bin/env bash\nexit 9\n' > "$TMP/shadow-bin/cipherbot"
+chmod +x "$TMP/shadow-bin/cipherbot"
+PATH="$TMP/shadow-bin:$PATH" run "$TMP/bin-precedence" --enrolment "" --member cipherbot
+check "bin-dir takes precedence over a failing adapter on PATH" ran \
+  "$(field "$TMP/bin-precedence/cipherbot.json" .status)"
+
 # A member name from the manifest is untrusted: a tab or a path in a key must
 # never become a plan field, an envelope file name or an adapter argument.
 printf '{"reporters":{"rhodibot":{"enrolled":true},"x\\t../../../evil\\tz":{"enrolled":true},"Bad Name":{"enrolled":true}},"schema":1}\n' > "$TMP/hostile.json"

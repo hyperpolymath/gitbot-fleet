@@ -25,7 +25,7 @@ check() {
 
 FLEET="$TMP/fleet with spaces"; TOOLS="$TMP/tools"
 mkdir -p "$FLEET/bots" "$TOOLS"
-for crate in rhodibot panicbot finishingbot glambot broken slow; do
+for crate in rhodibot panicbot finishingbot glambot broken slow library-only Adapter_2-name; do
   mkdir -p "$FLEET/bots/$crate"
   printf '[package]\nname = "%s"\nversion = "0.0.0"\n' "$crate" > "$FLEET/bots/$crate/Cargo.toml"
 done
@@ -40,6 +40,10 @@ printf '%s\t%s\n' "$crate" "$*" >> "$FLEET_BUILD_CALLS"
 # An accidental real dependency install must never escape the fixture.
 [[ "$*" == 'build --release --locked' ]] || exit 99
 mkdir -p target/release/deps
+if [[ "$crate" == library-only ]]; then
+  printf 'library\n' > target/release/libfixture.rlib
+  exit 0
+fi
 binary="$crate"; [[ "$crate" != finishingbot ]] || binary=finishing-bot
 printf '#!/usr/bin/env bash\necho %s\n' "$crate" > "target/release/$binary"
 chmod +x "target/release/$binary"
@@ -186,6 +190,36 @@ check "per-build limit below the budget: the limit applies" "1" "$(grep -c $'\t6
 run_build traversal --crates "../../evil rhodibot"
 check "a path in the crate list is skipped" "1" "$(grep -c 'is not a crate directory name' "$TMP/traversal.log" || true)"
 check "...and only the real crate is built" $'rhodibot\tbuild --release --locked' "$(cat "$FLEET_BUILD_CALLS")"
+
+# A positive total budget below the per-build limit must cap timeout's
+# argument. Allow for time spent starting the helper instead of assuming
+# Bash's SECONDS counter is still exactly zero on a busy machine.
+run_build budget-capped --crates rhodibot --build-budget 120 --build-timeout 900
+check "a build under a smaller total budget still succeeds" 0 "$rc"
+limit=$(awk -F'\t' '{split($2, args, " "); print args[1]}' "$FLEET_BUILD_TIMEOUTS")
+check "remaining budget caps the per-build timeout at a positive value" yes \
+  "$([[ "$limit" =~ ^[0-9]+$ ]] && [ "$limit" -gt 0 ] && [ "$limit" -le 120 ] && echo yes || echo no)"
+check "the budget-capped build publishes its executables" 'rhodi-helper rhodibot' \
+  "$(files "$TMP/budget-capped")"
+
+# A successful library-only crate produces no executable to publish; that
+# must not fail this helper or prevent a subsequent adapter build.
+run_build library-only --crates 'library-only panicbot'
+check "a crate with no executable does not fail the helper" 0 "$rc"
+check "library-only output is not copied and the later adapter is available" panicbot \
+  "$(files "$TMP/library-only")"
+check "successful library-only crates remain successful in the build summary" yes \
+  "$(grep -q '2 crate(s) built, 0 failed' "$TMP/library-only.log" && echo yes || echo no)"
+
+run_build crate-names --crates '-option bad/name dotted.name _leading Adapter_2-name'
+check "invalid crate tokens never reach cargo" $'Adapter_2-name\tbuild --release --locked' \
+  "$(cat "$FLEET_BUILD_CALLS")"
+check "each invalid crate token is warned about" 4 \
+  "$(grep -c 'is not a crate directory name' "$TMP/crate-names.log")"
+check "valid crate names may contain uppercase letters, underscores, digits and hyphens" \
+  Adapter_2-name "$(files "$TMP/crate-names")"
+check "invalid crate tokens count as failures while the valid build completes" yes \
+  "$(grep -q '1 crate(s) built, 4 failed' "$TMP/crate-names.log" && echo yes || echo no)"
 
 echo
 echo "fleet-report-back-build-test: $pass passed, $fail failed"

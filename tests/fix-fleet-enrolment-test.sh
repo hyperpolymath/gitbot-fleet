@@ -270,6 +270,138 @@ else
     echo "skip O: no commit without the producer is reachable from this checkout"
 fi
 
+# ── 14. dependencies and generated trees are not enrolment evidence ────────
+run_fixer() { # label repo [finding-json]; records rc and output
+    local label="$1"; shift
+    rc=0
+    bash "$FIXER" "$@" > "$TMP/$label.out" 2>&1 || rc=$?
+}
+dependent_enrolments() {
+    jq -c '[.reporters.panicbot.enrolled, .reporters.seambot.enrolled,
+            .reporters.accessibilitybot.enrolled, .reporters.echidnabot.enrolled]' "$1/.gitbot-fleet/enrolment.json"
+}
+for excluded in .git node_modules target vendor .fleet-src; do
+    P="$TMP/pruned-$excluded"; mk_repo "$P" https://github.com/hyperpolymath/example.git
+    canonical_workflow "$NEW_SHA" > "$P/.github/workflows/fork-governance.yml"
+    mkdir -p "$P/$excluded/dependency/spec/seams"
+    : > "$P/$excluded/dependency/Cargo.toml"
+    : > "$P/$excluded/dependency/index.htm"
+    : > "$P/$excluded/dependency/Theorem.lean"
+    : > "$P/$excluded/dependency/spec/seams/seam-register.json"
+    run_fixer "pruned-$excluded" "$P"
+    check "$excluded: a tree containing only excluded evidence is still wired" 0 "$rc"
+    check "$excluded: generated or vendored files enrol no conditional member" \
+        '[false,false,false,false]' "$(dependent_enrolments "$P")"
+    check "$excluded: every conditional exclusion carries an observed reason" 4 \
+        "$(jq '[.reporters.panicbot,.reporters.seambot,.reporters.accessibilitybot,.reporters.echidnabot] | map(select(.enrolled == false and (.reason | length) > 0)) | length' "$P/.gitbot-fleet/enrolment.json")"
+done
+
+# Proofs can live outside proofs/, in any of the supported source languages.
+# Conversely an explicitly declared, currently empty proofs/ is sufficient.
+for proof in theorem.agda theorem.lean theorem.idr theorem.v proofs-directory; do
+    P="$TMP/proof-$proof"; mk_repo "$P" https://github.com/hyperpolymath/example.git
+    canonical_workflow "$NEW_SHA" > "$P/.github/workflows/fork-governance.yml"
+    if [ "$proof" = proofs-directory ]; then
+        mkdir -p "$P/proofs"
+    else
+        mkdir -p "$P/nested"; : > "$P/nested/$proof"
+    fi
+    run_fixer "proof-$proof" "$P"
+    check "$proof: proof evidence wires successfully" 0 "$rc"
+    check "$proof: only the proof-dependent member is enabled" \
+        '[false,false,false,true]' "$(dependent_enrolments "$P")"
+done
+P="$TMP/nested source with spaces"; mk_repo "$P" https://github.com/hyperpolymath/example.git
+canonical_workflow "$NEW_SHA" > "$P/.github/workflows/fork-governance.yml"
+mkdir -p "$P/crates/app" "$P/site" "$P/docs"
+: > "$P/crates/app/Cargo.toml"; : > "$P/site/index.htm"; : > "$P/docs/proof.txt"
+run_fixer nested-source "$P" '{"ignored":"finding input is not tree evidence"}'
+check "nested Cargo and .htm files enable their members, while prose is not a proof" \
+    '[true,false,true,false]' "$(dependent_enrolments "$P")"
+check "nested source in a path with spaces wires successfully" 0 "$rc"
+
+# ── 15. owner detection and explicit job-form overrides ────────────────────
+for choice in ssh-auto force-inline force-reusable; do
+    P="$TMP/$choice"
+    case "$choice" in
+        ssh-auto) origin=git@github.com:hyperpolymath/example.git; form=auto; expected=reusable ;;
+        force-inline) origin=https://github.com/hyperpolymath/example.git; form=inline; expected=inline ;;
+        force-reusable) origin=https://github.com/another-owner/example.git; form=reusable; expected=reusable ;;
+    esac
+    mk_repo "$P" "$origin"
+    canonical_workflow "$NEW_SHA" > "$P/.github/workflows/fork-governance.yml"
+    FLEET_JOB_FORM="$form" run_fixer "$choice" "$P"
+    check "$choice: explicit form or detected SSH owner wires successfully" 0 "$rc"
+    check_grep "$choice: chosen job form is reported" "job form: $expected$" "$TMP/$choice.out"
+    if [ "$expected" = reusable ]; then
+        check_grep "$choice: reusable job pins the selected producer revision" \
+            "uses: hyperpolymath/gitbot-fleet/.github/workflows/fleet-report-back-reusable.yml@$REF$" "$P/.github/workflows/fork-governance.yml"
+    else
+        check_grep "$choice: inline job pins the selected producer revision" \
+            "^      FLEET_REF: $REF$" "$P/.github/workflows/fork-governance.yml"
+    fi
+done
+
+# ── 16. existing flow dependencies and guards keep their meaning ───────────
+for needs in '[]' '["deed", "fleet"]' "[ 'fleet', 'deed' ]"; do
+    P="$TMP/flow-$pass"; mk_repo "$P" https://github.com/hyperpolymath/example.git
+    canonical_workflow "$NEW_SHA" | awk -v needs="$needs" \
+        '{print} /^    name: Hypatia verdict grid/ {print "    needs: " needs; print "    if: ${{ success() }}"}' \
+        > "$P/.github/workflows/fork-governance.yml"
+    run_fixer flow "$P"
+    check "flow $needs: wiring succeeds" 0 "$rc"
+    expected="$needs"; [ "$needs" != '[]' ] || expected='[fleet]'
+    check_grep "flow $needs: dependency list preserves exact quoted fleet items" \
+        '^    needs:' "$P/.github/workflows/fork-governance.yml"
+    check "flow $needs: expected dependency list is retained" "    needs: $expected" \
+        "$(grep '^    needs:' "$P/.github/workflows/fork-governance.yml" | head -n1)"
+    check_grep "flow $needs: existing guard is preserved" \
+        '^    if: \$\{\{ success\(\) \}\}$' "$P/.github/workflows/fork-governance.yml"
+    cp "$P/.github/workflows/fork-governance.yml" "$TMP/flow-before.yml"
+    run_fixer flow-again "$P"
+    check "flow $needs: repeated wiring succeeds" 0 "$rc"
+    check "flow $needs: repeated wiring is byte-identical" '' \
+        "$(diff "$TMP/flow-before.yml" "$P/.github/workflows/fork-governance.yml" || true)"
+done
+
+# ── 17. invalid owner manifests and existing notes are never overwritten ────
+for invalid in malformed wrong-shape; do
+    P="$TMP/manifest-$invalid"; mk_repo "$P" https://github.com/hyperpolymath/example.git
+    canonical_workflow "$NEW_SHA" > "$P/.github/workflows/fork-governance.yml"
+    mkdir -p "$P/.gitbot-fleet/report-backs"
+    case "$invalid" in
+        malformed) printf 'not JSON\n' > "$P/.gitbot-fleet/enrolment.json" ;;
+        wrong-shape) printf '{"reporters":[]}\n' > "$P/.gitbot-fleet/enrolment.json" ;;
+    esac
+    printf 'Owner-maintained report-back instructions\n' > "$P/.gitbot-fleet/report-backs/README.md"
+    before=$(sha256sum "$P/.gitbot-fleet/enrolment.json" "$P/.gitbot-fleet/report-backs/README.md")
+    run_fixer "manifest-$invalid" "$P"
+    check "$invalid: invalid owner manifest requires manual action" 3 "$rc"
+    check_grep "$invalid: manifest validation failure is explicit" \
+        'MANUAL: .gitbot-fleet/enrolment.json exists but does not parse' "$TMP/manifest-$invalid.out"
+    check "$invalid: both owner files remain byte-identical" "$before" \
+        "$(sha256sum "$P/.gitbot-fleet/enrolment.json" "$P/.gitbot-fleet/report-backs/README.md")"
+    check_grep "$invalid: independent workflow wiring still completes" \
+        '^  fleet:$' "$P/.github/workflows/fork-governance.yml"
+done
+
+# A malformed panic-attack pin is rejected before creating any rollout files.
+cp -r "$G" "$TMP/panic-ref-before"
+PANIC_ATTACK_SHA=main run_fixer invalid-panic-ref "$G"
+check "an invalid panic-attack pin is refused" 2 "$rc"
+check_grep "invalid panic-attack pin explains the required format" \
+    'PANIC_ATTACK_SHA must be a 40-hex commit' "$TMP/invalid-panic-ref.out"
+check "invalid panic-attack pin leaves the entire repository unchanged" '' \
+    "$(diff -r "$TMP/panic-ref-before" "$G" || true)"
+
+# ── 18. a standards checkout without the pinned commit is unverified ────────
+P="$TMP/unknown-standards-pin"; mk_repo "$P" https://github.com/hyperpolymath/example.git
+canonical_workflow 1111111111111111111111111111111111111111 > "$P/.github/workflows/fork-governance.yml"
+run_fixer unknown-standards-pin "$P"
+check "an absent standards commit is not treated as successful wiring" 3 "$rc"
+check_grep "the absent standards commit is identified as unverified" \
+    'UNVERIFIED: standards pin 111111111111' "$TMP/unknown-standards-pin.out"
+
 echo
 echo "fix-fleet-enrolment: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
