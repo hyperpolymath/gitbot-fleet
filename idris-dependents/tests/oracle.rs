@@ -11,23 +11,64 @@ mod common;
 use std::path::Path;
 use std::process::Command;
 
-use idris_dependents::ipkg::{depends, package_name};
+use idris_dependents::ipkg::{depends, lex, package_name, Tok};
 use proptest::strategy::{Strategy, ValueTree};
 use proptest::test_runner::TestRunner;
+
+/// Idris2 checks that every `modules` / `main` entry exists under `sourcedir`,
+/// so give each case an empty source file for each module it names.
+fn stub_modules(dir: &Path, text: &str) {
+    let (toks, _) = lex(text);
+    let mut sourcedir = ".".to_string();
+    let mut modules = Vec::new();
+    for i in 0..toks.len() {
+        let key = match &toks[i] {
+            Tok::Ident {
+                text,
+                dotted: false,
+            } if toks.get(i + 1) == Some(&Tok::Equals) => text.as_str(),
+            _ => continue,
+        };
+        match (key, toks.get(i + 2)) {
+            ("sourcedir", Some(Tok::Str(s))) => sourcedir = s.clone(),
+            ("modules" | "main", _) => {
+                let mut j = i + 2;
+                while let Some(Tok::Ident { text, .. }) = toks.get(j) {
+                    modules.push(text.clone());
+                    if toks.get(j + 1) != Some(&Tok::Sep) {
+                        break;
+                    }
+                    j += 2;
+                }
+            }
+            _ => {}
+        }
+    }
+    for m in modules {
+        let file = dir.join(&sourcedir).join(m.replace('.', "/") + ".idr");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, format!("module {m}\n")).unwrap();
+    }
+}
 
 /// (package name, depends) as Idris2 reads the file, or Idris2's error.
 fn idris_reads(idris2: &str, file: &Path) -> Result<(String, Vec<String>), String> {
     let out = Command::new(idris2)
         .arg("--dump-ipkg-json")
-        .arg(file)
+        .arg(file.file_name().unwrap())
+        .current_dir(file.parent().unwrap())
         .output()
         .map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&out.stdout);
     if !out.status.success() {
         return Err(format!("{stdout}{}", String::from_utf8_lossy(&out.stderr)));
     }
-    let v: serde_json::Value =
-        serde_json::from_str(stdout.trim()).map_err(|e| format!("{e}: {stdout}"))?;
+    // Warnings (e.g. a deprecated `version = "x.y"` string) precede the JSON.
+    let json = stdout
+        .lines()
+        .find(|l| l.starts_with('{'))
+        .unwrap_or_default();
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|e| format!("{e}: {stdout}"))?;
     let name = v["name"].as_str().unwrap_or_default().to_string();
     let deps = v["depends"]
         .as_array()
@@ -70,7 +111,10 @@ fn agrees_with_idris2() {
 
     let mut mismatches = Vec::new();
     for (i, (label, text)) in cases.iter().enumerate() {
-        let file = dir.join(format!("case{i}.ipkg"));
+        let case_dir = dir.join(format!("case{i}"));
+        std::fs::create_dir_all(&case_dir).unwrap();
+        stub_modules(&case_dir, text);
+        let file = case_dir.join("pkg.ipkg");
         std::fs::write(&file, text).unwrap();
         match idris_reads(&idris2, &file) {
             Ok((name, deps)) => {
