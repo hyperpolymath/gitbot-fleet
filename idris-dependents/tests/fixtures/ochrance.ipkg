@@ -1,0 +1,32 @@
+-- SPDX-License-Identifier: MPL-2.0
+-- Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+--
+-- Ochrance Framework - Verified Subsystem Integrity Framework
+-- Package definition for Idris2
+
+package ochrance
+
+version = "0.1.0"
+authors = "Jonathan D.A. Jewell"
+brief   = "Ochránce: Verified Subsystem Integrity Framework"
+license = "MPL-2.0"
+
+sourcedir = "ochrance-core"
+
+depends = base,
+          contrib,
+          network
+
+modules = Ochrance.Framework.Interface,
+          Ochrance.Framework.Proof,
+          Ochrance.Framework.Error,
+          Ochrance.Framework.Progressive,
+          Ochrance.A2ML.Types,
+          Ochrance.A2ML.Lexer,
+          Ochrance.A2ML.Parser,
+          Ochrance.A2ML.Validator,
+          Ochrance.A2ML.Serializer,
+          Ochrance.Filesystem.Types,
+          Ochrance.Filesystem.Merkle,
+          Ochrance.Filesystem.Verify,
+          Ochrance.Filesystem.Repair

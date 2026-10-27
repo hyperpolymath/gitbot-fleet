@@ -1,0 +1,378 @@
+-- SPDX-License-Identifier: MPL-2.0
+-- Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+package proven
+
+version = 1.1.0
+authors = "Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>"
+license = "MPL-2.0"
+brief = "Safe-operations library with proof companions (see PROOF-NEEDS.md for discharge status)"
+readme = "README.adoc"
+homepage = "https://github.com/hyperpolymath/proven"
+sourceloc = "https://github.com/hyperpolymath/proven"
+bugtracker = "https://github.com/hyperpolymath/proven/issues"
+
+sourcedir = "src"
+builddir = "build"
+outputdir = "build/exec"
+
+modules = Proven
+        , Proven.Core
+        -- SafeMath
+        , Proven.SafeMath
+        , Proven.SafeMath.Nat
+        , Proven.SafeMath.Int
+        , Proven.SafeMath.Bounded
+        , Proven.SafeMath.Proofs
+        -- SafeString
+        , Proven.SafeString
+        , Proven.SafeString.UTF8
+        , Proven.SafeString.Escape
+        , Proven.SafeString.Proofs
+        -- SafeJson
+        , Proven.SafeJson
+        , Proven.SafeJson.Parser
+        , Proven.SafeJson.Access
+        , Proven.SafeJson.Proofs
+        -- SafeUrl
+        , Proven.SafeUrl
+        , Proven.SafeUrl.Parser
+        , Proven.SafeUrl.Query
+        , Proven.SafeUrl.Proofs
+        -- SafeEmail
+        , Proven.SafeEmail
+        , Proven.SafeEmail.Parser
+        , Proven.SafeEmail.Validation
+        , Proven.SafeEmail.Proofs
+        -- SafePath
+        , Proven.SafePath
+        , Proven.SafePath.Types
+        , Proven.SafePath.Operations
+        , Proven.SafePath.Proofs
+        -- SafeCrypto
+        , Proven.SafeCrypto
+        , Proven.SafeCrypto.Hash
+        , Proven.SafeCrypto.Random
+        , Proven.SafeCrypto.Proofs
+        -- SafeInput
+        , Proven.SafeInput
+        -- SafePassword
+        , Proven.SafePassword
+        , Proven.SafePassword.Policy
+        , Proven.SafePassword.Hash
+        , Proven.SafePassword.Strength
+        , Proven.SafePassword.Proofs
+        -- SafeDateTime
+        , Proven.SafeDateTime
+        , Proven.SafeDateTime.Types
+        , Proven.SafeDateTime.Parse
+        , Proven.SafeDateTime.Zones
+        , Proven.SafeDateTime.Proofs
+        -- SafeNetwork
+        , Proven.SafeNetwork
+        , Proven.SafeNetwork.IPv4
+        , Proven.SafeNetwork.IPv6
+        , Proven.SafeNetwork.CIDR
+        , Proven.SafeNetwork.Port
+        , Proven.SafeNetwork.Proofs
+        -- SafeHtml
+        , Proven.SafeHtml
+        , Proven.SafeHtml.Escape
+        , Proven.SafeHtml.Builder
+        , Proven.SafeHtml.Sanitize
+        , Proven.SafeHtml.Proofs
+        -- SafeRegex
+        , Proven.SafeRegex
+        , Proven.SafeRegex.Types
+        , Proven.SafeRegex.Safety
+        , Proven.SafeRegex.Proofs
+        -- SafeCommand
+        , Proven.SafeCommand
+        , Proven.SafeCommand.Escape
+        , Proven.SafeCommand.Builder
+        , Proven.SafeCommand.Proofs
+        -- SafeSQL
+        , Proven.SafeSQL
+        , Proven.SafeSQL.Types
+        , Proven.SafeSQL.Params
+        , Proven.SafeSQL.Proofs
+        -- SafeJWT
+        , Proven.SafeJWT
+        , Proven.SafeJWT.Decode
+        , Proven.SafeJWT.Validate
+        , Proven.SafeJWT.Proofs
+        -- SafeBase64
+        , Proven.SafeBase64
+        , Proven.SafeBase64.Types
+        , Proven.SafeBase64.Encode
+        , Proven.SafeBase64.Decode
+        , Proven.SafeBase64.Proofs
+        -- SafeXML
+        , Proven.SafeXML
+        , Proven.SafeXML.Types
+        , Proven.SafeXML.Builder
+        , Proven.SafeXML.Proofs
+        -- SafeYAML
+        , Proven.SafeYAML
+        , Proven.SafeYAML.Types
+        , Proven.SafeYAML.Proofs
+        -- SafeTOML
+        , Proven.SafeTOML
+        , Proven.SafeTOML.Types
+        , Proven.SafeTOML.Parser
+        , Proven.SafeTOML.Proofs
+        -- SafeEnv
+        , Proven.SafeEnv
+        , Proven.SafeEnv.Types
+        , Proven.SafeEnv.Access
+        , Proven.SafeEnv.Proofs
+        -- SafeArgs
+        , Proven.SafeArgs
+        , Proven.SafeArgs.Types
+        , Proven.SafeArgs.Parser
+        , Proven.SafeArgs.Proofs
+        -- SafeFile
+        , Proven.SafeFile
+        , Proven.SafeFile.Types
+        , Proven.SafeFile.Operations
+        , Proven.SafeFile.Proofs
+        -- SafeHeader
+        , Proven.SafeHeader
+        , Proven.SafeHeader.Types
+        , Proven.SafeHeader.Parser
+        , Proven.SafeHeader.Proofs
+        -- SafeCookie
+        , Proven.SafeCookie
+        , Proven.SafeCookie.Types
+        , Proven.SafeCookie.Parser
+        , Proven.SafeCookie.Proofs
+        -- SafeContentType
+        , Proven.SafeContentType
+        , Proven.SafeContentType.Types
+        , Proven.SafeContentType.Parser
+        , Proven.SafeContentType.Proofs
+        -- Standalone validated types
+        , Proven.SafeUUID
+        , Proven.SafeCurrency
+        , Proven.SafePhone
+        , Proven.SafeHex
+        -- Tree & buffer modules
+        , Proven.SafeTree
+        , Proven.SafeBuffer
+        -- Policy & audit
+        , Proven.SafePolicy
+        , Proven.SafeProvenance
+        -- Infrastructure verification (trust, attestation, cycle detection)
+        , Proven.SafeAttestation
+        , Proven.SafeCycleDetect
+        , Proven.SafeTrust
+        -- State machines
+        , Proven.SafeStateMachine
+        -- Format safety
+        , Proven.SafeMarkdown
+        , Proven.SafeLog
+        , Proven.SafeCron
+        -- Numeric safety
+        , Proven.SafeFloat
+        , Proven.SafeDecimal
+        , Proven.SafeRational
+        , Proven.SafeComplex
+        -- Domain values
+        , Proven.SafeColor
+        , Proven.SafeVersion
+        , Proven.SafeChecksum
+        , Proven.SafeGeo
+        -- , Proven.SafeAngle  -- MOVED to not-proven/
+        -- Mathematics & physics
+        , Proven.SafeProbability
+        , Proven.SafeUnit
+        , Proven.SafeFiniteField
+        -- Data structures
+        , Proven.SafeQueue
+        , Proven.SafeBloom
+        , Proven.SafeLRU
+        , Proven.SafeSet
+        , Proven.SafeHeap
+        , Proven.SafeMatrix
+        , Proven.SafeBitset
+        , Proven.SafeInterval
+        , Proven.SafeUnionFind
+        -- Distributed systems
+        , Proven.SafeRateLimiter
+        , Proven.SafeCircuitBreaker
+        , Proven.SafeRetry
+        , Proven.SafeMonotonic
+        -- Advanced
+        , Proven.SafeGraph
+        , Proven.SafeResource
+        , Proven.SafeTransaction
+        , Proven.SafeCapability
+        , Proven.SafeConsensus
+        , Proven.SafeOrdering
+        , Proven.SafeSchema
+        , Proven.SafeTensor
+        -- Data formats
+        , Proven.SafeCSV
+        , Proven.SafeCSV.Proofs
+        , Proven.SafeDigest
+        , Proven.SafeDigest.Proofs
+        , Proven.SafeRegistry
+        -- Concurrency primitives
+        , Proven.SafeSemaphore
+        , Proven.SafeCalculator
+        -- New v1.1.0 modules
+        , Proven.SafeGit
+        , Proven.SafeDocker
+        , Proven.SafeDNS
+        , Proven.SafeSSH
+        , Proven.SafeI18n
+        , Proven.SafeTemplate
+        , Proven.SafeArchive
+        , Proven.SafeCert
+        , Proven.SafeOAuth
+        , Proven.SafeWebhook
+        , Proven.SafeBibTeX
+        , Proven.SafeMCP
+        , Proven.SafeML
+        -- Web security modules (v1.2.0)
+        , Proven.SafeHTTP
+        , Proven.SafePromptInjection
+        , Proven.SafeCORS
+        , Proven.SafeCORS.Proofs
+        , Proven.SafeAPIKey
+        , Proven.SafeAPIKey.Proofs
+        , Proven.SafeWebSocket
+        -- Security hardening modules (v1.2.0)
+        , Proven.SafeCSRF
+        , Proven.SafeCSP
+        , Proven.SafeRedirect
+        , Proven.SafeSRI
+        , Proven.SafeOTP
+        -- Security & identity (v1.3.0)
+        , Proven.SafeSSRF
+        , Proven.SafeRBAC
+        , Proven.SafeRateWindow
+        , Proven.SafeJWK
+        , Proven.SafeHSTS
+        , Proven.SafeSameSite
+        , Proven.SafeWebAuthn
+        , Proven.SafeHomoglyph
+        , Proven.SafeSupplyChain
+        -- Data integrity (v1.3.0)
+        , Proven.SafeSemVer
+        , Proven.SafeULID
+        , Proven.SafeMediaType
+        , Proven.SafeCBOR
+        -- Crypto parameter validation (v1.3.0)
+        , Proven.SafeHKDF
+        , Proven.SafePBKDF2
+        , Proven.SafeSecretShare
+        -- Framework convenience re-export modules
+        , Proven.Network
+        , Proven.Crypto
+        , Proven.Hardware
+        , Proven.Data
+        , Proven.Collections
+        , Proven.System
+        , Proven.Safety
+        -- Hardware backend modules (GPU, VPU, TPU, crypto, FPGA, NPU, DSP, ISA)
+        , Proven.SafeGPU
+        , Proven.SafeVPU
+        , Proven.SafeTPU
+        , Proven.SafeCryptoAccel
+        , Proven.SafeFPGA
+        , Proven.SafeNPU
+        , Proven.SafeDSP
+        , Proven.SafeISA
+        -- Shell-specific modules (for valence-shell integration)
+        , Proven.SafeShell
+        , Proven.SafePipe
+        , Proven.SafeProcess
+        , Proven.SafeSignal
+        , Proven.SafeTerminal
+        -- FFI exports (connect Idris2 to Zig/C ABI)
+        , Proven.FFI
+        , Proven.FFI.SafePath
+        , Proven.FFI.SafeJson
+        , Proven.FFI.SafeMath
+        , Proven.FFI.SafeString
+        , Proven.FFI.SafeEmail
+        , Proven.FFI.SafeDateTime
+        , Proven.FFI.SafeHtml
+        , Proven.FFI.SafeCookie
+        , Proven.FFI.SafeHeader
+        , Proven.FFI.SafeContentType
+        , Proven.FFI.SafeJWT
+        , Proven.FFI.SafeSQL
+        , Proven.FFI.SafeCommand
+        , Proven.FFI.SafeCrypto
+        , Proven.FFI.SafePassword
+        , Proven.FFI.SafeRegex
+        , Proven.FFI.SafeXML
+        , Proven.FFI.SafeYAML
+        , Proven.FFI.SafeTOML
+        , Proven.FFI.SafeNetwork
+        , Proven.FFI.SafeUrl
+        , Proven.FFI.SafeEnv
+        , Proven.FFI.SafeArgs
+        , Proven.FFI.SafeFile
+        , Proven.FFI.SafeUUID
+        , Proven.FFI.SafeCurrency
+        , Proven.FFI.SafeHex
+        , Proven.FFI.SafeTree
+        , Proven.FFI.SafeBuffer
+        , Proven.FFI.SafePolicy
+        , Proven.FFI.SafeProvenance
+        , Proven.FFI.SafeStateMachine
+        , Proven.FFI.SafeMarkdown
+        , Proven.FFI.SafeLog
+        , Proven.FFI.SafeCron
+        , Proven.FFI.SafeFloat
+        , Proven.FFI.SafeColor
+        , Proven.FFI.SafeVersion
+        , Proven.FFI.SafeChecksum
+        , Proven.FFI.SafeGeo
+        , Proven.FFI.SafeAngle
+        , Proven.FFI.SafeProbability
+        , Proven.FFI.SafeUnit
+        , Proven.FFI.SafeQueue
+        , Proven.FFI.SafeBloom
+        , Proven.FFI.SafeLRU
+        , Proven.FFI.SafeRateLimiter
+        , Proven.FFI.SafeCircuitBreaker
+        , Proven.FFI.SafeRetry
+        , Proven.FFI.SafeMonotonic
+        , Proven.FFI.SafeGraph
+        , Proven.FFI.SafeResource
+        , Proven.FFI.SafeTransaction
+        , Proven.FFI.SafeCapability
+        , Proven.FFI.SafeConsensus
+        , Proven.FFI.SafeFiniteField
+        , Proven.FFI.SafeOrdering
+        , Proven.FFI.SafeSchema
+        , Proven.FFI.SafeTensor
+        , Proven.FFI.SafeGit
+        , Proven.FFI.SafeDocker
+        , Proven.FFI.SafeDNS
+        , Proven.FFI.SafeSSH
+        , Proven.FFI.SafeI18n
+        , Proven.FFI.SafeTemplate
+        , Proven.FFI.SafeArchive
+        , Proven.FFI.SafeCert
+        , Proven.FFI.SafeOAuth
+        , Proven.FFI.SafeWebhook
+        , Proven.FFI.SafeBibTeX
+        , Proven.FFI.SafeMCP
+        , Proven.FFI.SafeML
+        , Proven.FFI.SafePhone
+        -- ECHIDNA neurosymbolic theorem prover validation
+        -- NOTE: ECHIDNA modules temporarily excluded - need redesign
+        -- (proof keyword, ProofValid forward ref, All ambiguity, verify resolution)
+        -- , Proven.ECHIDNA.ProofTerm
+        -- , Proven.ECHIDNA.Validator
+        -- , Proven.ECHIDNA.Soundness
+
+depends = base >= 0.6.0
+        , contrib
+        , network
+
+opts = "--total"

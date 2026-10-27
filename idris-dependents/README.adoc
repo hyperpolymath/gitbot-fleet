@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= idris-dependents
+:icons: font
+
+A read-only estate audit: find people *outside* our own accounts whose Idris2
+projects depend on our packages, using GitHub code search. It sends GET requests
+only. The `scan::Io` trait it talks through has no other verb, so it cannot
+write to GitHub.
+
+It is a standalone audit crate, not a fleet bot: it has no `BotId` and does not
+route through `shared-context` (see invariant 6 in `.claude/CLAUDE.md`).
+
+== Usage
+
+[source,bash]
+----
+GITHUB_TOKEN=$(gh auth token) just audit-idris-dependents
+# or
+cd idris-dependents
+GITHUB_TOKEN=$(gh auth token) cargo run --release -- scan \
+  --owners hyperpolymath,metadatastician --json idris-dependents.json
+cargo run -- parse-ipkg path/to/pkg.ipkg      # offline: name + depends as JSON
+----
+
+== What it searches
+
+. *Catalogue* the `package` names of every `.ipkg` under `--owners` (or pass
+  `--packages`).
+. Search `.ipkg` files for each package-family stem (`proven-dns`,
+  `proven-ffi`… → `proven`), and `pack.toml` / `.gitmodules` files mentioning
+  each owner.
+. Classify each external repository:
++
+[cols="1,4"]
+|===
+|HIGH   |`pack.toml` or `.gitmodules` points at one of our GitHub owners
+|MEDIUM |an `.ipkg` `depends` on a distinctive package name of ours
+|LOW    |only ambiguous names (`proven`, `trope`) with no corroboration
+|===
+
+Queries that GitHub truncates (over 1000 results) or marks incomplete are
+listed in the report rather than silently dropped.
+Files returning HTTP 404, 410, or 451 are logged and listed as `skippedUrls`
+in the JSON report and in the CLI output; scanning continues. Other fetch
+errors, exhausted rate-limit retries, and failed search responses abort the scan.
+
+== How the `.ipkg` reader is checked
+
+The lexer follows Idris2's own package lexer (`Parser/Lexer/Package.idr` and
+`Common.idr` on Idris2 `main`): line comments, nested block comments that skip
+strings, `==` as a single token, and any whitespace including CRLF. It is
+lenient where Idris2 would reject a whole file: it skips a stray character
+instead of failing. It also merges several `depends` fields, where Idris2 keeps
+only the last.
+
+* `tests/rules_tests.rs`: the original JavaScript suite, plus regressions for
+  bugs it had. CRLF files and `==` bounds on continuation lines both lost
+  dependencies silently.
+* `tests/roundtrip_props.rs`: a property test. Random well-formed `.ipkg` files
+  (CRLF, nested comments, bounds, both comma styles) are printed, parsed back
+  and checked. On 500 such files the original JavaScript parser was wrong 404
+  times.
+* `tests/oracle.rs`: a differential test against Idris2 itself. Set `IDRIS2` to
+  an `idris2` built from `main` (it needs `--dump-ipkg-json`, which 0.7.0 lacks).
+  The test is skipped when `IDRIS2` is unset.
++
+[source,bash]
+----
+IDRIS2=/path/to/idris2 ORACLE_CASES=1000 cargo test --test oracle -- --nocapture
+----
+
+== Limits
+
+GitHub code search indexes default branches only and skips most forks. It
+returns at most 1000 results per query. A package of ours that someone vendors
+under a different name will not be found.

@@ -113,6 +113,11 @@ validate-rsr-drift:
 refresh-rsr-census:
     @bash scripts/rsr-census.sh --refresh
 
+# Read-only audit: external Idris2 projects depending on our packages (GitHub
+# code search, GET only; needs GITHUB_TOKEN). Evidence goes to OUT.
+audit-idris-dependents OUT="idris-dependents.json" *ARGS:
+    cd idris-dependents && cargo run --release -- scan --json "{{invocation_directory()}}/{{OUT}}" {{ARGS}}
+
 # Clean all build artifacts
 clean:
     cd robot-repo-automaton && cargo clean
