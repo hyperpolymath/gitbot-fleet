@@ -76,7 +76,7 @@ git -C "$STD" config user.email t@example.invalid; git -C "$STD" config user.nam
 printf 'on:\n  workflow_call:\n    inputs:\n      scan-ref:\n        type: string\n' > "$STD/.github/workflows/hypatia-scan-reusable.yml"
 git -C "$STD" add -A; git -C "$STD" -c commit.gpgsign=false commit -q -m old
 OLD_SHA=$(git -C "$STD" rev-parse HEAD)
-printf 'on:\n  workflow_call:\n    inputs:\n      report-backs-artifact:\n        type: string\n        default: fleet-report-backs\n' > "$STD/.github/workflows/hypatia-scan-reusable.yml"
+printf 'on:\n  workflow_call:\n    inputs:\n      report-backs-artifact:\n        type: string\n        default: fleet-report-backs\njobs:\n  scan:\n    steps:\n      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333\n' > "$STD/.github/workflows/hypatia-scan-reusable.yml"
 git -C "$STD" add -A; git -C "$STD" -c commit.gpgsign=false commit -q -m new
 NEW_SHA=$(git -C "$STD" rev-parse HEAD)
 export STANDARDS_DIR="$STD"
@@ -209,8 +209,11 @@ canonical_workflow "$NEW_SHA" | sed 's|uses: hyperpolymath/standards/.github/wor
 printf 'on:\n  workflow_call:\n    inputs:\n      scan-ref:\n        type: string\n' > "$I/.github/workflows/hypatia-scan-reusable.yml"
 set +e; bash "$FIXER" "$I" > "$TMP/i.out" 2>&1; rc=$?; set -e
 check "I: local reusable without the input → exit 3" 3 "$rc"
-check_grep "I: local reusable named" 'MANUAL: local Hypatia reusable .* has no report-backs-artifact input' "$TMP/i.out"
-printf '      report-backs-artifact:\n' >> "$I/.github/workflows/hypatia-scan-reusable.yml"
+check_grep "I: local reusable named" 'MANUAL: local Hypatia reusable .* has no report-backs-artifact input with a download-artifact step' "$TMP/i.out"
+printf '      report-backs-artifact: # the input alone\n' >> "$I/.github/workflows/hypatia-scan-reusable.yml"
+set +e; bash "$FIXER" "$I" > "$TMP/i1.out" 2>&1; rc=$?; set -e
+check "I: the input name alone is not wiring → exit 3" 3 "$rc"
+printf 'jobs:\n  scan:\n    steps:\n      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333\n' >> "$I/.github/workflows/hypatia-scan-reusable.yml"
 set +e; bash "$FIXER" "$I" > "$TMP/i2.out" 2>&1; rc=$?; set -e
 check "I: local reusable with the input → exit 0" 0 "$rc"
 

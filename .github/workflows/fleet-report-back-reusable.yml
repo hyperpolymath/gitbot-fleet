@@ -90,13 +90,14 @@ jobs:
   report-back:
     name: Fleet report-backs
     runs-on: ubuntu-latest
-    # Cold: up to six Rust adapters plus panic-attack from source (~15 min).
-    # fleet-report-back-build.sh keeps the builds inside a 40-minute budget
-    # (--build-budget, default 2400 s; a crate whose turn comes after the budget
-    # is spent reads error, never a dead job), so 45 minutes always leaves room
-    # for the adapters themselves and the upload.
-    # Warm (cache hit): about two minutes.
-    timeout-minutes: 45
+    # Warm (cache hit): about two minutes. Cold: up to six Rust adapters plus
+    # panic-attack from source (~15 min). The limit is the worst case, so a
+    # stalled phase never kills the job before the upload: the build budget
+    # (fleet-report-back-build.sh --build-budget, 2400 s) + up to seven adapters
+    # at adapter-timeout-seconds each (7 × 300 s = 2100 s) + checkout, cache and
+    # upload (~5 min) = 80 min. GNU timeout bounds each command on its own; only
+    # this limit bounds their sum.
+    timeout-minutes: 85
     permissions:
       contents: read
     outputs:

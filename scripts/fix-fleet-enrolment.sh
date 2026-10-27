@@ -253,6 +253,13 @@ if [ "$job_inserted" = true ] && command -v yq >/dev/null 2>&1; then
 fi
 
 # ── 4. does the pinned Hypatia lane read the artifact? ───────────────────────
+# A reusable reads the artifact when it both takes the report-backs-artifact
+# input and has a download-artifact step: the input name alone (or a comment
+# mentioning it) places no envelope where the renderer looks.
+reads_artifact() { # stdin: a workflow
+    local c; c=$(cat)
+    printf "%s\n" "$c" | grep -q "report-backs-artifact" && printf "%s\n" "$c" | grep -qE "uses:[[:space:]]*actions/download-artifact@"
+}
 if [ -f "$WORKFLOW" ]; then
     uses=$(hypatia_block | grep -m1 -E '^    uses:' | sed -E 's/^    uses:[[:space:]]*//; s/[[:space:]]+#.*$//' || true)
     case "$uses" in
@@ -260,15 +267,15 @@ if [ -f "$WORKFLOW" ]; then
             manual "hypatia job has no uses: line; cannot tell whether the lane reads the fleet-report-backs artifact" ;;
         ./*)
             local_reusable="$REPO_PATH/.github/workflows/${uses#./.github/workflows/}"
-            if [ -f "$local_reusable" ] && grep -q 'report-backs-artifact' "$local_reusable"; then
+            if [ -f "$local_reusable" ] && reads_artifact < "$local_reusable"; then
                 echo "  ok: local Hypatia reusable reads the fleet-report-backs artifact"
             else
-                manual "local Hypatia reusable ($uses) has no report-backs-artifact input; the artifact is produced but never read"
+                manual "local Hypatia reusable ($uses) has no report-backs-artifact input with a download-artifact step; the artifact is produced but never read"
             fi ;;
         */standards/.github/workflows/hypatia-scan-reusable.yml@*)
             sha="${uses##*@}"
             if [ -n "${STANDARDS_DIR:-}" ] && git -C "$STANDARDS_DIR" cat-file -e "$sha:.github/workflows/hypatia-scan-reusable.yml" 2>/dev/null; then
-                if git -C "$STANDARDS_DIR" cat-file -p "$sha:.github/workflows/hypatia-scan-reusable.yml" | grep -q 'report-backs-artifact'; then
+                if git -C "$STANDARDS_DIR" cat-file -p "$sha:.github/workflows/hypatia-scan-reusable.yml" | reads_artifact; then
                     echo "  ok: standards pin ${sha:0:12} reads the fleet-report-backs artifact"
                 else
                     manual "standards pin ${sha:0:12} does not read the artifact; bump the standards pins (standards scripts/propagate-workflow-pins.sh --fix --to <sha that carries report-backs-artifact>) in this same branch"
