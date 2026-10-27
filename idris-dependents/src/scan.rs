@@ -235,13 +235,13 @@ pub fn run<I: Io>(opts: &Options, io: &mut I) -> Result<Report> {
             acc.owner = it.owner.clone();
             let found = match kind {
                 Kind::Ipkg => {
-                    let before = acc.deps.len();
-                    acc.deps.extend(
-                        ipkg::depends(&text)
-                            .into_iter()
-                            .filter(|d| distinctive.contains(d.as_str())),
-                    );
-                    acc.deps.len() > before
+                    let matched: Vec<String> = ipkg::depends(&text)
+                        .into_iter()
+                        .filter(|d| distinctive.contains(d.as_str()))
+                        .collect();
+                    let found = !matched.is_empty();
+                    acc.deps.extend(matched);
+                    found
                 }
                 Kind::Pack => match refs::pack_toml_refs(&text, &opts.owners) {
                     Ok(r) => {
