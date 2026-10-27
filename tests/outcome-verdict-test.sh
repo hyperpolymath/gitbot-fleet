@@ -18,6 +18,7 @@
 #   6. Two parallel jobs on one repo record one fix, not two (repo_lock).
 #   7. The E1 replay (audit-fix-outcomes.sh) counts as the fixers do, and
 #      reads NA when git grep cannot run.
+#   8. Run counters from background jobs reach the parent (--parallel).
 
 set -euo pipefail
 
@@ -194,8 +195,9 @@ git -C "$ar" update-ref refs/remotes/origin/main HEAD
 printf '%s\n' \
     '{"repo":"ar","pattern":"recipe-shell-quote-vars","outcome":"success","fixed_at":"2026-02-01T00:00:00Z"}' \
     '{"repo":"ar","pattern_id":"PA004","recipe_id":"recipe-annotate-believe-me","outcome":"success","timestamp":"2026-02-01T00:00:00Z"}' \
+    '{"repo":"ar","pattern":"recipe-remove-believe-me","file":"A.idr","outcome":"success","fixed_at":"2026-02-01T00:00:00Z"}' \
     > "$TMP/audit/log.jsonl"
-audit() { "$ROOT/scripts/audit-fix-outcomes.sh" "$TMP/audit/log.jsonl" "$ar" | awk -F'\t' 'NR > 1 { print $2 "=" $6 }' | sort | paste -sd' '; }
+audit() { "$ROOT/scripts/audit-fix-outcomes.sh" "$TMP/audit/log.jsonl" "$ar" 2>/dev/null | awk -F'\t' 'NR > 1 { print $2 "=" $6 }' | sort | paste -sd' '; }
 check "replay counts as the fixers do" \
     "recipe-annotate-believe-me=$(recipe_check_count "$ROOT/scripts/fix-believe-me.sh" "$ar") recipe-shell-quote-vars=$(recipe_check_count "$fixer" "$ar")" \
     "$(audit)"
@@ -203,6 +205,26 @@ printf '#!/bin/sh\nfor a; do [ "$a" = grep ] && exit 128; done\nexec %s "$@"\n' 
 chmod +x "$TMP/shim-git/git"
 check "replay predicate failure is NA" "recipe-annotate-believe-me=NA recipe-shell-quote-vars=NA" \
     "$(PATH="$TMP/shim-git:$PATH" audit)"
+# A row naming one file is a narrower claim than a repo-wide predicate: it is
+# skipped (above, no recipe-remove-believe-me row) and the skip is reported.
+check "file-scoped row is skipped, and reported" "audit: ar: 1 file-scoped row(s) skipped" \
+    "$("$ROOT/scripts/audit-fix-outcomes.sh" "$TMP/audit/log.jsonl" "$ar" 2>&1 >/dev/null)"
+
+# --- 8. run counters survive --parallel -----------------------------------
+# execute_entry runs in a background subshell under --parallel; its counts
+# reach the parent through the tally file (extracted, as in section 4).
+awk '/^# --- Run counters ---/,/^# --- end run counters ---/' "$ROOT/scripts/dispatch-runner.sh" > "$TMP/counters.sh"
+# shellcheck disable=SC1091
+source "$TMP/counters.sh"
+PARALLEL_TMPDIR="$TMP/par-counters"
+mkdir -p "$PARALLEL_TMPDIR"
+EXECUTED=0 SUCCEEDED=0 FAILED=0 SKIPPED=0
+job_counts() { count EXECUTED; count "$1"; }
+IN_JOB=1 job_counts FAILED & IN_JOB=1 job_counts SUCCEEDED & IN_JOB=1 job_counts FAILED & wait
+count SKIPPED
+fold_counts
+check "background counts reach the parent" "EXECUTED=3 SUCCEEDED=1 FAILED=2 SKIPPED=1" \
+    "EXECUTED=$EXECUTED SUCCEEDED=$SUCCEEDED FAILED=$FAILED SKIPPED=$SKIPPED"
 
 echo ""
 echo "Results: $pass passed, $fail failed"
