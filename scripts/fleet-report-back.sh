@@ -312,7 +312,12 @@ run_member() {
       translate_or_error "$m" '
         [ (.findings // [])[]
           | select(.severity != "satisfied")
-          | { rule_id: .id, file: ((.canon_keeps_it_at // (.expected // [])[0] // "") | tostring),
+          # A relocated or deprecated file is reported at the path where it WAS
+          # found, so the grid can match it against the PR diff; a missing one
+          # can only be named by where the canon keeps it.
+          | { rule_id: .id,
+              file: ((if .severity == "missing" then (.canon_keeps_it_at // (.expected // [])[0] // "")
+                      else ((.found // [])[0] // .canon_keeps_it_at // (.expected // [])[0] // "") end) | tostring),
               line: 0,
               severity: ({missing: "error", deprecated: "warning", relocated: "info"}[.severity] // .severity),
               message: ("\(.name): \(.severity)" + (if (.details // []) | length > 0 then " — " + ((.details // []) | join("; ")) else "" end)) }

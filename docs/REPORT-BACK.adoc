@@ -188,24 +188,13 @@ Where it does not (a repository under another owner calling a reusable from
 check out `hyperpolymath/gitbot-fleet` at a pinned SHA with `actions/checkout`,
 run `scripts/fleet-report-back.sh`, upload the artifact under the same name.
 The standards canon's own `fork-governance.yml` is the worked example.
-. *A Hypatia lane that reads the artifact*: metadatastician/standards
-  `hypatia-scan-reusable.yml` input `report-backs-artifact` (default
-  `fleet-report-backs`; set it to `""` to opt out). Fork-local copies of the
-  reusable add the download step before "Render the verdict grid".
-
-The committed `.gitbot-fleet/report-backs/` directory stays empty. Envelopes
-are evidence about one commit and live in the run's artifact, never in git.
-
-== 6. What this is not
-
-* Not a gate. Fleet rows are advisory unless the enrolment manifest sets
-  `reporters.<id>.gating` (VERDICT-GRID-SPEC §3.1); the lane state is the worst
-  *gating* row.
-* Not SARIF. The ultraplan (standards `docs/ULTRAPLAN-KAUTZ-LADDER-2026-10-19.adoc`,
-  Wave 0) wants every reporter to emit SARIF that the lane ingests. This
-  driver is the shortest honest path to rows that say something; a typed
-  `ReportBack` in `shared-context` and SARIF emission per adapter are the
-  next steps, and nothing here blocks them.
-* Not a replacement for the bots' own modes. Each adapter still has its
-  webhook, service or fleet-context mode; the driver only reads their
-  local-directory JSON.
+. *A Hypatia lane that reads the artifact.* The `report-backs-artifact` input
+  (default `fleet-report-backs`; `""` opts out) and the download step before
+  "Render the verdict grid" are a change to metadatastician/standards
+  `hypatia-scan-reusable.yml` that is prepared but NOT yet on its `main`: no
+  pinned standards revision at the time of writing carries them, so a caller
+  on today's standards pin produces the artifact and the lane does not read it
+  yet. Until that change lands and callers bump their pin, a repository gets
+  rows only through a fork-local copy of the reusable that carries the step
+  (hyperpolymath/metamanifold-webui does, as its fork delta 4). This document
+  will name the first standards commit that carries the input once it exists.

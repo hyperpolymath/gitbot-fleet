@@ -127,9 +127,25 @@ jobs:
           path: .fleet-src
           persist-credentials: false
 
+      # The fleet checkout must not sit inside the tree being reported on:
+      # walk-based adapters (glambot, finishing-bot, cipherbot) would scan the
+      # fleet's own source and emit findings no PR diff can match. actions/checkout
+      # only writes under the workspace, so the checkout is moved out to
+      # RUNNER_TEMP before anything reads the caller's tree. The lockfile hash
+      # for the cache key is taken first, while hashFiles() can still see it.
+      - name: Move the fleet checkout out of the scanned tree
+        id: fleet
+        run: |
+          set -euo pipefail
+          lockhash=$(cat .fleet-src/bots/*/Cargo.lock .fleet-src/shared-context/Cargo.lock 2>/dev/null | sha256sum | cut -c1-16)
+          mv .fleet-src "$RUNNER_TEMP/fleet-src"
+          echo "dir=$RUNNER_TEMP/fleet-src" >> "$GITHUB_OUTPUT"
+          echo "lockhash=$lockhash" >> "$GITHUB_OUTPUT"
+
       - name: Plan which adapters to build
         id: plan
         env:
+          FLEET_DIR: ${{ steps.fleet.outputs.dir }}
           ENROLMENT: ${{ inputs.enrolment }}
           MEMBERS: ${{ inputs.members }}
         run: |
@@ -137,7 +153,7 @@ jobs:
           args=(--plan --enrolment "$ENROLMENT")
           IFS=',' read -r -a _m <<< "${MEMBERS:-}"
           for m in "${_m[@]}"; do m="${m// /}"; [ -n "$m" ] && args+=(--member "$m"); done
-          plan=$(bash .fleet-src/scripts/fleet-report-back.sh "${args[@]}")
+          plan=$(bash "$FLEET_DIR/scripts/fleet-report-back.sh" "${args[@]}")
           echo "plan:"; printf '%s\n' "$plan" | sed 's/^/  /'
           # Crates to build: the non-empty second column, deduplicated.
           crates=$(printf '%s\n' "$plan" | awk -F'\t' '$2 != "" {print $2}' | sort -u | tr '\n' ' ')
@@ -149,8 +165,8 @@ jobs:
           fi
           {
             echo "workspaces<<WS"
-            for c in $crates; do echo ".fleet-src/bots/$c -> target"; done
-            echo ".fleet-src/shared-context -> target"
+            for c in $crates; do echo "$FLEET_DIR/bots/$c -> target"; done
+            echo "$FLEET_DIR/shared-context -> target"
             echo "WS"
           } >> "$GITHUB_OUTPUT"
           [ -n "${crates% }" ] && echo "build=true" >> "$GITHUB_OUTPUT" || echo "build=false" >> "$GITHUB_OUTPUT"
@@ -169,11 +185,11 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            .fleet-src/bots/*/target
-          key: fleet-report-back-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fleet-src/bots/*/Cargo.lock') }}-${{ steps.plan.outputs.crates }}
+            ${{ runner.temp }}/fleet-src/bots/*/target
+          key: fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.fleet.outputs.lockhash }}-${{ steps.plan.outputs.crates }}
           restore-keys: |
-            fleet-report-back-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fleet-src/bots/*/Cargo.lock') }}-
-            fleet-report-back-v2-${{ runner.os }}-${{ runner.arch }}-
+            fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.fleet.outputs.lockhash }}-
+            fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Report the Rust toolchain in use
         if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
@@ -192,19 +208,21 @@ jobs:
       - name: Build the enrolled adapters
         if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
         env:
+          FLEET_DIR: ${{ steps.fleet.outputs.dir }}
           CRATES: ${{ steps.plan.outputs.crates }}
           PANICBOT: ${{ steps.plan.outputs.panicbot }}
         run: |
           set -euo pipefail
           # One build recipe for the reusable and for inline callers; a crate
           # that fails to build is a warning here and an `error` row later.
-          args=(--fleet .fleet-src --bin-dir "$RUNNER_TEMP/fleet-bin" --crates "$CRATES")
+          args=(--fleet "$FLEET_DIR" --bin-dir "$RUNNER_TEMP/fleet-bin" --crates "$CRATES")
           [ "$PANICBOT" = true ] && args+=(--panic-attack "$PANIC_ATTACK_SHA")
-          bash .fleet-src/scripts/fleet-report-back-build.sh "${args[@]}"
+          bash "$FLEET_DIR/scripts/fleet-report-back-build.sh" "${args[@]}"
 
       - name: Run the enrolled adapters and write the envelopes
         id: run
         env:
+          FLEET_DIR: ${{ steps.fleet.outputs.dir }}
           ENROLMENT: ${{ inputs.enrolment }}
           MEMBERS: ${{ inputs.members }}
           ADAPTER_TIMEOUT: ${{ inputs.adapter-timeout-seconds }}
@@ -217,7 +235,7 @@ jobs:
                 --timeout "$ADAPTER_TIMEOUT" --summary "$GITHUB_STEP_SUMMARY")
           IFS=',' read -r -a _m <<< "${MEMBERS:-}"
           for m in "${_m[@]}"; do m="${m// /}"; [ -n "$m" ] && args+=(--member "$m"); done
-          bash .fleet-src/scripts/fleet-report-back.sh "${args[@]}"
+          bash "$FLEET_DIR/scripts/fleet-report-back.sh" "${args[@]}"
           # Status map for the caller, and a non-empty directory for the
           # upload: a run that enrolled nobody still uploads the note below so
           # the consumer can tell "nothing enrolled" from "upload failed".
