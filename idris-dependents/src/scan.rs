@@ -35,9 +35,15 @@ impl Response {
 
 /// Side effects the scan needs. `raw` asks for file contents instead of JSON.
 pub trait Io {
+    /// Fetch `url`, requesting raw file contents when `raw` is true and JSON
+    /// otherwise. Return HTTP statuses for the scanner to handle; request or
+    /// body-reading errors propagate to the caller.
     fn get(&mut self, url: &str, raw: bool) -> Result<Response>;
+    /// Wait for the requested duration for search pacing or rate-limit retries.
     fn sleep(&mut self, d: Duration);
+    /// Current Unix time in seconds, used to interpret rate-limit reset headers.
     fn now_secs(&self) -> u64;
+    /// Emit a scan progress or diagnostic message.
     fn log(&mut self, msg: &str);
 }
 
@@ -102,6 +108,12 @@ struct Scanner<'a, I: Io> {
 }
 
 impl<I: Io> Scanner<'_, I> {
+    /// Fetch a response, allowing up to six attempts for HTTP 429 or
+    /// HTTP 403 with `retry-after` or `x-ratelimit-remaining: 0`. Wait according
+    /// to retry/reset headers, falling back to 60 seconds when neither is usable.
+    ///
+    /// Propagate I/O errors immediately and return errors for exhausted
+    /// rate-limit retries. Callers handle all other HTTP statuses.
     fn get(&mut self, url: &str, raw: bool) -> Result<Response> {
         for _ in 0..=5 {
             let res = self.io.get(url, raw)?;
@@ -125,6 +137,8 @@ impl<I: Io> Scanner<'_, I> {
         bail!("still rate-limited after 5 retries: {url}")
     }
 
+    /// Fetch raw file contents. Log and record HTTP 404, 410, or 451 as skipped
+    /// URLs and return `None`; propagate all other fetch errors.
     fn get_file(&mut self, url: &str) -> Result<Option<String>> {
         let res = self.get(url, true)?;
         if matches!(res.status, 404 | 410 | 451) {
@@ -138,6 +152,12 @@ impl<I: Io> Scanner<'_, I> {
         res.into_body(url).map(Some)
     }
 
+    /// Search `q` for up to ten pages of 100 results, pacing requests with
+    /// [`SEARCH_GAP`]. Record queries exceeding the search cap or marked
+    /// incomplete while returning the available hits.
+    ///
+    /// Items missing required string fields are omitted. Missing counts or
+    /// item arrays default to zero or empty. Fetch and JSON parse errors propagate.
     fn search_all(&mut self, q: &str) -> Result<Vec<Hit>> {
         let mut items = Vec::new();
         for page in 1..=10 {
@@ -194,6 +214,24 @@ fn urlencode(s: &str) -> String {
         .collect()
 }
 
+/// Find external repositories depending on the selected owners' packages.
+///
+/// Use `opts.packages` when supplied; otherwise discover names from the owners'
+/// `.ipkg` files. Match dependencies against the filtered catalogue and search
+/// for owner references in `pack.toml` and `.gitmodules`. Exclude self accounts
+/// case-insensitively and process each file URL once.
+///
+/// Return one row per matching repository, ordered by confidence (high first)
+/// then repository name, together with the filtered catalogue size and queries
+/// whose results were truncated or incomplete, and skipped raw file URLs.
+/// Network access and waits use `io`.
+///
+/// # Errors
+///
+/// Propagate I/O and search-response JSON errors, HTTP failures, and exhausted
+/// rate-limit retries. Raw files returning HTTP 404, 410, or 451 are logged,
+/// recorded, and skipped. Invalid `pack.toml` files are skipped instead of
+/// failing the scan.
 pub fn run<I: Io>(opts: &Options, io: &mut I) -> Result<Report> {
     let self_set: HashSet<String> = opts
         .self_accounts

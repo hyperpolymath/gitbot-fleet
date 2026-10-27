@@ -32,16 +32,23 @@ pub enum Tok {
     Int(String),
 }
 
+/// Whether a character can start an identifier: ASCII letters, `_`, or any
+/// character above U+00A0.
 fn is_ident_start(c: char) -> bool {
     c == '_' || c.is_ascii_alphabetic() || c > '\u{a0}'
 }
 
+/// Whether a character can follow an identifier's first character, including
+/// ASCII digits, hyphens, and apostrophes.
 fn is_ident_trailing(c: char) -> bool {
     c == '-' || c == '\'' || c == '_' || c.is_ascii_alphanumeric() || c > '\u{a0}'
 }
 
-/// Tokenise `src`. Returns the tokens and the number of characters skipped
+/// Tokenize `src`. Returns the tokens and the number of characters skipped
 /// because no Idris2 token rule matches them.
+/// Comments and whitespace are omitted. An unterminated block comment consumes
+/// the remaining input; an unterminated string's opening quote is counted as
+/// skipped, and tokenization continues after it. String contents retain escapes.
 pub fn lex(src: &str) -> (Vec<Tok>, usize) {
     let s: Vec<char> = src.chars().collect();
     let at = |j: usize| s.get(j).copied();
@@ -133,6 +140,8 @@ pub fn lex(src: &str) -> (Vec<Tok>, usize) {
 }
 
 /// Index just past the closing quote of the string literal opening at `i`.
+/// Backslash escapes skip the next character; returns `None` if no closing
+/// quote is found. Indices count characters, not UTF-8 bytes.
 fn string_end(s: &[char], i: usize) -> Option<usize> {
     let mut j = i + 1;
     while j < s.len() {
@@ -149,6 +158,8 @@ fn string_end(s: &[char], i: usize) -> Option<usize> {
 /// `toEndComment` / `singleBrace` / `singleDash` / `doubleDash` automaton:
 /// comments nest, string and character literals inside them are skipped,
 /// and `--` inside a comment hides the rest of its line (including any `-}`).
+/// Returns the character index after the closing delimiter, or `s.len()` if
+/// the comment is unterminated.
 fn block_comment(s: &[char], i: usize) -> usize {
     let at = |j: usize| s.get(j).copied();
     let mut j = i + 2;
@@ -213,6 +224,8 @@ fn block_comment(s: &[char], i: usize) -> usize {
     }
 }
 
+/// Borrow the text of an undotted identifier, or return `None` for any other
+/// token or missing token.
 fn ident(t: Option<&Tok>) -> Option<&str> {
     match t {
         Some(Tok::Ident {

@@ -65,6 +65,8 @@ struct Live {
 }
 
 impl Io for Live {
+    /// Send an authenticated GET requesting raw contents or JSON. Preserve the
+    /// HTTP status for the scanner; request and response-body errors propagate.
     fn get(&mut self, url: &str, raw: bool) -> Result<Response> {
         let accept = if raw {
             "application/vnd.github.raw"
@@ -97,20 +99,26 @@ impl Io for Live {
             body: res.text()?,
         })
     }
+    /// Block the current thread for the requested duration.
     fn sleep(&mut self, d: Duration) {
         std::thread::sleep(d);
     }
+    /// Return Unix time in whole seconds, falling back to zero for a clock
+    /// before the Unix epoch.
     fn now_secs(&self) -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0)
     }
+    /// Write a diagnostic message to standard error.
     fn log(&mut self, msg: &str) {
         eprintln!("{msg}");
     }
 }
 
+/// Print the scan summary, repository evidence, incomplete queries, and skipped URLs to
+/// standard output in the report's existing row order.
 fn print_report(r: &Report) {
     let owners: std::collections::BTreeSet<&str> =
         r.rows.iter().map(|x| x.owner.as_str()).collect();
@@ -158,6 +166,11 @@ fn print_report(r: &Report) {
     }
 }
 
+/// Run an offline parser command or an authenticated GitHub scan, printing
+/// results to standard output and optionally writing the scan report as JSON.
+///
+/// Return errors for unreadable input, invalid TOML, missing scan credentials,
+/// client construction, scanning, JSON serialization, or report-file writes.
 fn main() -> Result<()> {
     match Cli::parse().command {
         Command::ParseIpkg { file } => {
