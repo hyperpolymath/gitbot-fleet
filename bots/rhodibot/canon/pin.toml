@@ -39,6 +39,9 @@ categories = 11
 criteria = 78
 weight_sum = 88
 
+# Re-pinned 2026-10-27: the table changed upstream without a version bump
+# (still 0.3.0), so the digest, not the version, is what moved.
+#
 # The release's second artefact: the gate table. It says which capabilities a
 # profile may declare, what a preset expands to, and which module paths belong
 # to which capability. Same rule as the copy above -- taken verbatim, pinned by
@@ -51,8 +54,8 @@ path = ".machine_readable/template-capability-gates.toml"
 slot = "gates"
 version = "0.3.0"
 released = "2026-09-19"
-pinned = "2026-09-22"
-sha256 = "e70efd2f53c9445e30da4baf770366f04a4a84ffd844a01426e587e565b53e6a"
+pinned = "2026-10-27"
+sha256 = "2f31f46d4753432e0aa8c9c28f339e18e062c98dc6e6ef4ecbb76993cf37638b"
 
 # The shape of the pinned table. A vocabulary that shrank would leave profiles
 # declaring the lost words unparseable, and criteria gated on them permanently
