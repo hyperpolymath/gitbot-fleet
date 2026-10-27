@@ -69,7 +69,11 @@ on:
         required: false
         default: "fleet-report-backs"
       adapter-timeout-seconds:
-        description: Seconds each adapter may run before its row reads error.
+        description: >-
+          Seconds each adapter may run before its row reads error. At most 300:
+          the job limit is sized for seven adapters at 300 s after the build
+          budget, so a larger value is capped (with a warning) and a value that
+          is not a positive integer falls back to 300.
         type: string
         required: false
         default: "300"
@@ -238,6 +242,15 @@ jobs:
           FLEET_REF: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
+          # The job limit (timeout-minutes) assumes at most 300 s per adapter; a
+          # larger input would let the scans outrun it and lose every envelope.
+          case "$ADAPTER_TIMEOUT" in
+            ''|*[!0-9]*|0) echo "::warning title=adapter-timeout-seconds::'$ADAPTER_TIMEOUT' is not a positive integer; using 300"; ADAPTER_TIMEOUT=300 ;;
+          esac
+          if [ "$ADAPTER_TIMEOUT" -gt 300 ]; then
+            echo "::warning title=adapter-timeout-seconds::$ADAPTER_TIMEOUT s exceeds the 300 s the job limit is sized for; capped at 300"
+            ADAPTER_TIMEOUT=300
+          fi
           mkdir -p "$RUNNER_TEMP/fleet-bin" "$RUNNER_TEMP/report-backs"
           args=(--repo . --out "$RUNNER_TEMP/report-backs" --bin-dir "$RUNNER_TEMP/fleet-bin"
                 --enrolment "$ENROLMENT" --fleet-ref "$FLEET_REF"

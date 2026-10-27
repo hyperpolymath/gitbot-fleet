@@ -26,7 +26,7 @@ check_no_grep() { # name pattern file
     else pass=$((pass + 1)); echo "ok   $1"; fi
 }
 
-REF=1111111111111111111111111111111111111111
+REF=$(git -C "$ROOT" rev-parse HEAD)  # a commit that carries the producer
 PANIC=2222222222222222222222222222222222222222
 export FLEET_REF="$REF" PANIC_ATTACK_SHA="$PANIC"
 
@@ -252,6 +252,23 @@ check "N: scalar needs: other → exit 0" 0 "$rc"
 check_grep "N: scalar other becomes a flow list with fleet" '^    needs: \[workflow-contract, fleet\]$' "$N/.github/workflows/fork-governance.yml"
 check "N: the rewritten workflow keeps its mode (not mktemp's 0600)" "644" "$(stat -c %a "$N/.github/workflows/fork-governance.yml")"
 check "A: the inserted-job workflow keeps its mode too" "644" "$(stat -c %a "$A/.github/workflows/fork-governance.yml")"
+
+# ── 13. a pin that does not carry the producer is refused ───────────────────
+# The parent of the commit that added the driver lacks it; a shallow clone may
+# not hold that commit, in which case the case is reported as skipped.
+ADDED=$(git -C "$ROOT" log --format=%H --diff-filter=A -1 -- scripts/fleet-report-back.sh || true)
+if [ -n "$ADDED" ] && OLD=$(git -C "$ROOT" rev-parse -q --verify "${ADDED}^{commit}" 2>/dev/null) && OLD=$(git -C "$ROOT" rev-parse -q --verify "${OLD}^" 2>/dev/null) \
+   && ! git -C "$ROOT" cat-file -e "$OLD:scripts/fleet-report-back.sh" 2>/dev/null; then
+    O="$TMP/o"; mk_repo "$O" https://github.com/hyperpolymath/example.git
+    canonical_workflow "$NEW_SHA" > "$O/.github/workflows/fork-governance.yml"
+    cp -r "$O" "$TMP/o-before"
+    set +e; FLEET_REF="$OLD" bash "$FIXER" "$O" > "$TMP/o.out" 2>&1; rc=$?; set -e
+    check "O: a pin without the producer is refused with exit 2" 2 "$rc"
+    check_grep "O: the missing producer file is named" 'does not carry .github/workflows/fleet-report-back-reusable.yml' "$TMP/o.out"
+    check "O: refusal changed nothing" "" "$(diff -r "$TMP/o-before" "$O" || true)"
+else
+    echo "skip O: no commit without the producer is reachable from this checkout"
+fi
 
 echo
 echo "fix-fleet-enrolment: $pass passed, $fail failed"

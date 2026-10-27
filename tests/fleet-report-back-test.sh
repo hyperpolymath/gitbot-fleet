@@ -304,8 +304,9 @@ for output in empty malformed wrong-shape; do
   run "$TMP/output-$output" --enrolment "" --member cipherbot --member glambot
   check "$output adapter output is an error with no findings" 'error|0' \
     "$(field "$TMP/output-$output/cipherbot.json" '"\(.status)|\(.findings | length)"')"
+  case "$output" in wrong-shape) phrase="unexpected output shape" ;; *) phrase="no readable JSON" ;; esac
   check "$output adapter output explains the error" yes \
-    "$(field "$TMP/output-$output/cipherbot.json" .reason | grep -q 'no readable JSON' && echo yes || echo no)"
+    "$(field "$TMP/output-$output/cipherbot.json" .reason | grep -q "$phrase" && echo yes || echo no)"
   check "$output adapter output does not prevent a later member running" ran \
     "$(field "$TMP/output-$output/glambot.json" .status)"
 done
@@ -364,6 +365,23 @@ expect_usage "unknown option" --unrecognized
 for seconds in 0 -1 1.5 invalid; do
   expect_usage "invalid timeout $seconds" --repo "$REPO" --out "$TMP/unused" --timeout "$seconds"
 done
+# Valid JSON of the wrong shape is a shape error, never a clean scan.
+stub cipherbot 'echo "{}"'
+run "$TMP/shape-obj" --enrolment "" --member cipherbot
+check "an array adapter printing {} is an error" "error" "$(field "$TMP/shape-obj/cipherbot.json" .status)"
+check "...naming the expected shape" yes "$(field "$TMP/shape-obj/cipherbot.json" .reason | grep -q "unexpected output shape: expected an array" && echo yes || echo no)"
+stub seambot 'echo "[]"'
+run "$TMP/shape-arr" --enrolment "" --member seambot
+check "an object adapter printing [] is an error" "error" "$(field "$TMP/shape-arr/seambot.json" .status)"
+stub accessibilitybot 'echo "{\"findings\": null}"'
+run "$TMP/shape-null" --enrolment "" --member accessibilitybot
+check "a null findings array is an error, not a clean scan" "error" "$(field "$TMP/shape-null/accessibilitybot.json" .status)"
+# A manifest title is PR-controlled and rides into jq as an argument: bounded.
+stub cipherbot 'echo "[]"'
+jq -n --arg t "$(printf '%0500d' 0)" '{schema: 1, reporters: {cipherbot: {enrolled: true, title: $t}}}' > "$TMP/longtitle.json"
+run "$TMP/longtitle" --enrolment "$TMP/longtitle.json" --member cipherbot
+check "a 500-character manifest title is cut to 120" 120 "$(field "$TMP/longtitle/cipherbot.json" '.title | length')"
+
 # A member name from the manifest is untrusted: a tab or a path in a key must
 # never become a plan field, an envelope file name or an adapter argument.
 printf '{"reporters":{"rhodibot":{"enrolled":true},"x\\t../../../evil\\tz":{"enrolled":true},"Bad Name":{"enrolled":true}},"schema":1}\n' > "$TMP/hostile.json"

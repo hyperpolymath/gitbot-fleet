@@ -78,6 +78,12 @@ if [ -z "$fleet_ref" ]; then
     [ -n "$fleet_ref" ] || { echo "fix-fleet-enrolment: FLEET_REF is unset and this checkout has no origin/main to pin; nothing was changed" >&2; exit 2; }
 fi
 [[ "$fleet_ref" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-fleet-enrolment: FLEET_REF must be a 40-hex commit, got '$fleet_ref'; nothing was changed" >&2; exit 2; }
+# The pin must carry the producer, or every consumer would get a fleet job that
+# plans zero jobs (reusable form) or finds no driver (inline form).
+for f in .github/workflows/fleet-report-back-reusable.yml scripts/fleet-report-back.sh; do
+    git -C "$FLEET_DIR" cat-file -e "$fleet_ref:$f" 2>/dev/null \
+        || { echo "fix-fleet-enrolment: commit ${fleet_ref:0:12} does not carry $f in this checkout (fetch it, or pin a commit that does); nothing was changed" >&2; exit 2; }
+done
 
 panic_sha="${PANIC_ATTACK_SHA:-}"
 if [ -z "$panic_sha" ]; then

@@ -220,7 +220,9 @@ title_of() {
   if [ "$enrolment_json" != 'null' ] && [ "$enrolment_json" != '"unreadable"' ]; then
     t=$(jq -r --arg m "$m" '.reporters[$m].title // empty' <<<"$enrolment_json")
   fi
-  if [ -n "$t" ]; then echo "$t"; else default_title_of "$m"; fi
+  # The title rides into jq as an argument; a manifest is PR-controlled, so it is
+  # bounded here (120 characters) rather than trusted to fit the command line.
+  if [ -n "$t" ]; then echo "${t:0:120}"; else default_title_of "$m"; fi
 }
 
 # Print the executable found in bindir first, then PATH; return 1 if absent.
@@ -297,14 +299,27 @@ translate_or_error() { # member jq-program
   local m="$1" prog="$2" findings
   if [ "$ADAPTER_RC" -eq 124 ]; then
     write_envelope "$m" error "adapter exceeded the ${timeout_s}s timeout" '[]'
-  elif findings=$(jq -c --arg repo "$repo" "$(relativize_filter) $prog" "$ADAPTER_OUT" 2>/dev/null) \
+  elif findings=$(jq -c --arg repo "$repo" "$(relativize_filter) $prog" "$ADAPTER_OUT" 2> "$ADAPTER_ERR.jq") \
        && [ -n "$findings" ] && jq -e 'type == "array"' <<<"$findings" >/dev/null 2>&1; then
     write_envelope "$m" ran "" "$findings"
+  elif grep -q 'unexpected output shape' "$ADAPTER_ERR.jq" 2>/dev/null; then
+    # The shape guard fired: valid JSON, but not what this adapter documents.
+    write_envelope "$m" error "adapter output had an $(grep -o 'unexpected output shape: [^(]*' "$ADAPTER_ERR.jq" | head -n1 | sed 's/ *$//')" '[]'
   else
     write_envelope "$m" error "adapter produced no readable JSON: $(first_err_line)" '[]'
   fi
+  rm -f "$ADAPTER_ERR.jq"
   cleanup_adapter
 }
+
+# Every adapter program begins with its shape guard: a crash or a regression that
+# prints `{}` or `42` must become an error envelope, never a clean scan with no
+# findings (the per-member filters would otherwise default a missing array to []).
+SHAPE_ARRAY='if type != "array" then error("unexpected output shape: expected an array") else . end | '
+SHAPE_OBJ_FINDINGS='if type != "object" or (.findings | type) != "array" then error("unexpected output shape: expected an object with a findings array") else . end | '
+# finishing-bot and glambot print their analyzers keyed by name (an object, or
+# an array), each with a findings array; an empty set means the run died.
+SHAPE_ANALYZERS='if (type == "object" or type == "array") and length > 0 and all(.[]; type == "object" and (.findings | type) == "array") then . else error("unexpected output shape: expected analyzer objects each with a findings array") end | '
 
 # One finding shape for every adapter: { rule_id, severity, file, line, message }
 FINDING='{rule_id: (.rule_id // .id // "?" | tostring), severity: (.severity // "unknown" | tostring),
@@ -345,8 +360,8 @@ run_member() {
       # canon --path: file-presence criteria against the vendored RSR canon.
       # "satisfied" rows are not findings; missing > deprecated > relocated.
       run_adapter "$bin" canon --path "$repo" --format json
-      translate_or_error "$m" '
-        [ (.findings // [])[]
+      translate_or_error "$m" "$SHAPE_OBJ_FINDINGS"'
+        [ .findings[]
           | select(.severity != "satisfied")
           # A relocated or deprecated file is reported at the path where it WAS
           # found, so the grid can match it against the PR diff; a missing one
@@ -363,25 +378,25 @@ run_member() {
       # nothing. (`fleet` mode would write a .panicbot/*.a2ml debt register
       # into the scanned tree; A2ML is retired, so it is not used.)
       run_adapter "$bin" --format json scan "$repo"
-      translate_or_error "$m" "[ .[] | $FINDING ]" ;;
+      translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]" ;;
     cipherbot)
       run_adapter "$bin" --format json scan "$repo"
-      translate_or_error "$m" "[ .[] | $FINDING ]" ;;
+      translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]" ;;
     seambot)
       run_adapter "$bin" --path "$repo" --format json check
-      translate_or_error "$m" '
-        [ (.findings // [])[]
+      translate_or_error "$m" "$SHAPE_OBJ_FINDINGS"'
+        [ .findings[]
           | { rule_id: ("SEAM-" + (.check // "?" | tostring)), severity: (.severity // "unknown" | tostring),
               file: ((.location // "") | rel), line: 0, message: (.message // "" | tostring) } ]' ;;
     finishingbot|finishbot|finishing-bot)
       run_adapter "$bin" --path "$repo" --format json audit
-      translate_or_error "$m" "[ .[] | (.findings? // [])[] | $FINDING ]" ;;
+      translate_or_error "$m" "$SHAPE_ANALYZERS [ .[] | .findings[] | $FINDING ]" ;;
     glambot)
       run_adapter "$bin" --path "$repo" --format json audit
-      translate_or_error "$m" "[ .[] | (.findings? // [])[] | $FINDING ]" ;;
+      translate_or_error "$m" "$SHAPE_ANALYZERS [ .[] | .findings[] | $FINDING ]" ;;
     accessibilitybot)
       run_adapter "$bin" fleet "$repo"
-      translate_or_error "$m" "[ (.findings // [])[] | $FINDING ]" ;;
+      translate_or_error "$m" "$SHAPE_OBJ_FINDINGS [ .findings[] | $FINDING ]" ;;
     *)
       write_envelope "$m" error "no invocation is defined for $m" '[]' ;;
   esac
