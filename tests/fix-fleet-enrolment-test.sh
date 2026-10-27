@@ -214,6 +214,26 @@ printf '      report-backs-artifact:\n' >> "$I/.github/workflows/hypatia-scan-re
 set +e; bash "$FIXER" "$I" > "$TMP/i2.out" 2>&1; rc=$?; set -e
 check "I: local reusable with the input → exit 0" 0 "$rc"
 
+# ── 10. a needs item that merely starts with "fleet" is not fleet ───────────
+J="$TMP/j"; mk_repo "$J" https://github.com/hyperpolymath/example.git
+canonical_workflow "$NEW_SHA" | awk '{print} /^    name: Hypatia verdict grid/ {print "    needs: [fleet-scan]"}' > "$J/.github/workflows/fork-governance.yml"
+set +e; bash "$FIXER" "$J" > "$TMP/j.out" 2>&1; rc=$?; set -e
+check "J: exit 0" 0 "$rc"
+check_grep "J: fleet appended beside fleet-scan, not mistaken for it" '^    needs: \[fleet-scan, fleet\]$' "$J/.github/workflows/fork-governance.yml"
+set +e; bash "$FIXER" "$J" > "$TMP/j2.out" 2>&1; set -e
+check_grep "J: second run sees fleet as present" 'ok: hypatia already needs fleet' "$TMP/j2.out"
+
+# ── 11. a job merely named fleet is not the producer ────────────────────────
+K="$TMP/k"; mk_repo "$K" https://github.com/hyperpolymath/example.git
+canonical_workflow "$NEW_SHA" | awk '{print} /^jobs:$/ {print "  fleet:"; print "    name: Something else entirely"; print "    runs-on: ubuntu-24.04"; print "    steps:"; print "      - run: true"; print ""}' > "$K/.github/workflows/fork-governance.yml"
+set +e; bash "$FIXER" "$K" > "$TMP/k.out" 2>&1; rc=$?; set -e
+check "K: exit 3" 3 "$rc"
+check_grep "K: the impostor is named for a human" 'MANUAL: fork-governance.yml has a job named fleet that is not the report-back producer' "$TMP/k.out"
+check "K: no second fleet job inserted" "1" "$(grep -cE '^  fleet:$' "$K/.github/workflows/fork-governance.yml" | tr -d ' ')"
+check_no_grep "K: the impostor is not called the producer" 'already has the fleet report-back job' "$TMP/k.out"
+set +e; bash "$FIXER" "$A" > "$TMP/a3.out" 2>&1; set -e
+check_grep "A: the real producer job is recognised" 'ok: fork-governance.yml already has the fleet report-back job' "$TMP/a3.out"
+
 echo
 echo "fix-fleet-enrolment: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

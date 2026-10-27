@@ -176,7 +176,14 @@ job_inserted=false
 if [ ! -f "$WORKFLOW" ]; then
     manual "no .github/workflows/fork-governance.yml; adopt fork governance first (standards 3-practice/fork-governance/ADOPTION.adoc), then rerun"
 elif grep -qE '^  fleet:[[:space:]]*$' "$WORKFLOW"; then
-    echo "  ok: fork-governance.yml already has a fleet job"
+    # A job merely named fleet is not the producer: it must call the reusable or
+    # upload the fleet-report-backs artifact, else hypatia would wait on the
+    # wrong job and the artifact would never exist.
+    if awk '/^  fleet:[[:space:]]*$/ {p=1; next} p && /^  [A-Za-z_][A-Za-z0-9_-]*:/ {exit} p' "$WORKFLOW" | grep -qE 'fleet-report-back-reusable\.yml@|name: fleet-report-backs'; then
+        echo "  ok: fork-governance.yml already has the fleet report-back job"
+    else
+        manual "fork-governance.yml has a job named fleet that is not the report-back producer (no fleet-report-back-reusable.yml call and no fleet-report-backs upload); rename it or add the producer by hand (docs/REPORT-BACK.adoc §5)"
+    fi
 elif ! grep -qE '^  hypatia:[[:space:]]*$' "$WORKFLOW"; then
     manual "fork-governance.yml has no 'hypatia:' job at two-space indent to insert the fleet job before; add the job by hand (docs/REPORT-BACK.adoc §5)"
 else
@@ -197,6 +204,11 @@ else
 fi
 
 # ── 3b. hypatia runs after the fleet job ─────────────────────────────────────
+# Does a flow-list `needs: [a, b]` line name $2 as an exact item? `fleet-scan` is
+# not `fleet`: a word-boundary match would call it present and never append.
+needs_has_item() { # needs-line item
+    printf "%s\n" "$1" | sed -E "s/^[^[]*\[//; s/\].*$//" | tr "," "\n" | sed -E "s/^[[:space:]]+//; s/[[:space:]]+$//; s/^[\x27\"]//; s/[\x27\"]$//" | grep -qx -- "$2"
+}
 # The hypatia block: from its header to the next two-space job header.
 hypatia_block() {
     awk '/^  hypatia:[[:space:]]*$/ {p=1; print; next} p && /^  [A-Za-z_][A-Za-z0-9_-]*:/ {exit} p {print}' "$WORKFLOW"
@@ -214,11 +226,11 @@ if [ -f "$WORKFLOW" ] && grep -qE '^  hypatia:[[:space:]]*$' "$WORKFLOW"; then
         awk -v add="$add" '{ print } /^  hypatia:[[:space:]]*$/ && !done { print add; done = 1 }' "$WORKFLOW" > "$out"
         mv "$out" "$WORKFLOW"
         echo "  WIRED hypatia: needs: [fleet]"
-    elif printf '%s' "$needs_line" | grep -qE '\bfleet\b'; then
+    elif needs_has_item "$needs_line" fleet; then
         echo "  ok: hypatia already needs fleet"
     elif printf '%s' "$needs_line" | grep -qE '^    needs:[[:space:]]*\[.*\][[:space:]]*$'; then
         out=$(mktemp)
-        awk '!done && /^  hypatia:[[:space:]]*$/ {p=1} p && /^    needs:[[:space:]]*\[/ { sub(/\[[[:space:]]*\]/, "[fleet]"); if ($0 !~ /fleet\]/) sub(/\]/, ", fleet]"); done = 1; p = 0 } { print }' "$WORKFLOW" > "$out"
+        awk '!done && /^  hypatia:[[:space:]]*$/ {p=1} p && /^    needs:[[:space:]]*\[/ { if ($0 ~ /\[[[:space:]]*\]/) sub(/\[[[:space:]]*\]/, "[fleet]"); else sub(/\]/, ", fleet]"); done = 1; p = 0 } { print }' "$WORKFLOW" > "$out"
         mv "$out" "$WORKFLOW"
         echo "  WIRED hypatia: fleet added to its needs list"
     else

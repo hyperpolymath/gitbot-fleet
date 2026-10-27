@@ -91,6 +91,10 @@ jobs:
     name: Fleet report-backs
     runs-on: ubuntu-latest
     # Cold: up to six Rust adapters plus panic-attack from source (~15 min).
+    # fleet-report-back-build.sh keeps the builds inside a 40-minute budget
+    # (--build-budget, default 2400 s; a crate whose turn comes after the budget
+    # is spent reads error, never a dead job), so 45 minutes always leaves room
+    # for the adapters themselves and the upload.
     # Warm (cache hit): about two minutes.
     timeout-minutes: 45
     permissions:
@@ -221,6 +225,10 @@ jobs:
 
       - name: Run the enrolled adapters and write the envelopes
         id: run
+        # The envelopes are written under RUNNER_TEMP, never into the scanned tree:
+        # each member's JSON would otherwise be scanned by the walk-based adapters
+        # that run after it, and a tracked report-backs/ directory in the caller
+        # would leak into the artifact.
         env:
           FLEET_DIR: ${{ steps.fleet.outputs.dir }}
           ENROLMENT: ${{ inputs.enrolment }}
@@ -229,8 +237,8 @@ jobs:
           FLEET_REF: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/fleet-bin" report-backs
-          args=(--repo . --out report-backs --bin-dir "$RUNNER_TEMP/fleet-bin"
+          mkdir -p "$RUNNER_TEMP/fleet-bin" "$RUNNER_TEMP/report-backs"
+          args=(--repo . --out "$RUNNER_TEMP/report-backs" --bin-dir "$RUNNER_TEMP/fleet-bin"
                 --enrolment "$ENROLMENT" --fleet-ref "$FLEET_REF"
                 --timeout "$ADAPTER_TIMEOUT" --summary "$GITHUB_STEP_SUMMARY")
           IFS=',' read -r -a _m <<< "${MEMBERS:-}"
@@ -239,11 +247,11 @@ jobs:
           # Status map for the caller, and a non-empty directory for the
           # upload: a run that enrolled nobody still uploads the note below so
           # the consumer can tell "nothing enrolled" from "upload failed".
-          if ls report-backs/*.json >/dev/null 2>&1; then
-            members=$(jq -s -c 'map({(.reporter): .status}) | add' report-backs/*.json)
+          if ls "$RUNNER_TEMP"/report-backs/*.json >/dev/null 2>&1; then
+            members=$(jq -s -c 'map({(.reporter): .status}) | add' "$RUNNER_TEMP"/report-backs/*.json)
           else
             members='{}'
-            printf 'No member is enrolled in %s; no report-back was produced.\n' "$ENROLMENT" > report-backs/NONE-ENROLLED.txt
+            printf 'No member is enrolled in %s; no report-back was produced.\n' "$ENROLMENT" > "$RUNNER_TEMP/report-backs/NONE-ENROLLED.txt"
           fi
           echo "members=$members" >> "$GITHUB_OUTPUT"
           echo "members: $members"
@@ -253,6 +261,6 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.artifact-name }}
-          path: report-backs
+          path: ${{ runner.temp }}/report-backs
           if-no-files-found: error
           retention-days: 90

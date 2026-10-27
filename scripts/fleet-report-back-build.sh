@@ -21,6 +21,7 @@
 # Usage:
 #   fleet-report-back-build.sh --fleet DIR --bin-dir DIR [--crates "a b c"]
 #                              [--panic-attack SHA] [--build-timeout SECONDS]
+#                              [--build-budget SECONDS]
 #
 #   --fleet          a gitbot-fleet checkout (bots/<crate>/Cargo.toml)
 #   --bin-dir        where the built binaries are copied (created)
@@ -28,12 +29,16 @@
 #                    default: read `fleet-report-back.sh --plan` output on stdin
 #   --panic-attack   also install panic-attack at this commit into --bin-dir
 #   --build-timeout  seconds per cargo invocation (default 900)
+#   --build-budget   seconds for every build together (default 2400). A crate
+#                    whose turn comes after the budget is spent is not built
+#                    (warned; its row reads error) so one job timeout cannot
+#                    swallow the envelopes of the members that did build.
 #
 # Exit 0 when the script ran to completion (whatever built); 2 on usage error.
 
 set -euo pipefail
 
-fleet="" bindir="" crates="" pa_sha="" build_timeout=900
+fleet="" bindir="" crates="" pa_sha="" build_timeout=900 build_budget=2400
 while [ $# -gt 0 ]; do
   case "$1" in
     --fleet) fleet="$2"; shift 2 ;;
@@ -41,6 +46,7 @@ while [ $# -gt 0 ]; do
     --crates) crates="$2"; shift 2 ;;
     --panic-attack) pa_sha="$2"; shift 2 ;;
     --build-timeout) build_timeout="$2"; shift 2 ;;
+    --build-budget) build_budget="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -62,14 +68,22 @@ group() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::group::$1"; else echo "=
 endgroup() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::endgroup::"; fi; }
 # Report title $1 and message $2 as an Actions warning, or plain text to stderr.
 warn() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::warning title=$1::$2"; else echo "warning: $1: $2" >&2; fi; }
+# Seconds of the build budget still unspent (never negative). SECONDS is bash's
+# monotonic counter since the script started.
+remaining() { local r=$((build_budget - SECONDS)); [ "$r" -gt 0 ] && echo "$r" || echo 0; }
+# The timeout for the next build: the per-build limit $1, capped by the budget.
+slice() { local r; r=$(remaining); [ "$1" -lt "$r" ] && echo "$1" || echo "$r"; }
 
 built=0 failed=0
 for c in $crates; do
   if [ ! -f "$fleet/bots/$c/Cargo.toml" ]; then
     warn "unknown crate" "bots/$c has no Cargo.toml; skipped"; failed=$((failed + 1)); continue
   fi
+  if [ "$(remaining)" -eq 0 ]; then
+    warn "build budget exhausted" "bots/$c not built: the ${build_budget}s build budget was spent on earlier crates; its row will read error"; failed=$((failed + 1)); continue
+  fi
   group "cargo build --release --locked (bots/$c)"
-  if (cd "$fleet/bots/$c" && timeout "$build_timeout" cargo build --release --locked 2>&1); then
+  if (cd "$fleet/bots/$c" && timeout "$(slice "$build_timeout")" cargo build --release --locked 2>&1); then
     # Every executable the crate produced; the driver picks the one it needs.
     find "$fleet/bots/$c/target/release" -maxdepth 1 -type f -perm -u+x ! -name '*.d' \
       -exec cp -t "$bindir" {} +
@@ -86,7 +100,9 @@ if [ -n "$pa_sha" ]; then
   group "panic-attack at $pa_sha"
   if [ -x "$bin" ] && grep -qF "#$pa_sha" "$root/.crates.toml" 2>/dev/null; then
     echo "panic-attack restored from cache at $pa_sha"
-  elif ! timeout 600 cargo install --git https://github.com/hyperpolymath/panic-attack \
+  elif [ "$(remaining)" -eq 0 ]; then
+    warn "panic-attack not installed" "the ${build_budget}s build budget was spent before its turn; panicbot will read error"
+  elif ! timeout "$(slice 600)" cargo install --git https://github.com/hyperpolymath/panic-attack \
       --rev "$pa_sha" --locked --force --root "$root" panic-attack; then
     rm -rf "$root"   # leave nothing for the cache to save from a failed build
     warn "panic-attack not installed" "source build at $pa_sha failed or exceeded 10 minutes; panicbot will read error"

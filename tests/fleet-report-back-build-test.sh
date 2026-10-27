@@ -69,7 +69,7 @@ run_build() { # label arguments... ; sets rc, clears invocation logs
   local label="$1"; shift
   : > "$FLEET_BUILD_CALLS"; : > "$FLEET_BUILD_TIMEOUTS"
   rc=0
-  PATH="$TOOLS:$PATH" GITHUB_ACTIONS= bash "$BUILDER" \
+  PATH="$TOOLS:$PATH" GITHUB_ACTIONS='' bash "$BUILDER" \
     --fleet "$FLEET" --bin-dir "$TMP/$label" "$@" \
     < "$TMP/plan" > "$TMP/$label.log" 2>&1 || rc=$?
 }
@@ -170,6 +170,17 @@ expect_usage "builder missing bin-dir" --fleet "$FLEET"
 expect_usage "builder invalid fleet directory" --fleet "$TMP/absent" --bin-dir "$TMP/invalid"
 expect_usage "builder unknown option" --unknown
 check "invalid builder arguments create no bin directory" no "$([ -e "$TMP/invalid" ] && echo yes || echo no)"
+
+# --- the build budget: one job timeout must not swallow every envelope --------
+run_build budget-zero --crates "rhodibot panicbot" --panic-attack 0123456789abcdef0123456789abcdef01234567 --build-budget 0
+check "budget spent: no cargo invocation is attempted" "0" "$(grep -c . "$FLEET_BUILD_CALLS" || true)"
+check "budget spent: every crate is warned as unbuilt" "2" "$(grep -c 'build budget exhausted' "$TMP/budget-zero.log" || true)"
+check "budget spent: panic-attack is warned, not attempted" "1" "$(grep -c 'spent before its turn' "$TMP/budget-zero.log" || true)"
+check "budget spent: the run still completes (exit 0)" 0 "$rc"
+run_build budget-wide --crates rhodibot --build-budget 100000 --build-timeout 900
+check "budget above the per-build limit: the per-build limit applies" "1" "$(grep -c $'\t900 cargo build --release --locked$' "$FLEET_BUILD_TIMEOUTS" || true)"
+run_build budget-narrow --crates rhodibot --build-budget 100000 --build-timeout 60
+check "per-build limit below the budget: the limit applies" "1" "$(grep -c $'\t60 cargo build --release --locked$' "$FLEET_BUILD_TIMEOUTS" || true)"
 
 echo
 echo "fleet-report-back-build-test: $pass passed, $fail failed"
