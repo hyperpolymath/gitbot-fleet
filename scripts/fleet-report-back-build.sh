@@ -56,8 +56,11 @@ if [ -z "$crates" ] && [ ! -t 0 ]; then
   crates=$(awk -F'\t' '$2 != "" {print $2}' | sort -u | tr '\n' ' ')
 fi
 
+# Print a group heading for $1, using Actions grouping when GITHUB_ACTIONS is nonempty.
 group() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::group::$1"; else echo "== $1"; fi; }
+# Close an Actions log group; emit nothing when GITHUB_ACTIONS is empty or unset.
 endgroup() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::endgroup::"; fi; }
+# Report title $1 and message $2 as an Actions warning, or plain text to stderr.
 warn() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::warning title=$1::$2"; else echo "warning: $1: $2" >&2; fi; }
 
 built=0 failed=0

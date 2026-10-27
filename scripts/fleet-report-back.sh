@@ -71,6 +71,7 @@ set -euo pipefail
 
 FLEET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Print the usage text to stderr and terminate the script with status 2.
 usage() {
   sed -n '/^# Usage:/,/^# error\./p' "$0" | sed 's/^# \{0,1\}//' >&2
   exit 2
@@ -92,6 +93,8 @@ crate_dir_of() {
     *)                echo "" ;;
   esac
 }
+# Print the adapter executable name for a member, or an empty line if unknown
+# or unsupported locally. The finishingbot aliases all use finishing-bot.
 binary_of() {
   case "$1" in
     finishingbot|finishbot|finishing-bot) echo finishing-bot ;;
@@ -99,6 +102,7 @@ binary_of() {
     *) echo "" ;;
   esac
 }
+# Print the built-in display title, falling back to the member name.
 default_title_of() {
   case "$1" in
     rhodibot)         echo "rhodibot (RSR compliance)" ;;
@@ -197,6 +201,7 @@ if [ -z "$fleet_ref" ]; then
   fleet_ref=$(git -C "$FLEET_DIR" rev-parse HEAD 2>/dev/null || echo unknown)
 fi
 
+# Print the member's nonempty manifest title, or its default display title.
 title_of() {
   local m="$1" t=""
   if [ "$enrolment_json" != 'null' ] && [ "$enrolment_json" != '"unreadable"' ]; then
@@ -205,6 +210,7 @@ title_of() {
   if [ -n "$t" ]; then echo "$t"; else default_title_of "$m"; fi
 }
 
+# Print the executable found in bindir first, then PATH; return 1 if absent.
 find_binary() {
   local name="$1"
   if [ -n "$bindir" ] && [ -x "$bindir/$name" ]; then echo "$bindir/$name"; return 0; fi
@@ -216,6 +222,9 @@ find_binary() {
 # members. Output is key-sorted, compact, one final LF: the I-JSON/JCS shape
 # the estate's JSON policy asks of every .json it writes (standards
 # 3-practice/JSON-POLICY.adoc), as far as jq can produce it.
+# Write or replace out/<member>.json using the supplied status, reason, and
+# findings JSON array. An empty reason becomes null; title and ref come from
+# the current run. Temporary-file, JSON, and output I/O failures are not caught.
 write_envelope() { # member status reason findings_json
   local m="$1" status="$2" reason="$3" findings="$4" ftmp
   # The findings go in through a FILE, never argv: a few hundred findings
@@ -230,7 +239,8 @@ write_envelope() { # member status reason findings_json
   rm -f "$ftmp"
 }
 
-# Make an adapter's file path relative to the repository root. Adapters differ:
+# Emit a jq rel filter that strips the repo/ prefix and then one leading ./;
+# nonstrings become empty strings and other paths are unchanged. Adapters differ:
 # accessibilitybot prints absolute paths, glambot and finishing-bot "./x",
 # seambot and rhodibot repository-relative. The grid matches paths against
 # `git diff --name-only`, which is repository-relative with no "./".
@@ -245,22 +255,31 @@ JQ
 # Run an adapter, capturing stdout/stderr separately. Non-zero exit with valid
 # JSON on stdout is still a run: several adapters exit 1 when their findings
 # would block a release, and that is a finding, not a failure.
+# Run in repo with timeout_s seconds allowed. Set ADAPTER_OUT and ADAPTER_ERR
+# to temporary capture files and ADAPTER_RC to the exit status (124 on timeout)
+# without propagating it. The caller must remove the files; creation failures
+# are not caught.
 run_adapter() { # binary args... ; sets ADAPTER_OUT, ADAPTER_ERR, ADAPTER_RC
   local bin="$1"; shift
   ADAPTER_OUT=$(mktemp); ADAPTER_ERR=$(mktemp); ADAPTER_RC=0
   # --bin-dir is also prepended to PATH: panicbot finds panic-attack with `which`.
   ( cd "$repo" && PATH="${bindir:+$bindir:}$PATH" RUST_LOG=off timeout "$timeout_s" "$bin" "$@" ) > "$ADAPTER_OUT" 2> "$ADAPTER_ERR" || ADAPTER_RC=$?
 }
+# Print up to 240 characters of the first nonblank ADAPTER_ERR line excluding
+# Stack backtrace headers, or an ADAPTER_RC diagnostic if no line is selected.
 first_err_line() {
   local l
   l=$(grep -v '^\s*$' "$ADAPTER_ERR" 2>/dev/null | grep -v '^Stack backtrace' | head -n1 | cut -c1-240)
   [ -n "$l" ] && echo "$l" || echo "exit status $ADAPTER_RC with no diagnostic"
 }
+# Remove the most recent adapter's stdout and stderr capture files.
 cleanup_adapter() { rm -f "$ADAPTER_OUT" "$ADAPTER_ERR"; }
 
 # Translate when stdout parses with the given jq program (which must yield the
-# findings array); otherwise record an error envelope with the first stderr
-# line. `$repo` is bound for relativize_filter.
+# findings array), accepting nonzero adapter exits with usable output. Exit
+# status 124 always produces a timeout error; invalid output produces an error
+# with a stderr diagnostic. Bind $repo for relativize_filter, write the member's
+# envelope, and remove the capture files. Envelope I/O failures are not caught.
 translate_or_error() { # member jq-program
   local m="$1" prog="$2" findings
   if [ "$ADAPTER_RC" -eq 124 ]; then
@@ -279,6 +298,10 @@ FINDING='{rule_id: (.rule_id // .id // "?" | tostring), severity: (.severity // 
           file: ((.file // .location // "") | rel), line: ((.line // 0) | if type == "number" then . else 0 end),
           message: (.message // "" | tostring)}'
 
+# Run one member against repo and write its translated report-back envelope.
+# echidnabot and sustainabot yield not_run, even with ECHIDNA_URL configured;
+# unknown members, unavailable binaries, timeouts, and unusable output yield
+# error envelopes. Envelope I/O failures are not converted to adapter errors.
 run_member() {
   local m="$1" bin crate
   crate=$(crate_dir_of "$m")
@@ -360,6 +383,8 @@ for m in "${members[@]+"${members[@]}"}"; do
 done
 
 # ── summary ──────────────────────────────────────────────────────────────────
+# Print a Markdown summary of this run from the members' envelope files, or a
+# note if no members were selected. Envelope read/parse errors are not caught.
 render_summary() {
   echo "### gitbot-fleet report-backs"
   echo
