@@ -27,6 +27,9 @@
 #   7. the summary table has one row per member.
 #   8. (when STANDARDS_DIR points at a hyperpolymath/standards checkout) the
 #      real renderer turns the rows non-orange from these envelopes alone.
+#   9. empty scans, malformed output, normalization boundaries, aliases,
+#      failure isolation, invocation context, and an unchanged scanned tree.
+#  10. the build-helper unit suite (stubbed Cargo, no Rust builds or network).
 #
 # Run: bash tests/fleet-report-back-test.sh
 
@@ -50,7 +53,7 @@ check() {
 field() { jq -r "$2" "$1"; }
 
 # ── fixture repository and stub adapters ─────────────────────────────────────
-REPO="$TMP/repo"; mkdir -p "$REPO/.gitbot-fleet" "$REPO/src"
+REPO="$TMP/repo with spaces"; mkdir -p "$REPO/.gitbot-fleet" "$REPO/src"
 echo 'x' > "$REPO/src/a.jl"
 cat > "$REPO/.gitbot-fleet/enrolment.json" <<'JSON'
 { "schema": 1,
@@ -66,7 +69,7 @@ cat > "$REPO/.gitbot-fleet/enrolment.json" <<'JSON'
     "sustainabot": { "enrolled": false, "reason": "reserved slot" } } }
 JSON
 
-BIN="$TMP/bin"; mkdir -p "$BIN"
+BIN="$TMP/bin with spaces"; mkdir -p "$BIN"
 stub() { # name body
   printf '#!/usr/bin/env bash\nset -u\n%s\n' "$2" > "$BIN/$1"; chmod +x "$BIN/$1"
 }
@@ -113,7 +116,12 @@ run() { # out-dir extra-args...
 }
 
 # 1. enrolment ────────────────────────────────────────────────────────────────
-run "$TMP/o1" --summary "$TMP/o1.md"
+repo_state() {
+  find "$REPO" -printf '%P %y %l\n' | sort
+  find "$REPO" -type f -exec sha256sum {} + | sort
+}
+repo_before=$(repo_state)
+ECHIDNA_URL= run "$TMP/o1" --summary "$TMP/o1.md"
 check "enrolled members each get a file" "accessibilitybot echidnabot finishingbot glambot panicbot rhodibot seambot" \
   "$(find "$TMP/o1" -name '*.json' -printf '%f\n' | sed 's/\.json$//' | sort | tr '\n' ' ' | sed 's/ $//')"
 check "a member marked enrolled:false gets no file" no "$([ -e "$TMP/o1/cipherbot.json" ] && echo yes || echo no)"
@@ -201,6 +209,164 @@ check "--plan gives echidnabot no crate: nothing is built for a member without a
 check "summary has one row per member" 7 "$(grep -c '^| [a-z]' "$TMP/o1.md")"
 check "summary states the error reason" yes "$(grep -q '| echidnabot | not_run | 0 | no ECHIDNA' "$TMP/o1.md" && echo yes || echo no)"
 
+# 9. boundary and regression cases ────────────────────────────────────────────
+# Only boolean true enrols a member; JSON truthiness must not enrol a string.
+cat > "$TMP/strict.json" <<'JSON'
+{"reporters":{"cipherbot":{"enrolled":true,"title":""},
+  "panicbot":{"enrolled":"true"},"glambot":{"enrolled":1},
+  "seambot":{"enrolled":null},"rhodibot":{},"sustainabot":{"enrolled":false}}}
+JSON
+run "$TMP/strict" --enrolment "$TMP/strict.json"
+check "only boolean true enrols a member" cipherbot \
+  "$(find "$TMP/strict" -name '*.json' -printf '%f\n' | sed 's/\.json$//')"
+check "an empty title falls back to the built-in title" 'cipherbot (cryptographic hygiene)' \
+  "$(field "$TMP/strict/cipherbot.json" .title)"
+
+for manifest in missing empty wrong-shape nobody; do
+  case "$manifest" in
+    missing) ;; # Deliberately absent.
+    empty) : > "$TMP/$manifest.json" ;;
+    wrong-shape) echo '{"reporters":[]}' > "$TMP/$manifest.json" ;;
+    nobody) echo '{"reporters":{}}' > "$TMP/$manifest.json" ;;
+  esac
+  run "$TMP/manifest-$manifest" --enrolment "$TMP/$manifest.json"
+  check "$manifest manifest produces no envelopes" 0 \
+    "$(find "$TMP/manifest-$manifest" -name '*.json' | wc -l)"
+done
+run "$TMP/disabled" --member cipherbot --member sustainabot --summary "$TMP/disabled.md"
+check "an explicitly selected list of disabled members stays empty" 0 \
+  "$(find "$TMP/disabled" -name '*.json' | wc -l)"
+check "an empty selection gets an explanatory summary" yes \
+  "$(grep -q 'No member is enrolled' "$TMP/disabled.md" && echo yes || echo no)"
+
+# A clean scan has an envelope, for each distinct adapter JSON shape.
+for member in rhodibot panicbot seambot finishingbot glambot accessibilitybot cipherbot; do
+  case "$member" in
+    panicbot|cipherbot) shape='[]' ;;
+    finishingbot|glambot) shape='{"first":{"findings":[]},"second":{"findings":[]}}' ;;
+    *) shape='{"findings":[]}' ;;
+  esac
+  binary="$member"; [ "$member" != finishingbot ] || binary=finishing-bot
+  stub "$binary" "printf '%s\n' '$shape'"
+  run "$TMP/clean-$member" --enrolment "" --member "$member"
+  check "$member clean scan is ran with no findings or reason" 'ran|0|null' \
+    "$(field "$TMP/clean-$member/$member.json" '"\(.status)|\(.findings | length)|\(.reason)"')"
+done
+
+for alias in finishbot finishing-bot; do
+  run "$TMP/alias-$alias" --enrolment "" --member "$alias"
+  check "$alias uses finishing-bot and retains the requested reporter name" "$alias|ran" \
+    "$(field "$TMP/alias-$alias/$alias.json" '"\(.reporter)|\(.status)"')"
+done
+plan=$(bash "$DRIVER" --plan --enrolment "" --member finishbot --member finishing-bot --member cipherbot)
+check "--plan maps aliases and cipherbot to their crates and binaries" \
+  $'finishbot\tfinishingbot\tfinishing-bot\nfinishing-bot\tfinishingbot\tfinishing-bot\ncipherbot\tcipherbot\tcipherbot' "$plan"
+
+stub rhodibot 'cat <<JSON
+{"findings":[
+ {"id":"D","name":"Old canon","severity":"deprecated","found":["./legacy.txt"],"canon_keeps_it_at":"new.txt","details":["replace","retire"]},
+ {"id":"M","name":"Missing","severity":"missing","expected":["expected.txt"],"found":["wrong.txt"]},
+ {"id":"R","name":"Relocated","severity":"relocated","found":[],"expected":["fallback.txt"]},
+ {"id":"S","name":"Satisfied","severity":"satisfied"}]}
+JSON'
+run "$TMP/canon" --member rhodibot
+check "canon deprecated severity, actual path, details and fallback paths survive" \
+  '[{"file":"legacy.txt","line":0,"message":"Old canon: deprecated — replace; retire","rule_id":"D","severity":"warning"},{"file":"expected.txt","line":0,"message":"Missing: missing","rule_id":"M","severity":"error"},{"file":"fallback.txt","line":0,"message":"Relocated: relocated","rule_id":"R","severity":"info"}]' \
+  "$(jq -S -c .findings "$TMP/canon/rhodibot.json")"
+
+stub cipherbot 'cat <<JSON
+[{"id":"fallback","severity":null,"file":42,"line":"12","message":17},
+ {},
+ {"rule_id":"primary","id":"ignored","severity":"high","file":"$4/src/a.jl","line":12,"message":"message"},
+ {"rule_id":7,"severity":3,"location":"./src/b.jl","line":null},
+ {"rule_id":"sibling","file":"$4-other/src/a.jl","line":0}]
+JSON'
+run "$TMP/normalize" --enrolment "" --member cipherbot
+check "fleet fields have stable defaults, types and precedence" \
+  '[{"file":"","line":0,"message":"17","rule_id":"fallback","severity":"unknown"},{"file":"","line":0,"message":"","rule_id":"?","severity":"unknown"},{"file":"src/a.jl","line":12,"message":"message","rule_id":"primary","severity":"high"},{"file":"src/b.jl","line":0,"message":"","rule_id":"7","severity":"3"}]' \
+  "$(jq -S -c '.findings[:4]' "$TMP/normalize/cipherbot.json")"
+check "relativization does not strip a sibling directory with the same prefix" "$REPO-other/src/a.jl" \
+  "$(field "$TMP/normalize/cipherbot.json" '.findings[4].file')"
+
+stub cipherbot 'jq -n '\''["error","warning","info","suggestion","critical","high","medium","low"] | map({severity: .})'\'''
+run "$TMP/severities" --enrolment "" --member cipherbot
+check "fleet and scanner severities reach the renderer unchanged" \
+  'error warning info suggestion critical high medium low' \
+  "$(field "$TMP/severities/cipherbot.json" '[.findings[].severity] | join(" ")')"
+
+# Success exit codes alone do not prove the adapter produced usable findings.
+for output in empty malformed wrong-shape; do
+  case "$output" in
+    empty) stub cipherbot 'exit 0' ;;
+    malformed) stub cipherbot 'echo "not JSON"' ;;
+    wrong-shape) stub cipherbot 'echo 42' ;;
+  esac
+  run "$TMP/output-$output" --enrolment "" --member cipherbot --member glambot
+  check "$output adapter output is an error with no findings" 'error|0' \
+    "$(field "$TMP/output-$output/cipherbot.json" '"\(.status)|\(.findings | length)"')"
+  check "$output adapter output explains the error" yes \
+    "$(field "$TMP/output-$output/cipherbot.json" .reason | grep -q 'no readable JSON' && echo yes || echo no)"
+  check "$output adapter output does not prevent a later member running" ran \
+    "$(field "$TMP/output-$output/glambot.json" .status)"
+done
+
+stub cipherbot 'printf "\nStack backtrace:\nfirst diagnostic\nsecond diagnostic\n" >&2; exit 17'
+run "$TMP/diagnostic" --enrolment "" --member cipherbot
+check "errors use the first nonblank diagnostic, skipping backtrace headers" \
+  'adapter produced no readable JSON: first diagnostic' "$(field "$TMP/diagnostic/cipherbot.json" .reason)"
+stub cipherbot 'exit 17'
+run "$TMP/no-diagnostic" --enrolment "" --member cipherbot
+check "a silent crash records its exit status" \
+  'adapter produced no readable JSON: exit status 17 with no diagnostic' "$(field "$TMP/no-diagnostic/cipherbot.json" .reason)"
+stub cipherbot 'printf "%0300d\n" 0 >&2; exit 1'
+run "$TMP/long-diagnostic" --enrolment "" --member cipherbot
+check "diagnostics are bounded to 240 characters" 240 \
+  "$(field "$TMP/long-diagnostic/cipherbot.json" '.reason | ltrimstr("adapter produced no readable JSON: ") | length')"
+stub cipherbot 'echo "[]"; exit 124'
+run "$TMP/timeout-json" --enrolment "" --member cipherbot
+check "a timeout cannot become a clean scan even with valid JSON" \
+  'error|adapter exceeded the 300s timeout|0' \
+  "$(field "$TMP/timeout-json/cipherbot.json" '"\(.status)|\(.reason)|\(.findings | length)"')"
+stub cipherbot 'echo "[]"; exit 2'
+run "$TMP/nonzero-json" --enrolment "" --member cipherbot
+check "valid empty JSON with a nonzero exit is still a completed scan" 'ran|0|null' \
+  "$(field "$TMP/nonzero-json/cipherbot.json" '"\(.status)|\(.findings | length)|\(.reason)"')"
+
+ECHIDNA_URL=https://engine.invalid run "$TMP/engine" --enrolment "" --member echidnabot
+check "a configured engine still reports the unsupported dispatch honestly" 'not_run|0' \
+  "$(field "$TMP/engine/echidnabot.json" '"\(.status)|\(.findings | length)"')"
+check "a configured engine reason names the missing dispatch implementation" yes \
+  "$(field "$TMP/engine/echidnabot.json" .reason | grep -q 'does not yet dispatch' && echo yes || echo no)"
+
+# Verify process context and argument boundaries using paths containing spaces.
+stub cipherbot '[ "$#" -eq 4 ] && [ "$1 $2 $3" = "--format json scan" ] && [ "$PWD" = "$4" ] && [ "$RUST_LOG" = off ] || exit 9
+jq -n --arg path "$(command -v cipherbot)" '\''[{rule_id: "CONTEXT", severity: "info", message: $path}]'\'''
+run "$TMP/context with spaces" --enrolment "" --member cipherbot
+check "adapters run in the scanned tree with RUST_LOG off and bin-dir on PATH" "$BIN/cipherbot" \
+  "$(field "$TMP/context with spaces/cipherbot.json" '.findings[0].message')"
+PATH="$BIN:$PATH" run "$TMP/path-fallback" --enrolment "" --member cipherbot --bin-dir "$TMP/no-bin"
+check "an absent bin-dir falls back to PATH" ran "$(field "$TMP/path-fallback/cipherbot.json" .status)"
+
+printf 'Existing summary\n' > "$TMP/append.md"
+run "$TMP/append" --enrolment "" --member cipherbot --summary "$TMP/append.md"
+check "--summary appends and preserves existing content" 'Existing summary' "$(head -n1 "$TMP/append.md")"
+check "the default ref is the fleet checkout revision" "$(git -C "$ROOT" rev-parse HEAD)" \
+  "$(bash "$DRIVER" --repo "$REPO" --out "$TMP/default-ref" --enrolment "" --member sustainabot >/dev/null; field "$TMP/default-ref/sustainabot.json" .ref)"
+
+expect_usage() {
+  local label="$1" rc=0; shift
+  bash "$DRIVER" "$@" > "$TMP/usage.log" 2>&1 || rc=$?
+  check "$label exits with usage status" 2 "$rc"
+}
+expect_usage "missing required paths"
+expect_usage "nonexistent repository" --repo "$TMP/absent" --out "$TMP/unused"
+expect_usage "unknown option" --unrecognized
+for seconds in -1 1.5 invalid; do
+  expect_usage "invalid timeout $seconds" --repo "$REPO" --out "$TMP/unused" --timeout "$seconds"
+done
+check "usage errors create no output directory" no "$([ -e "$TMP/unused" ] && echo yes || echo no)"
+check "reporting never changes the scanned tree's files or directories" "$repo_before" "$(repo_state)"
+
 # 8. the real renderer ─────────────────────────────────────────────────────────
 GRID="${STANDARDS_DIR:-}/scripts/verdict-grid.sh"
 if [ -n "${STANDARDS_DIR:-}" ] && [ -f "$GRID" ]; then
@@ -222,3 +388,6 @@ fi
 echo
 echo "fleet-report-back-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
+
+# Keep the build helper covered by the same entry point used by e2e.yml.
+bash "$ROOT/tests/fleet-report-back-build-test.sh"
