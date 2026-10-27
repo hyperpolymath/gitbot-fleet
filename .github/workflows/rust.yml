@@ -45,6 +45,8 @@ jobs:
             dir: dashboard
           - module: rhodibot
             dir: bots/rhodibot
+          - module: idris-dependents
+            dir: idris-dependents
     defaults:
       run:
         working-directory: ${{ matrix.dir }}

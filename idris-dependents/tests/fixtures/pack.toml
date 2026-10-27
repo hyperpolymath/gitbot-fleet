@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MPL-2.0
+# Copyright (c) 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+# pack.toml - Pack package manager configuration for proven
+
+[package]
+name = "proven"
+version = "1.1.0"
+authors = ["Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>"]
+brief = "Verified safe operations - code that cannot crash"
+langversion = ">= 0.6.0"
+
+[build]
+ipkg = "proven.ipkg"
+
+[custom.all.proven]
+type = "local"
+path = "."
+ipkg = "proven.ipkg"

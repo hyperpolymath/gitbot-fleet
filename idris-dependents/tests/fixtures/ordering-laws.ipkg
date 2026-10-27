@@ -1,0 +1,15 @@
+package proven-ordering-laws
+
+version = 0.2.0
+sourcedir = "src"
+
+main = ProvenSubject.OrderingLawsMain
+executable = "proven-ordering-laws"
+
+-- proven-safeordering is proven's Proven.SafeOrdering at PROVEN_PIN, installed
+-- by scripts/prove-proven-ordering.sh; it is not a package proven itself ships.
+depends = proven-tests, proven-safeordering
+
+modules = ProvenSubject.OrderingLaws,
+         ProvenSubject.OrderingLawsTests,
+         ProvenSubject.OrderingLawsMain
