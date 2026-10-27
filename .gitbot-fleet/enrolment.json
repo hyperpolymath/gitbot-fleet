@@ -1,14 +1,1 @@
-{
-  "schema": 1,
-  "reporters": {
-    "rhodibot": { "title": "rhodibot (RSR compliance)", "enrolled": true },
-    "panicbot": { "title": "panicbot (panic recovery, error handling)", "enrolled": true },
-    "echidnabot": { "enrolled": false, "reason": "the only proof files here are echidnabot's own dogfood fixtures (bots/echidnabot/proofs); no proofs about the fleet" },
-    "seambot": { "enrolled": false, "reason": "no seam register is declared (spec/seams/seam-register.json)" },
-    "finishingbot": { "title": "finishingbot (release readiness)", "enrolled": true },
-    "accessibilitybot": { "enrolled": false, "reason": "no served HTML surface; the HTML in the tree is accessibilitybot's own test fixtures and gsbot's templates" },
-    "glambot": { "title": "glambot (presentation quality)", "enrolled": true },
-    "cipherbot": { "title": "cipherbot (cryptographic hygiene)", "enrolled": true },
-    "sustainabot": { "enrolled": false, "reason": "reserved fleet slot; no adapter exists (bots/sustainabot/README.adoc)" }
-  }
-}
+{"reporters":{"accessibilitybot":{"enrolled":false,"reason":"no served HTML surface; the HTML in the tree is accessibilitybot's own test fixtures and gsbot's templates"},"cipherbot":{"enrolled":true,"title":"cipherbot (cryptographic hygiene)"},"echidnabot":{"enrolled":false,"reason":"the only proof files here are echidnabot's own dogfood fixtures (bots/echidnabot/proofs); no proofs about the fleet"},"finishingbot":{"enrolled":true,"title":"finishingbot (release readiness)"},"glambot":{"enrolled":true,"title":"glambot (presentation quality)"},"panicbot":{"enrolled":true,"title":"panicbot (panic recovery, error handling)"},"rhodibot":{"enrolled":true,"title":"rhodibot (RSR compliance)"},"seambot":{"enrolled":false,"reason":"no seam register is declared (spec/seams/seam-register.json)"},"sustainabot":{"enrolled":false,"reason":"reserved fleet slot; no adapter exists (bots/sustainabot/README.adoc)"}},"schema":1}
