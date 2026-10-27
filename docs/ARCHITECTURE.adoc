@@ -54,6 +54,11 @@ fix, PR creation
 
 |`+bots/*+` |`+bots/+` |Rust (thin adapters — see `+bots/README.adoc+`)
 |Per-bot specialised logic
+
+|`+scripts/fleet-report-back.sh+` |`+scripts/+` |bash |Runs the adapters a
+repository enrols and writes one report-back envelope per member for the
+Hypatia verdict grid (`+docs/REPORT-BACK.adoc+`); called by
+`+.github/workflows/fleet-report-back-reusable.yml+`
 |===
 
 === Safety triangle

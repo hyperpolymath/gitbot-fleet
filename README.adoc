@@ -144,6 +144,7 @@ Authoritative documents:
 * link:EXPLAINME.adoc[EXPLAINME.adoc] — long-form architecture and rationale
 * link:ROADMAP.adoc[ROADMAP.adoc] — forward plan, all 11 bots
 * link:READINESS.md[READINESS.md] — Component Readiness Grades (CRG) assessment
+* link:docs/REPORT-BACK.adoc[docs/REPORT-BACK.adoc] — how each bot's verdict reaches the Hypatia verdict grid on a pull request (the `fleet-report-backs` artifact)
 * link:docs/[docs/] — operational guides, performance notes, branch protection
 * link:docs/archive/[docs/archive/] — historical session reports kept for audit
 * link:docs/wiki-source/[docs/wiki-source/] — repo source for the GitHub wiki

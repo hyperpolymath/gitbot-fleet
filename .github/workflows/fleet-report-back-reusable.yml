@@ -1,0 +1,280 @@
+# This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# fleet-report-back-reusable.yml — produce the gitbot-fleet report-backs for
+# one pull request, as an artifact the Hypatia verdict grid reads.
+#
+# WHY. The verdict grid (standards: docs/VERDICT-GRID-SPEC.adoc) gives every
+# fleet member a repository enrols in `.gitbot-fleet/enrolment.json` one row,
+# and that row is orange ("enrolled, but no report-back was received") until a
+# `.gitbot-fleet/report-backs/<member>.json` envelope exists when the grid
+# renders. Until this workflow existed nothing in the estate wrote one, so the
+# fleet reported nothing on any PR. This is the producer.
+#
+# WHAT IT DOES. Checks out the caller's tree, checks out gitbot-fleet at the
+# commit the caller pinned, builds only the adapters the manifest enrols
+# (cached with actions/cache), runs `scripts/fleet-report-back.sh`, and
+# uploads the envelopes as the `fleet-report-backs` artifact. The Hypatia lane
+# (standards: hypatia-scan-reusable.yml, input `report-backs-artifact`)
+# downloads that artifact into `.gitbot-fleet/report-backs/` before rendering.
+#
+# WHAT IT DOES NOT DO. It posts nothing and gates nothing: an adapter that is
+# missing, crashes or times out becomes an `error` envelope with its reason,
+# and the grid renders that orange. The job fails only when the driver itself
+# cannot run. It writes nothing into the caller's repository; the envelopes
+# live in the artifact for the run, never in git.
+#
+# Permissions: `contents: read` only. A called workflow may not request more
+# than its caller grants, and this one needs nothing more.
+#
+# Caller sketch (see docs/REPORT-BACK.adoc for the full adoption note):
+#
+#   jobs:
+#     fleet:
+#       uses: hyperpolymath/gitbot-fleet/.github/workflows/fleet-report-back-reusable.yml@<SHA>
+#       permissions: { contents: read }
+#     hypatia:
+#       needs: [fleet]
+#       if: ${{ always() }}
+#       uses: <standards>/.github/workflows/hypatia-scan-reusable.yml@<SHA>
+#       ...
+#
+# A repository whose Actions policy refuses reusable workflows from another
+# owner (metadatastician/* calling hyperpolymath/*) runs the same steps inline
+# instead: check out gitbot-fleet at a pinned SHA and call the driver. The
+# standards canon's own fork-governance.yml is the worked example of that.
+
+name: Fleet report-backs (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      enrolment:
+        description: Path of the enrolment manifest inside the caller's tree.
+        type: string
+        required: false
+        default: ".gitbot-fleet/enrolment.json"
+      members:
+        description: >-
+          Comma-separated member names to run instead of every enrolled
+          member. A member the manifest marks `enrolled: false` is still
+          skipped: the repository's statement wins.
+        type: string
+        required: false
+        default: ""
+      artifact-name:
+        description: Name of the uploaded artifact holding the envelopes.
+        type: string
+        required: false
+        default: "fleet-report-backs"
+      adapter-timeout-seconds:
+        description: >-
+          Seconds each adapter may run before its row reads error. At most 300:
+          the job limit is sized for seven adapters at 300 s after the build
+          budget, so a larger value is capped (with a warning) and a value that
+          is not a positive integer falls back to 300.
+        type: string
+        required: false
+        default: "300"
+    outputs:
+      members:
+        description: >-
+          JSON object mapping each member that ran to its envelope status
+          (ran | not_run | error). Empty object when nothing was enrolled.
+        value: ${{ jobs.report-back.outputs.members }}
+      artifact-name:
+        description: The artifact name, echoed for the consumer's download step.
+        value: ${{ jobs.report-back.outputs.artifact-name }}
+
+permissions:
+  contents: read
+
+jobs:
+  report-back:
+    name: Fleet report-backs
+    runs-on: ubuntu-latest
+    # Warm (cache hit): about two minutes. Cold: up to six Rust adapters plus
+    # panic-attack from source (~15 min). The limit is the worst case, so a
+    # stalled phase never kills the job before the upload: the build budget
+    # (fleet-report-back-build.sh --build-budget, 2400 s) + up to seven adapters
+    # at adapter-timeout-seconds each (7 × 300 s = 2100 s) + checkout, cache and
+    # upload (~5 min) = 80 min. GNU timeout bounds each command on its own; only
+    # this limit bounds their sum.
+    timeout-minutes: 85
+    permissions:
+      contents: read
+    outputs:
+      members: ${{ steps.run.outputs.members }}
+      artifact-name: ${{ inputs.artifact-name }}
+    env:
+      # panic-attack, built from source at this commit for panicbot. Kept in
+      # step with the standards Hypatia lane's PANIC_ATTACK_SHA so the two
+      # panic-attack-derived rows on one grid describe the same tool.
+      PANIC_ATTACK_SHA: b689a74d2762a1c19839ae3fbd59b7fe5ef920ea
+    steps:
+      - name: Checkout the repository to report on
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The PR head, not the merge ref: the grid's change scope is computed
+          # from the same head, so paths and line numbers agree with it.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Checkout gitbot-fleet at the pinned commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: hyperpolymath/gitbot-fleet
+          # `job.workflow_sha` is the commit of THIS file, which is what the
+          # caller pinned. It is not `github.workflow_sha` (the caller's file)
+          # and `github.job_workflow_sha` does not exist.
+          # It is deliberately NOT an input: a ref a caller can choose is untrusted
+          # code run with a cache the default branch shares (CodeQL
+          # actions/cache-poisoning, three alerts on gitbot-fleet PR 626). The pin
+          # in `uses:` is the only way to choose the fleet commit, and it is immutable.
+          ref: ${{ job.workflow_sha }}
+          path: .fleet-src
+          persist-credentials: false
+
+      # The fleet checkout must not sit inside the tree being reported on:
+      # walk-based adapters (glambot, finishing-bot, cipherbot) would scan the
+      # fleet's own source and emit findings no PR diff can match. actions/checkout
+      # only writes under the workspace, so the checkout is moved out to
+      # RUNNER_TEMP before anything reads the caller's tree. The lockfile hash
+      # for the cache key is taken first, while hashFiles() can still see it.
+      - name: Move the fleet checkout out of the scanned tree
+        id: fleet
+        run: |
+          set -euo pipefail
+          lockhash=$(cat .fleet-src/bots/*/Cargo.lock .fleet-src/shared-context/Cargo.lock 2>/dev/null | sha256sum | cut -c1-16)
+          mv .fleet-src "$RUNNER_TEMP/fleet-src"
+          echo "dir=$RUNNER_TEMP/fleet-src" >> "$GITHUB_OUTPUT"
+          echo "lockhash=$lockhash" >> "$GITHUB_OUTPUT"
+
+      - name: Plan which adapters to build
+        id: plan
+        env:
+          FLEET_DIR: ${{ steps.fleet.outputs.dir }}
+          ENROLMENT: ${{ inputs.enrolment }}
+          MEMBERS: ${{ inputs.members }}
+        run: |
+          set -euo pipefail
+          args=(--plan --enrolment "$ENROLMENT")
+          IFS=',' read -r -a _m <<< "${MEMBERS:-}"
+          for m in "${_m[@]}"; do m="${m// /}"; [ -n "$m" ] && args+=(--member "$m"); done
+          plan=$(bash "$FLEET_DIR/scripts/fleet-report-back.sh" "${args[@]}")
+          echo "plan:"; printf '%s\n' "$plan" | sed 's/^/  /'
+          # Crates to build: the non-empty second column, deduplicated.
+          crates=$(printf '%s\n' "$plan" | awk -F'\t' '$2 != "" {print $2}' | sort -u | tr '\n' ' ')
+          echo "crates=${crates% }" >> "$GITHUB_OUTPUT"
+          if printf '%s\n' "$plan" | awk -F'\t' '$1 == "panicbot" {found=1} END {exit !found}'; then
+            echo "panicbot=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "panicbot=false" >> "$GITHUB_OUTPUT"
+          fi
+          {
+            echo "workspaces<<WS"
+            for c in $crates; do echo "$FLEET_DIR/bots/$c -> target"; done
+            echo "$FLEET_DIR/shared-context -> target"
+            echo "WS"
+          } >> "$GITHUB_OUTPUT"
+          [ -n "${crates% }" ] && echo "build=true" >> "$GITHUB_OUTPUT" || echo "build=false" >> "$GITHUB_OUTPUT"
+
+      # Rust comes with the GitHub-hosted runner image (rustup, stable), so no
+      # third-party toolchain action is needed; the cache is actions/cache, keyed
+      # on the fleet commit's lockfiles. Only GitHub-owned actions, pinned by
+      # SHA, appear in this file: a caller whose Actions policy requires SHA pins
+      # or forbids unverified creators can still call it (metamanifold-webui
+      # PR 296 died at plan time with zero jobs on the tag-pinned version).
+      - name: Cache adapter builds
+        if: steps.plan.outputs.build == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ${{ runner.temp }}/fleet-src/bots/*/target
+          key: fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.fleet.outputs.lockhash }}-${{ steps.plan.outputs.crates }}
+          restore-keys: |
+            fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-${{ steps.fleet.outputs.lockhash }}-
+            fleet-report-back-v3-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Report the Rust toolchain in use
+        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
+        run: |
+          set -euo pipefail
+          command -v cargo >/dev/null || { echo "::error::cargo is not on this runner; the adapters cannot be built"; exit 1; }
+          cargo --version; rustc --version
+
+      - name: Restore panic-attack build cache
+        if: steps.plan.outputs.panicbot == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.panic-attack
+          key: panic-attack-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.PANIC_ATTACK_SHA }}
+
+      - name: Build the enrolled adapters
+        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
+        env:
+          FLEET_DIR: ${{ steps.fleet.outputs.dir }}
+          CRATES: ${{ steps.plan.outputs.crates }}
+          PANICBOT: ${{ steps.plan.outputs.panicbot }}
+        run: |
+          set -euo pipefail
+          # One build recipe for the reusable and for inline callers; a crate
+          # that fails to build is a warning here and an `error` row later.
+          args=(--fleet "$FLEET_DIR" --bin-dir "$RUNNER_TEMP/fleet-bin" --crates "$CRATES")
+          [ "$PANICBOT" = true ] && args+=(--panic-attack "$PANIC_ATTACK_SHA")
+          bash "$FLEET_DIR/scripts/fleet-report-back-build.sh" "${args[@]}"
+
+      - name: Run the enrolled adapters and write the envelopes
+        id: run
+        # The envelopes are written under RUNNER_TEMP, never into the scanned tree:
+        # each member's JSON would otherwise be scanned by the walk-based adapters
+        # that run after it, and a tracked report-backs/ directory in the caller
+        # would leak into the artifact.
+        env:
+          FLEET_DIR: ${{ steps.fleet.outputs.dir }}
+          ENROLMENT: ${{ inputs.enrolment }}
+          MEMBERS: ${{ inputs.members }}
+          ADAPTER_TIMEOUT: ${{ inputs.adapter-timeout-seconds }}
+          FLEET_REF: ${{ job.workflow_sha }}
+        run: |
+          set -euo pipefail
+          # The job limit (timeout-minutes) assumes at most 300 s per adapter; a
+          # larger input would let the scans outrun it and lose every envelope.
+          case "$ADAPTER_TIMEOUT" in
+            ''|*[!0-9]*|0) echo "::warning title=adapter-timeout-seconds::'$ADAPTER_TIMEOUT' is not a positive integer; using 300"; ADAPTER_TIMEOUT=300 ;;
+          esac
+          if [ "$ADAPTER_TIMEOUT" -gt 300 ]; then
+            echo "::warning title=adapter-timeout-seconds::$ADAPTER_TIMEOUT s exceeds the 300 s the job limit is sized for; capped at 300"
+            ADAPTER_TIMEOUT=300
+          fi
+          mkdir -p "$RUNNER_TEMP/fleet-bin" "$RUNNER_TEMP/report-backs"
+          args=(--repo . --out "$RUNNER_TEMP/report-backs" --bin-dir "$RUNNER_TEMP/fleet-bin"
+                --enrolment "$ENROLMENT" --fleet-ref "$FLEET_REF"
+                --timeout "$ADAPTER_TIMEOUT" --summary "$GITHUB_STEP_SUMMARY")
+          IFS=',' read -r -a _m <<< "${MEMBERS:-}"
+          for m in "${_m[@]}"; do m="${m// /}"; [ -n "$m" ] && args+=(--member "$m"); done
+          bash "$FLEET_DIR/scripts/fleet-report-back.sh" "${args[@]}"
+          # Status map for the caller, and a non-empty directory for the
+          # upload: a run that enrolled nobody still uploads the note below so
+          # the consumer can tell "nothing enrolled" from "upload failed".
+          if ls "$RUNNER_TEMP"/report-backs/*.json >/dev/null 2>&1; then
+            members=$(jq -s -c 'map({(.reporter): .status}) | add' "$RUNNER_TEMP"/report-backs/*.json)
+          else
+            members='{}'
+            printf 'No member is enrolled in %s; no report-back was produced.\n' "$ENROLMENT" > "$RUNNER_TEMP/report-backs/NONE-ENROLLED.txt"
+          fi
+          echo "members=$members" >> "$GITHUB_OUTPUT"
+          echo "members: $members"
+
+      - name: Upload the report-backs
+        if: ${{ always() && steps.run.conclusion != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ runner.temp }}/report-backs
+          if-no-files-found: error
+          retention-days: 90

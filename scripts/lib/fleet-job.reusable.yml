@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MPL-2.0
+# fleet-job.reusable.yml — the fork-governance `fleet` job fix-fleet-enrolment.sh
+# inserts before the Hypatia lane in a repository under the hyperpolymath owner,
+# where the gitbot-fleet reusable workflow can be called. __FLEET_REF__ is
+# filled in by the fixer.
+  # Produces .gitbot-fleet/report-backs/*.json as the `fleet-report-backs`
+  # artifact; the Hypatia lane downloads it before rendering (docs/REPORT-BACK.adoc
+  # in hyperpolymath/gitbot-fleet). Bump the pin deliberately.
+  fleet:
+    name: Fleet report-backs
+    uses: hyperpolymath/gitbot-fleet/.github/workflows/fleet-report-back-reusable.yml@__FLEET_REF__
+    permissions:
+      contents: read
+

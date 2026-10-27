@@ -1,0 +1,250 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+= Fleet report-backs — how a bot's verdict reaches a pull request
+:toc: left
+:toclevels: 3
+:revdate: 2026-10-27
+
+== 1. The problem this solves
+
+Every pull request in an estate repository carries one generated
+*Fork governance* comment whose third lane is the *Hypatia verdict grid*
+(metadatastician/standards: `3-practice/fork-governance/`,
+`docs/VERDICT-GRID-SPEC.adoc`). The grid has three permanent rows (Hypatia,
+panic-attack, pons asinorum) and one row per gitbot-fleet member the repository
+enrols in `.gitbot-fleet/enrolment.json`.
+
+A fleet row leaves 🟠 *indeterminate* only when a file
+`.gitbot-fleet/report-backs/<member>.json` is present in the scanned tree when
+the grid renders. Until 2026-10-27 nothing in the estate produced one. Measured
+on hyperpolymath/metamanifold-webui#295: seven enrolled members, seven rows
+reading "enrolled, but no report-back was received". The fleet was offering
+nothing, and the grid said so honestly.
+
+This document describes the producer that closes the gap and how a repository
+adopts it.
+
+== 2. Components
+
+[cols="1,3"]
+|===
+| `scripts/fleet-report-back.sh`
+| The driver. Reads the enrolment manifest, runs each enrolled adapter's
+  existing local-directory JSON mode, translates the output into the grid's
+  envelope, writes `<out>/<member>.json`. Exit 0 whenever envelopes were
+  written, whatever they say. `--plan` prints which crates a workflow must
+  build. `--summary` appends a Markdown table.
+
+| `scripts/fleet-report-back-build.sh`
+| Builds the enrolled adapter crates (`cargo build --release --locked`) into one
+  directory and installs panic-attack at the pinned commit for panicbot. One
+  recipe for the reusable workflow and for inline callers; a crate that fails to
+  build is a warning here and an `error` row later, never a dead run.
+
+| `tests/fleet-report-back-test.sh`
+| 48 checks over stubbed adapters whose JSON shapes were taken from live runs:
+  enrolment rules, every adapter's translation, path relativisation, the
+  failure modes, envelope shape, `--plan`, the summary, and (with
+  `STANDARDS_DIR` set) the real renderer turning the rows non-orange.
+
+| `.github/workflows/fleet-report-back-reusable.yml`
+| `workflow_call`. Checks out the caller and gitbot-fleet at the pinned commit,
+  builds only the enrolled adapters (actions/cache; only GitHub-owned, SHA-pinned actions), builds panic-attack
+  at the SHA the standards Hypatia lane pins, runs the driver, uploads the
+  `fleet-report-backs` artifact. `contents: read` only. Posts nothing.
+
+| `.github/workflows/fleet-report-back.yml`
+| This repository's dogfood: runs the reusable on its own PRs, then renders the
+  envelopes with the real standards renderer and fails if any enrolled member
+  is still reported silent.
+
+| `.gitbot-fleet/enrolment.json`, `.gitbot-fleet/report-backs/`
+| This repository's own manifest and the (deliberately empty) directory the
+  lane fills at render time.
+|===
+
+== 3. The envelope
+
+One JSON object per member, key-sorted and compact with one final LF (the
+I-JSON/JCS shape the estate asks of every `.json` it writes, as far as `jq`
+produces it):
+
+[source,json]
+----
+{ "findings": [ { "file": "src/a.jl", "line": 0, "message": "eval in src/a.jl",
+                  "rule_id": "PA018", "severity": "warning" } ],
+  "reason": null,
+  "ref": "<gitbot-fleet commit>",
+  "reporter": "panicbot",
+  "status": "ran",
+  "title": "panicbot (panic recovery, error handling)" }
+----
+
+`status` is `ran`, `not_run` or `error`; `reason` is required unless the member
+ran. The driver never writes `not_applicable`: that is a statement about the
+repository and belongs in the enrolment manifest (`"enrolled": false` with a
+reason), where the grid renders it grey. `severity` is the fleet's own word
+(`error`, `warning`, `info`, `suggestion`) or a scanner word (`critical`,
+`high`, `medium`, `low`); the renderer normalises both
+(`error` → high, `warning` → medium, `info`/`suggestion` → minor). File paths
+are repository-relative with no `./`, so the grid's change-scope (delta)
+grading can match them against the diff.
+
+== 4. What each member reports, and how
+
+[cols="1,2,3",options="header"]
+|===
+| Member | Invocation | Translation and honesty notes
+
+| rhodibot
+| `rhodibot canon --path <repo> --format json`
+| File-presence criteria against the vendored RSR canon. `satisfied` rows are
+  not findings; `missing` → error, `deprecated` → warning, `relocated` → info.
+  Advisory by rhodibot's own design: hypatia's `rsr-conformance` is the
+  normative checker.
+
+| panicbot
+| `panicbot --format json scan <repo>`
+| Wraps `panic-attack assail`; panicbot's own translator maps critical → error,
+  high → warning. The grid already carries a direct panic-attack row from the
+  Hypatia lane, so a repository that enrols panicbot sees the same tool twice,
+  once through the bot's categorisation. `fleet` mode is *not* used: it writes a
+  `.panicbot/*.a2ml` debt register into the scanned tree, and A2ML is retired.
+
+| seambot
+| `seambot --path <repo> --format json check`
+| Seam register completeness, drift and hidden channels. A repository with no
+  `spec/seams/seam-register.json` gets one `error` finding saying so; whether
+  that is wanted is the enrolment manifest's call.
+
+| finishingbot
+| `finishing-bot --path <repo> --format json audit`
+| Eight analyzers (license, placeholders, claims, release, SCM files, testing,
+  tooling, v1 readiness) flattened to one list. Exits 1 when findings block a
+  release; that is still a run.
+
+| glambot
+| `glambot --path <repo> --format json audit`
+| Visual, accessibility, SEO, machine-readability and git-SEO analyzers,
+  flattened.
+
+| accessibilitybot
+| `accessibilitybot fleet <repo>`
+| WCAG 2.3 static analysis of HTML/CSS; absolute paths are relativised. Exits 1
+  when findings block a release; still a run.
+
+| cipherbot
+| `cipherbot --format json scan <repo>`
+| Cryptographic hygiene and post-quantum readiness findings.
+
+| echidnabot
+| none
+| echidnabot verifies proofs by dispatching to an ECHIDNA engine and has no
+  local mode. Without `ECHIDNA_URL` the envelope is `not_run` with that reason:
+  still orange, but the comment now says *why*. The row turns green or red once
+  the engine leg lands; that is tracked in this repository, not papered over
+  with a placeholder.
+
+| sustainabot
+| none
+| Reserved slot (`bots/sustainabot/README.adoc`); `not_run` with that reason.
+  A repository should mark it `enrolled: false` instead.
+|===
+
+Adapter failures are never silent and never fatal to the run: a missing
+binary, a crash without JSON, or a timeout each become `error` with the first
+diagnostic line as the reason, and the grid renders that orange. Failing the
+job would have turned every other member's evidence into a missing artifact.
+
+== 5. Adoption
+
+A repository needs three things.
+
+. *An enrolment manifest* at `.gitbot-fleet/enrolment.json`, stating for every
+  member whether it applies, with a reason when it does not. Enrol what is
+  true of the repository, not what would look complete: a grey row with a
+  reason is honest; an orange row forever is noise.
+. *The producer job*, before the Hypatia lane in the fork-governance workflow.
+  Where the repository's Actions policy allows a reusable workflow from
+  `hyperpolymath`:
++
+[source,yaml]
+----
+jobs:
+  fleet:
+    name: Fleet report-backs
+    uses: hyperpolymath/gitbot-fleet/.github/workflows/fleet-report-back-reusable.yml@<SHA>
+    permissions:
+      contents: read
+  hypatia:
+    needs: [fleet]
+    if: ${{ always() }}
+    uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@<SHA>
+    # the reusable downloads the `fleet-report-backs` artifact by default
+----
++
+Where it does not (a repository under another owner calling a reusable from
+`hyperpolymath` fails at plan time with zero jobs), run the same steps inline:
+check out `hyperpolymath/gitbot-fleet` at a pinned SHA with `actions/checkout`,
+run `scripts/fleet-report-back.sh`, upload the artifact under the same name.
+The standards canon's own `fork-governance.yml` is the worked example.
+. *A Hypatia lane that reads the artifact.* The `report-backs-artifact` input
+  (default `fleet-report-backs`; `""` opts out) and the download step before
+  "Render the verdict grid" are a change to metadatastician/standards
+  `hypatia-scan-reusable.yml` that is prepared but NOT yet on its `main`: no
+  pinned standards revision at the time of writing carries them, so a caller
+  on today's standards pin produces the artifact and the lane does not read it
+  yet. Until that change lands and callers bump their pin, a repository gets
+  rows only through a fork-local copy of the reusable that carries the step
+  (hyperpolymath/metamanifold-webui does, as its fork delta 4). This document
+  will name the first standards commit that carries the input once it exists.
+
+== 6. Rolling it out across the estate
+
+The rows are not metamanifold-webui's: every repository that runs the fork
+governance comment can have them. Two routes, chosen by the owner 2026-10-27:
+
+* *New repositories* inherit the manifest and the inline `fleet` job from
+  `hyperpolymath/rsr-template-repo` (its `.gitbot-fleet/` and
+  `.github/workflows/fork-governance.yml`).
+* *Existing repositories* get them from `scripts/fix-fleet-enrolment.sh`,
+  which rides the standards pin-propagation PR each repository already
+  receives (standards `scripts/propagate-workflow-pins.sh`): run both in the
+  same branch, so the lane that reads the artifact and the job that produces it
+  land together. Registered as recipe `recipe-add-fleet-enrolment` and category
+  `MissingFleetEnrolment` in `scripts/fix-script-registry.json`; no Hypatia
+  rule emits that finding yet, so today the fixer is run by hand or from a
+  campaign manifest.
+
+[source,bash]
+----
+# in a consumer checkout, on the branch that bumps its standards pins
+STANDARDS_DIR=~/standards FLEET_REF=<gitbot-fleet main sha> \
+  bash ~/gitbot-fleet/scripts/fix-fleet-enrolment.sh .
+# exit 0: wired end to end. exit 3: written, with the MANUAL lines naming what
+# is still missing (a lock to regenerate, a standards pin that does not read the
+# artifact, a hypatia job to wire by hand). exit 2: refused, nothing changed.
+----
+
+What the fixer writes, and what it refuses to:
+
+[cols="1,3",options="header"]
+|===
+| Item | Rule
+| `.gitbot-fleet/enrolment.json`
+| Written only when absent. rhodibot, finishingbot, glambot and cipherbot are enrolled everywhere; panicbot, seambot, accessibilitybot and echidnabot are enrolled when the tree shows what they read (a `Cargo.toml`, `spec/seams/seam-register.json`, HTML files, proof files) and otherwise carry that observation as the reason. An existing manifest is the owner's and is never rewritten.
+| `.gitbot-fleet/report-backs/README.md`
+| Written only when absent.
+| `fleet` job
+| Inserted before `hypatia:` in `fork-governance.yml`. Under the hyperpolymath owner it calls `fleet-report-back-reusable.yml` (`scripts/lib/fleet-job.reusable.yml`); under any other owner, where a cross-owner reusable plans zero jobs, the steps go inline (`scripts/lib/fleet-job.inline.yml`, kept step for step with the reusable by `tests/fix-fleet-enrolment-test.sh`). The pin is `FLEET_REF` or this checkout's `origin/main`, never a feature-branch HEAD.
+| `hypatia` wiring
+| Gains `needs: [fleet]` (appended to a flow list it already has) and, only when it has no `if:`, `if: ${{ !cancelled() }}`. A block-list `needs:` is left to a human. An existing `always()` is pointed out, not changed.
+| `actions.lock`
+| Never edited. When one exists and a job was inserted the fixer exits 3 naming `gh actions-lock`.
+| Standards pin
+| Never bumped. The fixer reads the pinned `hypatia-scan-reusable.yml` from `STANDARDS_DIR` and exits 3 unless it takes `report-backs-artifact`: an artifact no lane downloads is unwired.
+|===
+
+Until the standards change in §5 step 3 is on `main`, every run against a
+remote standards pin ends in that exit 3. That is the intended order: the
+campaign starts when the standards pin can move, not before.
