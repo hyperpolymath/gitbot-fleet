@@ -4,7 +4,8 @@
 
 use serde::Serialize;
 
-/// Internal test/bench/ABI-shim packages nobody else would depend on by name.
+/// Whether a name passes the case-insensitive filter for internal test,
+/// benchmark, and ABI-shim package names.
 pub fn is_distinctive(name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     let internal = matches!(
@@ -31,6 +32,7 @@ pub const AMBIGUOUS: &[&str] = &["proven", "trope"];
 /// One search term per package family: `proven-ffi`, `proven-dns`… collapse to
 /// `proven`. Stems shorter than five characters are too noisy to search, so
 /// those names are kept whole.
+/// Internal package names are excluded; results are sorted and deduplicated.
 pub fn search_stems(names: &[String]) -> Vec<String> {
     let mut stems: Vec<String> = names
         .iter()
@@ -60,6 +62,11 @@ pub enum Confidence {
     Low,
 }
 
+/// Classify already-matched dependencies and counts of owner references.
+///
+/// Any pack or submodule reference yields high confidence. Otherwise, a name
+/// outside [`AMBIGUOUS`] yields medium confidence, only ambiguous names yield
+/// low confidence, and no evidence yields `None`. Name comparison is case-sensitive.
 pub fn classify(deps: &[String], pack_refs: usize, sub_refs: usize) -> Option<Confidence> {
     if pack_refs > 0 || sub_refs > 0 {
         Some(Confidence::High)

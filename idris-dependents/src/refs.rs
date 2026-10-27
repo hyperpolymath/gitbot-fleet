@@ -11,9 +11,12 @@ pub struct PackRef {
     pub url: String,
 }
 
-/// True when `url` is a GitHub URL (https, ssh or scp form) under one of
-/// `owners`. The owner must match exactly (case-insensitive), and `github.com`
-/// must be the whole host, so `notgithub.com/owner/x` does not count.
+/// Match a watched owner in a GitHub-style repository reference, including
+/// HTTPS, SSH, and scp forms. Owner matching is ASCII case-insensitive and
+/// requires a following `/`.
+///
+/// This is a textual check, not full URL validation: `github.com` may follow
+/// `/`, `@`, or `.` (or start the input), so subdomains and embedded paths can match.
 pub fn points_at(url: &str, owners: &[String]) -> bool {
     let url = url.to_ascii_lowercase();
     let mut from = 0;
@@ -39,6 +42,8 @@ pub fn points_at(url: &str, owners: &[String]) -> bool {
 /// `pack.toml` custom entries pointing at `owners`, in file order.
 /// Uses a real TOML parser, so quoting styles and `#` inside strings are
 /// handled the way pack itself handles them.
+/// Missing custom tables or entries without matching string URLs are ignored.
+/// Returns a TOML parse error if the document is invalid.
 pub fn pack_toml_refs(text: &str, owners: &[String]) -> Result<Vec<PackRef>, toml::de::Error> {
     let doc: toml::Table = text.parse()?;
     let mut refs = Vec::new();
@@ -60,7 +65,9 @@ pub fn pack_toml_refs(text: &str, owners: &[String]) -> Result<Vec<PackRef>, tom
     Ok(refs)
 }
 
-/// Submodule URLs in `.gitmodules` (git-config syntax) pointing at `owners`.
+/// Extract URLs matching `owners` from trimmed `url =` lines, in input order.
+/// Double-quoted values end at the next quote; unquoted values end at `#` or
+/// `;`. Sections and escapes are not interpreted, and duplicates are retained.
 pub fn gitmodules_refs(text: &str, owners: &[String]) -> Vec<String> {
     text.lines()
         .filter_map(|line| {
