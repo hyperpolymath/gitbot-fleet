@@ -21,7 +21,9 @@
 #
 # Rows are replayed repo-wide, as the fixers run: a row naming one `file` is
 # a narrower claim than the predicate measures, so it is skipped (and counted
-# on stderr) rather than refuted by a target in some other file.
+# on stderr) rather than refuted by a target in some other file. "." (and
+# "./") is not a file: dispatch-runner.sh passes it as the repo-root marker for
+# repo-grain fixes, so those rows are repo-scoped and replayed.
 set -euo pipefail
 LOG=$1; shift
 # The fixers' own exclusion list (lib/third-party-excludes.sh), as glob
@@ -32,6 +34,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/third-party-excludes.sh"
 EX=()
 for d in "${THIRD_PARTY_SKIP_DIRS[@]}"; do EX+=(":(exclude,glob)**/$d/**"); done
 IDR_EX=("${EX[@]}" ':(exclude,glob)**/.pack/**') # fix-believe-me.sh also skips .pack
+# jq: a row is repo-scoped when it names no file, or only the repo-root marker.
+# shellcheck disable=SC2016 # $f is a jq variable, not a shell one
+REPO_SCOPED='def repo_scoped: (.file // "") as $f | $f == "" or $f == "." or $f == "./";'
 # grep_hits <repo> <git-grep args...>: the git grep output, or exit 1 when
 # git grep itself failed (status > 1: no PCRE, unreadable revision). Status 1
 # is "no match", which is a count of 0, not an error.
@@ -63,9 +68,9 @@ pred() { # repo rev pattern -> count of remaining hits, or NA
 printf 'repo\tpattern\toutcome\tfixed_at\trev_at\thits_at\thits_plus7d\thits_head\n'
 for repo in "$@"; do
   name=$(basename "$repo"); head=$(git -C "$repo" rev-parse origin/main)
-  skipped=$(jq -c --arg r "$name" 'select(.repo==$r and (.file // "") != "")' "$LOG" | wc -l)
+  skipped=$(jq -c --arg r "$name" "$REPO_SCOPED"' select(.repo==$r and (repo_scoped | not))' "$LOG" | wc -l)
   ((skipped == 0)) || echo "audit: $name: $skipped file-scoped row(s) skipped" >&2
-  jq -r --arg r "$name" 'select(.repo==$r and (.file // "") == "") | [.pattern // .recipe_id // .pattern_id, .outcome, .fixed_at // .timestamp] | select(.[2] != null) | @tsv' "$LOG" | sort -u |
+  jq -r --arg r "$name" "$REPO_SCOPED"' select(.repo==$r and repo_scoped) | [.pattern // .recipe_id // .pattern_id, .outcome, .fixed_at // .timestamp] | select(.[2] != null) | @tsv' "$LOG" | sort -u |
   while IFS=$'\t' read -r pat out ts; do
     at=$(git -C "$repo" rev-list -1 --before="$ts" origin/main || true)
     p7=$(git -C "$repo" rev-list -1 --before="$(date -u -d "$ts + 7 days" +%FT%TZ)" origin/main || true)

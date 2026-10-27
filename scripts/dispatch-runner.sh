@@ -115,8 +115,8 @@ fold_counts() {
     local name
     [[ -f "$PARALLEL_TMPDIR/tally" ]] || return 0
     while IFS= read -r name; do
+        # shellcheck disable=SC2004 # $name names the counter; the $ is the indirection
         case "$name" in
-            # shellcheck disable=SC2004 # $name names the counter
             EXECUTED|SKIPPED|FAILED|SUCCEEDED) (( $name++ )) || true ;;
         esac
     done < "$PARALLEL_TMPDIR/tally"
