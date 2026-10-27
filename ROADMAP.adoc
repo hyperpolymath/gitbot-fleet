@@ -80,7 +80,7 @@ Robot-repo-automaton is currently at ~5% completion. This milestone brings it to
 * [ ] GitHub Actions integration for automated fleet runs
 * [ ] GitLab CI integration via mirror workflows
 * [ ] Scheduled fleet scans (cron-based)
-* [ ] PR-triggered scans with bot comments
+* [~] PR-triggered scans with bot comments — report-backs land on every PR grid via `fleet-report-back-reusable.yml` (2026-10-27, link:docs/REPORT-BACK.adoc[]); comments are posted by the fork-governance engine in standards, not by the fleet
 * [ ] Status checks: block merge on Eliminate-tier findings
 
 == v1.3.0 -- Observability and Analytics

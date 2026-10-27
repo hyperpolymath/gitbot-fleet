@@ -1,0 +1,117 @@
+# This workflow is managed by gh actions-lock.
+# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell (hyperpolymath) <j.d.a.jewell@open.ac.uk>
+#
+# fleet-report-back.yml — the fleet dogfoods its own report-back reusable.
+#
+# Every pull request here runs the enrolled adapters against this repository
+# through `fleet-report-back-reusable.yml`, then proves the artifact is the
+# evidence the Hypatia verdict grid accepts: the real renderer from
+# metadatastician/standards is run over the envelopes and the enrolment
+# manifest, and the job FAILS if any enrolled member is still reported as
+# "enrolled, but no report-back was received". That is the one claim this
+# workflow exists to test: the fleet's PR feedback is no longer silent.
+#
+# The grid rendered here carries only fleet rows (no Hypatia, panic-attack or
+# pons evidence is passed), so its overall state is orange by construction and
+# is not a verdict on this repository. The repository's own Hypatia lane is
+# hypatia-scan.yml; once its standards pin carries the `report-backs-artifact`
+# input, that lane consumes the same artifact and the rows appear in the PR
+# comment. Until then this summary is where the rows are visible.
+
+name: Fleet report-backs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # metadatastician/standards commit whose scripts/verdict-grid.sh renders the
+  # grid. Bump deliberately; the renderer's envelope contract is what the
+  # driver's test suite (tests/fleet-report-back-test.sh) is written against.
+  STANDARDS_GRID_SHA: 9ae23875d29a7c6de71a17eb026d54b914a3d2bf
+
+jobs:
+  report-back:
+    name: Produce the report-backs
+    uses: ./.github/workflows/fleet-report-back-reusable.yml
+    permissions:
+      contents: read
+    with:
+      # The commit under test, so a PR that changes the driver is tested with
+      # its own driver. (For a local `uses:` this equals job.workflow_sha; it
+      # is passed explicitly so the dependency is visible.)
+      fleet-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  render-check:
+    name: The grid accepts the envelopes
+    needs: [report-back]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout the verdict grid renderer
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: metadatastician/standards
+          ref: ${{ env.STANDARDS_GRID_SHA }}
+          path: .standards-grid
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/verdict-grid.sh
+            scripts/lib/verdict-grid.jq
+          sparse-checkout-cone-mode: false
+
+      - name: Download the report-backs
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: fleet-report-backs
+          path: report-backs
+
+      - name: Run the driver's test suite against the real renderer
+        run: STANDARDS_DIR="$PWD/.standards-grid" bash tests/fleet-report-back-test.sh
+
+      - name: Render the grid from the envelopes and fail on any silent member
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          MEMBERS: ${{ needs.report-back.outputs.members }}
+        run: |
+          set -euo pipefail
+          echo "members reported by the reusable: $MEMBERS"
+          ls -l report-backs
+          bash .standards-grid/scripts/verdict-grid.sh render --out grid \
+            --hypatia /dev/null --panic /dev/null --pons /dev/null \
+            --report-backs report-backs --enrolment .gitbot-fleet/enrolment.json \
+            --sha "$HEAD_SHA" --run "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
+          {
+            echo "## Fleet rows as the Hypatia verdict grid renders them"
+            echo
+            echo "_Fleet rows only: no Hypatia, panic-attack or pons evidence is passed here, so the lane state is orange by construction._"
+            echo
+            cat grid/report.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          silent=$(jq -r '[.reporters[] | select(.reason == "enrolled, but no report-back was received") | .id] | join(", ")' grid/report.json)
+          if [ -n "$silent" ]; then
+            echo "::error::enrolled member(s) produced no report-back: $silent"
+            exit 1
+          fi
+          enrolled=$(jq -r '[.reporters | to_entries[] | select(.value.enrolled == true) | .key] | length' .gitbot-fleet/enrolment.json)
+          reported=$(jq -r '[.reporters[] | select(.status != "not_applicable")] | length' grid/report.json)
+          echo "enrolled=$enrolled fleet rows with evidence or a stated reason=$((reported - 3))"
+          echo "every enrolled member reported back"

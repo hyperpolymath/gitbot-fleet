@@ -28,3 +28,15 @@ reset to a placeholder. See `sustainabot/README.adoc`.
 If a bot needs a heavyweight capability that deserves its own project, build that
 project in its **own repository** and have the adapter here depend on it as an
 external crate or service. Keep the adapter thin.
+
+== How an adapter reports back to a pull request
+
+Each adapter keeps a local-directory JSON mode (`rhodibot canon --path`,
+`panicbot scan`, `seambot check`, `finishing-bot audit`, `glambot audit`,
+`accessibilitybot fleet`, `cipherbot scan`). `scripts/fleet-report-back.sh`
+runs the members a repository enrols in `.gitbot-fleet/enrolment.json` and
+translates each output into the report-back envelope the Hypatia verdict grid
+reads, so the member's row on the pull request stops being orange. A new
+adapter joins that path by adding one `case` arm to the driver and one stub to
+`tests/fleet-report-back-test.sh`; it must print JSON to stdout and write
+nothing into the scanned tree. See link:../docs/REPORT-BACK.adoc[docs/REPORT-BACK.adoc].

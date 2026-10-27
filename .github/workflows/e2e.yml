@@ -30,3 +30,5 @@ jobs:
         run: bash tests/retired-descriptile-policy-test.sh
       - name: Verify star-list enrollment discovery
         run: bash tests/enroll-discovery-test.sh
+      - name: Verify the fleet report-back driver (envelope contract)
+        run: bash tests/fleet-report-back-test.sh

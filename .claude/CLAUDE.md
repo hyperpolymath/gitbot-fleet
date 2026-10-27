@@ -37,6 +37,7 @@ hypatia (scanner)  →  findings JSONL  →  fleet-coordinator.sh  →  dispatch
 | `fix-*.sh` | `scripts/` | ~50 fix scripts for eliminate-tier patterns |
 | `shared-context/` | `shared-context/` | Rust crate for inter-bot communication |
 | `robot-repo-automaton/` | `robot-repo-automaton/` | Rust CLI: scan, fix, PR creation |
+| `fleet-report-back.sh`, `fleet-report-back-build.sh` | `scripts/` | Build the enrolled adapters, run them on a PR head, and write the report-back envelopes the Hypatia verdict grid reads (`docs/REPORT-BACK.adoc`) |
 
 ## Build & Run
 
