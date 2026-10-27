@@ -49,7 +49,7 @@ adopts it.
 
 | `.github/workflows/fleet-report-back-reusable.yml`
 | `workflow_call`. Checks out the caller and gitbot-fleet at the pinned commit,
-  builds only the enrolled adapters (Swatinem/rust-cache), builds panic-attack
+  builds only the enrolled adapters (actions/cache; only GitHub-owned, SHA-pinned actions), builds panic-attack
   at the SHA the standards Hypatia lane pins, runs the driver, uploads the
   `fleet-report-backs` artifact. `contents: read` only. Posts nothing.
 

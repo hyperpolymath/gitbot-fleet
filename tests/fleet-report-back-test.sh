@@ -172,6 +172,16 @@ run "$TMP/o6" --enrolment "" --member sustainabot --member nosuchbot
 check "sustainabot is not_run (reserved slot)" not_run "$(field "$TMP/o6/sustainabot.json" .status)"
 check "an unknown member is error" error "$(field "$TMP/o6/nosuchbot.json" .status)"
 
+# 4b. a large findings list must not die on ARG_MAX (seen live: 146 panicbot
+#     findings killed jq with "Argument list too long" when passed via argv).
+stub cipherbot '[ "$1 $2 $3" = "--format json scan" ] || { echo "bad args: $*" >&2; exit 9; }
+jq -n -c '"'"'[range(6000) | {rule_id: "CIPHER-\(.)", severity: "warning", file: "src/f\(.).jl", line: ., message: ("m" * 60)}]'"'"''
+run "$TMP/o4b" --enrolment "" --member cipherbot
+check "a 6000-finding envelope is written (no ARG_MAX failure)" ran "$(field "$TMP/o4b/cipherbot.json" .status)"
+check "...with every finding kept" 6000 "$(field "$TMP/o4b/cipherbot.json" '.findings | length')"
+stub cipherbot '[ "$1 $2 $3" = "--format json scan" ] || { echo "bad args: $*" >&2; exit 9; }
+echo "[]"'
+
 # 5. envelope shape ────────────────────────────────────────────────────────────
 check "envelope keys are exactly the spec's, sorted" "findings reason ref reporter status title" \
   "$(field "$r" 'keys | join(" ")')"

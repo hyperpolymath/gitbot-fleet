@@ -217,12 +217,17 @@ find_binary() {
 # the estate's JSON policy asks of every .json it writes (standards
 # 3-practice/JSON-POLICY.adoc), as far as jq can produce it.
 write_envelope() { # member status reason findings_json
-  local m="$1" status="$2" reason="$3" findings="$4"
+  local m="$1" status="$2" reason="$3" findings="$4" ftmp
+  # The findings go in through a FILE, never argv: a few hundred findings
+  # exceed ARG_MAX and jq dies with "Argument list too long" (seen live on
+  # gitbot-fleet's own PR 626 with panicbot's 146 findings).
+  ftmp=$(mktemp); printf '%s' "$findings" > "$ftmp"
   jq -S -c -n --arg reporter "$m" --arg title "$(title_of "$m")" --arg status "$status" \
-    --arg reason "$reason" --arg ref "$fleet_ref" --argjson findings "$findings" \
+    --arg reason "$reason" --arg ref "$fleet_ref" --slurpfile findings "$ftmp" \
     '{reporter: $reporter, title: $title, status: $status,
       reason: (if $reason == "" then null else $reason end),
-      ref: $ref, findings: $findings}' > "$out/$m.json"
+      ref: $ref, findings: $findings[0]}' > "$out/$m.json"
+  rm -f "$ftmp"
 }
 
 # Make an adapter's file path relative to the repository root. Adapters differ:

@@ -14,7 +14,7 @@
 #
 # WHAT IT DOES. Checks out the caller's tree, checks out gitbot-fleet at the
 # commit the caller pinned, builds only the adapters the manifest enrols
-# (cached by Swatinem/rust-cache), runs `scripts/fleet-report-back.sh`, and
+# (cached with actions/cache), runs `scripts/fleet-report-back.sh`, and
 # uploads the envelopes as the `fleet-report-backs` artifact. The Hypatia lane
 # (standards: hypatia-scan-reusable.yml, input `report-backs-artifact`)
 # downloads that artifact into `.gitbot-fleet/report-backs/` before rendering.
@@ -50,15 +50,6 @@ name: Fleet report-backs (reusable)
 on:
   workflow_call:
     inputs:
-      fleet-ref:
-        description: >-
-          gitbot-fleet commit to run the adapters from. Defaults to the commit
-          of THIS workflow file, i.e. what the caller pinned in its `uses:`
-          (`job.workflow_sha`). Pass a SHA only to run a different fleet
-          commit than the workflow's own.
-        type: string
-        required: false
-        default: ""
       enrolment:
         description: Path of the enrolment manifest inside the caller's tree.
         type: string
@@ -100,7 +91,7 @@ jobs:
     name: Fleet report-backs
     runs-on: ubuntu-latest
     # Cold: up to six Rust adapters plus panic-attack from source (~15 min).
-    # Warm (rust-cache hit): about two minutes.
+    # Warm (cache hit): about two minutes.
     timeout-minutes: 45
     permissions:
       contents: read
@@ -114,7 +105,7 @@ jobs:
       PANIC_ATTACK_SHA: b689a74d2762a1c19839ae3fbd59b7fe5ef920ea
     steps:
       - name: Checkout the repository to report on
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           # The PR head, not the merge ref: the grid's change scope is computed
@@ -122,13 +113,17 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Checkout gitbot-fleet at the pinned commit
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: hyperpolymath/gitbot-fleet
           # `job.workflow_sha` is the commit of THIS file, which is what the
           # caller pinned. It is not `github.workflow_sha` (the caller's file)
           # and `github.job_workflow_sha` does not exist.
-          ref: ${{ inputs.fleet-ref || job.workflow_sha }}
+          # It is deliberately NOT an input: a ref a caller can choose is untrusted
+          # code run with a cache the default branch shares (CodeQL
+          # actions/cache-poisoning, three alerts on gitbot-fleet PR 626). The pin
+          # in `uses:` is the only way to choose the fleet commit, and it is immutable.
+          ref: ${{ job.workflow_sha }}
           path: .fleet-src
           persist-credentials: false
 
@@ -160,24 +155,36 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           [ -n "${crates% }" ] && echo "build=true" >> "$GITHUB_OUTPUT" || echo "build=false" >> "$GITHUB_OUTPUT"
 
-      - name: Install Rust toolchain
-        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-
+      # Rust comes with the GitHub-hosted runner image (rustup, stable), so no
+      # third-party toolchain action is needed; the cache is actions/cache, keyed
+      # on the fleet commit's lockfiles. Only GitHub-owned actions, pinned by
+      # SHA, appear in this file: a caller whose Actions policy requires SHA pins
+      # or forbids unverified creators can still call it (metamanifold-webui
+      # PR 296 died at plan time with zero jobs on the tag-pinned version).
       - name: Cache adapter builds
         if: steps.plan.outputs.build == 'true'
-        uses: Swatinem/rust-cache@v2.9.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          workspaces: ${{ steps.plan.outputs.workspaces }}
-          # The cache key must not depend on the caller's tree, only on the
-          # fleet commit's lockfiles, which rust-cache hashes from `workspaces`.
-          key: fleet-report-back-v1
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            .fleet-src/bots/*/target
+          key: fleet-report-back-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fleet-src/bots/*/Cargo.lock') }}-${{ steps.plan.outputs.crates }}
+          restore-keys: |
+            fleet-report-back-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.fleet-src/bots/*/Cargo.lock') }}-
+            fleet-report-back-v2-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Report the Rust toolchain in use
+        if: steps.plan.outputs.build == 'true' || steps.plan.outputs.panicbot == 'true'
+        run: |
+          set -euo pipefail
+          command -v cargo >/dev/null || { echo "::error::cargo is not on this runner; the adapters cannot be built"; exit 1; }
+          cargo --version; rustc --version
 
       - name: Restore panic-attack build cache
         if: steps.plan.outputs.panicbot == 'true'
-        uses: actions/cache@v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.panic-attack
           key: panic-attack-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.PANIC_ATTACK_SHA }}
@@ -201,7 +208,7 @@ jobs:
           ENROLMENT: ${{ inputs.enrolment }}
           MEMBERS: ${{ inputs.members }}
           ADAPTER_TIMEOUT: ${{ inputs.adapter-timeout-seconds }}
-          FLEET_REF: ${{ inputs.fleet-ref || job.workflow_sha }}
+          FLEET_REF: ${{ job.workflow_sha }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/fleet-bin" report-backs
@@ -225,7 +232,7 @@ jobs:
 
       - name: Upload the report-backs
         if: ${{ always() && steps.run.conclusion != 'skipped' }}
-        uses: actions/upload-artifact@v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.artifact-name }}
           path: report-backs
