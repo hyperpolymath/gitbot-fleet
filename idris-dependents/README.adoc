@@ -41,6 +41,9 @@ cargo run -- parse-ipkg path/to/pkg.ipkg      # offline: name + depends as JSON
 
 Queries that GitHub truncates (over 1000 results) or marks incomplete are
 listed in the report rather than silently dropped.
+Files returning HTTP 404, 410, or 451 are logged and listed as `skippedUrls`
+in the JSON report and in the CLI output; scanning continues. Other fetch
+errors, exhausted rate-limit retries, and failed search responses abort the scan.
 
 == How the `.ipkg` reader is checked
 

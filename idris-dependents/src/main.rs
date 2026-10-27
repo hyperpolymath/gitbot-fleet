@@ -150,6 +150,12 @@ fn print_report(r: &Report) {
             r.incomplete_queries.join("; ")
         );
     }
+    if !r.skipped_urls.is_empty() {
+        println!("\nSkipped unavailable files (HTTP 404, 410, or 451):");
+        for url in &r.skipped_urls {
+            println!("  {url}");
+        }
+    }
 }
 
 fn main() -> Result<()> {

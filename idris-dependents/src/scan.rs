@@ -24,6 +24,15 @@ pub struct Response {
     pub body: String,
 }
 
+impl Response {
+    fn into_body(self, url: &str) -> Result<String> {
+        if !(200..300).contains(&self.status) {
+            bail!("HTTP {} for {url}", self.status);
+        }
+        Ok(self.body)
+    }
+}
+
 /// Side effects the scan needs. `raw` asks for file contents instead of JSON.
 pub trait Io {
     fn get(&mut self, url: &str, raw: bool) -> Result<Response>;
@@ -59,6 +68,8 @@ pub struct Report {
     pub rows: Vec<Row>,
     /// Queries whose results GitHub truncated or marked incomplete.
     pub incomplete_queries: Vec<String>,
+    /// Raw file URLs unavailable with HTTP 404, 410, or 451.
+    pub skipped_urls: Vec<String>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -87,10 +98,11 @@ struct Acc {
 struct Scanner<'a, I: Io> {
     io: &'a mut I,
     incomplete: Vec<String>,
+    skipped_urls: Vec<String>,
 }
 
 impl<I: Io> Scanner<'_, I> {
-    fn get(&mut self, url: &str, raw: bool) -> Result<String> {
+    fn get(&mut self, url: &str, raw: bool) -> Result<Response> {
         for _ in 0..=5 {
             let res = self.io.get(url, raw)?;
             let h = |k: &str| res.headers.get(k).map(String::as_str);
@@ -98,10 +110,7 @@ impl<I: Io> Scanner<'_, I> {
                 || (res.status == 403
                     && (h("retry-after").is_some() || h("x-ratelimit-remaining") == Some("0")));
             if !limited {
-                if !(200..300).contains(&res.status) {
-                    bail!("HTTP {} for {url}", res.status);
-                }
-                return Ok(res.body);
+                return Ok(res);
             }
             let retry_after = h("retry-after").and_then(|v| v.parse::<u64>().ok());
             let reset = h("x-ratelimit-reset").and_then(|v| v.parse::<u64>().ok());
@@ -116,6 +125,19 @@ impl<I: Io> Scanner<'_, I> {
         bail!("still rate-limited after 5 retries: {url}")
     }
 
+    fn get_file(&mut self, url: &str) -> Result<Option<String>> {
+        let res = self.get(url, true)?;
+        if matches!(res.status, 404 | 410 | 451) {
+            self.io.log(&format!(
+                "  skipping unavailable file {url}: HTTP {}",
+                res.status
+            ));
+            self.skipped_urls.push(url.to_string());
+            return Ok(None);
+        }
+        res.into_body(url).map(Some)
+    }
+
     fn search_all(&mut self, q: &str) -> Result<Vec<Hit>> {
         let mut items = Vec::new();
         for page in 1..=10 {
@@ -123,8 +145,9 @@ impl<I: Io> Scanner<'_, I> {
                 "{API}/search/code?q={}&per_page=100&page={page}",
                 urlencode(q)
             );
-            let body: serde_json::Value = serde_json::from_str(&self.get(&url, false)?)
-                .with_context(|| format!("search response for {q}"))?;
+            let body: serde_json::Value =
+                serde_json::from_str(&self.get(&url, false)?.into_body(&url)?)
+                    .with_context(|| format!("search response for {q}"))?;
             self.io.sleep(SEARCH_GAP);
             let total = body["total_count"].as_u64().unwrap_or(0);
             if page == 1 && total > SEARCH_CAP {
@@ -180,6 +203,7 @@ pub fn run<I: Io>(opts: &Options, io: &mut I) -> Result<Report> {
     let mut sc = Scanner {
         io,
         incomplete: Vec::new(),
+        skipped_urls: Vec::new(),
     };
 
     // 1. Catalogue of your package names (or use --packages to skip this step).
@@ -190,7 +214,10 @@ pub fn run<I: Io>(opts: &Options, io: &mut I) -> Result<Report> {
             for o in &opts.owners {
                 sc.io.log(&format!("cataloguing .ipkg packages under {o}…"));
                 for it in sc.search_all(&format!("package extension:ipkg user:{o}"))? {
-                    if let Some(n) = ipkg::package_name(&sc.get(&it.url, true)?) {
+                    let Some(text) = sc.get_file(&it.url)? else {
+                        continue;
+                    };
+                    if let Some(n) = ipkg::package_name(&text) {
                         names.insert(n);
                     }
                 }
@@ -230,7 +257,9 @@ pub fn run<I: Io>(opts: &Options, io: &mut I) -> Result<Report> {
             {
                 continue;
             }
-            let text = sc.get(&it.url, true)?;
+            let Some(text) = sc.get_file(&it.url)? else {
+                continue;
+            };
             let acc = hits.entry(it.full_name.clone()).or_default();
             acc.owner = it.owner.clone();
             let found = match kind {
@@ -297,5 +326,6 @@ pub fn run<I: Io>(opts: &Options, io: &mut I) -> Result<Report> {
         catalogue_size: distinctive.len(),
         rows,
         incomplete_queries: sc.incomplete,
+        skipped_urls: sc.skipped_urls,
     })
 }
