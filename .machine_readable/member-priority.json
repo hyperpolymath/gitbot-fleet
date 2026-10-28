@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "description": "Canonical member priority order for gitbot-fleet. Single source consumed by the driver (fleet-report-back.sh), Hypatia's Arbiter, and standards' verdict-grid renderer. The driver sorts enrolled members by this order regardless of manifest order; fix-fleet-enrolment.sh writes manifests in this order.",
+  "priority": [
+    "rhodibot",
+    "echidnabot",
+    "sustainabot",
+    "panicbot",
+    "glambot",
+    "seambot",
+    "finishingbot",
+    "accessibilitybot",
+    "cipherbot",
+    "robot-repo-automaton",
+    "hypatia"
+  ],
+  "tiers": {
+    "verifier": ["rhodibot", "echidnabot", "sustainabot", "panicbot"],
+    "finisher": ["glambot", "seambot", "finishingbot", "accessibilitybot"],
+    "specialist": ["cipherbot"],
+    "executor": ["robot-repo-automaton"],
+    "engine": ["hypatia"]
+  },
+  "dependencies": {
+    "panicbot": ["rhodibot"],
+    "glambot": ["rhodibot"],
+    "seambot": ["rhodibot", "echidnabot"],
+    "finishingbot": ["rhodibot", "glambot"],
+    "accessibilitybot": ["rhodibot", "glambot"],
+    "cipherbot": ["rhodibot", "echidnabot"],
+    "robot-repo-automaton": [],
+    "hypatia": []
+  }
+}

@@ -136,24 +136,167 @@ else
     mkdir -p "$(dirname "$MANIFEST")"
     # Key-sorted, compact, one final LF: the I-JSON/JCS shape the estate's
     # JSON policy asks of every .json (standards 3-practice/JSON-POLICY.adoc).
-    jq -nSc --argjson rust "$has_rust" --argjson seams "$has_seams" --argjson html "$has_html" --argjson proofs "$has_proofs" '
-      {schema: 1,
-       reporters: {
-         rhodibot:     {title: "rhodibot (RSR compliance)", enrolled: true},
-         finishingbot: {title: "finishingbot (release readiness)", enrolled: true},
-         glambot:      {title: "glambot (presentation quality)", enrolled: true},
-         cipherbot:    {title: "cipherbot (cryptographic hygiene)", enrolled: true},
-         panicbot: (if $rust then {title: "panicbot (panic recovery, error handling)", enrolled: true}
-                    else {enrolled: false, reason: "no Cargo.toml in the tree; panic-attack scans Rust"} end),
-         seambot: (if $seams then {title: "seambot (ABI/FFI seam checks)", enrolled: true}
-                   else {enrolled: false, reason: "no seam register is declared (spec/seams/seam-register.json)"} end),
-         accessibilitybot: (if $html then {title: "accessibilitybot (WCAG conformance)", enrolled: true}
-                            else {enrolled: false, reason: "no HTML files in the tree"} end),
-         echidnabot: (if $proofs then {title: "echidnabot (formal verification)", enrolled: true}
-                      else {enrolled: false, reason: "no proof files in the tree"} end),
-         sustainabot: {enrolled: false, reason: "reserved fleet slot; no adapter exists"}}}' > "$MANIFEST"
+    # F1: ONE CANONICAL PRIORITY — write manifest in canonical priority order.
+    # Read priority order from the single source of truth.
+    pri_file="$FLEET_DIR/.machine_readable/member-priority.json"
+    if [ -f "$pri_file" ] && jq -e '.priority | type == "array"' "$pri_file" >/dev/null 2>&1; then
+        priority_order=$(jq -r '.priority[]' "$pri_file")
+    else
+        # Fallback hardcoded order matching the canonical priority
+        priority_order='rhodibot
+echidnabot
+sustainabot
+panicbot
+glambot
+seambot
+finishingbot
+accessibilitybot
+cipherbot
+robot-repo-automaton
+hypatia'
+    fi
+
+    # jq 1.6 does NOT preserve object key order in output regardless of input method.
+    # Use Python (which preserves dict insertion order since 3.7) to generate the
+    # manifest with keys in canonical priority order.
+    # Convert shell true/false to Python True/False
+    py_rust=$( [ "$has_rust" = "true" ] && echo "True" || echo "False" )
+    py_seams=$( [ "$has_seams" = "true" ] && echo "True" || echo "False" )
+    py_html=$( [ "$has_html" = "true" ] && echo "True" || echo "False" )
+    py_proofs=$( [ "$has_proofs" = "true" ] && echo "True" || echo "False" )
+
+    python3 -c "
+import json
+import sys
+
+has_rust = $py_rust
+has_seams = $py_seams
+has_html = $py_html
+has_proofs = $py_proofs
+
+priority_order = '''$priority_order'''.strip().split('\n')
+
+reporters = {}
+for member in priority_order:
+    if member == 'rhodibot':
+        reporters[member] = {'title': 'rhodibot (RSR compliance)', 'enrolled': True}
+    elif member == 'echidnabot':
+        if has_proofs:
+            reporters[member] = {'title': 'echidnabot (formal verification)', 'enrolled': True}
+        else:
+            reporters[member] = {'enrolled': False, 'reason': 'no proof files in the tree'}
+    elif member == 'sustainabot':
+        reporters[member] = {'enrolled': False, 'reason': 'reserved fleet slot; no adapter exists'}
+    elif member == 'panicbot':
+        if has_rust:
+            reporters[member] = {'title': 'panicbot (panic recovery, error handling)', 'enrolled': True}
+        else:
+            reporters[member] = {'enrolled': False, 'reason': 'no Cargo.toml in the tree; panic-attack scans Rust'}
+    elif member == 'glambot':
+        reporters[member] = {'title': 'glambot (presentation quality)', 'enrolled': True}
+    elif member == 'seambot':
+        if has_seams:
+            reporters[member] = {'title': 'seambot (ABI/FFI seam checks)', 'enrolled': True}
+        else:
+            reporters[member] = {'enrolled': False, 'reason': 'no seam register is declared (spec/seams/seam-register.json)'}
+    elif member == 'finishingbot':
+        reporters[member] = {'title': 'finishingbot (release readiness)', 'enrolled': True}
+    elif member == 'accessibilitybot':
+        if has_html:
+            reporters[member] = {'title': 'accessibilitybot (WCAG conformance)', 'enrolled': True}
+        else:
+            reporters[member] = {'enrolled': False, 'reason': 'no HTML files in the tree'}
+    elif member == 'cipherbot':
+        reporters[member] = {'title': 'cipherbot (cryptographic hygiene)', 'enrolled': True}
+    elif member == 'robot-repo-automaton':
+        reporters[member] = {'enrolled': False, 'reason': 'not a fleet reporter; executor role only'}
+    elif member == 'hypatia':
+        reporters[member] = {'enrolled': False, 'reason': 'not a fleet reporter; engine role only'}
+
+manifest = {'schema': 1, 'reporters': reporters}
+# Compact output with single trailing newline (I-JSON/JCS)
+json.dump(manifest, sys.stdout, separators=(',', ':'))
+print()
+" > "$MANIFEST"
+
     echo "  CREATED .gitbot-fleet/enrolment.json (rust=$has_rust seams=$has_seams html=$has_html proofs=$has_proofs; edit it — enrol what is true of this repository)"
 fi
+
+# ── F2: ENROLMENT LINT ────────────────────────────────────────────────────────
+# Check the manifest (whether newly created or existing) for problematic
+# enrolment patterns and warn with suggested fixes.
+lint_enrolment() {
+    local manifest="$1"
+    local repo_path="$2"
+
+    [ -f "$manifest" ] || return 0
+    jq -e '.reporters | type == "object"' "$manifest" >/dev/null 2>&1 || return 0
+
+    # F2a: panicbot enrolled where the lane already has a direct panic-attack row (double counting)
+    # The Hypatia lane runs panic-attack directly; if panicbot is also enrolled,
+    # the same findings appear twice. The honest state is to decline panicbot enrolment.
+    if jq -e '.reporters.panicbot.enrolled == true' "$manifest" >/dev/null 2>&1; then
+        # Check if this repo's fork-governance.yml has a hypatia job that runs panic-attack
+        if [ -f "$WORKFLOW" ] && grep -q 'panic-attack\|hypatia.*panic' "$WORKFLOW" 2>/dev/null; then
+            echo "  LINT: panicbot enrolled but Hypatia lane already runs panic-attack directly (double counting)"
+            echo "  SUGGESTED FIX: set panicbot.enrolled=false with reason: \"panic-attack runs in Hypatia lane; enrolling panicbot would double-count findings\""
+        fi
+    fi
+
+    # F2b: echidnabot/sustainabot enrolled with no engine/adapter (permanent not_run presented as enrolment)
+    if jq -e '.reporters.echidnabot.enrolled == true' "$manifest" >/dev/null 2>&1; then
+        if [ -z "${ECHIDNA_URL:-}" ]; then
+            echo "  LINT: echidnabot enrolled but no ECHIDNA engine endpoint configured (ECHIDNA_URL unset)"
+            echo "  SUGGESTED FIX: set echidnabot.enrolled=false with reason: \"no ECHIDNA engine endpoint configured; echidnabot verifies proofs by dispatching to an engine and has no local mode\""
+        fi
+    fi
+    if jq -e '.reporters.sustainabot.enrolled == true' "$manifest" >/dev/null 2>&1; then
+        echo "  LINT: sustainabot enrolled but no sustainabot adapter exists (reserved fleet slot)"
+        echo "  SUGGESTED FIX: set sustainabot.enrolled=false with reason: \"reserved fleet slot; no adapter exists (bots/sustainabot/README.adoc)\""
+    fi
+
+    # F2c: cipherbot enrolled where no cryptographic code exists (checksum pins become findings)
+    if jq -e '.reporters.cipherbot.enrolled == true' "$manifest" >/dev/null 2>&1; then
+        # Check for cryptographic code: Cargo.toml with crypto deps, .js/.ts with crypto imports, etc.
+        has_crypto=false
+        # Rust: check Cargo.toml for crypto crates
+        if [ -f "$repo_path/Cargo.toml" ]; then
+            if grep -qiE 'ring|rust-crypto|aes|rsa|ed25519|p256|sha2|hmac|pbkdf2|argon2|bcrypt|scrypt|chacha|poly1305|x25519|pqc|kyber|dilithium|frost|secp256k1|k256|p384|p521' "$repo_path/Cargo.toml" 2>/dev/null; then
+                has_crypto=true
+            fi
+        fi
+        # JS/TS: check package.json for crypto packages
+        if [ -f "$repo_path/package.json" ]; then
+            if grep -qiE 'crypto|webcrypto|node-forge|tweetnacl|libsodium|elliptic|bn.js|ethereum-cryptography|@noble/|secp256k1|ed25519|blake|keccak|sha3' "$repo_path/package.json" 2>/dev/null; then
+                has_crypto=true
+            fi
+        fi
+        # Python: check for crypto imports (only if .py files exist)
+        py_files=$(find "$repo_path" -name '*.py' -type f 2>/dev/null)
+        if [ -n "$py_files" ] && echo "$py_files" | xargs -r grep -lE '^import (cryptography|hashlib|hmac|secrets|ssl)|^from (cryptography|Crypto)' 2>/dev/null | head -1 >/dev/null; then
+            has_crypto=true
+        fi
+        # Go: check go.mod for crypto packages
+        if [ -f "$repo_path/go.mod" ]; then
+            if grep -qiE 'golang.org/x/crypto|crypto/|filippo.io/edwards25519|filippo.io/mlkem|filippo.io/hpke' "$repo_path/go.mod" 2>/dev/null; then
+                has_crypto=true
+            fi
+        fi
+        # General: check for common crypto file patterns (only if C/C++ files exist)
+        c_files=$(find "$repo_path" -type f \( -name '*.c' -o -name '*.h' -o -name '*.cpp' -o -name '*.hpp' \) 2>/dev/null)
+        if [ -n "$c_files" ] && echo "$c_files" | xargs -r grep -lE 'openssl|mbedtls|wolfssl|boringssl|libsodium|libsodium' 2>/dev/null | head -1 >/dev/null; then
+            has_crypto=true
+        fi
+
+        if [ "$has_crypto" = false ]; then
+            echo "  LINT: cipherbot enrolled but no cryptographic code detected in the repository"
+            echo "  SUGGESTED FIX: set cipherbot.enrolled=false with reason: \"no cryptographic code in the tree; checksum pins would become findings\""
+        fi
+    fi
+}
+
+# Run enrolment lint on the manifest (whether created or existing)
+lint_enrolment "$MANIFEST" "$REPO_PATH"
 
 # ── 2. report-backs directory ────────────────────────────────────────────────
 if [ -f "$RB_README" ]; then

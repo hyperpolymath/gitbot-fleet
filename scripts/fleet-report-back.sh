@@ -93,6 +93,76 @@ crate_dir_of() {
     *)                echo "" ;;
   esac
 }
+
+# Print the canonical priority order for fleet members.
+# Source: .machine_readable/member-priority.json (single source of truth).
+# Falls back to a hardcoded order if the file is missing/corrupt.
+priority_order() {
+  local pri_file="$FLEET_DIR/.machine_readable/member-priority.json"
+  if [ -f "$pri_file" ] && jq -e '.priority | type == "array"' "$pri_file" >/dev/null 2>&1; then
+    jq -r '.priority[]' "$pri_file"
+  else
+    # Fallback hardcoded order matching the canonical priority
+    cat <<'EOF'
+rhodibot
+echidnabot
+sustainabot
+panicbot
+glambot
+seambot
+finishingbot
+accessibilitybot
+cipherbot
+robot-repo-automaton
+hypatia
+EOF
+  fi
+}
+
+# Sort an array of member names by canonical priority.
+# Input: member names on stdin (one per line)
+# Output: member names sorted by priority (unknown members last, alphabetical)
+sort_by_priority() {
+  local pri_file="$FLEET_DIR/.machine_readable/member-priority.json"
+  local order_map
+  if [ -f "$pri_file" ] && jq -e '.priority | type == "array"' "$pri_file" >/dev/null 2>&1; then
+    order_map=$(jq -r '.priority | to_entries | map("\(.value)\t\(.key)") | .[]' "$pri_file")
+  else
+    # Fallback hardcoded order
+    order_map=$(cat <<'EOF'
+rhodibot	0
+echidnabot	1
+sustainabot	2
+panicbot	3
+glambot	4
+seambot	5
+finishingbot	6
+accessibilitybot	7
+cipherbot	8
+robot-repo-automaton	9
+hypatia	10
+EOF
+)
+  fi
+  # Use awk to sort: known members by priority, unknown members last (alphabetical)
+  awk -v order="$order_map" '
+    BEGIN {
+      split(order, lines, "\n");
+      for (i in lines) {
+        split(lines[i], kv, "\t");
+        if (kv[1] != "") priority[kv[1]] = kv[2] + 0;
+      }
+    }
+    {
+      member = $0;
+      if (member in priority) {
+        print priority[member] "\t" member;
+      } else {
+        print 999 "\t" member;
+      }
+    }
+  ' | sort -n -k1,1 | cut -f2-
+}
 # Print the adapter executable name for a member, or an empty line if unknown
 # or unsupported locally. The finishingbot aliases all use finishing-bot.
 binary_of() {
@@ -200,6 +270,12 @@ for m in "${members[@]+"${members[@]}"}"; do
 done
 members=("${slugs[@]+"${slugs[@]}"}")
 
+# Sort members by canonical priority order (F1: ONE CANONICAL PRIORITY)
+# The driver sorts enrolled members by it regardless of manifest order.
+if [ "${#members[@]}" -gt 1 ]; then
+  mapfile -t members < <(printf '%s\n' "${members[@]}" | sort_by_priority)
+fi
+
 if [ "$plan" = true ]; then
   for m in "${members[@]+"${members[@]}"}"; do
     printf '%s\t%s\t%s\n' "$m" "$(crate_dir_of "$m")" "$(binary_of "$m")"
@@ -232,6 +308,57 @@ find_binary() {
   command -v "$name" 2>/dev/null || return 1
 }
 
+# Get adapter version for a member (from cargo pkg version or binary --version)
+adapter_version_of() {
+  local m="$1" bin crate version
+  crate=$(crate_dir_of "$m")
+  if [ -z "$crate" ]; then echo ""; return; fi
+  # Try to get version from built binary first
+  if bin=$(find_binary "$(binary_of "$m")"); then
+    if version=$("$bin" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?' | head -1); then
+      echo "$version"
+      return
+    fi
+  fi
+  # Fallback: read from Cargo.toml
+  if [ -f "$FLEET_DIR/bots/$crate/Cargo.toml" ]; then
+    version=$(grep '^version' "$FLEET_DIR/bots/$crate/Cargo.toml" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -n "$version" ]; then echo "$version"; return; fi
+  fi
+  echo "unknown"
+}
+
+# Get underlying tool version for members that wrap external tools
+tool_version_of() {
+  local m="$1" version
+  case "$m" in
+    panicbot)
+      # panicbot wraps panic-attack
+      if command -v panic-attack >/dev/null 2>&1; then
+        version=$(panic-attack --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?' | head -1)
+        [ -n "$version" ] && echo "panic-attack:$version" && return
+      fi
+      # Try from pinned SHA in workflow
+      if [ -f "$FLEET_DIR/.github/workflows/fleet-report-back-reusable.yml" ]; then
+        version=$(grep -oE 'PANIC_ATTACK_SHA: [0-9a-f]{40}' "$FLEET_DIR/.github/workflows/fleet-report-back-reusable.yml" | cut -d' ' -f2 | cut -c1-12)
+        [ -n "$version" ] && echo "panic-attack:$version" && return
+      fi
+      echo "panic-attack:unknown"
+      ;;
+    echidnabot)
+      # echidnabot uses ECHIDNA engine
+      if [ -n "${ECHIDNA_URL:-}" ]; then
+        echo "echidna-engine:remote"
+      else
+        echo "echidna-engine:unconfigured"
+      fi
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
+
 # ── envelope writers ─────────────────────────────────────────────────────────
 # Every envelope goes through one writer so the shape cannot drift between
 # members. Output is key-sorted, compact, one final LF: the I-JSON/JCS shape
@@ -240,17 +367,61 @@ find_binary() {
 # Write or replace out/<member>.json using the supplied status, reason, and
 # findings JSON array. An empty reason becomes null; title and ref come from
 # the current run. Temporary-file, JSON, and output I/O failures are not caught.
+# F3: ENVELOPE PROVENANCE — include adapter+tool version pins, evidence class,
+# and semantic fingerprint per finding for fleet-wide de-duplication.
 write_envelope() { # member status reason findings_json
   local m="$1" status="$2" reason="$3" findings="$4" ftmp
   # The findings go in through a FILE, never argv: a few hundred findings
   # exceed ARG_MAX and jq dies with "Argument list too long" (seen live on
   # gitbot-fleet's own PR 626 with panicbot's 146 findings).
   ftmp=$(mktemp); printf '%s' "$findings" > "$ftmp"
+
+  local adapter_ver tool_ver
+  adapter_ver=$(adapter_version_of "$m")
+  tool_ver=$(tool_version_of "$m")
+
+  # Enrich findings with evidence_class and semantic_fingerprint using jq
+  # (F3: ENVELOPE PROVENANCE). The enrichment is done inline in jq for performance.
   jq -S -c -n --arg reporter "$m" --arg title "$(title_of "$m")" --arg status "$status" \
-    --arg reason "$reason" --arg ref "$fleet_ref" --slurpfile findings "$ftmp" \
-    '{reporter: $reporter, title: $title, status: $status,
+    --arg reason "$reason" --arg ref "$fleet_ref" \
+    --arg adapter_version "$adapter_ver" --arg tool_version "$tool_ver" \
+    --arg member "$m" \
+    --slurpfile findings "$ftmp" \
+    'def evidence_class:
+      if .evidence_class then .evidence_class
+      else
+        if $member == "panicbot" then
+          (if .rule_id | startswith("PA0") then "panic-attack:unsafe-code"
+           elif .rule_id | startswith("PA1") then "panic-attack:panic-path"
+           elif .rule_id | startswith("PA2") then "panic-attack:command-injection"
+           elif .rule_id | startswith("PA3") then "panic-attack:hardcoded-secret"
+           elif .rule_id | startswith("PA4") then "panic-attack:unsafe-ffi"
+           elif .rule_id | startswith("PA5") then "panic-attack:unsafe-deser"
+           elif .rule_id | startswith("PA6") then "panic-attack:race-condition"
+           elif .rule_id | startswith("PA7") then "panic-attack:resource-leak"
+           elif .rule_id | startswith("PA8") then "panic-attack:unchecked-error"
+           elif .rule_id | startswith("PA9") then "panic-attack:path-traversal"
+           else "panic-attack:unknown" end)
+        elif $member == "rhodibot" then "rsr:file-presence"
+        elif $member == "cipherbot" then "cipherbot:crypto-hygiene"
+        elif $member == "glambot" or $member == "accessibilitybot" then "wcag:accessibility"
+        elif $member == "seambot" then "seam:drift-detection"
+        elif $member == "finishingbot" then "finishingbot:release-readiness"
+        else "fleet:" + (.category // "unknown") end
+      end;
+    def semantic_fingerprint:
+      # Normalized fingerprint: base64 of "rule_id|file|line|category" (lowercase).
+      # The standards grid can recompute sha256 from these components for de-duplication.
+      # Use ascii_downcase (jq 1.6 compatible) instead of lower.
+      ((.rule_id // "?" | ascii_downcase) + "|" + (.file // "") + "|" + (.line // 0 | tostring) + "|" + (.category // "unknown" | ascii_downcase)) | @base64;
+    {
+      reporter: $reporter, title: $title, status: $status,
       reason: (if $reason == "" then null else $reason end),
-      ref: $ref, findings: $findings[0]}' > "$out/$m.json"
+      ref: $ref,
+      adapter_version: (if $adapter_version == "unknown" then null else $adapter_version end),
+      tool_version: (if $tool_version == "" then null else $tool_version end),
+      findings: ($findings[0] | map(. + {evidence_class: evidence_class, semantic_fingerprint: semantic_fingerprint}))
+    }' > "$out/$m.json"
   rm -f "$ftmp"
 }
 
