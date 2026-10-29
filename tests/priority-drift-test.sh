@@ -161,14 +161,11 @@ check_envelope_provenance() {
     grep -q 'adapter_version' "$REPORT_BACK" || { echo "FAIL: adapter_version not in write_envelope"; return 1; }
     grep -q 'tool_version' "$REPORT_BACK" || { echo "FAIL: tool_version not in write_envelope"; return 1; }
 
-    # Check enrich_findings function
-    grep -q 'enrich_findings()' "$REPORT_BACK" || { echo "FAIL: enrich_findings function not found"; return 1; }
-
-    # Check semantic_fingerprint function
-    grep -q 'semantic_fingerprint()' "$REPORT_BACK" || { echo "FAIL: semantic_fingerprint function not found"; return 1; }
-
-    # Check evidence_class_of function
-    grep -q 'evidence_class_of()' "$REPORT_BACK" || { echo "FAIL: evidence_class_of function not found"; return 1; }
+    # Check evidence_class and semantic_fingerprint are computed inline in write_envelope
+    grep -q 'def evidence_class:' "$REPORT_BACK" || { echo "FAIL: evidence_class not in write_envelope"; return 1; }
+    grep -q 'def semantic_fingerprint:' "$REPORT_BACK" || { echo "FAIL: semantic_fingerprint not in write_envelope"; return 1; }
+    grep -q 'evidence_class: evidence_class' "$REPORT_BACK" || { echo "FAIL: evidence_class not applied to findings"; return 1; }
+    grep -q 'semantic_fingerprint: semantic_fingerprint' "$REPORT_BACK" || { echo "FAIL: semantic_fingerprint not applied to findings"; return 1; }
 
     echo "OK: envelope provenance fields present"
     return 0

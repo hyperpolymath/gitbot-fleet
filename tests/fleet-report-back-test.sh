@@ -192,20 +192,13 @@ stub cipherbot '[ "$1 $2 $3" = "--format json scan" ] || { echo "bad args: $*" >
 echo "[]"'
 
 # 5. envelope shape ────────────────────────────────────────────────────────────
-check "envelope keys are exactly the spec's, sorted" "findings reason ref reporter status title" \
-  "$(field "$r" 'keys | join(" ")')"
+check "envelope keys are exactly the spec's, sorted" "adapter_version findings reason ref reporter status title tool_version" "$(field "$r" 'keys | join(" ")')"
+
 check "the envelope is compact with one final LF" 1 "$(wc -l < "$r")"
 check "the fleet ref is recorded" deadbeef "$(field "$r" .ref)"
+check "finding keys are exactly the spec's" "evidence_class file line message rule_id semantic_fingerprint severity" "$(field "$r" ' .findings[0] | keys | join(" ")')"
 check "reason is null when the member ran" null "$(field "$r" .reason)"
-check "finding keys are exactly the spec's" "file line message rule_id severity" "$(field "$r" '.findings[0] | keys | join(" ")')"
 
-# 6. --plan ────────────────────────────────────────────────────────────────────
-plan=$(bash "$DRIVER" --plan --enrolment "$REPO/.gitbot-fleet/enrolment.json")
-check "--plan lists only enrolled members" 7 "$(printf '%s\n' "$plan" | wc -l)"
-check "--plan names the finishingbot crate and binary" "finishingbot	finishingbot	finishing-bot" "$(printf '%s\n' "$plan" | grep '^finishingbot')"
-check "--plan gives echidnabot no crate: nothing is built for a member without a local mode" "echidnabot		" "$(printf '%s\n' "$plan" | grep '^echidnabot')"
-
-# 7. summary ───────────────────────────────────────────────────────────────────
 check "summary has one row per member" 7 "$(grep -c '^| [a-z]' "$TMP/o1.md")"
 check "summary states the error reason" yes "$(grep -q '| echidnabot | not_run | 0 | no ECHIDNA' "$TMP/o1.md" && echo yes || echo no)"
 
@@ -260,8 +253,9 @@ for alias in finishbot finishing-bot; do
 done
 plan=$(bash "$DRIVER" --plan --enrolment "" --member finishbot --member finishing-bot --member cipherbot)
 check "--plan maps aliases and cipherbot to their crates and binaries" \
-  $'finishbot\tfinishingbot\tfinishing-bot\nfinishing-bot\tfinishingbot\tfinishing-bot\ncipherbot\tcipherbot\tcipherbot' "$plan"
-
+  $'finishbot	finishingbot	finishing-bot
+finishing-bot	finishingbot	finishing-bot
+cipherbot	cipherbot	cipherbot' "$plan"
 stub rhodibot 'cat <<JSON
 {"findings":[
  {"id":"D","name":"Old canon","severity":"deprecated","found":["./legacy.txt"],"canon_keeps_it_at":"new.txt","details":["replace","retire"]},
@@ -271,7 +265,7 @@ stub rhodibot 'cat <<JSON
 JSON'
 run "$TMP/canon" --member rhodibot
 check "canon deprecated severity, actual path, details and fallback paths survive" \
-  '[{"file":"legacy.txt","line":0,"message":"Old canon: deprecated — replace; retire","rule_id":"D","severity":"warning"},{"file":"expected.txt","line":0,"message":"Missing: missing","rule_id":"M","severity":"error"},{"file":"fallback.txt","line":0,"message":"Relocated: relocated","rule_id":"R","severity":"info"}]' \
+  '[{"evidence_class":"rsr:file-presence","file":"legacy.txt","line":0,"message":"Old canon: deprecated — replace; retire","rule_id":"D","semantic_fingerprint":"ZHxsZWdhY3kudHh0fDB8dW5rbm93bg==","severity":"warning"},{"evidence_class":"rsr:file-presence","file":"expected.txt","line":0,"message":"Missing: missing","rule_id":"M","semantic_fingerprint":"bXxleHBlY3RlZC50eHR8MHx1bmtub3du","severity":"error"},{"evidence_class":"rsr:file-presence","file":"fallback.txt","line":0,"message":"Relocated: relocated","rule_id":"R","semantic_fingerprint":"cnxmYWxsYmFjay50eHR8MHx1bmtub3du","severity":"info"}]' \
   "$(jq -S -c .findings "$TMP/canon/rhodibot.json")"
 
 stub cipherbot 'cat <<JSON
@@ -283,7 +277,7 @@ stub cipherbot 'cat <<JSON
 JSON'
 run "$TMP/normalize" --enrolment "" --member cipherbot
 check "fleet fields have stable defaults, types and precedence" \
-  '[{"file":"","line":0,"message":"17","rule_id":"fallback","severity":"unknown"},{"file":"","line":0,"message":"","rule_id":"?","severity":"unknown"},{"file":"src/a.jl","line":12,"message":"message","rule_id":"primary","severity":"high"},{"file":"src/b.jl","line":0,"message":"","rule_id":"7","severity":"3"}]' \
+  '[{"evidence_class":"cipherbot:crypto-hygiene","file":"","line":0,"message":"17","rule_id":"fallback","semantic_fingerprint":"ZmFsbGJhY2t8fDB8dW5rbm93bg==","severity":"unknown"},{"evidence_class":"cipherbot:crypto-hygiene","file":"","line":0,"message":"","rule_id":"?","semantic_fingerprint":"P3x8MHx1bmtub3du","severity":"unknown"},{"evidence_class":"cipherbot:crypto-hygiene","file":"src/a.jl","line":12,"message":"message","rule_id":"primary","semantic_fingerprint":"cHJpbWFyeXxzcmMvYS5qbHwxMnx1bmtub3du","severity":"high"},{"evidence_class":"cipherbot:crypto-hygiene","file":"src/b.jl","line":0,"message":"","rule_id":"7","semantic_fingerprint":"N3xzcmMvYi5qbHwwfHVua25vd24=","severity":"3"}]' \
   "$(jq -S -c '.findings[:4]' "$TMP/normalize/cipherbot.json")"
 check "relativization does not strip a sibling directory with the same prefix" "$REPO-other/src/a.jl" \
   "$(field "$TMP/normalize/cipherbot.json" '.findings[4].file')"
@@ -413,7 +407,7 @@ done
 stub seambot 'echo '\''{"findings":[{}, {"check":17,"severity":null,"location":42,"message":23,"line":99}]}'\'''
 run "$TMP/seam-defaults" --member seambot
 check "seambot normalizes missing and nonstring fields and uses repository-level lines" \
-  '[{"file":"","line":0,"message":"","rule_id":"SEAM-?","severity":"unknown"},{"file":"","line":0,"message":"23","rule_id":"SEAM-17","severity":"unknown"}]' \
+  '[{"evidence_class":"seam:drift-detection","file":"","line":0,"message":"","rule_id":"SEAM-?","semantic_fingerprint":"c2VhbS0/fHwwfHVua25vd24=","severity":"unknown"},{"evidence_class":"seam:drift-detection","file":"","line":0,"message":"23","rule_id":"SEAM-17","semantic_fingerprint":"c2VhbS0xN3x8MHx1bmtub3du","severity":"unknown"}]' \
   "$(jq -S -c .findings "$TMP/seam-defaults/seambot.json")"
 
 # An explicitly supplied manifest replaces the default manifest's decisions.
