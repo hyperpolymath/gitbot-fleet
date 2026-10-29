@@ -79,6 +79,14 @@ usage() {
 
 # ── member table ─────────────────────────────────────────────────────────────
 # member -> crate directory under bots/ (empty: no adapter) and binary name.
+# Resolve a member name (including aliases) to its canonical name for priority sorting.
+canonical_name_of() {
+  case "$1" in
+    finishingbot|finishbot|finishing-bot) echo finishingbot ;;
+    *) echo "$1" ;;
+  esac
+}
+
 crate_dir_of() {
   case "$1" in
     rhodibot)         echo rhodibot ;;
@@ -273,9 +281,40 @@ members=("${slugs[@]+"${slugs[@]}"}")
 # Sort members by canonical priority order (F1: ONE CANONICAL PRIORITY)
 # The driver sorts enrolled members by it regardless of manifest order.
 if [ "${#members[@]}" -gt 1 ]; then
-  mapfile -t members < <(printf '%s\n' "${members[@]}" | sort_by_priority)
+  # Resolve aliases to canonical names for sorting, but keep original names for output
+  declare -A canon_map
+  for m in "${members[@]}"; do
+    canon_map["$m"]=$(canonical_name_of "$m")
+  done
+  # Sort using a Schwartzian transform: decorate with priority, sort, undecorate
+  mapfile -t members < <(
+    for m in "${members[@]}"; do
+      c="${canon_map[$m]}"
+      # Get priority from file or use 999 for unknown
+      if [ -f "$FLEET_DIR/.machine_readable/member-priority.json" ] && jq -e ".priority | type == "array"" "$FLEET_DIR/.machine_readable/member-priority.json" >/dev/null 2>&1; then
+        pri=$(jq -r --arg c "$c" ".priority | index($c) // 999" "$FLEET_DIR/.machine_readable/member-priority.json")
+      else
+        # Fallback hardcoded order
+        case "$c" in
+          rhodibot) pri=0 ;;
+          echidnabot) pri=1 ;;
+          sustainabot) pri=2 ;;
+          panicbot) pri=3 ;;
+          glambot) pri=4 ;;
+          seambot) pri=5 ;;
+          finishingbot) pri=6 ;;
+          accessibilitybot) pri=7 ;;
+          cipherbot) pri=8 ;;
+          robot-repo-automaton) pri=9 ;;
+          hypatia) pri=10 ;;
+          *) pri=999 ;;
+        esac
+      fi
+      printf "%d	%s
+" "$pri" "$m"
+    done | sort -n | cut -f2-
+  )
 fi
-
 if [ "$plan" = true ]; then
   for m in "${members[@]+"${members[@]}"}"; do
     printf '%s\t%s\t%s\n' "$m" "$(crate_dir_of "$m")" "$(binary_of "$m")"
