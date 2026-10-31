@@ -20,6 +20,11 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - name: Install PyYAML (for workflow YAML validation)
         run: pip install pyyaml --quiet
+      - name: Test workflow lock-map and regeneration audit
+        run: |
+          python3 tests/workflow-lock-map-test.py
+          python3 tests/lock-regeneration-test.py
+          python3 scripts/audit-workflow-lock-map.py
       - name: Verify automation quarantine
         run: bash tests/automation-quarantine-test.sh
       - name: Verify fix-outcome verdicts
