@@ -383,10 +383,16 @@ END {
     print "GitHub refuses such a run at startup: zero jobs are created and the run"
     print "reports \"This run likely failed because of a workflow file issue.\""
     print ""
-    print "Fix, in this order:"
+    print "Fix, in this order (the same order upstream standards documents; do not"
+    print "short-circuit it with a bare `gh actions-lock`, which drops job-level"
+    print "reusable refs and can de-pin bare SHAs to floating tags):"
     print "  1. `gh actions-lock --no-migrate-local-actions`, then review the diff. It does"
-    print "     NOT handle job-level reusable-workflow refs and it can de-pin bare SHAs to"
-    print "     floating tags - both must be corrected by hand."
+    print "     NOT handle job-level reusable-workflow refs, it can shorten a record's"
+    print "     nested uses: list without leaving a dangling edge, and it can de-pin bare"
+    print "     SHAs to floating tags - all three must be corrected by hand."
+    print "     Then run scripts/audit-lock-closure.sh: it compares nested lists against"
+    print "     the reviewed receipts in scripts/lib/lock-closure-receipts.tsv and reports"
+    print "     an unproven closure as NOT RUN rather than as a pass."
     print "  2. For any DANGLING EDGES above, add a top-level `dependencies:` record for each"
     print "     ref. A leaf record may legally omit the nested `uses:` key entirely, so adding"
     print "     leaves introduces no new dangling edges and closure terminates in one pass."
@@ -408,7 +414,7 @@ END {
   if (nunref > 0)
     printf "  note: %d dependencies: record(s) are unreferenced - harmless, but prunable.\n", nunref
   if (jnote != "")
-    printf "  note: job-level reusable refs not locked (harmless; see clause 1):%s\n", jnote
+    printf "  note: job-level reusable refs absent from the lock (tolerated by clause 1, NOT proven closed; run scripts/audit-lock-closure.sh):%s\n", jnote
 }
 AWK
 

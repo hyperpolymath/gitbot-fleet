@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# lock-audit-baseline.tsv — reviewed, pre-existing representation debt.
+#
+# Only REVIEW findings can be acknowledged here. A FATAL finding cannot: it is
+# either a lockfile that cannot be trusted, or a demonstrable closure loss, and
+# silencing it is exactly how a green gate hides a dead workflow.
+#
+# Every row is a claim that a human looked at this defect and decided it is not
+# to be fixed in this change. Remove a row as soon as the defect is fixed; a row
+# that matches no current finding is reported as NOT RUN (BASELINE-STALE), so an
+# acknowledgement cannot outlive its subject unnoticed.
+#
+# fields: rule <TAB> subject <TAB> reason <TAB> reviewer <TAB> date
+REF-AMBIGUOUS	dtolnay/rust-toolchain@v1	Two immutable snapshots are recorded for one moved ref (v1). The 02cb… record backs panicbot-sweep.yml's inline @v1; the e2a5… record backs the standards mirror reusable at 75bd. Re-resolving either without the other's owner is a silent behaviour change, so it needs a reviewed re-pin, not an audit-time rewrite.	lock-audit	2026-10-31
+REF-MUTABLE	hyperpolymath/deed-ecosystem@main	dogfood-gate.yml pins the validate-action subpath at @main. The lock records an immutable snapshot, but the ref itself is not an immutable pin. Fixing it means changing the dogfood-gate caller (and possibly the action's release tags), which is outside a lock-closure change.	lock-audit	2026-10-31
+REF-MUTABLE	hyperpolymath/k9-ecosystem@main	Same class as deed-ecosystem@main: dogfood-gate.yml pins the validate-action subpath at @main while the lock freezes a snapshot. Needs a reviewed tag on the action, not an audit-time rewrite.	lock-audit	2026-10-31
+REMOTE-STALE	dtolnay/rust-toolchain@v1	Re-checked 2026-10-31: the upstream tag now resolves to 683b588c… while the lock preserves the two reviewed snapshots above. The snapshot is intentionally immutable; only a reviewed re-pin may move it.	lock-audit	2026-10-31
+REMOTE-STALE	hyperpolymath/deed-ecosystem@main	Re-checked 2026-10-31: main now resolves to edb3640c…, the lock preserves ed83d692…. That divergence is the reason to pin a tag; it is not a reason to chase main inside a lock-closure change.	lock-audit	2026-10-31
+REMOTE-STALE	hyperpolymath/k9-ecosystem@main	Re-checked 2026-10-31: main now resolves to 20f6be5b…, the lock preserves c1a34884…. Same disposition as deed-ecosystem@main.	lock-audit	2026-10-31

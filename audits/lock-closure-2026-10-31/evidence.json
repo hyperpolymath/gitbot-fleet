@@ -1,0 +1,278 @@
+{
+  "schema": "gitbot-fleet/lock-closure-audit/1",
+  "generated_at": "2026-10-31T12:03:19Z",
+  "corpus": {
+    "repository": "hyperpolymath/gitbot-fleet",
+    "commit": "83e35bcfd04d43960d635fec5397da8dfa344268",
+    "mode": "read-only measurement; no workflow deployed, no ruleset edited"
+  },
+  "callees": {
+    "current": {
+      "source": "hyperpolymath/standards",
+      "resolved_commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "workflow": ".github/workflows/secret-scanner-reusable.yml",
+      "runs_on": "ubuntu-24.04 / ubuntu-24.04-arm",
+      "jobs": [
+        "gitleaks",
+        "rust-secrets",
+        "shell-secrets"
+      ],
+      "declares_secrets": false
+    },
+    "proposed": {
+      "source": "hyperpolymath/cicd-suite",
+      "resolved_commit": "4404c3c0474e17753fe7689f3485c02890aac113",
+      "workflow": ".github/workflows/secret-scanner-reusable.yml",
+      "jobs": [
+        "gitleaks",
+        "supplemental-results"
+      ],
+      "matrix_languages": [
+        "rust",
+        "shell"
+      ],
+      "declares_secrets": false,
+      "requires": "bare 40-hex pin of the callee at .jobs.scan.uses"
+    }
+  },
+  "required_contexts": [
+    "scan / gitleaks",
+    "scan / rust-secrets",
+    "scan / shell-secrets"
+  ],
+  "rulesets": [
+    {
+      "id": 24309193,
+      "name": "Secret-Scan-Floor",
+      "contexts": [
+        "scan / gitleaks"
+      ]
+    },
+    {
+      "id": 22415578,
+      "name": "gitbot-fleet-proof-stack-branch",
+      "contexts": [
+        "scan / gitleaks",
+        "scan / rust-secrets",
+        "scan / shell-secrets"
+      ]
+    }
+  ],
+  "live_runs": {
+    "gitbot-fleet@83e35bc_push": {
+      "lock_sync_gate": {
+        "run_id": 40933665365,
+        "conclusion": "success"
+      },
+      "secret_scanner": {
+        "run_id": 40933665219,
+        "conclusion": "failure",
+        "jobs": 0,
+        "name_equals_path": true,
+        "trigger": "push",
+        "created_at": "2026-10-29T18:44:35Z"
+      },
+      "governance_audit": {
+        "run_id": 40933665285,
+        "conclusion": "failure",
+        "jobs": 0
+      },
+      "hypatia_scan": {
+        "run_id": 40933665246,
+        "conclusion": "failure",
+        "jobs": 0
+      },
+      "scorecard": {
+        "run_id": 40933665259,
+        "conclusion": "failure",
+        "jobs": 0
+      },
+      "mirror": {
+        "run_id": 40933665305,
+        "conclusion": "failure",
+        "jobs": 0
+      }
+    },
+    "control_2026_10_25": {
+      "secret_scanner": {
+        "run_id": 40175794668,
+        "conclusion": "success",
+        "jobs": 3,
+        "created_at": "2026-10-25T08:13:48Z"
+      }
+    },
+    "cicd_suite@4404c3c0_push": {
+      "run_id": 41195030267,
+      "conclusion": "success",
+      "jobs": 1
+    },
+    "gitbot-fleet_pr631": {
+      "run_id": 41199708273,
+      "workflow": "secret-scanner.yml",
+      "event": "pull_request",
+      "head_sha": "364b267279ecf3ef90dc93fac4dfdd370779393c",
+      "conclusion": "failure",
+      "jobs": 0,
+      "pr_checks_list_scan_contexts": [],
+      "peer_checks": {
+        "Lock Sync Gate": "success",
+        "E2E Tests": "success"
+      },
+      "note": "fresh reproduction of the zero-job signature on the change that reports it"
+    }
+  },
+  "file_history": {
+    ".github/workflows/secret-scanner.yml": {
+      "last_change": "6e38719569",
+      "date": "2026-10-20"
+    },
+    ".github/workflows/actions.lock": {
+      "last_change": "e44af814",
+      "date": "2026-10-27",
+      "scope": "added fleet-report-back workflow keys only"
+    }
+  },
+  "closure": {
+    "hyperpolymath/standards": {
+      "resolved_commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "reviewed_refs": 11,
+      "receipt_rows": 11,
+      "complete": true,
+      "refs": [
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+        "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+        "dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f",
+        "editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393",
+        "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124",
+        "github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+        "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
+        "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555"
+      ]
+    },
+    "actions/upload-pages-artifact": {
+      "resolved_commit": "fc324d3547104276b827a68afc52ff2a11cc49c9",
+      "reviewed_refs": 1,
+      "receipt_rows": 1,
+      "complete": true,
+      "refs": [
+        "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f"
+      ]
+    }
+  },
+  "review_findings": [
+    {
+      "rule": "REF-AMBIGUOUS",
+      "detail": "dtolnay/rust-toolchain@v1 recorded twice with different commits: 02cb101ec7c40f2c49e1d9714d64511d8e1b74de (@v1) and e2a55d2ffb04f378e9626c28d38b36d230d1e12f (@e2a55d2f); live tag v1 resolves to 683b588c487a69d01f6c6ddf40f036ff682cc2c8"
+    },
+    {
+      "rule": "REF-MUTABLE",
+      "detail": "hyperpolymath/deed-ecosystem@main recorded ed83d6927e8fb21431e403dbf6d7a4af96772746; live main edb3640c"
+    },
+    {
+      "rule": "REF-MUTABLE",
+      "detail": "hyperpolymath/k9-ecosystem@main recorded c1a34884054fabf0e9de81dbf68f4ba7874e85f1; live main 20f6be5b"
+    },
+    {
+      "rule": "REMOTE-STALE",
+      "detail": "dtolnay/rust-toolchain@v1 live 683b588c487a69d01f6c6ddf40f036ff682cc2c8"
+    },
+    {
+      "rule": "REMOTE-STALE",
+      "detail": "hyperpolymath/deed-ecosystem@main live edb3640c"
+    },
+    {
+      "rule": "REMOTE-STALE",
+      "detail": "hyperpolymath/k9-ecosystem@main live 20f6be5b"
+    }
+  ],
+  "checks": {
+    "audit_offline": {
+      "command": "./scripts/audit-lock-closure.sh",
+      "exit": 0,
+      "fatal": 0,
+      "review": 0,
+      "accepted": 3,
+      "not_run": 0
+    },
+    "audit_online": {
+      "command": "./scripts/audit-lock-closure.sh --online",
+      "exit": 0
+    },
+    "tests": {
+      "command": "bash scripts/tests/lock-closure-test.sh",
+      "passed": 41,
+      "failed": 0
+    },
+    "preflight": {
+      "command": "./docs/migrations/secret-scanner-cicd-suite/preflight.sh --online",
+      "exit": 2,
+      "findings": 0,
+      "not_run": [
+        "CANARY",
+        "ONLINE"
+      ],
+      "online_resolved": true
+    }
+  },
+  "not_run": [
+    {
+      "id": "N1",
+      "check": "real gh actions-lock regeneration",
+      "reason": "extension release asset egress blocked in this sandbox",
+      "how": "gh extension install github/gh-actions-lock --pin v0.2.0"
+    },
+    {
+      "id": "N2",
+      "check": "check-lock-sync.sh in this sandbox",
+      "reason": "no gawk/yq/ruby; CI green at 83e35bc",
+      "how": "apt-get install gawk yq"
+    },
+    {
+      "id": "N3",
+      "check": "live canary for unified-dataset-vocab",
+      "reason": "no live run recorded",
+      "how": "migration README \u00a73"
+    },
+    {
+      "id": "N4",
+      "check": "root cause of zero-job runs",
+      "reason": "run API exposes no reason; annotations 404",
+      "how": "run page as repo admin"
+    },
+    {
+      "id": "N5",
+      "check": "remote tag/branch resolution",
+      "reason": "opt-in network check",
+      "how": "audit --online",
+      "result": "executed; drift matches baseline"
+    },
+    {
+      "id": "N6",
+      "check": "fleet consumer census and propagation",
+      "reason": "out of scope while the canary gate is closed",
+      "how": "not scheduled"
+    },
+    {
+      "id": "N7",
+      "check": "cicd-suite consumer-canary workflow against 83e35bc",
+      "reason": "not executed in this session",
+      "how": "gh workflow run secret-scanner-consumer-canaries.yml -R hyperpolymath/cicd-suite"
+    },
+    {
+      "id": "N8",
+      "check": "cross-repository callee lock validation",
+      "reason": "evidence contradictory; canary is the discriminator",
+      "how": "canary plus a second-repo control"
+    }
+  ],
+  "boundaries": [
+    "deployment is not expanded before the first unified-dataset-vocab live canary receipt exists",
+    "no required status context is disabled or renamed",
+    "no secret is forwarded to the callee; secrets: inherit is rejected by preflight",
+    "fast-pr scanning stays disabled",
+    "reviewed tag refs and their immutable resolved commits are preserved; regeneration must not de-pin them"
+  ]
+}
