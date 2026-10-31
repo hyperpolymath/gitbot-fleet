@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Migration-only closure receipts, merged into scripts/lib/lock-closure-receipts.tsv
+# by patches/lock-closure-receipts.tsv.patch when the migration is applied.
+#
+# Provenance: hyperpolymath/cicd-suite @ 4404c3c0474e17753fe7689f3485c02890aac113,
+# .github/workflows/secret-scanner-reusable.yml (vendored verbatim under fixtures/,
+# checksum-pinned by fixtures/SHA256SUMS). The suite's scanner also executes
+# actions/secret-scan-check/{install,control,check}.sh from that same checkout;
+# scripts are not actions, so they add no lock edges.
+#
+# fields: source <TAB> commit <TAB> nested-ref
+hyperpolymath/cicd-suite	4404c3c0474e17753fe7689f3485c02890aac113	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

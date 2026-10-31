@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Required status contexts that the migration MUST NOT change. Captured from the
+# live rulesets on hyperpolymath/gitbot-fleet, default branch main, 2026-10-31:
+#
+#   ruleset 24309193 "Secret-Scan-Floor" (active, ~DEFAULT_BRANCH)
+#     scan / gitleaks
+#   ruleset 22415578 "gitbot-fleet-proof-stack-branch" (active, ~DEFAULT_BRANCH)
+#     scan / gitleaks
+#     scan / rust-secrets
+#     scan / shell-secrets
+#     build · test · clippy (robot-repo-automaton)
+#     build · test · clippy (shared-context)
+#     build · test · clippy (dashboard)
+#     Dispatch path and outcome contracts
+#     GSBot build, tests and dependency security
+#
+# The three scanner contexts are reproduced here; the non-scanner contexts are
+# listed only as context and are outside this migration's scope. Re-read the
+# rulesets before applying; a context required today but absent from the callee
+# makes the migration a ruleset change in disguise.
+scan / gitleaks
+scan / rust-secrets
+scan / shell-secrets

@@ -34,3 +34,18 @@ jobs:
         run: bash tests/fleet-report-back-test.sh
       - name: Fleet enrolment fixer (report-back rollout)
         run: bash tests/fix-fleet-enrolment-test.sh
+      - name: Lock closure contracts (dropped edges, malformed refs)
+        run: bash scripts/tests/lock-closure-test.sh
+      - name: Audit this repository's lock closure
+        run: ./scripts/audit-lock-closure.sh
+      - name: Prepared secret-scanner migration stays gated
+        run: |
+          # 0 = every precondition holds, 2 = evidence still missing (expected
+          # until the unified-dataset-vocab canary lands). 1 and 3 are findings
+          # in the prepared migration and must fail the build.
+          rc=0
+          ./docs/migrations/secret-scanner-cicd-suite/preflight.sh --quiet || rc=$?
+          case "$rc" in
+            0|2) echo "preflight exit $rc (no findings)";;
+            *) echo "preflight exit $rc: findings in the prepared migration" >&2; exit 1;;
+          esac
