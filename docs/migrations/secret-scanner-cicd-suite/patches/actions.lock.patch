@@ -1,0 +1,25 @@
+--- a/.github/workflows/actions.lock	2026-10-31 12:01:29.730296740 +0000
++++ b/.github/workflows/actions.lock	2026-10-31 12:01:29.750296840 +0000
+@@ -65,7 +65,7 @@
+     '.github/workflows/scorecard.yml':
+         - 'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
+     '.github/workflows/secret-scanner.yml':
+-        - 'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
++        - 'hyperpolymath/cicd-suite@4404c3c0474e17753fe7689f3485c02890aac113'
+     '.github/workflows/supervised-fleet-scan.yml':
+         - 'actions/checkout@v7.0.1'
+     '.github/workflows/vendored-bot-drift.yml':
+@@ -173,6 +173,13 @@
+         commit: 'sha1-0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d'
+         owner_id: 75048950
+         repo_id: 623796603
++    'hyperpolymath/cicd-suite@4404c3c0474e17753fe7689f3485c02890aac113':
++        ref: '4404c3c0474e17753fe7689f3485c02890aac113'
++        commit: 'sha1-4404c3c0474e17753fe7689f3485c02890aac113'
++        owner_id: 6759885
++        repo_id: 1326697643
++        uses:
++            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+     'hyperpolymath/deed-ecosystem@main':
+         ref: 'main'
+         commit: 'sha1-ed83d6927e8fb21431e403dbf6d7a4af96772746'

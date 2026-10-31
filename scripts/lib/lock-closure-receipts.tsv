@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# lock-closure-receipts.tsv — reviewed closure receipts for actions.lock.
+#
+# READ THIS BEFORE EDITING
+# ------------------------
+# A row says: "at this exact commit, the named source uses this external ref,
+# written in lock-key form." The rows for one `owner/repo@sha` are the UNION of
+# external `uses:` across the files this repository calls at that commit, and
+# the union of external `uses:` of an external composite action's action.yml.
+# The audit compares each record's nested `uses:` list against the union; a
+# short list is a dropped edge (CLOSURE-DROPPED), an extra row is an unreviewed
+# edge (CLOSURE-EXTRA).
+#
+# Why a checked-in receipt exists at all: `gh actions-lock` writes a record's
+# nested edges from the pinned source, and a later regeneration can shorten
+# that list without creating any dangling ref. No ref is then unresolvable, so
+# clauses 1-4 of scripts/check-lock-sync.sh all pass while the composite's or
+# reusable's real dependency set is no longer represented. The receipt is the
+# reviewed snapshot that makes the loss observable.
+#
+# PROVENANCE (re-emit, do not hand-edit)
+#   standards@75bd5994470661a099df562d6d5ad2fe744dbd66
+#     source: hyperpolymath/standards .github/workflows/{governance,hypatia-scan,
+#             mirror,scorecard,secret-scanner}-reusable.yml at that commit
+#     command: ./scripts/audit-lock-closure.sh \
+#                --emit-receipt hyperpolymath/standards@75bd599... \
+#                --source <each of the five files>
+#   actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+#     source: action.yml at the commit the tag v5.0.0 resolved to when the lock
+#             record was written (fc324d3 is the reviewed immutable commit)
+#     command: ./scripts/audit-lock-closure.sh \
+#                --emit-receipt actions/upload-pages-artifact@fc324d35... \
+#                --source action.yml
+#
+# Receipts are SHA-bound on purpose. When a tag moves, the record's commit does
+# not move with it (that is the point of preserving the resolved commit), so a
+# receipt stays valid for the reviewed snapshot. To re-review a snapshot, emit a
+# new receipt for the new commit and remove the old rows in the same change.
+#
+# fields: source <TAB> commit <TAB> nested-ref
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+hyperpolymath/standards	75bd5994470661a099df562d6d5ad2fe744dbd66	webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555
+actions/upload-pages-artifact	fc324d3547104276b827a68afc52ff2a11cc49c9	actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f

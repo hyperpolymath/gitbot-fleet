@@ -1,0 +1,229 @@
+= Secret-scanner consumer migration: standards → cicd-suite
+:toc: preamble
+:sectnums:
+
+*Status: PREPARED, NOT APPLIED.* The live workflow in this repository still
+calls `hyperpolymath/standards/.github/workflows/secret-scanner-reusable.yml@75bd5994…`.
+Nothing in this directory changes it.
+
+The migration is gated by `preflight.sh`, which currently exits *2 (NOT RUN)*
+because no live canary receipt exists for `hyperpolymath/unified-dataset-vocab`.
+That is deliberate: see <<gate>>.
+
+== 1. Why migrate at all
+
+Two independent facts, both measured on 2026-10-31 and both recorded in
+`audits/lock-closure-2026-10-31/REPORT.md`:
+
+. The current consumer pin is *not producing jobs*. Every `Secret Scanner` run
+  since 2026-10-27 has `conclusion=failure`, `jobs=0`, `name == path` — the
+  signature of a run GitHub refused to start (link:https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40933665219[run 40933665219]).
+  The same pin produced jobs on 2026-10-25 (link:https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40175794668[run 40175794668]),
+  so this is not a YAML change in this repository: the workflow file has not
+  changed since 2026-10-20. The required contexts `scan / gitleaks`,
+  `scan / rust-secrets` and `scan / shell-secrets` are therefore *absent*, not
+  green — a required context that never reports reads as "waiting", and a
+  branch that merges anyway reads as clean.
+. The replacement callee executes real detectors. At `4404c3c0…` the published
+  suite runs Gitleaks plus its own Rust and shell detectors, verifies the
+  exact suite SHA from the direct caller, checks out the scanner implementation
+  outside the subject, and publishes SHA-bound receipts that the compatibility
+  contexts consume (`supplemental-results`). Its own runs at that SHA succeed
+  with jobs (link:https://github.com/hyperpolymath/cicd-suite/actions/runs/41195030267[run 41195030267]).
+
+The migration is *bounded*: one caller, one callee, no fleet-wide deployment,
+no `fix-*` script rewrites, no new triggers.
+
+== 2. What changes, and what does not
+
+[cols="1,2",options="header"]
+|===
+|Path |Change
+
+|`.github/workflows/secret-scanner.yml`
+|`uses:` moves to
+`hyperpolymath/cicd-suite/.github/workflows/secret-scanner-reusable.yml@4404c3c0474e17753fe7689f3485c02890aac113`;
+`with: fast-pr: false`; job-level permissions reduce to `contents: read`.
+
+|`.github/workflows/actions.lock`
+|The caller's `workflows:` edge moves to `hyperpolymath/cicd-suite@4404c3c0…`;
+a dependency record is added with the *immutable resolved commit* and the
+callee's nested `actions/checkout@3d3c42e5…`. The `standards@75bd5994…` record
+stays: four other workflows still call it, and its nested closure is unchanged
+(the union across its called files is still the same 11 refs).
+
+|`scripts/lib/lock-closure-receipts.tsv`
+|One reviewed closure receipt row for `hyperpolymath/cicd-suite@4404c3c0…`,
+emitted from the vendored callee source at that SHA.
+|===
+
+Unchanged, on purpose:
+
+* *Contexts.* `scan / gitleaks` (callee job `gitleaks`), `scan / rust-secrets`
+  and `scan / shell-secrets` (callee matrix job `supplemental-results` with
+  `name: ${{ matrix.language }}-secrets`). `required-contexts.txt` records the
+  live rulesets (`Secret-Scan-Floor` 24309193, `gitbot-fleet-proof-stack-branch`
+  22415578) as read on 2026-10-31.
+* *Triggers.* `pull_request` and `push` to `main` only. No `schedule`, no
+  `workflow_dispatch`, no `pull_request_target`, no `workflow_run`.
+* *Secrets.* None are passed. The previous caller already had no `secrets:`
+  line; the callee declares no `workflow_call.secrets` and references no
+  `secrets.*`. `secrets: inherit` is explicitly rejected by preflight.
+* *Fast-PR scanning.* Off (`fast-pr: false`). Every non-PR run remains a
+  full-history scan. Introduced-commit PR coverage is a separate security-owner
+  decision and is not taken here.
+* *Rulesets.* No edit. A migration that renames a context is a ruleset change
+  in disguise; this one does not.
+
+== 3. Evidence required before applying
+[[gate]]
+
+`preflight.sh` is the only gate that matters, and it separates the two
+questions that a single "green" would blur:
+
+*FINDINGS* (exit 1 or 3) — the proposed artefact is wrong. Examples: a required
+context would disappear; `secrets:` or `secrets: inherit` appears; `fast-pr`
+would be true; an extra trigger appears; the proposed lock loses a closure
+edge; a patch no longer applies.
+
+*NOT RUN* (exit 2 or 3) — the evidence does not exist. Currently: no live
+canary receipt. This is not a pass.
+
+=== The live canary
+
+The first live canary is on `hyperpolymath/unified-dataset-vocab`, which
+already runs a secret scanner and already has the required contexts. The
+canary must:
+
+. pin this same callee SHA (`4404c3c0…`),
+. keep `fast-pr: false` and pass no secrets,
+. complete a run with `jobs > 0` (a zero-job startup failure is a *failed*
+  canary, not an absent one),
+. report all three contexts with real detector results bound to the subject
+  SHA — `scan / rust-secrets` and `scan / shell-secrets` must validate the
+  receipts of detectors actually executed, not echo a pass,
+. record the run in `canary/receipt.json`.
+
+`canary/receipt.schema.json` is the format; `canary/receipt.example.json` is a
+`result: not_run` placeholder that preflight rejects. Do not hand-write a
+receipt from a dry run, a corpus audit, or a run against a different SHA: the
+receipt is evidence of a live run or it is nothing.
+
+Only after that run is recorded does `preflight.sh` reach exit 0. Expanding
+beyond the canary (other repos, fleet propagation) is a *separate* decision
+with its own cohort and stop conditions.
+
+== 4. Apply procedure
+
+[source,bash]
+----
+# 1. Read the current state; expect NOT RUN for the canary, and no findings.
+./docs/migrations/secret-scanner-cicd-suite/preflight.sh --online
+
+# 2. Once canary/receipt.json exists, prove the patches apply to this checkout.
+./docs/migrations/secret-scanner-cicd-suite/preflight.sh --online --check-apply
+
+# 3. Apply. The patches touch exactly three files.
+patch -p1 < docs/migrations/secret-scanner-cicd-suite/patches/secret-scanner.yml.patch
+patch -p1 < docs/migrations/secret-scanner-cicd-suite/patches/actions.lock.patch
+patch -p1 < docs/migrations/secret-scanner-cicd-suite/patches/lock-closure-receipts.tsv.patch
+
+# 4. Re-run both gates on the applied tree.
+./scripts/audit-lock-closure.sh
+./docs/migrations/secret-scanner-cicd-suite/preflight.sh --online
+----
+
+Pull-request checklist:
+
+* [ ] preflight exits 0, and the canary receipt names the merged callee SHA.
+* [ ] `Lock Sync Gate` green (the lock change is part of the same commit).
+* [ ] `Secret Scanner` produces three contexts on the PR, each with a real
+      detector receipt; zero jobs is a failure, not a pending check.
+* [ ] No ruleset change appears in the diff.
+* [ ] `git diff --stat` shows only the three intended files.
+
+== 5. Rollback
+
+Rollback is a revert, not a repair. Contexts do not change in either
+direction, so no ruleset is touched. `rollback.sh` reverse-applies the three
+patches in the opposite order and re-audits; its dry run is only meaningful on
+an *applied* tree (it refuses if a patch has drifted). Verified end to end on a
+full copy: apply → audit exit 0 → `rollback.sh --apply` exit 0 → the three
+files byte-identical to `main`.
+
+[source,bash]
+----
+# Preferred: revert the migration commit.
+git revert <migration-commit>
+
+# If the change is uncommitted or must be reversed in place:
+./docs/migrations/secret-scanner-cicd-suite/rollback.sh            # dry run
+./docs/migrations/secret-scanner-cicd-suite/rollback.sh --apply    # reverse + re-audit
+----
+
+Stop conditions — roll back rather than loosen anything:
+
+* any of the three contexts is absent after the run (zero jobs);
+* the callee rejects startup because a ref is unresolvable;
+* a supplemental context reports success without a detector receipt;
+* the run requires a secret the caller should not forward;
+* the canary cohort shows a false negative that the standards scanner caught.
+
+Do *not* respond to a failed migration by deleting a required context,
+adding `secrets: inherit`, enabling `fast-pr`, or lowering permissions below
+`contents: read` (that last one rejects the run at startup).
+
+== 6. Coordination
+
+*With `hyperpolymath/standards`* (owner of the current reusable, the lock
+tooling and the regeneration chain):
+
+. Reconcile the two `check-lock-sync.sh` variants: this repository's script
+  treats an absent job-level ref as harmless and adds transitive-closure and
+  coverage clauses; the estate template compares the exact uses set. Two
+  authorities means two answers.
+. Publish the repair order (`gh actions-lock → relock-sha-keys →
+  complete-job-refs → close-lock → prune-stale`) as the *only* documented
+  regeneration path. A bare `gh actions-lock` drops every job-level entry
+  (upstream #129) and cannot close a remote reusable's record.
+. Make `--verify-local` state what it cannot see (local composites, job-level
+  reusables). Today its silence reads as coverage.
+. Decide the `dtolnay/rust-toolchain@v1` snapshot: one tag, two recorded commits.
+
+*With `hyperpolymath/cicd-suite`* (owner of the replacement):
+
+. The published `actions.lock` at `4404c3c0…` keys 4 of 14 workflow files and
+  has no SHA-keyed `actions/checkout@3d3c42e5…` record, while the reusable pins
+  that SHA. Its own same-repo runs succeed, so this is *not* proof of a startup
+  failure — but it is also not proof of callability from another repository.
+  The live canary is the discriminator; publish a closed lock at the next pin
+  either way.
+. Land link:https://github.com/hyperpolymath/cicd-suite/issues/9[#9] (stale lock
+  versus own uses) before consumers depend on the scanner.
+. Keep the compatibility contexts' names stable; they are required contexts in
+  consumer rulesets.
+
+*With Hypatia* (startup/subject verification):
+
+. Treat zero-job runs as failed evidence, not absent evidence: the run API
+  carries no reason, so the only reliable signal is `jobs == 0` together with
+  `name == path`.
+. Require detector receipts to be bound to the subject SHA; a passing
+  compatibility context with no executed detector is a vacuous pass.
+. Record the canary receipt once, immutably, and cite its run id in the
+  migration PR.
+
+== 7. Files
+
+[cols="1,2",options="header"]
+|===
+|Path |Purpose
+
+|`patches/*.patch` |The three-file change. Never applied in this commit.
+|`preflight.sh` |Findings-vs-not-run gate, static + closure + canary.
+|`rollback.sh` |Dry-run-by-default reversal with re-audit.
+|`receipts.tsv` |Migration-only closure receipt (merged by the patch).
+|`fixtures/` |Vendored callee workflow at `4404c3c0…`, checksum-pinned.
+|`required-contexts.txt` |Live ruleset snapshot; the three scanner contexts.
+|`canary/` |Receipt schema, rejected example, and where the real receipt goes.
+|===

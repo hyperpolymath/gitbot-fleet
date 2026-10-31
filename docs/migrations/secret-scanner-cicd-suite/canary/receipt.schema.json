@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hyperpolymath/gitbot-fleet/docs/migrations/secret-scanner-cicd-suite/canary/receipt.schema.json",
+  "title": "Live canary receipt for the cicd-suite secret-scanner migration",
+  "description": "A receipt is written ONLY from a real workflow run, after the run finished. It is the evidence that the callee resolves at startup, creates jobs, and produces all three required contexts with real detector results. It is not a plan, not a dry run and not a corpus audit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "result",
+    "subject",
+    "subject_sha",
+    "suite_sha",
+    "run_id",
+    "run_url",
+    "event",
+    "scanned_mode",
+    "fast_pr",
+    "secrets_passed",
+    "contexts",
+    "measured_at"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "result": { "enum": ["pass", "fail", "not_run"] },
+    "subject": { "const": "hyperpolymath/unified-dataset-vocab" },
+    "subject_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "suite_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "run_id": { "type": "integer", "minimum": 1 },
+    "run_url": {
+      "type": "string",
+      "pattern": "^https://github\\.com/hyperpolymath/unified-dataset-vocab/actions/runs/[0-9]+$"
+    },
+    "event": { "enum": ["pull_request", "push"] },
+    "scanned_mode": { "enum": ["full", "pr-range"] },
+    "fast_pr": { "type": "boolean" },
+    "secrets_passed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Names of caller secrets forwarded to the reusable. MUST be empty: the callee declares none and needs none."
+    },
+    "jobs_total": { "type": "integer", "minimum": 1 },
+    "contexts": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "conclusion", "receipt_sha"],
+        "properties": {
+          "name": {
+            "enum": ["scan / gitleaks", "scan / rust-secrets", "scan / shell-secrets"]
+          },
+          "conclusion": { "enum": ["success", "failure", "cancelled", "skipped"] },
+          "receipt_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+          "detector": { "enum": ["gitleaks", "rust", "shell"] }
+        }
+      }
+    },
+    "measured_at": { "type": "string", "format": "date-time" }
+  }
+}
