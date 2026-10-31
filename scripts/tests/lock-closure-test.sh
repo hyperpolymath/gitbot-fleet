@@ -470,7 +470,7 @@ run_audit "$d"
 expect_rc "a local composite's refs are locked under the caller" 0
 
 # --------------------------------------------------------------- this repo ----
-( cd "$ROOT" && OUT="$(./scripts/audit-lock-closure.sh 2>&1)"; RC=$? )
+OUT="$(cd "$ROOT" && ./scripts/audit-lock-closure.sh 2>&1)"; RC=$?
 expect_rc "this repository's own lock is clean (offline)" 0
 expect_out "the repo audit reports every owned edge set reviewed" "every owned edge set matches a reviewed receipt"
 
