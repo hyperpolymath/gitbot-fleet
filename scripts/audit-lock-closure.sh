@@ -799,13 +799,13 @@ n_notrun=${#N_RULE[@]}
 n_accepted=${#ACC_RULE[@]}
 
 if [ "$JSON" -eq 1 ]; then
-  jq -s --argjson fatal "$n_fatal" --argjson review "$n_review" \
+  jq -n --argjson fatal "$n_fatal" --argjson review "$n_review" \
     --argjson not_run "$n_notrun" --argjson accepted "$n_accepted" \
     --arg lock "$LOCK" --arg wf "$WF_DIR" \
+    --slurpfile findings "$TMP/findings.jsonl" --slurpfile notrun "$TMP/notrun.jsonl" \
     '{lock:$lock,workflows:$wf,
       summary:{fatal:$fatal,review:$review,accepted:$accepted,not_run:$not_run},
-      findings:.[0], not_run:.[1]}' \
-    "$TMP/findings.jsonl" "$TMP/notrun.jsonl"
+      findings:$findings, not_run:$notrun}'
 else
   echo "audit-lock-closure: $LOCK"
   echo "workflows: $WF_DIR"
