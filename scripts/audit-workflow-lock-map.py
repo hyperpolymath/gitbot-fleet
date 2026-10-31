@@ -13,6 +13,11 @@ class UniqueLoader(yaml.SafeLoader):
 
 
 def unique_mapping(loader, node, deep=False):
+    """Construct a YAML mapping, raising ValueError for duplicate keys.
+
+    Pass deep through to PyYAML's key and value construction. YAML construction
+    errors and TypeError for unhashable keys propagate to the caller.
+    """
     result = {}
     for key, value in node.value:
         k = loader.construct_object(key, deep=deep)
@@ -26,11 +31,20 @@ UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, uni
 
 
 def load(path):
+    """Read UTF-8 YAML with duplicate keys rejected.
+
+    File, YAML, duplicate-key, and key construction errors propagate.
+    """
     with path.open(encoding='utf-8') as f:
         return yaml.load(f, Loader=UniqueLoader)
 
 
 def ref_key(value):
+    """Normalize a remote uses reference to owner/repository@ref.
+
+    Lowercase the owner and repository, discard any subpath, and preserve the ref's case. Return None for local
+    and docker references; raise ValueError for unsupported or invalid input.
+    """
     if not isinstance(value, str) or not value or re.search(r'\s', value):
         raise ValueError(f'invalid uses: {value!r}')
     if value.startswith('./'):
@@ -44,6 +58,13 @@ def ref_key(value):
 
 
 def inspect(root, unmanaged=()):
+    """Return (findings, notes) for the workflow lock map under root.
+
+    Unmanaged contains repository-relative workflow paths to treat as explicit
+    exceptions; their dependency closure remains unverified. The inventory
+    does not verify remote source closure or provenance. Invalid structures or
+    references raise ValueError; file, YAML, and construction errors propagate.
+    """
     root = pathlib.Path(root).resolve()
     wfdir = root / '.github/workflows'
     lock = load(wfdir / 'actions.lock')
@@ -136,6 +157,11 @@ def inspect(root, unmanaged=()):
 
 
 def main():
+    """Print the inventory and return its command-line status.
+
+    Return 1 for findings, 2 for caught audit errors or unmanaged exceptions,
+    and 0 otherwise. Caught errors go to stderr; argument parsing may exit.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', nargs='?', default='.')
     parser.add_argument('--unmanaged', action='append', default=[], help='explicit workflow path excluded by an owner; still requires manual closure review')

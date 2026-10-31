@@ -11,6 +11,11 @@ class UniqueLoader(yaml.SafeLoader):
 
 
 def unique_mapping(loader, node, deep=False):
+    """Construct a YAML mapping, raising ValueError for duplicate keys.
+
+    Pass deep through to PyYAML's key and value construction. YAML construction
+    errors and TypeError for unhashable keys propagate to the caller.
+    """
     mapping = {}
     for key_node, value_node in node.value:
         item = loader.construct_object(key_node, deep=deep)
@@ -24,6 +29,10 @@ UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, uni
 
 
 def key(value):
+    """Normalize an owner/repository@ref key, preserving the ref's case.
+
+    Raise ValueError if the reference is not in the supported form.
+    """
     if not isinstance(value, str) or not re.fullmatch(r'[^\s/@]+/[^\s/@]+@[^\s@]+', value):
         raise ValueError(f'invalid dependency reference: {value!r}')
     repo, ref = value.split('@')
@@ -31,6 +40,13 @@ def key(value):
 
 
 def load(path):
+    """Load and validate a lock file as (dependencies, workflow roots).
+
+    Dependency keys and edges are normalized; each dependency value contains
+    its ref, commit, and set of edges. Raise ValueError for invalid records,
+    references, or missing targets. File, YAML, and key construction errors
+    propagate to the caller.
+    """
     with open(path, encoding='utf-8') as f:
         doc = yaml.load(f, Loader=UniqueLoader)
     if not isinstance(doc, dict) or not isinstance(doc.get('workflows'), dict) or not isinstance(doc.get('dependencies'), dict):
@@ -67,6 +83,13 @@ def load(path):
 
 
 def audit(old_path, new_path):
+    """Compare reviewed dependencies reachable from proposed workflow roots.
+
+    For roots present in the reviewed lock, check that their reviewed
+    reachable records, refs, commits, and edges remain in the proposed lock.
+    Print a success summary; new sources still require independent review.
+    Raise ValueError on a mismatch and propagate lock loading errors.
+    """
     old, _ = load(old_path)
     new, roots = load(new_path)
     queue = list(roots & old.keys())
