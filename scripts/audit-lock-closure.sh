@@ -126,6 +126,9 @@ json_notrun() { # rule subject detail fix
   fi
 }
 
+# Record a finding, routing baselined REVIEW findings to the accepted list.
+# Other findings are also appended to the JSON output when requested; a jq
+# failure then propagates as the function's status.
 add_finding() { # severity rule subject detail fix
   local sev="$1" rule="$2" subj="$3" det="$4" fix="$5" fp
   fp="$rule|$subj"
@@ -143,9 +146,9 @@ add_notrun() { # rule subject detail fix
 }
 
 # ------------------------------------------------------------- emit receipts --
-# Extract every external `uses:` from one file. Emits USE<TAB>kind<TAB>raw or
-# UNPARSED<TAB>reason; kind is job or step, derived from the line's shape. A
-# value this reader cannot interpret is UNPARSED, never guessed.
+# Read uses: lines from one file, including local and Docker references. Emit
+# USE<TAB>kind<TAB>raw or UNPARSED<TAB>reason; kind is job or step, inferred
+# from the line's shape. Unsupported values are reported rather than guessed.
 extract_uses() { # <file>
   "$AWK" '
     function strip_comment(s,   out, i, n, c, q) {
@@ -216,7 +219,9 @@ extract_uses() { # <file>
   ' "$1"
 }
 
-norm_ref() { # raw -> owner/repo@ref ; rc 2 = local/docker (not lock-keyed)
+# Collapse an external reference's subpath to owner/repo@ref. Return 1 for an
+# unrecognized reference and 2 for ./, $/, or Docker references (not lock-keyed).
+norm_ref() { # raw -> owner/repo@ref
   local raw="$1" path ref owner repo
   case "$raw" in
     ./*|\$/*|docker://*) return 2 ;;
@@ -233,8 +238,11 @@ norm_ref() { # raw -> owner/repo@ref ; rc 2 = local/docker (not lock-keyed)
 
 is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 
-# Union of external uses reachable from one source file or directory tree.
-collect_source_uses() { # <path> ; prints normalized refs, one per line
+# Print normalized external references, one per line, from a file or YAML files
+# up to four levels under a directory. Duplicates are retained. Missing files
+# and unparsed values return 1 for a file; directory traversal continues and
+# returns 0 even if a contained file fails.
+collect_source_uses() { # <path>
   local src="$1" f kind raw norm
   if [ -d "$src" ]; then
     while IFS= read -r f; do
@@ -509,11 +517,15 @@ declare -A USED_ACTION=()
 declare -A USED_REUSABLE=()
 declare -A LOCAL_SEEN=()
 
+# Return success when the space-delimited list contains the entire reference.
 list_has() { # <" ref ref "> <ref>
   case " $1 " in *" $2 "*) return 0 ;; esac
   return 1
 }
 
+# Record external uses and parse findings under the caller's lock path. Local
+# actions are scanned once per lock path; local workflows are not followed.
+# A composite flag of 1 treats its external uses as steps and skips local uses.
 scan_workflow_file() { # <path> <lock path> [composite]
   local file="$1" lockpath="$2" composite="${3:-0}" tag kind raw norm rc f localpath dir action
   while IFS=$'\t' read -r tag kind raw; do

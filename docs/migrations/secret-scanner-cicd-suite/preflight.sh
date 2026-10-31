@@ -108,6 +108,8 @@ elif ! ( cd "$MIG/fixtures" && sha256sum -c SHA256SUMS >/dev/null 2>&1 ); then
 fi
 
 # ------------------------------------------------- static properties of patch --
+# Copy stdin without whole-line comments; inline comments remain. Return 1
+# when no lines remain, or a higher status on a grep error.
 code_only() { grep -vE '^[[:space:]]*#'; }
 
 if [ -f "$PROPOSED" ]; then
@@ -146,13 +148,10 @@ if [ -f "$PROPOSED" ]; then
 fi
 
 # ------------------------------------------------ contexts from the callee ----
-# Derive the contexts the pinned callee would report for a direct caller. This
-# is a property of the vendored source, not of the caller's wishes: the job id
-# names the first half, the matrix name the second.
+# Print sorted, unique scan contexts inferred from the callee workflow. Jobs
+# named using matrix.language expand the listed languages as <language>-secrets;
+# other jobs use their job IDs. The reader expects the fixture's YAML layout.
 derive_contexts() { # <callee workflow>
-  # A direct caller of a reusable workflow reports `<caller job id> / <callee
-  # job id>`, or, when the callee job has a matrix name, the rendered name.
-  # Here the caller job is always `scan`.
   awk '
     function flush(   lang, n, L, i) {
       if (job == "") return
