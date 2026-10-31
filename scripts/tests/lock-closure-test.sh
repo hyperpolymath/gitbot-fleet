@@ -469,6 +469,40 @@ LOCK
 run_audit "$d"
 expect_rc "a local composite's refs are locked under the caller" 0
 
+# Receipt emission must report the union of external references and refuse to
+# certify an unreadable source. Local and Docker actions are not lock keys.
+cat > "$WORK/source.yml" <<'YAML'
+steps:
+  - uses: actions/checkout@v7.0.1
+  - uses: actions/checkout@v7.0.1
+  - uses: github/codeql-action/upload-sarif@v3
+  - uses: ./local
+  - uses: docker://alpine:3
+YAML
+OUT="$("$AUDIT" --emit-receipt "example/source@$SHA_CK" --source "$WORK/source.yml" 2>&1)"; RC=$?
+expect_rc "receipt emission succeeds for a readable source" 0
+expected="$(printf 'example/source\t%s\tactions/checkout@v7.0.1\nexample/source\t%s\tgithub/codeql-action@v3' "$SHA_CK" "$SHA_CK")"
+if [ "$OUT" = "$expected" ]; then pass "receipt emission normalizes and deduplicates external refs"; else fail "receipt emission produces the reviewed union" "$OUT"; fi
+OUT="$("$AUDIT" --emit-receipt "example/source@$SHA_CK" --source "$WORK/absent.yml" 2>&1)"; RC=$?
+if [ "$RC" -ne 0 ]; then pass "receipt emission refuses a missing source"; else fail "receipt emission must fail for a missing source" "$OUT"; fi
+
+# JSON output must retain every finding and not-run entry, not just totals.
+d="$(new_repo json-report)"; write_good_reusable "$d"
+printf 'invalid-source\t%s\tactions/checkout@v7.0.1\nexample/source\tbad-sha\tactions/checkout@v7.0.1\n' "$SHA_CK" >> "$d/receipts.tsv"
+printf 'REF-MUTABLE\tghost/action@main\tstale\ttest\t2026-10-31\n' > "$d/baseline.tsv"
+run_audit "$d" --json
+expect_rc "JSON audit reports findings and missing evidence" 3
+if printf '%s\n' "$OUT" | jq -e '[.findings | .. | objects | select(.rule? == "RECEIPT-PARSE")] | length == 2' >/dev/null; then
+  pass "JSON includes both receipt findings"
+else
+  fail "JSON includes both receipt findings" "$OUT"
+fi
+if printf '%s\n' "$OUT" | jq -e '[.not_run | .. | objects | select(.rule? == "BASELINE-STALE")] | length == 1' >/dev/null; then
+  pass "JSON includes the not-run entry"
+else
+  fail "JSON includes the not-run entry" "$OUT"
+fi
+
 # --------------------------------------------------------------- this repo ----
 OUT="$(cd "$ROOT" && ./scripts/audit-lock-closure.sh 2>&1)"; RC=$?
 expect_rc "this repository's own lock is clean (offline)" 0
