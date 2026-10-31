@@ -536,8 +536,8 @@ scan_workflow_file() { # <path> <lock path> [composite]
                 add_notrun WF-LOCAL-MISSING "$lockpath" "local action '$localpath' has no action.yml under $REPO_ROOT" "Restore the composite or fix the path; its refs cannot be audited"
                 continue
               fi
-              if [ -n "${LOCAL_SEEN["$action"]:-}" ]; then continue; fi
-              LOCAL_SEEN["$action"]=1
+              if [ -n "${LOCAL_SEEN["$lockpath|$action"]:-}" ]; then continue; fi
+              LOCAL_SEEN["$lockpath|$action"]=1
               scan_workflow_file "$action" "$lockpath" 1
               ;;
             \$/*)
