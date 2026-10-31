@@ -18,6 +18,7 @@ This report separates two things that a single green tick conflates:
 |---|---|---|
 | M1 | The repository's Lock Sync Gate is green at `83e35bc` | push run [40933665365](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40933665365) — `success`; `check-lock-sync.sh` executes on the runner (so gawk/yq are present there) |
 | M2 | All five job-level reusable callers fail with **zero jobs** | runs [40933665219](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40933665219) (secret-scanner), [40933665285](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40933665285) (governance), [40933665246](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40933665246) (hypatia-scan), [40933665259](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40933665259) (scorecard), [40933665305](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40933665305) (mirror): `conclusion=failure`, `jobs=[]`, `name == path` |
+| M2b | **Reproduced live, after this audit was written** | PR #631 head `364b2672`: `Secret Scanner` run [41199708273](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/41199708273), `failure`, **0 jobs**; `gh pr checks 631` lists no `scan / …` context at all, while `Lock Sync Gate` and `E2E Tests` ran and passed |
 | M3 | The same caller pin produced jobs two days earlier | run [40175794668](https://github.com/hyperpolymath/gitbot-fleet/actions/runs/40175794668), 2026-10-25, `success`, `referenced_workflows=[standards…secret-scanner-reusable.yml@75bd5994…]` |
 | M4 | The caller YAML has not changed since 2026-10-20 | commit history of `.github/workflows/secret-scanner.yml` ends at `6e38719569` (2026-10-20); `actions.lock` last changed 2026-10-27 (`e44af814`) but that change only added `fleet-report-back*` entries |
 | M5 | The replacement callee runs and creates jobs | cicd-suite push run [41195030267](https://github.com/hyperpolymath/cicd-suite/actions/runs/41195030267) at `4404c3c0`, `success`, `jobs=1` |
@@ -37,6 +38,10 @@ This report separates two things that a single green tick conflates:
 ### F1 — FATAL, live: the secret-scan floor is not executing
 
 The required contexts `scan / gitleaks`, `scan / rust-secrets`, `scan / shell-secrets` are **not being produced**. Every `Secret Scanner` run since 2026-10-27 has zero jobs (M2), including the push to `main` at `83e35bc`; the same pin produced jobs on 2026-10-25 (M3). This is not a YAML regression in this repository (M4).
+
+Reproduced on this very change: the PR that reports the defect (#631) shows no
+`scan / gitleaks` entry in `gh pr checks`, because run 41199708273 created zero
+jobs, while its `Lock Sync Gate` and `E2E Tests` checks passed normally.
 
 A zero-job run produces **no check run**. A required context that never reports does not read as failing — it reads as absent, which in `gh pr checks` is indistinguishable from “not yet started”. The ruleset is therefore satisfied by silence.
 

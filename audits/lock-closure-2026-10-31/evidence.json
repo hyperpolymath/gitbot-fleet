@@ -70,7 +70,7 @@
         "jobs": 0,
         "name_equals_path": true,
         "trigger": "push",
-        "created_at": "2026-10-27T06:38:20Z"
+        "created_at": "2026-10-29T18:44:35Z"
       },
       "governance_audit": {
         "run_id": 40933665285,
@@ -105,6 +105,20 @@
       "run_id": 41195030267,
       "conclusion": "success",
       "jobs": 1
+    },
+    "gitbot-fleet_pr631": {
+      "run_id": 41199708273,
+      "workflow": "secret-scanner.yml",
+      "event": "pull_request",
+      "head_sha": "364b267279ecf3ef90dc93fac4dfdd370779393c",
+      "conclusion": "failure",
+      "jobs": 0,
+      "pr_checks_list_scan_contexts": [],
+      "peer_checks": {
+        "Lock Sync Gate": "success",
+        "E2E Tests": "success"
+      },
+      "note": "fresh reproduction of the zero-job signature on the change that reports it"
     }
   },
   "file_history": {
