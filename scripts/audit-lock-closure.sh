@@ -262,10 +262,12 @@ if [ -n "$EMIT_KEY" ]; then
   [ "${#EMIT_SOURCES[@]}" -gt 0 ] || { echo "audit-lock-closure: --emit-receipt needs --source" >&2; exit 64; }
   repo="${EMIT_KEY%@*}"; sha="${EMIT_KEY##*@}"
   rc=0
-  { for s in "${EMIT_SOURCES[@]}"; do collect_source_uses "$s" || rc=1; done; } \
-    | LC_ALL=C sort -u | while IFS= read -r ref; do
-        printf '%s\t%s\t%s\n' "$repo" "$sha" "$ref"
-      done
+  for s in "${EMIT_SOURCES[@]}"; do
+    collect_source_uses "$s" >> "$TMP/emit.refs" || rc=1
+  done
+  LC_ALL=C sort -u "$TMP/emit.refs" | while IFS= read -r ref; do
+    printf '%s\t%s\t%s\n' "$repo" "$sha" "$ref"
+  done
   exit "$rc"
 fi
 
