@@ -30,11 +30,11 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
     '.github/workflows/governance.yml':
-        - 'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
+        - 'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
     '.github/workflows/hypatia-dispatch-intake.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/hypatia-scan.yml':
-        - 'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
+        - 'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
     '.github/workflows/inbox-steward.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/instant-sync.yml':
@@ -46,7 +46,7 @@ workflows:
         - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/lock-sync-gate.yml': []
     '.github/workflows/mirror.yml':
-        - 'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
+        - 'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
     '.github/workflows/pages.yml':
         - 'actions/checkout@v7.0.1'
         - 'actions/deploy-pages@v5.0.1'
@@ -63,7 +63,7 @@ workflows:
     '.github/workflows/rust.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/scorecard.yml':
-        - 'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
+        - 'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
     '.github/workflows/secret-scanner.yml':
         - 'hyperpolymath/cicd-suite@4404c3c0474e17753fe7689f3485c02890aac113'
     '.github/workflows/supervised-fleet-scan.yml':
@@ -195,10 +195,10 @@ dependencies:
         commit: 'sha1-c1c9fa07992a02c1fd3d67a0dc1b08cccb852aef'
         owner_id: 6759885
         repo_id: 1352485172
-    'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66':
+    'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66':
         ref: '75bd5994470661a099df562d6d5ad2fe744dbd66'
         commit: 'sha1-75bd5994470661a099df562d6d5ad2fe744dbd66'
-        owner_id: 6759885
+        owner_id: 297579217
         repo_id: 1116521501
         uses:
             - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
