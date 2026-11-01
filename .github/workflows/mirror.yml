@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   mirror:
-    uses: hyperpolymath/standards/.github/workflows/mirror-reusable.yml@75bd5994470661a099df562d6d5ad2fe744dbd66
+    uses: metadatastician/standards/.github/workflows/mirror-reusable.yml@75bd5994470661a099df562d6d5ad2fe744dbd66
     # mirror-reusable declares exactly these seven forge keys and forbids
     # `secrets: inherit`; pass them by name.
     secrets:
