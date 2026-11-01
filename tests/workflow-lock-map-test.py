@@ -210,7 +210,7 @@ class ScannerCallerTests(unittest.TestCase):
         self.assertEqual((record['ref'], record['commit']), (sha, 'sha1-' + sha))
         self.assertEqual(record['uses'], [checkout])
         self.assertIn(checkout, self.lock['dependencies'])
-        standards = 'hyperpolymath/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
+        standards = 'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
         self.assertIn(standards, self.lock['dependencies'])
         self.assertTrue(any(standards in edges for edges in self.lock['workflows'].values()))
 
