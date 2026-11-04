@@ -350,11 +350,8 @@ fn non_rate_limit_errors_fail_loudly() {
 
 fn ready_mock() -> Mock {
     Mock {
-        searches: BTreeMap::new(),
-        contents: BTreeMap::new(),
         limited_once: true,
-        logs: vec![],
-        gets: 0,
+        ..Mock::default()
     }
 }
 
