@@ -11,32 +11,62 @@ pub struct PackRef {
     pub url: String,
 }
 
-/// Match a watched owner in a GitHub-style repository reference, including
-/// HTTPS, SSH, and scp forms. Owner matching is ASCII case-insensitive and
-/// requires a following `/`.
-///
-/// This is a textual check, not full URL validation: `github.com` may follow
-/// `/`, `@`, or `.` (or start the input), so subdomains and embedded paths can match.
-pub fn points_at(url: &str, owners: &[String]) -> bool {
-    let url = url.to_ascii_lowercase();
-    let mut from = 0;
-    while let Some(k) = url[from..].find("github.com") {
-        let at = from + k;
-        let host_start = at == 0 || matches!(url.as_bytes()[at - 1], b'/' | b'@' | b'.');
-        let rest = &url[at + "github.com".len()..];
-        if host_start && (rest.starts_with('/') || rest.starts_with(':')) {
-            let path = &rest[1..];
-            if owners.iter().any(|o| {
-                let o = o.to_ascii_lowercase();
-                path.strip_prefix(o.as_str())
-                    .is_some_and(|r| r.starts_with('/'))
-            }) {
-                return true;
-            }
+/// The repository path of a GitHub URL (`scheme://[user@]host[:port]/path` or
+/// scp-style `[user@]host:path`), lower-cased, when the host is GitHub itself.
+fn github_path(url: &str) -> Option<String> {
+    let url = url.trim().to_ascii_lowercase();
+    let (authority, path) = match url.find("://") {
+        Some(i) => {
+            let rest = &url[i + 3..];
+            let slash = rest.find('/')?;
+            (&rest[..slash], &rest[slash + 1..])
         }
-        from = at + 1;
+        None => {
+            let colon = url.find(':')?;
+            if url[..colon].contains('/') {
+                return None;
+            }
+            (&url[..colon], url[colon + 1..].trim_start_matches('/'))
+        }
+    };
+    let host = authority.rsplit('@').next()?.split(':').next()?;
+    matches!(host, "github.com" | "www.github.com").then(|| path.to_string())
+}
+
+/// Match a watched owner in a GitHub repository URL (HTTPS, SSH or scp form).
+/// GitHub must be the URL's host, not merely appear in its path, and the owner
+/// must be followed by a repository name. Matching is ASCII case-insensitive.
+pub fn points_at(url: &str, owners: &[String]) -> bool {
+    github_path(url).is_some_and(|path| {
+        let mut parts = path.splitn(2, '/');
+        let (Some(owner), Some(repo)) = (parts.next(), parts.next()) else {
+            return false;
+        };
+        !repo.is_empty() && owners.iter().any(|o| o.eq_ignore_ascii_case(owner))
+    })
+}
+
+/// Resolve a submodule URL relative to its superproject (`../x` and `./x`, as
+/// git does against the superproject's remote), taking the remote to be
+/// `https://github.com/<full_name>`. Absolute URLs are returned unchanged.
+fn resolve_submodule_url(url: &str, superproject: Option<&str>) -> Option<String> {
+    if !(url.starts_with("../") || url.starts_with("./")) {
+        return Some(url.to_string());
     }
-    false
+    let mut base: Vec<&str> = superproject?.split('/').filter(|s| !s.is_empty()).collect();
+    let mut rest = url;
+    loop {
+        if let Some(r) = rest.strip_prefix("../") {
+            base.pop()?;
+            rest = r;
+        } else if let Some(r) = rest.strip_prefix("./") {
+            rest = r;
+        } else {
+            break;
+        }
+    }
+    base.push(rest);
+    Some(format!("https://github.com/{}", base.join("/")))
 }
 
 /// `pack.toml` custom entries pointing at `owners`, in file order.
@@ -68,20 +98,35 @@ pub fn pack_toml_refs(text: &str, owners: &[String]) -> Result<Vec<PackRef>, tom
 /// Extract URLs matching `owners` from trimmed `url =` lines, in input order.
 /// Double-quoted values end at the next quote; unquoted values end at `#` or
 /// `;`. Sections and escapes are not interpreted, and duplicates are retained.
+/// Relative URLs cannot be resolved without the superproject, so they are
+/// skipped; see [`gitmodules_refs_in`].
 pub fn gitmodules_refs(text: &str, owners: &[String]) -> Vec<String> {
+    gitmodules_refs_in(text, owners, None)
+}
+
+/// Like [`gitmodules_refs`], resolving relative submodule URLs against the
+/// GitHub repository `superproject` (`owner/repo`). Keys are matched
+/// case-insensitively, as git config does; relative matches are returned
+/// resolved to absolute URLs.
+pub fn gitmodules_refs_in(
+    text: &str,
+    owners: &[String],
+    superproject: Option<&str>,
+) -> Vec<String> {
     text.lines()
         .filter_map(|line| {
             let line = line.trim();
-            let value = line
-                .strip_prefix("url")?
-                .trim_start()
-                .strip_prefix('=')?
-                .trim();
+            let key = line.get(..3)?;
+            if !key.eq_ignore_ascii_case("url") {
+                return None;
+            }
+            let value = line[3..].trim_start().strip_prefix('=')?.trim();
             let value = match value.strip_prefix('"') {
                 Some(q) => q.split('"').next().unwrap_or(""),
                 None => value.split(['#', ';']).next().unwrap_or("").trim(),
             };
-            points_at(value, owners).then(|| value.to_string())
+            let url = resolve_submodule_url(value, superproject)?;
+            points_at(&url, owners).then_some(url)
         })
         .collect()
 }

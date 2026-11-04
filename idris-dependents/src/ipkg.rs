@@ -108,13 +108,11 @@ pub fn lex(src: &str) -> (Vec<Tok>, usize) {
             continue;
         }
         if c == '"' {
-            if let Some(end) = string_end(&s, i) {
-                toks.push(Tok::Str(s[i + 1..end - 1].iter().collect()));
-                i = end;
-            } else {
-                skipped += 1;
-                i += 1;
-            }
+            // An unterminated string runs to end of input, so its contents are
+            // never read as package syntax.
+            let end = string_end(&s, i).unwrap_or(s.len() + 1);
+            toks.push(Tok::Str(s[i + 1..end - 1].iter().collect()));
+            i = end;
             continue;
         }
         let (tok, len) = match (c, at(i + 1)) {

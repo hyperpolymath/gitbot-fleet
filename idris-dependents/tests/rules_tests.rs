@@ -4,7 +4,7 @@
 
 use idris_dependents::catalogue::{classify, is_distinctive, search_stems, Confidence};
 use idris_dependents::ipkg::{depends, lex, package_name, Tok};
-use idris_dependents::refs::{gitmodules_refs, pack_toml_refs, points_at};
+use idris_dependents::refs::{gitmodules_refs, gitmodules_refs_in, pack_toml_refs, points_at};
 
 fn fx(name: &str) -> String {
     std::fs::read_to_string(format!(
@@ -569,4 +569,71 @@ url = ""
             "https://github.com/hyperpolymath/third#fragment;part",
         ])
     );
+}
+
+// --- review findings on #628 (Codex, CodeRabbit) -------------------------------
+
+#[test]
+fn unterminated_string_hides_its_contents() {
+    // Codex: `brief = "depends = proven` must not report `proven`.
+    assert!(depends("package x\nbrief = \"depends = proven").is_empty());
+    assert_eq!(
+        depends("package x\ndepends = ochrance\nbrief = \"oops depends = proven"),
+        s(&["ochrance"])
+    );
+}
+
+#[test]
+fn github_must_be_the_host_not_a_path_segment() {
+    // Codex: a mirror path containing github.com is not a GitHub URL.
+    let o = own();
+    assert!(!points_at(
+        "https://example.com/mirrors/github.com/hyperpolymath/proven",
+        &o
+    ));
+    assert!(!points_at(
+        "git@example.com:github.com/hyperpolymath/proven",
+        &o
+    ));
+    assert!(points_at(
+        "ssh://git@github.com:22/hyperpolymath/proven.git",
+        &o
+    ));
+    assert!(points_at("git+https://github.com/hyperpolymath/proven", &o));
+    assert!(points_at(
+        "https://user@github.com/Hyperpolymath/proven",
+        &o
+    ));
+}
+
+#[test]
+fn gitmodules_keys_are_case_insensitive() {
+    // Codex: git config keys are case-insensitive (`URL =` is valid).
+    let t = "[submodule \"p\"]\n\tURL = https://github.com/hyperpolymath/proven.git\n\tUrl=https://github.com/metadatastician/x";
+    assert_eq!(
+        gitmodules_refs(t, &own()),
+        s(&[
+            "https://github.com/hyperpolymath/proven.git",
+            "https://github.com/metadatastician/x"
+        ])
+    );
+    assert!(gitmodules_refs("urlx = https://github.com/hyperpolymath/p", &own()).is_empty());
+}
+
+#[test]
+fn relative_submodule_urls_resolve_against_the_superproject() {
+    // Codex: `../../hyperpolymath/proven.git` from alice/app is hyperpolymath/proven.
+    let t = "[submodule \"p\"]\n\turl = ../../hyperpolymath/proven.git\n[submodule \"q\"]\n\turl = ../sibling.git";
+    assert_eq!(
+        gitmodules_refs_in(t, &own(), Some("alice/app")),
+        s(&["https://github.com/hyperpolymath/proven.git"])
+    );
+    // A sibling of a hyperpolymath fork's own repo resolves to that owner too.
+    assert_eq!(
+        gitmodules_refs_in("url = ./../proven", &own(), Some("hyperpolymath/app")),
+        s(&["https://github.com/hyperpolymath/proven"])
+    );
+    // Without the superproject, or climbing past the host, nothing is claimed.
+    assert!(gitmodules_refs(t, &own()).is_empty());
+    assert!(gitmodules_refs_in("url = ../../../x/y", &own(), Some("alice/app")).is_empty());
 }

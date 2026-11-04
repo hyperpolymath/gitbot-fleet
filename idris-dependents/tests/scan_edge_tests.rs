@@ -460,3 +460,27 @@ fn report_json_keeps_public_field_names_and_confidence_spelling() {
     );
     io.done();
 }
+
+#[test]
+fn http_errors_carry_github_reason() {
+    // CodeRabbit: surface the body (e.g. "Bad credentials"), not just the status.
+    let mut io = Script::default();
+    io.search(
+        QUERY,
+        1,
+        1,
+        false,
+        vec![item("alice/app", "a.ipkg", "contents/a")],
+    );
+    io.respond(
+        "contents/a",
+        true,
+        Ok(response(500, &[], "{\"message\":\"Bad credentials\"}")),
+    );
+    let error = run(&options(), &mut io).unwrap_err().to_string();
+    assert!(
+        error.contains("HTTP 500 for contents/a: {\"message\":\"Bad credentials\"}"),
+        "{error}"
+    );
+    io.done();
+}

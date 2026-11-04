@@ -34,7 +34,7 @@ cargo run -- parse-ipkg path/to/pkg.ipkg      # offline: name + depends as JSON
 +
 [cols="1,4"]
 |===
-|HIGH   |`pack.toml` or `.gitmodules` points at one of our GitHub owners
+|HIGH   |`pack.toml` or `.gitmodules` points at one of our GitHub owners (GitHub must be the URL host; relative submodule URLs are resolved against the dependent repository)
 |MEDIUM |an `.ipkg` `depends` on a distinctive package name of ours
 |LOW    |only ambiguous names (`proven`, `trope`) with no corroboration
 |===
