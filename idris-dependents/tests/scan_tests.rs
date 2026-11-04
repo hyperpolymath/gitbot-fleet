@@ -352,6 +352,7 @@ fn ready_mock() -> Mock {
     Mock {
         searches: BTreeMap::new(),
         contents: BTreeMap::new(),
+        responses: BTreeMap::new(),
         limited_once: true,
         logs: vec![],
         gets: 0,
