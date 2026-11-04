@@ -388,10 +388,7 @@ pub fn translate_weak_point(wp: &WeakPoint, config: &PanicbotConfig) -> Finding 
 ///
 /// Applies the configured minimum severity filter — findings below the
 /// threshold are silently dropped.
-pub fn translate_all(
-    weak_points: &[WeakPoint],
-    config: &PanicbotConfig,
-) -> Vec<Finding> {
+pub fn translate_all(weak_points: &[WeakPoint], config: &PanicbotConfig) -> Vec<Finding> {
     let min_threshold = config.min_severity.threshold();
 
     weak_points
@@ -413,10 +410,7 @@ pub fn translate_all(
             if wp.suppressed {
                 return None;
             }
-            if matches!(
-                wp.test_context.as_deref(),
-                Some("test_only") | Some("doc")
-            ) {
+            if matches!(wp.test_context.as_deref(), Some("test_only") | Some("doc")) {
                 return None;
             }
 
@@ -581,8 +575,8 @@ mod tests {
                 severity: "Low".to_string(),
                 description: "low severity".to_string(),
                 recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
             WeakPoint {
                 category: "CommandInjection".to_string(),
@@ -590,8 +584,8 @@ mod tests {
                 severity: "Critical".to_string(),
                 description: "critical severity".to_string(),
                 recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
         ];
         let config = PanicbotConfig {
@@ -616,8 +610,8 @@ mod tests {
                     severity: "High".to_string(),
                     description: "fixable".to_string(),
                     recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                    suppressed: false,
+                    test_context: None,
                 },
                 &config,
             ),
@@ -628,8 +622,8 @@ mod tests {
                     severity: "High".to_string(),
                     description: "not fixable".to_string(),
                     recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                    suppressed: false,
+                    test_context: None,
                 },
                 &config,
             ),
@@ -645,18 +639,37 @@ mod tests {
     #[test]
     fn test_all_categories_have_unique_rule_ids() {
         let categories = [
-            "UnsafeCode", "PanicPath", "CommandInjection", "HardcodedSecret",
-            "UnsafeDeserialization", "UncheckedError", "UnsafeFFI", "RaceCondition",
-            "ResourceLeak", "PathTraversal", "AtomExhaustion", "ExcessivePermissions",
-            "UnsafeTypeCoercion", "UncheckedAllocation", "UnboundedLoop", "BlockingIO",
-            "DeadlockPotential", "DynamicCodeExecution", "InsecureProtocol",
-            "InfiniteRecursion", "ProofDrift", "CryptoMisuse", "SupplyChain",
-            "InputBoundary", "MutationGap",
+            "UnsafeCode",
+            "PanicPath",
+            "CommandInjection",
+            "HardcodedSecret",
+            "UnsafeDeserialization",
+            "UncheckedError",
+            "UnsafeFFI",
+            "RaceCondition",
+            "ResourceLeak",
+            "PathTraversal",
+            "AtomExhaustion",
+            "ExcessivePermissions",
+            "UnsafeTypeCoercion",
+            "UncheckedAllocation",
+            "UnboundedLoop",
+            "BlockingIO",
+            "DeadlockPotential",
+            "DynamicCodeExecution",
+            "InsecureProtocol",
+            "InfiniteRecursion",
+            "ProofDrift",
+            "CryptoMisuse",
+            "SupplyChain",
+            "InputBoundary",
+            "MutationGap",
         ];
 
         let mut rule_ids = std::collections::HashSet::new();
         for cat in &categories {
-            let mapping = category_mapping(cat).unwrap_or_else(|| panic!("Missing mapping for {}", cat));
+            let mapping =
+                category_mapping(cat).unwrap_or_else(|| panic!("Missing mapping for {}", cat));
             assert!(
                 rule_ids.insert(mapping.rule_id),
                 "Duplicate rule_id {} for category {}",

@@ -25,8 +25,8 @@ fn weak_point(category: &str, severity: &str) -> WeakPoint {
         severity: severity.to_string(),
         description: format!("Test finding for {}", category),
         recommended_attack: vec![],
-    suppressed: false,
-            test_context: None,
+        suppressed: false,
+        test_context: None,
     }
 }
 
@@ -38,8 +38,8 @@ fn weak_point_at(category: &str, severity: &str, location: &str) -> WeakPoint {
         severity: severity.to_string(),
         description: format!("Test finding at {}", location),
         recommended_attack: vec![],
-    suppressed: false,
-            test_context: None,
+        suppressed: false,
+        test_context: None,
     }
 }
 
@@ -77,11 +77,7 @@ fn test_all_23_categories_have_mappings() {
 
     for cat in &categories {
         let mapping = translator::category_mapping(cat);
-        assert!(
-            mapping.is_some(),
-            "Missing mapping for category: {}",
-            cat
-        );
+        assert!(mapping.is_some(), "Missing mapping for category: {}", cat);
     }
 }
 
@@ -244,10 +240,7 @@ fn test_translate_location_parsing() {
     let wp = weak_point_at("UnsafeCode", "High", "src/ffi.rs:42");
     let finding = translator::translate_weak_point(&wp, &config);
 
-    assert_eq!(
-        finding.file,
-        Some(std::path::PathBuf::from("src/ffi.rs"))
-    );
+    assert_eq!(finding.file, Some(std::path::PathBuf::from("src/ffi.rs")));
     assert_eq!(finding.line, Some(42));
 }
 
@@ -257,10 +250,7 @@ fn test_translate_location_no_line() {
     let wp = weak_point_at("PanicPath", "Medium", "src/lib.rs");
     let finding = translator::translate_weak_point(&wp, &config);
 
-    assert_eq!(
-        finding.file,
-        Some(std::path::PathBuf::from("src/lib.rs"))
-    );
+    assert_eq!(finding.file, Some(std::path::PathBuf::from("src/lib.rs")));
     assert_eq!(finding.line, None);
 }
 
@@ -311,8 +301,8 @@ fn test_translate_metadata_includes_panic_attack_category() {
         severity: "Critical".to_string(),
         description: "os.system with user input".to_string(),
         recommended_attack: vec!["Memory".to_string(), "Concurrency".to_string()],
-    suppressed: false,
-            test_context: None,
+        suppressed: false,
+        test_context: None,
     };
     let finding = translator::translate_weak_point(&wp, &config);
 
@@ -386,13 +376,31 @@ fn test_classify_empty_findings() {
 #[test]
 fn test_all_confidence_values_in_valid_range() {
     let categories = [
-        "UnsafeCode", "PanicPath", "CommandInjection", "HardcodedSecret",
-        "UnsafeDeserialization", "UncheckedError", "UnsafeFFI", "RaceCondition",
-        "ResourceLeak", "PathTraversal", "AtomExhaustion", "ExcessivePermissions",
-        "UnsafeTypeCoercion", "UncheckedAllocation", "UnboundedLoop", "BlockingIO",
-        "DeadlockPotential", "DynamicCodeExecution", "InsecureProtocol",
-        "InfiniteRecursion", "ProofDrift", "CryptoMisuse", "SupplyChain",
-        "InputBoundary", "MutationGap",
+        "UnsafeCode",
+        "PanicPath",
+        "CommandInjection",
+        "HardcodedSecret",
+        "UnsafeDeserialization",
+        "UncheckedError",
+        "UnsafeFFI",
+        "RaceCondition",
+        "ResourceLeak",
+        "PathTraversal",
+        "AtomExhaustion",
+        "ExcessivePermissions",
+        "UnsafeTypeCoercion",
+        "UncheckedAllocation",
+        "UnboundedLoop",
+        "BlockingIO",
+        "DeadlockPotential",
+        "DynamicCodeExecution",
+        "InsecureProtocol",
+        "InfiniteRecursion",
+        "ProofDrift",
+        "CryptoMisuse",
+        "SupplyChain",
+        "InputBoundary",
+        "MutationGap",
     ];
 
     for cat in &categories {
