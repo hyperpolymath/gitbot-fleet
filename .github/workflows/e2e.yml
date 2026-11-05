@@ -29,6 +29,8 @@ jobs:
         run: bash tests/automation-quarantine-test.sh
       - name: Verify fix-outcome verdicts
         run: bash tests/outcome-verdict-test.sh
+      - name: PA rule IDs agree with panic-attack's table
+        run: bash tests/panic-attack-rule-ids-test.sh
       - name: Run E2E tests
         run: bash tests/e2e.sh
       - name: Verify canonical descriptile policy repair

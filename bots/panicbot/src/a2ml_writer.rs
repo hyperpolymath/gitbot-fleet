@@ -120,10 +120,7 @@ fn finding_to_a2ml(finding: &Finding) -> A2mlFinding {
 }
 
 /// Build the summary statistics from fixable and unfixable findings.
-fn build_summary(
-    fixable: &[&Finding],
-    unfixable: &[&Finding],
-) -> FindingsSummary {
+fn build_summary(fixable: &[&Finding], unfixable: &[&Finding]) -> FindingsSummary {
     let total = fixable.len() + unfixable.len();
     let all_findings: Vec<&&Finding> = fixable.iter().chain(unfixable.iter()).collect();
 
@@ -187,8 +184,8 @@ pub fn write_a2ml(repo_path: &Path, document: &A2mlDocument) -> Result<std::path
         .with_context(|| format!("Failed to create {}", panicbot_dir.display()))?;
 
     let output_path = panicbot_dir.join("PANICBOT-FINDINGS.a2ml");
-    let json = serde_json::to_string_pretty(document)
-        .context("Failed to serialize A2ML document")?;
+    let json =
+        serde_json::to_string_pretty(document).context("Failed to serialize A2ML document")?;
 
     std::fs::write(&output_path, &json)
         .with_context(|| format!("Failed to write {}", output_path.display()))?;
@@ -204,7 +201,12 @@ mod tests {
     use gitbot_shared_context::finding::Severity;
     use gitbot_shared_context::triangle::TriangleTier;
 
-    fn make_finding(rule_id: &str, severity: Severity, fixable: bool, tier: TriangleTier) -> Finding {
+    fn make_finding(
+        rule_id: &str,
+        severity: Severity,
+        fixable: bool,
+        tier: TriangleTier,
+    ) -> Finding {
         let mut f = Finding::new(BotId::Panicbot, rule_id, severity, "test finding")
             .with_category("static-analysis/test")
             .with_triangle_tier(tier)

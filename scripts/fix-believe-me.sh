@@ -3,7 +3,8 @@
 #
 # fix-believe-me.sh — Flag or remove Idris2 believe_me calls
 #
-# Fixes PA004-idris-believe-me findings.
+# Fixes Hypatia pattern `PA004-idris-believe-me`; panic-attack reports
+# believe_me as PA021 (ProofDrift).
 # believe_me bypasses the type checker — it should be replaced with proper proofs.
 #
 # Usage: fix-believe-me.sh <repo-path> <finding-json>
