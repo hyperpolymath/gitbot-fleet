@@ -27,7 +27,12 @@ pub struct Response {
 impl Response {
     fn into_body(self, url: &str) -> Result<String> {
         if !(200..300).contains(&self.status) {
-            bail!("HTTP {} for {url}", self.status);
+            // GitHub puts the reason ("Bad credentials", secondary limits…) in the body.
+            let detail: String = self.body.trim().chars().take(300).collect();
+            if detail.is_empty() {
+                bail!("HTTP {} for {url}", self.status);
+            }
+            bail!("HTTP {} for {url}: {detail}", self.status);
         }
         Ok(self.body)
     }
@@ -325,7 +330,7 @@ pub fn run<I: Io>(opts: &Options, io: &mut I) -> Result<Report> {
                     }
                 },
                 Kind::Submodule => {
-                    let r = refs::gitmodules_refs(&text, &opts.owners);
+                    let r = refs::gitmodules_refs_in(&text, &opts.owners, Some(&it.full_name));
                     let found = !r.is_empty();
                     acc.sub_refs.extend(r);
                     found

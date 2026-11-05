@@ -105,15 +105,19 @@ impl MinSeverity {
             MinSeverity::Critical => 3,
         }
     }
+}
 
-    /// Parse from string (case-insensitive).
-    pub fn from_str(s: &str) -> Option<Self> {
+/// Parse from string (case-insensitive).
+impl std::str::FromStr for MinSeverity {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "low" => Some(MinSeverity::Low),
-            "medium" => Some(MinSeverity::Medium),
-            "high" => Some(MinSeverity::High),
-            "critical" => Some(MinSeverity::Critical),
-            _ => None,
+            "low" => Ok(MinSeverity::Low),
+            "medium" => Ok(MinSeverity::Medium),
+            "high" => Ok(MinSeverity::High),
+            "critical" => Ok(MinSeverity::Critical),
+            other => Err(format!("unknown severity: {other}")),
         }
     }
 }
@@ -154,20 +158,18 @@ mod tests {
 
     #[test]
     fn test_min_severity_from_str() {
-        assert_eq!(MinSeverity::from_str("low"), Some(MinSeverity::Low));
-        assert_eq!(MinSeverity::from_str("HIGH"), Some(MinSeverity::High));
-        assert_eq!(MinSeverity::from_str("invalid"), None);
+        assert_eq!("low".parse::<MinSeverity>().ok(), Some(MinSeverity::Low));
+        assert_eq!("HIGH".parse::<MinSeverity>().ok(), Some(MinSeverity::High));
+        assert_eq!("invalid".parse::<MinSeverity>().ok(), None);
     }
 
     #[test]
     fn test_confidence_override_lookup() {
         let config = PanicbotConfig {
-            confidence_overrides: vec![
-                ConfidenceOverride {
-                    category: "UnsafeCode".to_string(),
-                    confidence: 0.60,
-                },
-            ],
+            confidence_overrides: vec![ConfidenceOverride {
+                category: "UnsafeCode".to_string(),
+                confidence: 0.60,
+            }],
             ..Default::default()
         };
         assert_eq!(config.confidence_for("UnsafeCode"), Some(0.60));

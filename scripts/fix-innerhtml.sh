@@ -3,7 +3,8 @@
 #
 # fix-innerhtml.sh — Replace innerHTML with textContent to prevent XSS
 #
-# Fixes PA014 InnerHTML / XSS findings.
+# Fixes innerHTML / XSS DOM-sink findings: panic-attack rule
+# PA011 (DynamicCodeExecution), semantic class improper-neutralization-of-html-input.
 # innerHTML allows script injection; textContent is safe for text display.
 #
 # Usage: fix-innerhtml.sh <repo-path> <finding-json>

@@ -18,9 +18,11 @@ use std::path::PathBuf;
 #[command(name = "panicbot")]
 #[command(version)]
 #[command(about = "Targeted audit bot wrapping panic-attack static analysis")]
-#[command(long_about = "Panicbot invokes panic-attack as a subprocess, translates its findings \
+#[command(
+    long_about = "Panicbot invokes panic-attack as a subprocess, translates its findings \
     into gitbot-fleet Finding structs, classifies them as fixable or unfixable, and writes \
-    unfixable findings to per-repo A2ML debt registers.")]
+    unfixable findings to per-repo A2ML debt registers."
+)]
 pub struct Cli {
     /// Subcommand to run.
     #[command(subcommand)]

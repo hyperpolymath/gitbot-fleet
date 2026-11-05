@@ -4,7 +4,8 @@
 # fix-shell-quoting.sh — Quote unquoted shell variable expansions
 #
 # Fixes patterns like: $VAR → "${VAR}" in shell scripts
-# Targets PA009-shell-unquoted-var findings.
+# Targets Hypatia pattern `PA009-shell-unquoted-var`; panic-attack rule
+# PA009 (CommandInjection).
 #
 # Usage: fix-shell-quoting.sh <repo-path> <finding-json>
 # outcome-predicate: --check

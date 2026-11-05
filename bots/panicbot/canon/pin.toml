@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# panicbot's copy of panic-attack's published rule-ID table, taken verbatim
+# and pinned by digest. panicbot's translator must use these IDs (enforced by
+# tests/canonical_rule_ids_test.rs); the digest is checked by
+# tests/panic-attack-rule-ids-test.sh. To re-pin: copy the upstream file over
+# canonical-rule-ids.json, update `commit`, `pinned` and `sha256`, and run both
+# tests. `tests/panic-attack-rule-ids-test.sh --upstream` compares against
+# panic-attack main.
+
+[source]
+repo = "hyperpolymath/panic-attack"
+path = "data/canonical-rule-ids.json"
+commit = "5175a681f9a0c82313f06e3c2cba8089f4ecfb6b"
+pinned = "2026-11-04"
+sha256 = "28ffe510535e0bc6cccc92845411d6496fe9270cce58364f4d3507c5c08337d4"

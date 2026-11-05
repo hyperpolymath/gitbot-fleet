@@ -15,10 +15,15 @@ use std::path::PathBuf;
 
 /// Helper: create a minimal Finding for testing.
 fn test_finding(rule_id: &str, severity: Severity, fixable: bool, tier: TriangleTier) -> Finding {
-    let mut f = Finding::new(BotId::Panicbot, rule_id, severity, &format!("Test: {}", rule_id))
-        .with_category("static-analysis/test")
-        .with_triangle_tier(tier)
-        .with_confidence(0.75);
+    let mut f = Finding::new(
+        BotId::Panicbot,
+        rule_id,
+        severity,
+        &format!("Test: {}", rule_id),
+    )
+    .with_category("static-analysis/test")
+    .with_triangle_tier(tier)
+    .with_confidence(0.75);
     if fixable {
         f = f.fixable();
     }
@@ -107,14 +112,19 @@ fn test_summary_by_tier() {
 
 #[test]
 fn test_finding_fields_in_a2ml() {
-    let finding = Finding::new(BotId::Panicbot, "PA004", Severity::Error, "AWS key in source")
-        .with_rule_name("Hardcoded secret or credential")
-        .with_category("static-analysis/hardcoded-secret")
-        .with_file(PathBuf::from("config.py"))
-        .with_line(15)
-        .with_triangle_tier(TriangleTier::Eliminate)
-        .with_confidence(0.88)
-        .fixable();
+    let finding = Finding::new(
+        BotId::Panicbot,
+        "PA004",
+        Severity::Error,
+        "AWS key in source",
+    )
+    .with_rule_name("Hardcoded secret or credential")
+    .with_category("static-analysis/hardcoded-secret")
+    .with_file(PathBuf::from("config.py"))
+    .with_line(15)
+    .with_triangle_tier(TriangleTier::Eliminate)
+    .with_confidence(0.88)
+    .fixable();
 
     let fixable = vec![&finding];
     let doc = a2ml_writer::generate_a2ml(&fixable, &[], "test/fields", "2.1.0");
