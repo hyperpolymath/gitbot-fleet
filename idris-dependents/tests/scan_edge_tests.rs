@@ -387,9 +387,9 @@ fn raw_content_fetches_retry_rate_limits_and_propagate_hard_failures() {
         false,
         vec![item("alice/app", "a.ipkg", "contents/a")],
     );
-    io.respond("contents/a", true, Ok(response(404, &[], "")));
+    io.respond("contents/a", true, Ok(response(500, &[], "")));
     let error = run(&options(), &mut io).unwrap_err().to_string();
-    assert!(error.contains("HTTP 404 for contents/a"), "{error}");
+    assert!(error.contains("HTTP 500 for contents/a"), "{error}");
     io.done();
 }
 
@@ -440,6 +440,7 @@ fn report_json_keeps_public_field_names_and_confidence_spelling() {
                 "confidence": "MEDIUM",
             }],
             "incompleteQueries": [],
+            "skippedUrls": [],
         })
     );
     io.done();
