@@ -685,3 +685,23 @@ fn owner_pages_with_query_or_fragment_are_not_repositories() {
         &o
     ));
 }
+
+#[test]
+fn authority_ends_at_query_or_fragment() {
+    // CodeRabbit on #644: the host here is evil.example, not github.com.
+    let o = own();
+    assert!(!points_at(
+        "https://evil.example#@github.com/hyperpolymath/proven",
+        &o
+    ));
+    assert!(!points_at(
+        "https://evil.example?@github.com/hyperpolymath/proven",
+        &o
+    ));
+    assert!(!points_at("https://github.com?x=/hyperpolymath/proven", &o));
+    assert!(!points_at("https://github.com/hyperpolymath/#/proven", &o));
+    assert!(points_at(
+        "https://user@github.com/hyperpolymath/proven",
+        &o
+    ));
+}

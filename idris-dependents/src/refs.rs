@@ -18,8 +18,13 @@ fn github_path(url: &str) -> Option<String> {
     let (authority, path) = match url.find("://") {
         Some(i) => {
             let rest = &url[i + 3..];
-            let slash = rest.find('/')?;
-            (&rest[..slash], &rest[slash + 1..])
+            // The authority ends at the first `/`, `?` or `#` (RFC 3986), so
+            // `https://evil.example#@github.com/...` has host `evil.example`.
+            let end = rest.find(['/', '?', '#'])?;
+            if !rest[end..].starts_with('/') {
+                return None;
+            }
+            (&rest[..end], &rest[end + 1..])
         }
         None => {
             let colon = url.find(':')?;
