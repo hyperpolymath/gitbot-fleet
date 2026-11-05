@@ -3,7 +3,7 @@
 #
 # fix-unchecked-error.sh — Annotate unchecked error returns
 #
-# Fixes PA019 UncheckedError findings.
+# Fixes PA018 (UncheckedError) findings.
 # Adds annotations where function return values are silently discarded.
 #
 # Usage: fix-unchecked-error.sh <repo-path> <finding-json>

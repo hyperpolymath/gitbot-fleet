@@ -45,6 +45,10 @@ jobs:
             dir: dashboard
           - module: rhodibot
             dir: bots/rhodibot
+          # panicbot was built (panicbot-sweep.yml) but never tested or linted
+          # in CI, so its private PA numbering went unnoticed until 2026-11-04.
+          - module: panicbot
+            dir: bots/panicbot
           - module: idris-dependents
             dir: idris-dependents
     defaults:

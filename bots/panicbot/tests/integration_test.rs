@@ -92,12 +92,12 @@ fn test_full_translation_pipeline() {
     }
 
     // Check specific translations
-    let unsafe_finding = findings.iter().find(|f| f.rule_id == "PA001").unwrap();
+    let unsafe_finding = findings.iter().find(|f| f.rule_id == "PA004").unwrap();
     assert_eq!(unsafe_finding.severity, Severity::Warning); // High → Warning
     assert_eq!(unsafe_finding.category, "static-analysis/unsafe-code");
     assert!(!unsafe_finding.fixable);
 
-    let secret_finding = findings.iter().find(|f| f.rule_id == "PA004").unwrap();
+    let secret_finding = findings.iter().find(|f| f.rule_id == "PA017").unwrap();
     assert_eq!(secret_finding.severity, Severity::Error); // Critical → Error
     assert!(secret_finding.fixable);
     assert_eq!(secret_finding.triangle_tier, Some(TriangleTier::Eliminate));
@@ -118,8 +118,8 @@ fn test_fixability_classification_pipeline() {
     assert_eq!(unfixable.len(), 3);
 
     let fixable_ids: Vec<&str> = fixable.iter().map(|f| f.rule_id.as_str()).collect();
-    assert!(fixable_ids.contains(&"PA004"));
-    assert!(fixable_ids.contains(&"PA006"));
+    assert!(fixable_ids.contains(&"PA017"));
+    assert!(fixable_ids.contains(&"PA018"));
 }
 
 #[test]

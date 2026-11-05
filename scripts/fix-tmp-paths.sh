@@ -3,7 +3,7 @@
 #
 # fix-tmp-paths.sh — Replace hardcoded /tmp/ paths with mktemp
 #
-# Fixes PA016 PathTraversal findings where /tmp/ is hardcoded.
+# Fixes PA016 (PathTraversal) findings where /tmp/ is hardcoded.
 # Adds trap cleanup and uses mktemp -d for temp directories.
 #
 # Usage: fix-tmp-paths.sh <repo-path> <finding-json>

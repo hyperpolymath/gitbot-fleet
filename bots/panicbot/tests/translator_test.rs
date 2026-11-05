@@ -83,27 +83,31 @@ fn test_all_23_categories_have_mappings() {
 
 #[test]
 fn test_rule_ids_sequential_pa001_to_pa020() {
+    // panic-attack's canonical order (WeakPointCategory::rule_id). PA001b
+    // (UnboundedAllocation) is not translated yet; see
+    // canonical_rule_ids_test.rs, which checks every ID against the
+    // vendored table rather than by position.
     let categories = [
-        "UnsafeCode",
-        "PanicPath",
-        "CommandInjection",
-        "HardcodedSecret",
-        "UnsafeDeserialization",
-        "UncheckedError",
-        "UnsafeFFI",
-        "RaceCondition",
-        "ResourceLeak",
-        "PathTraversal",
-        "AtomExhaustion",
-        "ExcessivePermissions",
-        "UnsafeTypeCoercion",
         "UncheckedAllocation",
         "UnboundedLoop",
         "BlockingIO",
+        "UnsafeCode",
+        "PanicPath",
+        "RaceCondition",
         "DeadlockPotential",
+        "ResourceLeak",
+        "CommandInjection",
+        "UnsafeDeserialization",
         "DynamicCodeExecution",
+        "UnsafeFFI",
+        "AtomExhaustion",
         "InsecureProtocol",
+        "ExcessivePermissions",
+        "PathTraversal",
+        "HardcodedSecret",
+        "UncheckedError",
         "InfiniteRecursion",
+        "UnsafeTypeCoercion",
     ];
 
     for (i, cat) in categories.iter().enumerate() {
