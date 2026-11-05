@@ -261,8 +261,8 @@ pub fn run_adjudicate(reports: &[PathBuf], timeout: Duration) -> Result<Adjudica
     }
     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-    let output = invoke_panic_attack(&arg_refs, timeout)
-        .context("Failed to run panic-attack adjudicate")?;
+    let output =
+        invoke_panic_attack(&arg_refs, timeout).context("Failed to run panic-attack adjudicate")?;
 
     serde_json::from_str::<AdjudicateReport>(&output)
         .context("Failed to parse panic-attack adjudicate output as JSON")
@@ -324,12 +324,7 @@ pub fn run_migration_snapshot(
     timeout: Duration,
 ) -> Result<MigrationSnapshotReport> {
     let target_str = target.display().to_string();
-    let mut args = vec![
-        "migration-snapshot",
-        &target_str,
-        "--label",
-        label,
-    ];
+    let mut args = vec!["migration-snapshot", &target_str, "--label", label];
 
     // Allocate owned strings for optional flags so references stay valid
     let build_flag = "--build-time".to_string();
@@ -360,14 +355,10 @@ pub fn run_migration_diff(
 ) -> Result<MigrationDiffReport> {
     let before_str = before.display().to_string();
     let after_str = after.display().to_string();
-    let args = vec![
-        "migration-diff",
-        &before_str,
-        &after_str,
-    ];
+    let args = vec!["migration-diff", &before_str, &after_str];
 
-    let output = invoke_panic_attack(&args, timeout)
-        .context("Failed to run panic-attack migration-diff")?;
+    let output =
+        invoke_panic_attack(&args, timeout).context("Failed to run panic-attack migration-diff")?;
 
     serde_json::from_str::<MigrationDiffReport>(&output)
         .context("Failed to parse panic-attack migration-diff output as JSON")
@@ -391,10 +382,7 @@ fn find_panic_attack_binary() -> Result<PathBuf> {
     }
 
     // Check common locations
-    let common_paths = [
-        "/usr/local/bin/panic-attack",
-        "/usr/bin/panic-attack",
-    ];
+    let common_paths = ["/usr/local/bin/panic-attack", "/usr/bin/panic-attack"];
 
     for path in &common_paths {
         if Path::new(path).exists() {
@@ -442,12 +430,9 @@ fn invoke_panic_attack(args: &[&str], timeout: Duration) -> Result<String> {
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let child = cmd.spawn().with_context(|| {
-        format!(
-            "Failed to spawn panic-attack at {}",
-            binary.display()
-        )
-    })?;
+    let child = cmd
+        .spawn()
+        .with_context(|| format!("Failed to spawn panic-attack at {}", binary.display()))?;
 
     let output = child
         .wait_with_output()

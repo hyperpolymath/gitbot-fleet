@@ -3,7 +3,7 @@
 #
 # fix-http-to-https.sh — Replace HTTP URLs with HTTPS
 #
-# Fixes PA014 InsecureProtocol findings where http:// is used.
+# Fixes PA014 (InsecureProtocol) findings where http:// is used.
 # Upgrades to https:// where safe to do so.
 #
 # Uses git ls-files for fast traversal and hash-based caching to skip
