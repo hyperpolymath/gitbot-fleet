@@ -38,7 +38,9 @@ fn github_path(url: &str) -> Option<String> {
 /// must be followed by a repository name. Matching is ASCII case-insensitive.
 pub fn points_at(url: &str, owners: &[String]) -> bool {
     github_path(url).is_some_and(|path| {
-        let mut parts = path.splitn(2, '/');
+        // A query or fragment is not part of the repository path.
+        let path = path.split(['?', '#']).next().unwrap_or("");
+        let mut parts = path.split('/');
         let (Some(owner), Some(repo)) = (parts.next(), parts.next()) else {
             return false;
         };

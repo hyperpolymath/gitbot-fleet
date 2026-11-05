@@ -662,3 +662,26 @@ fn relative_submodule_urls_match_git_resolution() {
     assert!(all("../../../x/y").is_empty());
     assert!(all("../../../../too/far").is_empty());
 }
+
+#[test]
+fn owner_pages_with_query_or_fragment_are_not_repositories() {
+    // Codex on #644: a profile URL names no repository.
+    let o = own();
+    assert!(!points_at(
+        "https://github.com/hyperpolymath/?tab=repositories",
+        &o
+    ));
+    assert!(!points_at("https://github.com/hyperpolymath/#about", &o));
+    assert!(!points_at(
+        "https://github.com/hyperpolymath?tab=repositories",
+        &o
+    ));
+    assert!(points_at(
+        "https://github.com/hyperpolymath/proven#readme",
+        &o
+    ));
+    assert!(points_at(
+        "https://github.com/hyperpolymath/proven/tree/main?x=1",
+        &o
+    ));
+}
