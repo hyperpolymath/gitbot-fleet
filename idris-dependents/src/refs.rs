@@ -49,11 +49,16 @@ pub fn points_at(url: &str, owners: &[String]) -> bool {
 /// Resolve a submodule URL relative to its superproject (`../x` and `./x`, as
 /// git does against the superproject's remote), taking the remote to be
 /// `https://github.com/<full_name>`. Absolute URLs are returned unchanged.
+/// Like git, `../` may climb past `owner/repo` into the host part, so
+/// `../../../github.com/o/r` from `a/b` is `https://github.com/o/r`; climbing
+/// past the host yields `None` (git's result there is never a GitHub URL).
 fn resolve_submodule_url(url: &str, superproject: Option<&str>) -> Option<String> {
     if !(url.starts_with("../") || url.starts_with("./")) {
         return Some(url.to_string());
     }
-    let mut base: Vec<&str> = superproject?.split('/').filter(|s| !s.is_empty()).collect();
+    let mut base: Vec<&str> = std::iter::once("github.com")
+        .chain(superproject?.split('/').filter(|s| !s.is_empty()))
+        .collect();
     let mut rest = url;
     loop {
         if let Some(r) = rest.strip_prefix("../") {
@@ -66,7 +71,7 @@ fn resolve_submodule_url(url: &str, superproject: Option<&str>) -> Option<String
         }
     }
     base.push(rest);
-    Some(format!("https://github.com/{}", base.join("/")))
+    Some(format!("https://{}", base.join("/")))
 }
 
 /// `pack.toml` custom entries pointing at `owners`, in file order.

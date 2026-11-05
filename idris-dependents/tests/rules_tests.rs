@@ -637,3 +637,28 @@ fn relative_submodule_urls_resolve_against_the_superproject() {
     assert!(gitmodules_refs(t, &own()).is_empty());
     assert!(gitmodules_refs_in("url = ../../../x/y", &own(), Some("alice/app")).is_empty());
 }
+
+#[test]
+fn relative_submodule_urls_match_git_resolution() {
+    // Codex on #644. Expected values are what `git submodule init` (2.43)
+    // registers for a superproject whose origin is https://github.com/alice/app.git.
+    let all = |u: &str| {
+        gitmodules_refs_in(
+            &format!("url = {u}"),
+            &s(&["hyperpolymath", "alice"]),
+            Some("alice/app"),
+        )
+    };
+    assert_eq!(
+        all("../../../github.com/hyperpolymath/proven.git"),
+        s(&["https://github.com/hyperpolymath/proven.git"])
+    );
+    assert_eq!(
+        all("../../hyperpolymath/proven.git"),
+        s(&["https://github.com/hyperpolymath/proven.git"])
+    );
+    assert_eq!(all("./../proven"), s(&["https://github.com/alice/proven"]));
+    // git: https://x/y, https:/too/far — never a GitHub URL.
+    assert!(all("../../../x/y").is_empty());
+    assert!(all("../../../../too/far").is_empty());
+}
