@@ -78,12 +78,12 @@ run_scanner() {
   printf '%s: validated report, %s unsuppressed findings, %s critical\n' "$scanner" "$n" "$c"
 }
 
-declare -A seen=()
+seen=' '
 if [[ "$scanners" == auto ]]; then selected='panic-attack hypatia'; else selected=$scanners; fi
 read -r -a selected_scanners <<< "$selected"
 for scanner in "${selected_scanners[@]}"; do
-  [[ -z "${seen[$scanner]:-}" ]] || continue
-  seen[$scanner]=1
+  case "$seen" in *" $scanner "*) continue ;; esac
+  seen="$seen$scanner "
   case "$scanner" in
     panic-attack) binary=$(command -v panic-attack || true) ;;
     hypatia) binary=$(command -v hypatia-cli.sh || true) ;;

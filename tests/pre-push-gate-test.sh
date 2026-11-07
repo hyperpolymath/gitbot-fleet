@@ -35,6 +35,13 @@ exit "$SCANNER_EXIT"
 SCANNER
 chmod +x "$scratch/bin/hypatia-cli.sh"
 run_gate pass 'valid empty Hypatia array succeeds'
+git config fleet.prePushScanners 'hypatia hypatia hypatia'
+run_gate pass 'repeated Hypatia runs once'
+[[ $(grep -c '^Running hypatia ' "$scratch/result") == 1 ]]
+git config fleet.prePushScanners 'hypatia hyp'
+run_gate fail 'scanner prefix is not mistaken for a duplicate'
+grep -q 'unknown configured scanner: hyp$' "$scratch/result"
+git config --unset fleet.prePushScanners
 REPORT_PAYLOAD='{"message":"failed"}' run_gate fail 'error JSON is not a scan'
 REPORT_PAYLOAD='not JSON' run_gate fail 'malformed output blocks'
 REPORT_PAYLOAD='' run_gate fail 'empty output blocks'
@@ -60,6 +67,10 @@ exit "$SCANNER_EXIT"
 SCANNER
 chmod +x "$scratch/bin/panic-attack"
 REPORT_PAYLOAD='{"schema_version":"2.6","coverage":{"status":"complete","analyzed_files":1},"weak_points":[]}' run_gate pass 'actual assail envelope and command flags'
+git config fleet.prePushScanners 'panic-attack panic-attack panic-attack'
+REPORT_PAYLOAD='{"schema_version":"2.6","coverage":{"status":"complete","analyzed_files":1},"weak_points":[]}' run_gate pass 'repeated panic-attack runs once'
+[[ $(grep -c '^Running panic-attack ' "$scratch/result") == 1 ]]
+git config fleet.prePushScanners panic-attack
 REPORT_PAYLOAD='{"schema_version":"2.6","coverage":{"status":"complete","analyzed_files":1},"weak_points":[{"severity":"Critical"}]}' run_gate fail 'assail uppercase critical blocks'
 REPORT_PAYLOAD='{"schema_version":"2.6","coverage":{"status":"complete","analyzed_files":1},"weak_points":[{"severity":"Critical","suppressed":true}]}' run_gate pass 'assail explicit suppression retained'
 REPORT_PAYLOAD='{"schema_version":"2.6","coverage":{"status":"partial","analyzed_files":1},"weak_points":[]}' run_gate fail 'incomplete coverage blocks'
