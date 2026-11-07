@@ -53,3 +53,9 @@ changes = "Main shell mutation paths blocked with exit 78; Rust fleet simulation
 validation = "Shell containment tests passed; existing E2E 36 passed after supplying PyYAML. Rust tests not run: toolchain unavailable."
 next = "Read-only estate directive inventory and explicit policy contract. Do not enable execution or increase permissions before local restrictions are enforced."
 evidence = "docs/AUTOMATION-QUARANTINE.adoc; audits/fleet-wiring-2026-09-26.md"
+
+[pre-push-enforcement-2026-11-07]
+status = "candidate; hosted qualification and consumer deployment pending"
+change = "Fail closed on zero scanners, scanner errors, malformed reports, incomplete assail coverage and failed configured consumer execution gates. Preserve custom hooks during installation."
+validation = "28 local scanner/runner boundary controls and real Git installation controls pass. A separate actual Hypatia escript run accepted a clean fixture and blocked its changed critical transmute fixture; hosted and consumer deployment evidence is still pending."
+contract = "docs/PRE-PUSH-GATE.adoc"
