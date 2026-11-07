@@ -606,3 +606,26 @@ fn legacy_yaml_boolean_and_timestamp_refs_do_not_become_strings() {
     f.write("main.yml", "jobs: {}\njobs: {}\n");
     expect(f.audit(&[]), 2, "duplicate YAML key");
 }
+
+#[test]
+fn unquoted_legacy_numeric_refs_fail_closed_and_quoted_refs_remain_strings() {
+    for raw in [
+        "1_000",
+        "0xFF_FF",
+        "0xFFFFFFFFFFFFFFFFFFFFFFFF",
+        "0b1_0",
+        "+1_000",
+        "1_0.0",
+        "0b_",
+        "0x_",
+        "0b__",
+        "0x__",
+        "+0b_",
+    ] {
+        let quoted = format!("workflows: {{test.yml: [org/action@{raw}]}}\ndependencies: {{org/action@{raw}: {{ref: '{raw}', commit: sha1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}}}}");
+        expect(regen_raw(&quoted, &quoted), 0, "closure (1 records)");
+        let bare = quoted.replace(&format!("ref: '{raw}'"), &format!("ref: {raw}"));
+        expect(regen_raw(&bare, &quoted), 1, "lock regeneration audit:");
+        expect(regen_raw(&quoted, &bare), 1, "lock regeneration audit:");
+    }
+}

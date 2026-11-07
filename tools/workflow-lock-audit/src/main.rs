@@ -63,44 +63,7 @@ fn resolve_yaml(value: Value) -> Result<Value> {
             if tag.is_some() {
                 return Err("YAML tags are unsupported".into());
             }
-            if style == ScalarStyle::Plain {
-                let bytes = raw.as_bytes();
-                let timestamp = bytes.len() >= 10
-                    && bytes[4] == b'-'
-                    && bytes[7] == b'-'
-                    && bytes[..4]
-                        .iter()
-                        .chain(bytes[5..7].iter())
-                        .chain(bytes[8..10].iter())
-                        .all(u8::is_ascii_digit);
-                let sexagesimal = raw.contains(':')
-                    && raw
-                        .chars()
-                        .all(|c| c.is_ascii_digit() || matches!(c, ':' | '+' | '-' | '.' | '_'));
-                if timestamp || sexagesimal {
-                    return Err("ambiguous YAML 1.1 typed scalar; quote strings explicitly".into());
-                }
-            }
-            let scalar = if style == ScalarStyle::Plain {
-                match raw.as_str() {
-                    "yes" | "Yes" | "YES" | "on" | "On" | "ON" => ScalarOwned::Boolean(true),
-                    "no" | "No" | "NO" | "off" | "Off" | "OFF" => ScalarOwned::Boolean(false),
-                    _ => ScalarOwned::parse_from_cow_and_metadata(raw.clone().into(), style, None)
-                        .ok_or("invalid YAML scalar")?,
-                }
-            } else {
-                ScalarOwned::String(raw.clone())
-            };
-            // The YAML 1.2 parser bounds integers to i64; the old loader did
-            // not. Never turn an overflowing bare number into an accepted ref.
-            if style == ScalarStyle::Plain
-                && matches!(scalar, ScalarOwned::String(_))
-                && raw.parse::<f64>().is_ok()
-            {
-                return Err(
-                    "out-of-range plain numeric YAML scalar; quote strings explicitly".into(),
-                );
-            }
+            let scalar = resolve_scalar(raw, style)?;
             Ok(Value::Value(scalar))
         }
         Value::Mapping(map) => {
@@ -129,6 +92,67 @@ fn resolve_yaml(value: Value) -> Result<Value> {
         Value::Alias(_) | Value::BadValue => Err("unresolved or invalid YAML node".into()),
         Value::Value(_) => Ok(value),
     }
+}
+fn resolve_scalar(raw: String, style: ScalarStyle) -> Result<ScalarOwned> {
+    if style == ScalarStyle::Plain {
+        let bytes = raw.as_bytes();
+        let timestamp = bytes.len() >= 10
+            && bytes[4] == b'-'
+            && bytes[7] == b'-'
+            && bytes[..4]
+                .iter()
+                .chain(bytes[5..7].iter())
+                .chain(bytes[8..10].iter())
+                .all(u8::is_ascii_digit);
+        let sexagesimal = raw.contains(':')
+            && raw
+                .chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, ':' | '+' | '-' | '.' | '_'));
+        if timestamp || sexagesimal {
+            return Err("ambiguous YAML 1.1 typed scalar; quote strings explicitly".into());
+        }
+    }
+    let scalar = if style == ScalarStyle::Plain {
+        match raw.as_str() {
+            "yes" | "Yes" | "YES" | "on" | "On" | "ON" => ScalarOwned::Boolean(true),
+            "no" | "No" | "NO" | "off" | "Off" | "OFF" => ScalarOwned::Boolean(false),
+            _ => ScalarOwned::parse_from_cow_and_metadata(raw.clone().into(), style, None)
+                .ok_or("invalid YAML scalar")?,
+        }
+    } else {
+        ScalarOwned::String(raw.clone())
+    };
+    // The YAML 1.2 parser bounds integers to i64; the old loader did
+    // not. Never turn a bare number (including separator spellings) into an accepted ref.
+    if style == ScalarStyle::Plain
+        && matches!(scalar, ScalarOwned::String(_))
+        && is_legacy_number(&raw)
+    {
+        return Err("numeric YAML scalar cannot be a string; quote strings explicitly".into());
+    }
+    Ok(scalar)
+}
+/// Recognize numeric spellings that a bounded YAML 1.2 scalar parser may
+/// leave as strings. YAML 1.1 allows underscore separators and arbitrary
+/// precision integers; neither may silently become a valid string ref.
+fn is_legacy_number(raw: &str) -> bool {
+    let unsigned = raw.strip_prefix(['+', '-']).unwrap_or(raw);
+    // A nonempty underscore-only radix tail matched the old numeric resolver
+    // but failed conversion. Keep it an error, rather than accepting a ref.
+    let radix_tail = |tail: &str, radix: u32| {
+        !tail.is_empty() && tail.chars().all(|c| c == '_' || c.is_digit(radix))
+    };
+    if let Some(binary) = unsigned.strip_prefix("0b") {
+        return radix_tail(binary, 2);
+    }
+    if let Some(hexadecimal) = unsigned.strip_prefix("0x") {
+        return radix_tail(hexadecimal, 16);
+    }
+    let compact = unsigned.replace('_', "");
+    let digits = |text: &str| !text.is_empty() && text.chars().all(|c| c.is_ascii_digit());
+    // The unseparated form also covers octal integers; only the scalar's
+    // non-string classification matters here, not its numeric value.
+    digits(&compact) || compact.parse::<f64>().is_ok()
 }
 fn reference(raw: &str, dependency: bool) -> Result<Option<String>> {
     if raw.is_empty() || raw.chars().any(char::is_whitespace) {
@@ -272,48 +296,50 @@ fn regeneration(old_path: &Path, new_path: &Path) -> Result<()> {
     println!("Preserved reviewed reachable closure ({} records); new sources require independent review.", seen.len());
     Ok(())
 }
-fn inventory(root: &Path, unmanaged: &Set) -> Result<(Vec<String>, Vec<String>)> {
-    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
-    let wfdir = root.join(".github/workflows");
-    let canonical_wfdir = fs::canonicalize(&wfdir).map_err(|e| e.to_string())?;
-    let lock = read_yaml(&wfdir.join("actions.lock"))?;
-    let (workflows, deps) = lock_parts(&lock)?;
+#[derive(Default)]
+struct InventoryReport {
+    findings: Vec<String>,
+    notes: Vec<String>,
+}
+#[derive(Default)]
+struct WorkflowUses {
+    refs: Set,
+    remote_calls: Set,
+    local_calls: Vec<String>,
+    unsupported: Vec<String>,
+}
+impl WorkflowUses {
+    fn is_empty(&self) -> bool {
+        self.refs.is_empty()
+            && self.remote_calls.is_empty()
+            && self.local_calls.is_empty()
+            && self.unsupported.is_empty()
+    }
+}
+fn workflow_files(wfdir: &Path) -> Result<BTreeMap<String, PathBuf>> {
     let mut files = BTreeMap::new();
-    for entry in fs::read_dir(&wfdir).map_err(|e| e.to_string())? {
+    for entry in fs::read_dir(wfdir).map_err(|e| e.to_string())? {
         let path = entry.map_err(|e| e.to_string())?.path();
-        if path.is_file()
-            && matches!(
-                path.extension().and_then(|s| s.to_str()),
-                Some("yml" | "yaml")
-            )
-        {
-            files.insert(
-                format!(
-                    ".github/workflows/{}",
-                    path.file_name()
-                        .and_then(|s| s.to_str())
-                        .ok_or("non-UTF8 workflow name")?
-                ),
-                path,
-            );
+        if path.is_file() && is_workflow_path(&path) {
+            let filename = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .ok_or("non-UTF8 workflow name")?;
+            files.insert(format!(".github/workflows/{filename}"), path);
         }
     }
-    let mut findings = Vec::new();
-    let mut notes = Vec::new();
-    for path in unmanaged {
-        if !files.contains_key(path) {
-            findings.push(format!("UNMANAGED-UNKNOWN {path}"));
-        }
-    }
-    for name in workflows.keys() {
-        let name = string(name, "workflow path")?;
-        if !files.contains_key(name) {
-            findings.push(format!("STALE-WORKFLOW {name}"));
-        }
-    }
-    let mut depkeys = Set::new();
+    Ok(files)
+}
+fn is_workflow_path(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|s| s.to_str()),
+        Some("yml" | "yaml")
+    )
+}
+fn dependency_keys(deps: &Mapping, report: &mut InventoryReport) -> Result<Set> {
+    let mut keys = Set::new();
     for dep in deps.keys() {
-        if !depkeys.insert(key(dep, false)?) {
+        if !keys.insert(key(dep, false)?) {
             return Err("invalid or duplicate dependency key".into());
         }
     }
@@ -323,124 +349,249 @@ fn inventory(root: &Path, unmanaged: &Set) -> Result<(Vec<String>, Vec<String>)>
         if let Some(edges) = get(record, "uses") {
             for edge in list(edges, "dependency uses")? {
                 let normalized = key(edge, false)?;
-                if !depkeys.contains(&normalized) {
-                    findings.push(format!("MISSING-TRANSITIVE-RECORD {dep} {normalized}"));
+                if !keys.contains(&normalized) {
+                    report
+                        .findings
+                        .push(format!("MISSING-TRANSITIVE-RECORD {dep} {normalized}"));
                 }
             }
         }
     }
-    for (name, file) in &files {
+    Ok(keys)
+}
+fn job_entries(job: &Value) -> Result<Vec<(&Value, bool)>> {
+    let job = mapping(job, "invalid job")?;
+    let mut entries = Vec::new();
+    if let Some(uses) = get(job, "uses") {
+        entries.push((uses, true));
+    }
+    if let Some(steps) = get(job, "steps") {
+        for step in list(steps, "invalid steps")? {
+            let step = mapping(step, "invalid step")?;
+            if let Some(uses) = get(step, "uses") {
+                entries.push((uses, false));
+            }
+        }
+    }
+    Ok(entries)
+}
+struct InventoryContext<'a> {
+    root: &'a Path,
+    wfdir: &'a Path,
+    workflows: &'a Mapping,
+    depkeys: Set,
+    unmanaged: &'a Set,
+}
+impl InventoryContext<'_> {
+    fn local_target(&self, raw: &str) -> Result<Option<String>> {
+        let Ok(local) = fs::canonicalize(self.root.join(raw)) else {
+            return Ok(None);
+        };
+        if !local.starts_with(self.wfdir) || !local.is_file() || !is_workflow_path(&local) {
+            return Ok(None);
+        }
+        Ok(Some(
+            local
+                .strip_prefix(self.root)
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .into_owned(),
+        ))
+    }
+    fn inspect_uses(
+        &self,
+        name: &str,
+        jobs: &Mapping,
+        report: &mut InventoryReport,
+    ) -> Result<WorkflowUses> {
+        let mut uses = WorkflowUses::default();
+        for job in jobs.values() {
+            for (raw, is_job) in job_entries(job)? {
+                self.inspect_entry(name, string(raw, "uses")?, is_job, &mut uses, report)?;
+            }
+        }
+        for raw in &uses.unsupported {
+            report
+                .notes
+                .push(format!("NOT-LOCKED-SOURCE-REVIEW {name} {raw}"));
+        }
+        Ok(uses)
+    }
+    fn inspect_entry(
+        &self,
+        name: &str,
+        raw: &str,
+        is_job: bool,
+        uses: &mut WorkflowUses,
+        report: &mut InventoryReport,
+    ) -> Result<()> {
+        match reference(raw, false)? {
+            Some(normalized) if is_job => {
+                if !sha(normalized.rsplit_once('@').unwrap().1) {
+                    report
+                        .findings
+                        .push(format!("REMOTE-REUSABLE-NOT-SHA {name} {normalized}"));
+                }
+                report
+                    .notes
+                    .push(format!("REMOTE-REUSABLE-SOURCE-REVIEW {name} {normalized}"));
+                report.notes.push(format!("UNSUPPORTED-LOCK-SCOPE {name} {normalized} (external reusable dependencies not locked)"));
+                uses.remote_calls.insert(normalized);
+            }
+            Some(normalized) => {
+                uses.refs.insert(normalized);
+            }
+            None if raw.starts_with("./") && is_job => match self.local_target(raw)? {
+                Some(local) => uses.local_calls.push(local),
+                None => report
+                    .findings
+                    .push(format!("INVALID-LOCAL-WORKFLOW {name} {raw}")),
+            },
+            None => uses.unsupported.push(raw.to_owned()),
+        }
+        Ok(())
+    }
+    fn compare_map(
+        &self,
+        name: &str,
+        uses: WorkflowUses,
+        report: &mut InventoryReport,
+    ) -> Result<()> {
+        let Some(mapped) = get(self.workflows, name) else {
+            if self.unmanaged.contains(name) {
+                report.notes.push(format!(
+                    "INTENTIONALLY-UNMANAGED {name} (dependency closure not verified)"
+                ));
+            } else {
+                report.findings.push(format!("MISSING-WORKFLOW {name}"));
+            }
+            return Ok(());
+        };
+        if self.unmanaged.contains(name) {
+            report.findings.push(format!("UNMANAGED-BUT-MAPPED {name}"));
+        }
+        let mapped_set = mapped_references(name, mapped)?;
+        for r in uses.refs.difference(&mapped_set) {
+            report
+                .findings
+                .push(format!("MISSING-DIRECT-EDGE {name} {r}"));
+        }
+        for r in mapped_set.difference(&self.depkeys) {
+            report.findings.push(format!("MISSING-RECORD {name} {r}"));
+        }
+        if uses.is_empty() && mapped_set.is_empty() {
+            report.notes.push(format!("NO-USES-MAPPED {name}"));
+        }
+        for target in uses.local_calls {
+            report.notes.push(format!(
+                "LOCAL-REUSABLE {name} -> {target} (callee checked separately)"
+            ));
+        }
+        for r in mapped_set.difference(&uses.refs) {
+            report.notes.push(format!(
+                "EXTRA-OR-TRANSITIVE-EDGE {name} {r} (source review needed)"
+            ));
+        }
+        Ok(())
+    }
+    fn inspect_file(&self, name: &str, file: &Path, report: &mut InventoryReport) -> Result<()> {
         let doc = read_yaml(file)?;
         let doc = mapping(&doc, "workflow")?;
         let jobs = get(doc, "jobs")
             .and_then(Value::as_mapping)
             .ok_or_else(|| format!("{name}: expected jobs mapping"))?;
-        let mut refs = Set::new();
-        let mut remote_calls = Set::new();
-        let mut local_calls = Vec::new();
-        let mut unsupported = Vec::new();
-        for job in jobs.values() {
-            let job = mapping(job, "invalid job")?;
-            let mut entries = Vec::new();
-            if let Some(uses) = get(job, "uses") {
-                entries.push((uses, true));
-            }
-            if let Some(steps) = get(job, "steps") {
-                for step in list(steps, "invalid steps")? {
-                    let step = mapping(step, "invalid step")?;
-                    if let Some(uses) = get(step, "uses") {
-                        entries.push((uses, false));
-                    }
-                }
-            }
-            for (raw, is_job) in entries {
-                let raw = string(raw, "uses")?;
-                match reference(raw, false)? {
-                    Some(normalized) if is_job => {
-                        if !sha(normalized.rsplit_once('@').unwrap().1) {
-                            findings.push(format!("REMOTE-REUSABLE-NOT-SHA {name} {normalized}"));
-                        }
-                        notes.push(format!("REMOTE-REUSABLE-SOURCE-REVIEW {name} {normalized}"));
-                        notes.push(format!("UNSUPPORTED-LOCK-SCOPE {name} {normalized} (external reusable dependencies not locked)"));
-                        remote_calls.insert(normalized);
-                    }
-                    Some(normalized) => {
-                        refs.insert(normalized);
-                    }
-                    None if raw.starts_with("./") && is_job => {
-                        let local = fs::canonicalize(root.join(raw));
-                        match local {
-                            Ok(local)
-                                if local.starts_with(&canonical_wfdir)
-                                    && local.is_file()
-                                    && matches!(
-                                        local.extension().and_then(|s| s.to_str()),
-                                        Some("yml" | "yaml")
-                                    ) =>
-                            {
-                                local_calls.push(
-                                    local
-                                        .strip_prefix(&root)
-                                        .map_err(|e| e.to_string())?
-                                        .to_string_lossy()
-                                        .into_owned(),
-                                );
-                            }
-                            _ => findings.push(format!("INVALID-LOCAL-WORKFLOW {name} {raw}")),
-                        }
-                    }
-                    None => unsupported.push(raw.to_owned()),
-                }
-            }
-        }
-        for raw in &unsupported {
-            notes.push(format!("NOT-LOCKED-SOURCE-REVIEW {name} {raw}"));
-        }
-        let Some(mapped) = get(workflows, name) else {
-            if unmanaged.contains(name) {
-                notes.push(format!(
-                    "INTENTIONALLY-UNMANAGED {name} (dependency closure not verified)"
-                ));
-            } else {
-                findings.push(format!("MISSING-WORKFLOW {name}"));
-            }
-            continue;
-        };
-        if unmanaged.contains(name) {
-            findings.push(format!("UNMANAGED-BUT-MAPPED {name}"));
-        }
-        let mut mapped_set = Set::new();
-        for item in list(mapped, "workflow lock list")? {
-            if !mapped_set.insert(key(item, false)?) {
-                return Err(format!("{name}: invalid or duplicate lock reference"));
-            }
-        }
-        for r in refs.difference(&mapped_set) {
-            findings.push(format!("MISSING-DIRECT-EDGE {name} {r}"));
-        }
-        for r in mapped_set.difference(&depkeys) {
-            findings.push(format!("MISSING-RECORD {name} {r}"));
-        }
-        if refs.is_empty()
-            && remote_calls.is_empty()
-            && local_calls.is_empty()
-            && unsupported.is_empty()
-            && mapped_set.is_empty()
-        {
-            notes.push(format!("NO-USES-MAPPED {name}"));
-        }
-        for target in local_calls {
-            notes.push(format!(
-                "LOCAL-REUSABLE {name} -> {target} (callee checked separately)"
-            ));
-        }
-        for r in mapped_set.difference(&refs) {
-            notes.push(format!(
-                "EXTRA-OR-TRANSITIVE-EDGE {name} {r} (source review needed)"
-            ));
+        let uses = self.inspect_uses(name, jobs, report)?;
+        self.compare_map(name, uses, report)
+    }
+}
+fn mapped_references(name: &str, mapped: &Value) -> Result<Set> {
+    let mut refs = Set::new();
+    for item in list(mapped, "workflow lock list")? {
+        if !refs.insert(key(item, false)?) {
+            return Err(format!("{name}: invalid or duplicate lock reference"));
         }
     }
-    Ok((findings, notes))
+    Ok(refs)
+}
+fn inventory(root: &Path, unmanaged: &Set) -> Result<(Vec<String>, Vec<String>)> {
+    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let wfdir = root.join(".github/workflows");
+    let canonical_wfdir = fs::canonicalize(&wfdir).map_err(|e| e.to_string())?;
+    let lock = read_yaml(&wfdir.join("actions.lock"))?;
+    let (workflows, deps) = lock_parts(&lock)?;
+    let files = workflow_files(&wfdir)?;
+    let mut report = InventoryReport::default();
+    for path in unmanaged {
+        if !files.contains_key(path) {
+            report.findings.push(format!("UNMANAGED-UNKNOWN {path}"));
+        }
+    }
+    for name in workflows.keys() {
+        let name = string(name, "workflow path")?;
+        if !files.contains_key(name) {
+            report.findings.push(format!("STALE-WORKFLOW {name}"));
+        }
+    }
+    let depkeys = dependency_keys(deps, &mut report)?;
+    let context = InventoryContext {
+        root: &root,
+        wfdir: &canonical_wfdir,
+        workflows,
+        depkeys,
+        unmanaged,
+    };
+    for (name, file) in &files {
+        context.inspect_file(name, file, &mut report)?;
+    }
+    Ok((report.findings, report.notes))
+}
+fn parse_map_arguments(args: &[String]) -> Result<(PathBuf, Set)> {
+    let mut root = PathBuf::from(".");
+    let mut has_root = false;
+    let mut unmanaged = Set::new();
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        if arg == "--unmanaged" {
+            unmanaged.insert(rest.next().ok_or("missing unmanaged workflow")?.clone());
+        } else if arg.starts_with('-') || has_root {
+            return Err("unexpected map argument".into());
+        } else {
+            root = PathBuf::from(arg);
+            has_root = true;
+        }
+    }
+    Ok((root, unmanaged))
+}
+fn map_command(args: &[String]) -> i32 {
+    let Ok((root, unmanaged)) = parse_map_arguments(args) else {
+        eprintln!("usage: audit-workflow-lock-map.sh [ROOT] [--unmanaged WORKFLOW]");
+        return 2;
+    };
+    match inventory(&root, &unmanaged) {
+        Err(e) => {
+            eprintln!("NOT-RUN: {e}");
+            2
+        }
+        Ok((findings, notes)) => {
+            for note in notes {
+                println!("NOTE: {note}");
+            }
+            for finding in &findings {
+                println!("FINDING: {finding}");
+            }
+            println!(
+                "workflow-map findings={}; remote source closure and provenance NOT VERIFIED",
+                findings.len()
+            );
+            if !findings.is_empty() {
+                1
+            } else if !unmanaged.is_empty() {
+                2
+            } else {
+                0
+            }
+        }
+    }
 }
 fn main() {
     let args: Vec<_> = env::args().skip(1).collect();
@@ -458,53 +609,7 @@ fn main() {
             eprintln!("usage: audit-lock-regeneration.sh REVIEWED_LOCK PROPOSED_LOCK");
             1
         }
-        Some("map") => {
-            let mut root = PathBuf::from(".");
-            let mut has_root = false;
-            let mut unmanaged = Set::new();
-            let mut rest = args.iter().skip(1);
-            let mut invalid = false;
-            while let Some(arg) = rest.next() {
-                if arg == "--unmanaged" {
-                    if let Some(path) = rest.next() {
-                        unmanaged.insert(path.clone());
-                    } else {
-                        invalid = true;
-                    }
-                } else if arg.starts_with('-') || has_root {
-                    invalid = true;
-                } else {
-                    root = PathBuf::from(arg);
-                    has_root = true;
-                }
-            }
-            if invalid {
-                eprintln!("usage: audit-workflow-lock-map.sh [ROOT] [--unmanaged WORKFLOW]");
-                process::exit(2);
-            }
-            match inventory(&root, &unmanaged) {
-                Err(e) => {
-                    eprintln!("NOT-RUN: {e}");
-                    2
-                }
-                Ok((findings, notes)) => {
-                    for note in notes {
-                        println!("NOTE: {note}");
-                    }
-                    for finding in &findings {
-                        println!("FINDING: {finding}");
-                    }
-                    println!("workflow-map findings={}; remote source closure and provenance NOT VERIFIED", findings.len());
-                    if !findings.is_empty() {
-                        1
-                    } else if !unmanaged.is_empty() {
-                        2
-                    } else {
-                        0
-                    }
-                }
-            }
-        }
+        Some("map") => map_command(&args[1..]),
         _ => {
             eprintln!("usage: fleet-workflow-lock-audit map|regeneration ...");
             2

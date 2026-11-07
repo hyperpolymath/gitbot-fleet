@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           # Official RustSec binary, immutable content hash from its release asset.
           archive="$RUNNER_TEMP/cargo-audit.tgz"
-          curl -fsSL --retry 3 https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz -o "$archive"
+          curl --proto '=https' --proto-redir '=https' -fsSL --retry 3 https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz -o "$archive"
           printf '%s  %s\n' ab28a1bdb54db4d5d8ad5981cf1f959410370b3d28250dbd35f6a44248620e39 "$archive" | sha256sum -c -
           tar -xzf "$archive" -C "$RUNNER_TEMP"
           "$RUNNER_TEMP/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2/cargo-audit" audit --file tools/workflow-lock-audit/Cargo.lock --deny warnings

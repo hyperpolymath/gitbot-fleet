@@ -32,10 +32,10 @@ scalar resolution. Input must contain exactly one document. Complex mapping
 keys, explicit tags and YAML merge keys are rejected. Legacy YAML 1.1
 unquoted yes/no/on/off remain booleans, so a bare boolean cannot become a
 valid ref after migration. Ambiguous plain timestamps, sexagesimal values
-and overflowing numbers fail closed; quote intended strings explicitly.
+and overflowing or underscore-separated numbers fail closed; quote intended strings explicitly.
 These bounded, explicit restrictions avoid silently changing input meaning.
 
-The 41 CLI tests retain all 22 prior map/scanner controls and 16 prior
+The 42 CLI tests retain all 22 prior map/scanner controls and 16 prior
 regeneration controls, plus strict parsing, symlink containment and legacy
 scalar tests. Test fixtures use serde_json solely to write inputs; production
 uses the saphyr tree directly. ordered-float is locked to 5.3.0 to retain
