@@ -40,6 +40,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Harden credential-bearing runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            github.com:443
+            api.github.com:443
+            release-assets.githubusercontent.com:443
+            ${{ secrets.SMTP_HOST }}:${{ secrets.SMTP_PORT || '465' }}
       - name: Send push notification email
         uses: hyperpolymath/smtp-notify-action@v0.5.0
         with:

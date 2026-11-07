@@ -27,6 +27,13 @@ jobs:
     env:
       HAS_TOKEN: ${{ secrets.FARM_DISPATCH_TOKEN != '' }}
     steps:
+      - name: Harden credential-bearing runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            api.github.com:443
       - name: Trigger Propagation
         if: env.HAS_TOKEN == 'true'
         uses: peter-evans/repository-dispatch@v4.0.1

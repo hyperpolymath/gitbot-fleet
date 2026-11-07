@@ -29,13 +29,19 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v7.0.1
-      - name: Install PyYAML (for workflow YAML validation)
-        run: pip install pyyaml --quiet
+      - name: Audit workflow lock auditor dependencies
+        run: |
+          set -euo pipefail
+          # Official RustSec binary, immutable content hash from its release asset.
+          archive="$RUNNER_TEMP/cargo-audit.tgz"
+          curl -fsSL --retry 3 https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz -o "$archive"
+          printf '%s  %s\n' ab28a1bdb54db4d5d8ad5981cf1f959410370b3d28250dbd35f6a44248620e39 "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2/cargo-audit" audit --file tools/workflow-lock-audit/Cargo.lock --deny warnings
       - name: Test workflow lock-map and regeneration audit
         run: |
-          python3 tests/workflow-lock-map-test.py
-          python3 tests/lock-regeneration-test.py
-          python3 scripts/audit-workflow-lock-map.py
+          cargo test --locked --manifest-path tools/workflow-lock-audit/Cargo.toml
+          bash scripts/audit-workflow-lock-map.sh
       - name: Verify automation quarantine
         run: bash tests/automation-quarantine-test.sh
       - name: Verify fix-outcome verdicts

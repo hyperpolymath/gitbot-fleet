@@ -48,8 +48,8 @@ on:
   # MONITORING; the auto-merge job itself is gated OFF by default (see below).
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
   repository-projects: read
   actions: read
 
@@ -280,6 +280,12 @@ jobs:
   # Job 3: Auto-merge qualifying PRs
   auto-merge-prs:
     name: Auto-merge qualifying PRs
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      merged_count: ${{ steps.merge.outputs.merged_count }}
+      failed_count: ${{ steps.merge.outputs.failed_count }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate-prs
@@ -379,6 +385,15 @@ jobs:
     if: always() && (needs.identify-passed-prs.result == 'success' || needs.validate-prs.result == 'success')
     
     steps:
+      - name: Harden credential-bearing runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43
+        with:
+          egress-policy: block
+          disable-telemetry: true
+          allowed-endpoints: >-
+            github.com:443
+            api.github.com:443
+            codeload.github.com:443
       - name: Checkout gitbot-fleet
         uses: actions/checkout@v7.0.1
 

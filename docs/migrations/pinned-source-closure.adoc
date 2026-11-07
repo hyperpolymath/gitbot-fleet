@@ -147,7 +147,7 @@ bash scripts/audit-pinned-reusable-sources.sh --json
 bash scripts/tests/pinned-reusable-sources-test.sh
 bash scripts/tests/lock-closure-test.sh
 bash scripts/tests/pinned-source-entrypoints-test.sh
-python3 tests/workflow-lock-map-test.py
+cargo test --locked --manifest-path tools/workflow-lock-audit/Cargo.toml
 bash scripts/audit-lock-closure.sh --json
 ----
 
