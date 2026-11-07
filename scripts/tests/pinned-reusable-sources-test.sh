@@ -86,6 +86,7 @@ check() {
       clean) [[ "$rc" == 0 ]] && jq -e '(.findings|length)==0 and (.not_run|length)==0 and (.verified_roots|length)==1 and (.verified_receipt_sources|length)>0' "$CASE/result.json" >/dev/null && valid=1 ;;
       fatal) [[ "$rc" == 1 || "$rc" == 3 ]] && jq -e 'any(.findings[]; .severity=="FATAL" and (.rule|length)>0 and (.detail|length)>0) and (.verified_roots|length)==0 and (.verified_receipt_sources|length)==0' "$CASE/result.json" >/dev/null && valid=1 ;;
       notrun) [[ "$rc" == 2 ]] && jq -e '(.findings|length)==0 and any(.not_run[]; (.rule|length)>0 and (.detail|length)>0) and (.verified_roots|length)==0 and (.verified_receipt_sources|length)==0' "$CASE/result.json" >/dev/null && valid=1 ;;
+      *) printf 'Unexpected fixture expectation: %s\n' "$expected" >&2; exit 64 ;;
     esac
   fi
   if [[ "$valid" == 1 ]]; then PASS=$((PASS+1)); printf 'PASS: %s (%s, exit %s)\n' "$label" "$expected" "$rc"
@@ -242,6 +243,7 @@ for variant in local-action local-reusable nested-reusable docker block-scalar a
     tagged-action) text=$'name: R\non: workflow_call\njobs:\n  build:\n    steps:\n      - uses: org/child@v1'; raw='org/child@v1'; kind=step ;;
     docker) text=$'name: R\non: workflow_call\njobs:\n  build:\n    steps:\n      - uses: docker://alpine:3'; raw='docker://alpine:3'; kind=step ;;
     block-scalar) text=$'name: R\non: workflow_call\njobs:\n  build:\n    steps:\n      - uses: >-\n          org/child@'"$CHILD_SHA"; raw="$CHILD_KEY"; kind=step ;;
+    *) printf 'Unexpected fixture variant: %s\n' "$variant" >&2; exit 64 ;;
   esac
   source_object "$CASE/cache/org/reusable.git" "$text"; replace_pin "$ROOT_SHA" "$NEW_COMMIT"
   edit_manifest --arg blob "$NEW_BLOB" --arg raw "$raw" --arg kind "$kind" '.sources[0].blob=$blob | .sources[0].uses=[{kind:$kind,ref:$raw}]'

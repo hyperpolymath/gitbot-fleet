@@ -8,12 +8,13 @@ on:
     branches: [main]
   pull_request:
     branches: ['**']
-permissions:
-  actions: read
-  contents: read
+permissions: {}
 jobs:
   e2e:
     name: E2E tests
+    permissions:
+      actions: read
+      contents: read
     needs: pinned-source-closure
     if: ${{ always() }}
     runs-on: ubuntu-latest
@@ -57,10 +58,10 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-    env:
-      PINNED_SOURCE_CACHE: ${{ runner.temp }}/fleet-pinned-sources
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Set source cache
+        run: printf 'PINNED_SOURCE_CACHE=%s/fleet-pinned-sources\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Test pinned-source failure modes
         run: bash scripts/tests/pinned-reusable-sources-test.sh
       - name: Authenticate pinned reusable sources

@@ -482,7 +482,7 @@ while IFS=$'\t' read -r tag a b c; do
       ;;
     DEPFIELD)
       key="$a"; field="$b"; val="$c"
-      if [ -n "${DEP_HASFIELD["$key|$field"]:-}" ]; then
+      if [[ -n "${DEP_HASFIELD["$key|$field"]:-}" ]]; then
         add_finding FATAL LOCK-DUP-FIELD "$key" "dependency field $field appears more than once" "Keep one unambiguous value per field"
       fi
       DEP_HASFIELD["$key|$field"]=1
@@ -492,7 +492,7 @@ while IFS=$'\t' read -r tag a b c; do
         uses) DEP_USES["$key"]="${DEP_USES["$key"]:-} $val" ;;
         owner_id|repo_id)
           [[ "$val" =~ ^[0-9]+$ ]] || add_finding FATAL REF-FIELD "$key" "$field is '$val', not an integer" "Record the numeric GitHub id or omit the field"
-          if [ "$field" = owner_id ]; then DEP_OWNER_ID["$key"]="$val"; else DEP_REPO_ID["$key"]="$val"; fi
+          if [[ "$field" = owner_id ]]; then DEP_OWNER_ID["$key"]="$val"; else DEP_REPO_ID["$key"]="$val"; fi
           ;;
         *) add_finding REVIEW REF-FIELD "$key" "unknown dependency field '$field'" "Remove it or extend the audit" ;;
       esac
@@ -542,8 +542,8 @@ done
 # Internal data-only interface used by the independent source verifier. It
 # exits before source verification, avoiding recursion, and never emits a
 # successful record dump for malformed lock/receipt input.
-if [ "$DUMP_LOCK_RECORDS" -eq 1 ]; then
-  if [ "${#F_SEV[@]}" -gt 0 ] || [ "${#N_RULE[@]}" -gt 0 ]; then
+if [[ "$DUMP_LOCK_RECORDS" -eq 1 ]]; then
+  if [[ "${#F_SEV[@]}" -gt 0 ]] || [[ "${#N_RULE[@]}" -gt 0 ]]; then
     printf '%s\n' 'audit-lock-closure: cannot dump invalid or incomplete input' >&2
     exit 1
   fi
@@ -563,15 +563,15 @@ fi
 # supply additional records only after exact commit/tree/blob, caller/path,
 # reviewed-edge and receipt checks all succeed. These are source-attested
 # records, not a claim that gh-actions-lock generated or verified them.
-if [ -z "$SOURCE_MANIFEST" ] && { [ -f "$REPO_ROOT/scripts/lib/pinned-reusable-sources.json" ] || [ -f "$REPO_ROOT/scripts/audit-pinned-reusable-sources.sh" ]; }; then
+if [[ -z "$SOURCE_MANIFEST" ]] && { [[ -f "$REPO_ROOT/scripts/lib/pinned-reusable-sources.json" ]] || [[ -f "$REPO_ROOT/scripts/audit-pinned-reusable-sources.sh" ]]; }; then
   SOURCE_MANIFEST="$REPO_ROOT/scripts/lib/pinned-reusable-sources.json"
 fi
 SOURCE_ATTESTED_COUNT=0
-if [ -n "$SOURCE_MANIFEST" ]; then
+if [[ -n "$SOURCE_MANIFEST" ]]; then
   helper="$(dirname "${BASH_SOURCE[0]}")/audit-pinned-reusable-sources.sh"
   args=(--manifest "$SOURCE_MANIFEST" --repo-root "$REPO_ROOT" --lock "$LOCK" --receipts "$RECEIPTS" --json)
-  [ -z "$SOURCE_CACHE" ] || args+=(--cache "$SOURCE_CACHE")
-  [ "$FETCH_SOURCES" -eq 0 ] || args+=(--fetch-sources)
+  [[ -z "$SOURCE_CACHE" ]] || args+=(--cache "$SOURCE_CACHE")
+  [[ "$FETCH_SOURCES" -eq 0 ]] || args+=(--fetch-sources)
   source_rc=0
   bash "$helper" "${args[@]}" > "$TMP/source-report.json" || source_rc=$?
   if ! jq -e '(.findings | type == "array") and (.not_run | type == "array") and (.dependencies | type == "object")' "$TMP/source-report.json" >/dev/null 2>&1; then
@@ -583,24 +583,24 @@ if [ -n "$SOURCE_MANIFEST" ]; then
     while IFS= read -r item; do
       add_notrun "$(jq -r .rule <<< "$item")" "$(jq -r .subject <<< "$item")" "$(jq -r .detail <<< "$item")" "$(jq -r .fix <<< "$item")"
     done < <(jq -c '.not_run[]' "$TMP/source-report.json")
-    if [ "$source_rc" -eq 0 ] && jq -e '(.findings | length == 0) and (.not_run | length == 0)' "$TMP/source-report.json" >/dev/null; then
+    if [[ "$source_rc" -eq 0 ]] && jq -e '(.findings | length == 0) and (.not_run | length == 0)' "$TMP/source-report.json" >/dev/null; then
       while IFS= read -r item; do
         key="$(jq -r .key <<< "$item")"
         f="$(fold_ref "$key")"
         # Overlaps have already been compared by the verifier. Keep every
         # existing vendor record untouched, including its spelling.
-        [ -z "${DEP_IDX[$f]:-}" ] || continue
+        [[ -z "${DEP_IDX[$f]:-}" ]] || continue
         DEP_KEYS+=("$key"); DEP_IDX["$f"]="$key"; DISP["$f"]="$key"
         DEP_REF["$key"]="$(jq -r .value.ref <<< "$item")"
         commit="$(jq -r .value.commit <<< "$item")"
         DEP_COMMIT["$key"]="${commit#sha1-}"
         owner_id="$(jq -r '.value.owner_id//empty' <<< "$item")"; repo_id="$(jq -r '.value.repo_id//empty' <<< "$item")"
-        [ -z "$owner_id" ] || DEP_OWNER_ID["$key"]="$owner_id"
-        [ -z "$repo_id" ] || DEP_REPO_ID["$key"]="$repo_id"
+        [[ -z "$owner_id" ]] || DEP_OWNER_ID["$key"]="$owner_id"
+        [[ -z "$repo_id" ]] || DEP_REPO_ID["$key"]="$repo_id"
         DEP_USES["$key"]="$(jq -r '(.value.uses // []) | join(" ")' <<< "$item")"
         SOURCE_ATTESTED_COUNT=$((SOURCE_ATTESTED_COUNT + 1))
       done < <(jq -c '.dependencies | to_entries[]' "$TMP/source-report.json")
-    elif [ "$(jq '(.findings | length) + (.not_run | length)' "$TMP/source-report.json")" -eq 0 ]; then
+    elif [[ "$(jq '(.findings | length) + (.not_run | length)' "$TMP/source-report.json")" -eq 0 ]]; then
       add_notrun SOURCE-REPORT "$SOURCE_MANIFEST" "source verifier exited $source_rc without a diagnostic" "Inspect the verifier; no supplemental record is trusted"
     fi
   fi

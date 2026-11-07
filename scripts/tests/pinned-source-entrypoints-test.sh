@@ -39,7 +39,8 @@ expect_finding() {
   else fail "$label"; fi
 }
 manifest_edit() {
-  jq "$1" "$CASE/scripts/lib/pinned-reusable-sources.json" > "$CASE/manifest.tmp"
+  local expression="$1"
+  jq "$expression" "$CASE/scripts/lib/pinned-reusable-sources.json" > "$CASE/manifest.tmp"
   mv "$CASE/manifest.tmp" "$CASE/scripts/lib/pinned-reusable-sources.json"
 }
 new_case untouched

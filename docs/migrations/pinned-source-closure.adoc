@@ -6,7 +6,7 @@
 The local implementation verifies reviewed direct reusable-workflow edges
 against exact Git source objects and joins their reviewed dependency records
 to the ordinary vendor lock for closure auditing. Local acceptance checks pass;
-fresh hosted checks are pending. This records work based on Fleet draft
+hosted results are recorded in Fleet draft #652. This records work based on
 `48de76a5bcf466f46e4e973a21ca911ebec1b23c`, with main/base
 `34908580b98cd354caa3bfc5a000bc7935957fce`. It does not certify the entire fleet
 or declare the secret-scanner migration ready.
@@ -118,6 +118,7 @@ The final local acceptance results are:
 |Explicit HTTPS fetch followed by offline helper |5 verified roots; 11 records
 |Integrated closure audit |fatal 0; review 0; not_run 0; accepted 3; source_attested_records 11
 |Vendor verify-local, full verify and lock sync |Pass
+|Workflow expression validation |actionlint 1.7.12 passes; E2E guard checked for success, failure, skipped, cancelled and empty results
 |===
 
 The source job runs helper fixtures, explicit source fetching, the preserved
@@ -160,8 +161,8 @@ inspect source data and fixtures, not fetched executable code.
 Local Debian `en_GB.UTF-8` report-back runs have three ordering failures on both
 the base and candidate; this closure change does not claim to repair them or to
 make the full repository E2E suite pass. Nine governance findings remained at the
-last observation. Fresh hosted checks remain pending, so local acceptance is
-not a claim that every hosted repository check is green.
+last observation. The latest hosted outcomes are recorded in draft PR #652;
+local acceptance is not a claim that every hosted repository check is green.
 
 No normative policy, standards draft 1419, fleet draft 651, ruleset, mirror or
 credential is changed by this closure integration. Source caches and raw local

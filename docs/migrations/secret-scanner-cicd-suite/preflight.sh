@@ -78,7 +78,7 @@ cp "$ROOT/scripts/lib/lock-closure-receipts.tsv" "$TMP/tree/scripts/lib/" 2>/dev
 cp "$ROOT/scripts/lib/lock-audit-baseline.tsv" "$TMP/tree/scripts/lib/" 2>/dev/null || true
 # Preserve the independent source proof in the proposed tree when the vendor
 # lock omits remote reusables. The closure audit below must still verify it.
-if [ -f "$ROOT/scripts/lib/pinned-reusable-sources.json" ]; then
+if [[ -f "$ROOT/scripts/lib/pinned-reusable-sources.json" ]]; then
   cp "$ROOT/scripts/lib/pinned-reusable-sources.json" "$TMP/tree/scripts/lib/" || finding TREE "source manifest could not be copied"
   cp "$ROOT/scripts/audit-pinned-reusable-sources.sh" "$TMP/tree/scripts/" || finding TREE "source verifier could not be copied"
 fi
@@ -96,7 +96,7 @@ if [ -f "$TMP/tree/.github/workflows/secret-scanner.yml" ] &&
   # integrated audit below must authenticate every active binding and edge,
   # and missing evidence remains nonzero NOT RUN, never a migration pass.
   count=$(grep -Fc "$source_key" "$TMP/tree/.github/workflows/actions.lock" 2>/dev/null || true)
-  if [ "$count" -lt 2 ] && [ ! -f "$TMP/tree/scripts/lib/pinned-reusable-sources.json" ]; then
+  if [[ "$count" -lt 2 ]] && [[ ! -f "$TMP/tree/scripts/lib/pinned-reusable-sources.json" ]]; then
     finding LOCK-MISSING "applied scanner lacks both pinned suite vendor records and a source-verification route"
     apply_ok=0
   fi

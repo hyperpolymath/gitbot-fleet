@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST=""; LOCK=""; RECEIPTS=""; CACHE="${PINNED_SOURCE_CACHE:-${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/fleet-pinned-sources}"
 FETCH=0; JSON=0
-while [ "$#" -gt 0 ]; do
+while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --manifest|--source-manifest) MANIFEST="${2:?manifest file required}"; shift ;;
     --repo-root) ROOT="${2:?repository root required}"; shift ;;
@@ -33,32 +33,34 @@ trap 'rm -rf "$TMP"' EXIT
 : > "$TMP/findings"; : > "$TMP/notrun"; : > "$TMP/roots"; : > "$TMP/groups"
 printf '{}\n' > "$TMP/supplement.json"
 finding() {
-  jq -nc --arg rule "$1" --arg subject "$2" --arg detail "$3" \
+  local rule="$1" subject="$2" detail="$3"
+  jq -nc --arg rule "$rule" --arg subject "$subject" --arg detail "$detail" \
     '{severity:"FATAL",rule:$rule,subject:$subject,detail:$detail,fix:"Review the source-bound manifest and immutable objects; do not waive closure evidence"}' >> "$TMP/findings"
 }
 notrun() {
-  jq -nc --arg rule "$1" --arg subject "$2" --arg detail "$3" \
+  local rule="$1" subject="$2" detail="$3"
+  jq -nc --arg rule "$rule" --arg subject "$subject" --arg detail "$detail" \
     '{rule:$rule,subject:$subject,detail:$detail,fix:"Provide authenticated source objects and supported parseable input; fetched source is never executed"}' >> "$TMP/notrun"
 }
 finish() {
   local f n rc=0
   f="$(jq -s length "$TMP/findings")"; n="$(jq -s length "$TMP/notrun")"
-  [ "$f" -eq 0 ] || rc=1
-  [ "$n" -eq 0 ] || rc=$((rc + 2))
-  if [ "$rc" -ne 0 ]; then
+  [[ "$f" -eq 0 ]] || rc=1
+  [[ "$n" -eq 0 ]] || rc=$((rc + 2))
+  if [[ "$rc" -ne 0 ]]; then
     : > "$TMP/roots"; : > "$TMP/groups"; printf '{}\n' > "$TMP/supplement.json"
   fi
   jq -n --slurpfile findings "$TMP/findings" --slurpfile not_run "$TMP/notrun" \
     --slurpfile roots "$TMP/roots" --slurpfile groups "$TMP/groups" --slurpfile deps "$TMP/supplement.json" \
     '{findings:$findings,not_run:$not_run,verified_roots:$roots,verified_receipt_sources:($groups|unique),dependencies:$deps[0]}' > "$TMP/report.json"
-  if [ "$JSON" -eq 1 ]; then cat "$TMP/report.json"; else
+  if [[ "$JSON" -eq 1 ]]; then cat "$TMP/report.json"; else
     jq -r '.findings[] | "FATAL\t\(.rule)\t\(.subject)\t\(.detail)"' "$TMP/report.json"
     jq -r '.not_run[] | "NOT-RUN\t\(.rule)\t\(.subject)\t\(.detail)"' "$TMP/report.json"
     printf 'pinned reusable sources: findings=%s not-run=%s verified-roots=%s (direct source edges; no fetched execution)\n' "$f" "$n" "$(jq '.verified_roots|length' "$TMP/report.json")"
   fi
   return "$rc"
 }
-if [ ! -f "$MANIFEST" ]; then notrun SOURCE-MISSING "$MANIFEST" 'No source manifest'; finish; exit $?; fi
+if [[ ! -f "$MANIFEST" ]]; then notrun SOURCE-MISSING "$MANIFEST" 'No source manifest'; finish; exit $?; fi
 # Streaming paths retain duplicate object keys which ordinary jq object
 # parsing would discard. Container-close events identify their parent path.
 if ! jq --stream -es 'map(if length==2 then .[0] else .[0][0:-1] end) as $paths | ($paths|length)==($paths|unique|length)' "$MANIFEST" >/dev/null 2>&1; then
@@ -98,14 +100,15 @@ jq '.dependencies | with_entries(.value |= with_entries(select(.key=="ref" or .k
 # Repository names are case-insensitive; ref spelling is not. Reject a
 # collision before normalization, then compare records in one key space.
 normalize_records() {
+  local input="$1" output="$2"
   jq -e '
     def key: capture("^(?<repository>[^@]+)@(?<ref>[^@]+)$") | ((.repository|ascii_downcase)+"@"+.ref);
     (keys|map(key)) as $keys | ($keys|length)==($keys|unique|length)
-  ' "$1" >/dev/null 2>&1 || return 1
+  ' "$input" >/dev/null 2>&1 || return 1
   jq '
     def key: capture("^(?<repository>[^@]+)@(?<ref>[^@]+)$") | ((.repository|ascii_downcase)+"@"+.ref);
     with_entries(.key |= key | if (.value|has("uses")) then .value.uses |= map(key) else . end)
-  ' "$1" > "$2"
+  ' "$input" > "$output"
 }
 for graph in vendor supplement; do
   if ! normalize_records "$TMP/$graph.json" "$TMP/$graph.normalized.json"; then
@@ -126,6 +129,7 @@ normalize_ref() {
 # Conservative block-YAML reader matching the existing auditor's profile.
 # A flow/scalar/anchor spelling we cannot read is evidence missing, not green.
 extract_uses() {
+  local workflow_file="$1"
   awk '
     function uncomment(s, i,c,q,out) {
       q="";out=""
@@ -155,7 +159,7 @@ extract_uses() {
       if(line~/(^|[[:space:],{])["\047]?uses["\047]?[[:space:]]*:/)print "UNPARSED\tuses in unsupported YAML shape"
       s=uncomment(line);if(s~/(^|[[:space:]-])["\047]?[A-Za-z0-9_.-]+["\047]?[[:space:]]*:[[:space:]]*[|>][-+]?[0-9]?[[:space:]]*$/){block=1;blockind=ind}
     }
-  ' "$1"
+  ' "$workflow_file"
 }
 
 # Discover the exact live caller/job/path roots independently of the catalog.
@@ -163,10 +167,10 @@ shopt -s nullglob
 for workflow in "$ROOT"/.github/workflows/*.yml "$ROOT"/.github/workflows/*.yaml; do
   caller=".github/workflows/$(basename "$workflow")"
   while IFS=$'\t' read -r tag kind raw job; do
-    if [ "$tag" = UNPARSED ]; then notrun SOURCE-PARSE "$caller" "$kind"; continue; fi
-    [ "$kind" = job ] || continue
-    case "$raw" in ./*) continue ;; esac
-    if [[ ! "$raw" =~ ^([A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*)/(\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml)@([0-9a-f]{40})$ ]] || [ -z "$job" ]; then
+    if [[ "$tag" = UNPARSED ]]; then notrun SOURCE-PARSE "$caller" "$kind"; continue; fi
+    [[ "$kind" = job ]] || continue
+    if [[ "$raw" == ./* ]]; then continue; fi
+    if [[ ! "$raw" =~ ^([A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*)/(\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml)@([0-9a-f]{40})$ ]] || [[ -z "$job" ]]; then
       finding SOURCE-PIN "$caller/$job" "Remote reusable must have an exact workflow path and full lowercase 40-hex source pin: $raw"; continue
     fi
     jq -nc --arg workflow "$caller" --arg job "$job" --arg repository "${BASH_REMATCH[1],,}" --arg path "${BASH_REMATCH[2]}" --arg commit "${BASH_REMATCH[3]}" \
@@ -193,11 +197,11 @@ verify_object() {
   local type="$1" oid="$2" dest="$3" actual
   git_data cat-file "$type" "$oid" > "$dest" 2>/dev/null || return 1
   actual="$(git_data hash-object -t "$type" --stdin < "$dest")" || return 1
-  [ "$actual" = "$oid" ]
+  [[ "$actual" = "$oid" ]]
 }
 object_failure() {
   local type="$1" oid="$2" subject="$3"
-  if git_data cat-file -e "$oid" 2>/dev/null || [ -e "$BARE/objects/${oid:0:2}/${oid:2}" ]; then
+  if git_data cat-file -e "$oid" 2>/dev/null || [[ -e "$BARE/objects/${oid:0:2}/${oid:2}" ]]; then
     finding SOURCE-ORIGIN "$subject" "Cached $type object is present but corrupt, has the wrong type, or fails its raw content hash"
   else
     notrun SOURCE-MISSING "$subject" "Offline cache lacks required $type object $oid"
@@ -207,25 +211,25 @@ source_bytes() {
   local repository="$1" commit="$2" path="$3" blob="$4" dest="$5" tree entry mode type oid name part i
   BARE="$CACHE/$repository.git"
   for entry in "$CACHE" "$CACHE/${repository%/*}" "$BARE"; do
-    if [ -L "$entry" ]; then finding SOURCE-ORIGIN "$repository@$commit" 'Symlink in source-cache path'; return 1; fi
+    if [[ -L "$entry" ]]; then finding SOURCE-ORIGIN "$repository@$commit" 'Symlink in source-cache path'; return 1; fi
   done
-  if [ ! -d "$BARE" ] && [ "$FETCH" -eq 1 ]; then
+  if [[ ! -d "$BARE" ]] && [[ "$FETCH" -eq 1 ]]; then
     mkdir -p "$(dirname "$BARE")"
     if ! env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -c core.hooksPath=/dev/null init --bare --object-format=sha1 "$BARE" >/dev/null 2>&1; then
       notrun SOURCE-MISSING "$repository@$commit" 'Cannot initialize isolated bare source cache'; return 1
     fi
   fi
-  if [ ! -d "$BARE" ]; then notrun SOURCE-MISSING "$repository@$commit" 'No authenticated bare cache; bootstrap with --fetch-sources'; return 1; fi
-  if [ "$(git_data rev-parse --is-bare-repository 2>/dev/null)" != true ]; then finding SOURCE-ORIGIN "$repository@$commit" 'Source cache is not a bare Git repository'; return 1; fi
-  if [ -e "$BARE/info/grafts" ] || [ -L "$BARE/info/grafts" ] || [ -n "$(git_data for-each-ref --format='%(refname)' refs/replace/ 2>/dev/null)" ] ||
+  if [[ ! -d "$BARE" ]]; then notrun SOURCE-MISSING "$repository@$commit" 'No authenticated bare cache; bootstrap with --fetch-sources'; return 1; fi
+  if [[ "$(git_data rev-parse --is-bare-repository 2>/dev/null)" != true ]]; then finding SOURCE-ORIGIN "$repository@$commit" 'Source cache is not a bare Git repository'; return 1; fi
+  if [[ -e "$BARE/info/grafts" ]] || [[ -L "$BARE/info/grafts" ]] || [[ -n "$(git_data for-each-ref --format='%(refname)' refs/replace/ 2>/dev/null)" ]] ||
      git_data config --local --get-regexp '^(include\.|includeif\.|url\.|extensions\.partialclone|remote\..*\.promisor)' >/dev/null 2>&1; then
     finding SOURCE-ORIGIN "$repository@$commit" 'Cache has grafts, replacement refs or source-rewriting configuration'; return 1
   fi
   if ! verify_object commit "$commit" "$TMP/commit"; then
-    if git_data cat-file -e "$commit" 2>/dev/null || [ -e "$BARE/objects/${commit:0:2}/${commit:2}" ]; then
+    if git_data cat-file -e "$commit" 2>/dev/null || [[ -e "$BARE/objects/${commit:0:2}/${commit:2}" ]]; then
       finding SOURCE-ORIGIN "$repository@$commit" 'Cached commit exists but its raw content/type/hash is corrupt or mismatched'; return 1
     fi
-    if [ "$FETCH" -eq 1 ]; then
+    if [[ "$FETCH" -eq 1 ]]; then
       if ! git_data fetch --quiet --no-tags --depth=1 --no-recurse-submodules "https://github.com/$repository.git" "$commit" > "$TMP/fetch.out" 2> "$TMP/fetch.err"; then
         notrun SOURCE-MISSING "$repository@$commit" 'Exact public HTTPS source fetch failed'; return 1
       fi
@@ -240,12 +244,12 @@ source_bytes() {
     if ! verify_object tree "$tree" "$TMP/tree"; then object_failure tree "$tree" "$repository@$commit/$path"; return 1; fi
     entry="$(git_data ls-tree "$tree" -- "$part")"
     IFS=$' \t' read -r mode type oid name <<< "$entry"
-    if [ "$name" != "$part" ]; then finding SOURCE-BLOB "$repository@$commit/$path" 'Requested source path absent from exact commit tree'; return 1; fi
-    if [ "$i" -lt "$((${#parts[@]}-1))" ]; then
-      if [ "$mode" != 040000 ] || [ "$type" != tree ]; then finding SOURCE-BLOB "$repository@$commit/$path" 'Non-tree or symlink in source path'; return 1; fi
+    if [[ "$name" != "$part" ]]; then finding SOURCE-BLOB "$repository@$commit/$path" 'Requested source path absent from exact commit tree'; return 1; fi
+    if [[ "$i" -lt "$((${#parts[@]}-1))" ]]; then
+      if [[ "$mode" != 040000 ]] || [[ "$type" != tree ]]; then finding SOURCE-BLOB "$repository@$commit/$path" 'Non-tree or symlink in source path'; return 1; fi
       tree="$oid"
     else
-      if [[ "$mode" != 100644 && "$mode" != 100755 ]] || [ "$type" != blob ] || [ "$oid" != "$blob" ]; then
+      if [[ "$mode" != 100644 && "$mode" != 100755 ]] || [[ "$type" != blob ]] || [[ "$oid" != "$blob" ]]; then
         finding SOURCE-BLOB "$repository@$commit/$path" 'Blob identity or regular-file mode differs from manifest'; return 1
       fi
       if ! verify_object blob "$blob" "$dest"; then object_failure blob "$blob" "$repository@$commit/$path"; return 1; fi
@@ -263,13 +267,13 @@ while IFS= read -r source; do
   parse_incomplete=0
   : > "$TMP/uses"
   while IFS=$'\t' read -r tag kind raw job; do
-    if [ "$tag" = UNPARSED ]; then notrun SOURCE-PARSE "$subject" "$kind"; parse_incomplete=1; continue; fi
-    if [ "$kind" = job ]; then notrun SOURCE-LOCAL "$subject" 'Nested reusable calls are outside this reviewed direct-action source profile'; parse_incomplete=1; continue; fi
+    if [[ "$tag" = UNPARSED ]]; then notrun SOURCE-PARSE "$subject" "$kind"; parse_incomplete=1; continue; fi
+    if [[ "$kind" = job ]]; then notrun SOURCE-LOCAL "$subject" 'Nested reusable calls are outside this reviewed direct-action source profile'; parse_incomplete=1; continue; fi
     if ! ref="$(normalize_ref "$raw")"; then notrun SOURCE-LOCAL "$subject" "Unsupported local, Docker, dynamic or malformed uses: $raw"; parse_incomplete=1; continue; fi
     if [[ ! "${ref##*@}" =~ ^[0-9a-f]{40}$ ]]; then finding SOURCE-PIN "$subject" "Authenticated direct remote uses must have a literal full 40-hex source pin: $raw"; continue; fi
     jq -nc --arg kind "$kind" --arg ref "$raw" '{kind:$kind,ref:$ref}' >> "$TMP/uses"
   done < <(extract_uses "$bytes")
-  [ "$parse_incomplete" -eq 0 ] || continue
+  [[ "$parse_incomplete" -eq 0 ]] || continue
   jq -s 'unique_by(.kind,.ref)|sort_by(.kind,.ref)' "$TMP/uses" > "$TMP/actual-uses"
   jq '.uses|map({kind,ref})|unique_by(.kind,.ref)|sort_by(.kind,.ref)' <<< "$source" > "$TMP/expected-uses"
   if ! cmp -s "$TMP/actual-uses" "$TMP/expected-uses"; then
@@ -282,7 +286,7 @@ done < <(jq -c '.sources[]' "$MANIFEST")
 # Do not turn absent authenticated data into a misleading edge mismatch.
 # No source-derived records are exported unless the whole evidence pass is
 # complete, including every retained-review path.
-if [ -s "$TMP/findings" ] || [ -s "$TMP/notrun" ]; then finish; exit $?; fi
+if [[ -s "$TMP/findings" ]] || [[ -s "$TMP/notrun" ]]; then finish; exit $?; fi
 
 # A retained source may extend an existing reviewed union, but cannot create
 # an unrelated historical dependency population with no current caller.
@@ -299,7 +303,7 @@ while IFS= read -r group; do
   edges="$(jq -Rsc 'split("\n")|map(select(length>0))' "$TMP/group-normalized")"
   if jq -e --arg k "$rid" 'has($k)' "$TMP/graph.json" >/dev/null; then
     prior="$(jq -c --arg k "$rid" '.[$k].uses//[]|sort|unique' "$TMP/graph.json")"
-    if [ "$prior" != "$(jq -c 'sort|unique' <<< "$edges")" ]; then finding SOURCE-DEPENDENCY "$rid" 'Source parent record differs from its authenticated direct-edge union'; fi
+    if [[ "$prior" != "$(jq -c 'sort|unique' <<< "$edges")" ]]; then finding SOURCE-DEPENDENCY "$rid" 'Source parent record differs from its authenticated direct-edge union'; fi
   else
     jq --arg k "$rid" --arg sha "$commit" --argjson edges "$edges" '.+{($k):{ref:$sha,commit:("sha1-"+$sha),uses:$edges}}' "$TMP/supplement.json" > "$TMP/next.json"
     mv "$TMP/next.json" "$TMP/supplement.json"
@@ -312,30 +316,30 @@ done < <(jq -sc 'sort_by(.repository,.commit)|group_by(.repository,.commit)|map(
 # claiming recursive source authentication beyond the reviewed direct sets.
 while IFS= read -r entry; do
   key="$(jq -r .key <<< "$entry")"; normalized="$(normalize_ref "$key")" || normalized=""
-  if [ "$normalized" != "$key" ] || ! jq -e '.value|(.ref|type=="string" and test("^[^[:space:]@]+$")) and (.commit|type=="string" and test("^sha1-[0-9a-f]{40}$")) and ((.uses//[])|type=="array")' <<< "$entry" >/dev/null; then
+  if [[ "$normalized" != "$key" ]] || ! jq -e '.value|(.ref|type=="string" and test("^[^[:space:]@]+$")) and (.commit|type=="string" and test("^sha1-[0-9a-f]{40}$")) and ((.uses//[])|type=="array")' <<< "$entry" >/dev/null; then
     finding SOURCE-DEPENDENCY "$key" 'Malformed supplemental dependency identity'; continue
   fi
   ref="$(jq -r .value.ref <<< "$entry")"; digest="$(jq -r .value.commit <<< "$entry")"; named="${key##*@}"
-  if [[ "$ref" =~ ^[0-9a-f]{40}$ ]] && [ "$digest" != "sha1-$ref" ]; then finding SOURCE-DEPENDENCY "$key" 'Full-SHA ref and resolved commit disagree'; fi
+  if [[ "$ref" =~ ^[0-9a-f]{40}$ ]] && [[ "$digest" != "sha1-$ref" ]]; then finding SOURCE-DEPENDENCY "$key" 'Full-SHA ref and resolved commit disagree'; fi
   if [[ "$ref" == sha1-* ]]; then finding SOURCE-DEPENDENCY "$key" 'Dependency ref must not use the commit digest prefix'; fi
   if [[ "$named" =~ ^[0-9a-f]{40}$ ]]; then
-    [ "$digest" = "sha1-$named" ] || finding SOURCE-DEPENDENCY "$key" 'SHA key and resolved commit disagree'
-  elif [ "$named" != "$ref" ]; then finding SOURCE-DEPENDENCY "$key" 'Named ref and dependency ref disagree'; fi
+    [[ "$digest" = "sha1-$named" ]] || finding SOURCE-DEPENDENCY "$key" 'SHA key and resolved commit disagree'
+  elif [[ "$named" != "$ref" ]]; then finding SOURCE-DEPENDENCY "$key" 'Named ref and dependency ref disagree'; fi
   if jq -e --arg k "$key" 'has($k)' "$TMP/vendor.json" >/dev/null; then
     left="$(jq -cS --arg k "$key" '.[$k]|{ref,commit,uses:(.uses//[]|sort)} + (if has("owner_id") then {owner_id} else {} end) + (if has("repo_id") then {repo_id} else {} end)' "$TMP/vendor.json")"
     right="$(jq -cS '.value|{ref,commit,uses:(.uses//[]|sort)} + (if has("owner_id") then {owner_id} else {} end) + (if has("repo_id") then {repo_id} else {} end)' <<< "$entry")"
-    [ "$left" = "$right" ] || finding SOURCE-DEPENDENCY "$key" 'Shared vendor and supplemental records disagree'
+    [[ "$left" = "$right" ]] || finding SOURCE-DEPENDENCY "$key" 'Shared vendor and supplemental records disagree'
   fi
 done < <(jq -c 'to_entries[]' "$TMP/supplement.json")
 declare -A VISITING=() DONE=()
 visit() {
   local key="$1" depth="$2" child
-  [ -z "${DONE[$key]:-}" ] || return 0
-  if [ "$depth" -gt 100 ] || [ -n "${VISITING[$key]:-}" ]; then finding SOURCE-DEPENDENCY "$key" 'Cyclic or excessively deep supplemental graph'; return 0; fi
+  [[ -z "${DONE[$key]:-}" ]] || return 0
+  if [[ "$depth" -gt 100 ]] || [[ -n "${VISITING[$key]:-}" ]]; then finding SOURCE-DEPENDENCY "$key" 'Cyclic or excessively deep supplemental graph'; return 0; fi
   if ! jq -e --arg k "$key" 'has($k)' "$TMP/graph.json" >/dev/null; then finding SOURCE-DEPENDENCY "$key" 'Required direct/transitive dependency record is missing'; return 0; fi
   VISITING["$key"]=1
   while IFS= read -r child; do
-    if ! normalized="$(normalize_ref "$child")" || [ "$child" != "$normalized" ]; then finding SOURCE-DEPENDENCY "$key" "Invalid nested edge: $child"; continue; fi
+    if ! normalized="$(normalize_ref "$child")" || [[ "$child" != "$normalized" ]]; then finding SOURCE-DEPENDENCY "$key" "Invalid nested edge: $child"; continue; fi
     visit "$child" "$((depth+1))"
   done < <(jq -r --arg k "$key" '.[$k].uses//[]|.[]' "$TMP/graph.json")
   unset 'VISITING[$key]'; DONE["$key"]=1
