@@ -90,6 +90,8 @@ jobs:
       - run: bash scripts/tests/dispatch-paths.sh
       - name: Workflow-pin fix scripts keep their contracts
         run: bash scripts/tests/fix-workflow-pins.sh
+      - name: Pre-push gate rejects missing and failed scans
+        run: bash tests/pre-push-gate-test.sh
 
   gsbot:
     name: GSBot build, tests and dependency security
