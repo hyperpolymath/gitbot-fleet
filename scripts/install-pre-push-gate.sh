@@ -5,7 +5,10 @@ set -euo pipefail
 repo=${1:?usage: install-pre-push-gate.sh REPOSITORY}
 source_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 repo=$(git -C "$repo" rev-parse --show-toplevel)
-hook=$(git -C "$repo" rev-parse --path-format=absolute --git-path hooks/pre-push)
+# Resolve the directory through Git, but preserve the final hook entry itself:
+# resolving hooks/pre-push can follow a dangling symlink to an absent target.
+hook_dir=$(git -C "$repo" rev-parse --path-format=absolute --git-path hooks)
+hook="$hook_dir/pre-push"
 source_hook="$source_root/hooks/pre-push-gate.sh"
 if [[ -e "$hook" || -L "$hook" ]]; then
   if cmp -s "$source_hook" "$hook" && [[ -x "$hook" ]]; then
