@@ -8,23 +8,40 @@ on:
     branches: [main]
   pull_request:
     branches: ['**']
-permissions:
-  actions: read
-  contents: read
+permissions: {}
 jobs:
   e2e:
     name: E2E tests
+    permissions:
+      actions: read
+      contents: read
+    needs: pinned-source-closure
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Require verified pinned-source closure
+        env:
+          CLOSURE_RESULT: ${{ needs.pinned-source-closure.result }}
+        run: |
+          if [ "$CLOSURE_RESULT" != success ]; then
+            echo "Pinned-source closure did not pass: $CLOSURE_RESULT" >&2
+            exit 1
+          fi
       - uses: actions/checkout@v7.0.1
-      - name: Install PyYAML (for workflow YAML validation)
-        run: pip install pyyaml --quiet
+      - name: Audit workflow lock auditor dependencies
+        run: |
+          set -euo pipefail
+          # Official RustSec binary, immutable content hash from its release asset.
+          archive="$RUNNER_TEMP/cargo-audit.tgz"
+          curl --proto '=https' --proto-redir '=https' -fsSL --retry 3 https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz -o "$archive"
+          printf '%s  %s\n' ab28a1bdb54db4d5d8ad5981cf1f959410370b3d28250dbd35f6a44248620e39 "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2/cargo-audit" audit --file tools/workflow-lock-audit/Cargo.lock --deny warnings
       - name: Test workflow lock-map and regeneration audit
         run: |
-          python3 tests/workflow-lock-map-test.py
-          python3 tests/lock-regeneration-test.py
-          python3 scripts/audit-workflow-lock-map.py
+          cargo test --locked --manifest-path tools/workflow-lock-audit/Cargo.toml
+          bash scripts/audit-workflow-lock-map.sh
       - name: Verify automation quarantine
         run: bash tests/automation-quarantine-test.sh
       - name: Verify fix-outcome verdicts
@@ -41,10 +58,26 @@ jobs:
         run: bash tests/fleet-report-back-test.sh
       - name: Fleet enrolment fixer (report-back rollout)
         run: bash tests/fix-fleet-enrolment-test.sh
-      - name: Lock closure contracts (dropped edges, malformed refs)
+  pinned-source-closure:
+    name: Pinned source closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Set source cache
+        run: printf 'PINNED_SOURCE_CACHE=%s/fleet-pinned-sources\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Test pinned-source failure modes
+        run: bash scripts/tests/pinned-reusable-sources-test.sh
+      - name: Authenticate pinned reusable sources
+        run: bash scripts/audit-pinned-reusable-sources.sh --fetch-sources
+      - name: Preserve lock closure contracts
         run: bash scripts/tests/lock-closure-test.sh
-      - name: Audit this repository's lock closure
+      - name: Audit vendor lock and pinned-source closure
         run: ./scripts/audit-lock-closure.sh
+      - name: Test source closure through migration preflight
+        run: bash scripts/tests/pinned-source-entrypoints-test.sh
       - name: Prepared secret-scanner migration stays gated
         run: |
           # 0 = every precondition holds, 2 = evidence still missing (expected

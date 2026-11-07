@@ -76,6 +76,12 @@ cp -R "$ROOT/.github" "$TMP/tree/" 2>/dev/null || finding TREE "$ROOT/.github mi
 cp "$ROOT/scripts/audit-lock-closure.sh" "$TMP/tree/scripts/" 2>/dev/null || finding TREE "audit-lock-closure.sh missing"
 cp "$ROOT/scripts/lib/lock-closure-receipts.tsv" "$TMP/tree/scripts/lib/" 2>/dev/null || true
 cp "$ROOT/scripts/lib/lock-audit-baseline.tsv" "$TMP/tree/scripts/lib/" 2>/dev/null || true
+# Preserve the independent source proof in the proposed tree when the vendor
+# lock omits remote reusables. The closure audit below must still verify it.
+if [[ -f "$ROOT/scripts/lib/pinned-reusable-sources.json" ]]; then
+  cp "$ROOT/scripts/lib/pinned-reusable-sources.json" "$TMP/tree/scripts/lib/" || finding TREE "source manifest could not be copied"
+  cp "$ROOT/scripts/audit-pinned-reusable-sources.sh" "$TMP/tree/scripts/" || finding TREE "source verifier could not be copied"
+fi
 
 # A prepared migration can subsequently be applied by an approved PR.
 # In that case old patch hunks no longer apply; check the final artifacts.
@@ -85,10 +91,13 @@ if [ -f "$TMP/tree/.github/workflows/secret-scanner.yml" ] &&
    grep -Fq "uses: $CALLEE" "$TMP/tree/.github/workflows/secret-scanner.yml"; then
   already_applied=1
   source_key="'hyperpolymath/cicd-suite@$SUITE_SHA'"
-  # Both caller's workflow map and dependency record must exist.
+  # Legacy representation needs both vendor records. Supported vendor locks
+  # may instead carry a source manifest; its presence is not proof. The
+  # integrated audit below must authenticate every active binding and edge,
+  # and missing evidence remains nonzero NOT RUN, never a migration pass.
   count=$(grep -Fc "$source_key" "$TMP/tree/.github/workflows/actions.lock" 2>/dev/null || true)
-  if [ "$count" -lt 2 ]; then
-    finding LOCK-MISSING "applied scanner lacks both pinned suite caller and dependency records"
+  if [[ "$count" -lt 2 ]] && [[ ! -f "$TMP/tree/scripts/lib/pinned-reusable-sources.json" ]]; then
+    finding LOCK-MISSING "applied scanner lacks both pinned suite vendor records and a source-verification route"
     apply_ok=0
   fi
   receipt=$(printf 'hyperpolymath/cicd-suite\t%s\tactions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' "$SUITE_SHA")
