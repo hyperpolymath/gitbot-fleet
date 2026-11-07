@@ -4,6 +4,7 @@
 # A missing, failed or malformed scan is not a successful zero-finding scan.
 set -euo pipefail
 
+# Report the supplied reason to stderr and exit the hook with status 1.
 fail() { printf 'BLOCKED: %s\n' "$*" >&2; exit 1; }
 REPO_ROOT=$(git rev-parse --show-toplevel) || fail 'not a Git working tree'
 cd "$REPO_ROOT"
@@ -21,6 +22,12 @@ tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 scanners_run=0 critical=0 high=0 total=0
 
+# Run the named scanner (panic-attack or hypatia) with the given executable
+# and configured timeout in seconds. Add non-suppressed, non-advisory findings
+# to the global counts and increment scanners_run after validating the report.
+# Exit the hook on timeout, scanner failure, or invalid or incomplete output.
+# Hypatia exit 1 is accepted only with a non-suppressed, non-advisory critical
+# finding; the caller blocks on critical findings after scanning.
 run_scanner() {
   local scanner=$1 binary=$2 rc=0 counts c h n
   printf 'Running %s (timeout %ss)\n' "$scanner" "$limit"
