@@ -14,9 +14,19 @@ permissions:
 jobs:
   e2e:
     name: E2E tests
+    needs: pinned-source-closure
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Require verified pinned-source closure
+        env:
+          CLOSURE_RESULT: ${{ needs.pinned-source-closure.result }}
+        run: |
+          if [ "$CLOSURE_RESULT" != success ]; then
+            echo "Pinned-source closure did not pass: $CLOSURE_RESULT" >&2
+            exit 1
+          fi
       - uses: actions/checkout@v7.0.1
       - name: Install PyYAML (for workflow YAML validation)
         run: pip install pyyaml --quiet
@@ -41,10 +51,26 @@ jobs:
         run: bash tests/fleet-report-back-test.sh
       - name: Fleet enrolment fixer (report-back rollout)
         run: bash tests/fix-fleet-enrolment-test.sh
-      - name: Lock closure contracts (dropped edges, malformed refs)
+  pinned-source-closure:
+    name: Pinned source closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      PINNED_SOURCE_CACHE: ${{ runner.temp }}/fleet-pinned-sources
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Test pinned-source failure modes
+        run: bash scripts/tests/pinned-reusable-sources-test.sh
+      - name: Authenticate pinned reusable sources
+        run: bash scripts/audit-pinned-reusable-sources.sh --fetch-sources
+      - name: Preserve lock closure contracts
         run: bash scripts/tests/lock-closure-test.sh
-      - name: Audit this repository's lock closure
+      - name: Audit vendor lock and pinned-source closure
         run: ./scripts/audit-lock-closure.sh
+      - name: Test source closure through migration preflight
+        run: bash scripts/tests/pinned-source-entrypoints-test.sh
       - name: Prepared secret-scanner migration stays gated
         run: |
           # 0 = every precondition holds, 2 = evidence still missing (expected

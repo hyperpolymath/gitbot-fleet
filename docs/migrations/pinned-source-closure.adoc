@@ -1,0 +1,170 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+= Pinned reusable source closure: implementation and evidence
+:revdate: 2026-11-07
+
+The local implementation verifies reviewed direct reusable-workflow edges
+against exact Git source objects and joins their reviewed dependency records
+to the ordinary vendor lock for closure auditing. Local acceptance checks pass;
+fresh hosted checks are pending. This records work based on Fleet draft
+`48de76a5bcf466f46e4e973a21ca911ebec1b23c`, with main/base
+`34908580b98cd354caa3bfc5a000bc7935957fce`. It does not certify the entire fleet
+or declare the secret-scanner migration ready.
+
+== Vendor lock and source-attested records
+
+Official `gh-actions-lock` v0.4.1 excludes cross-repository `jobs.<id>.uses`
+from locking. The supported v0.0.3 vendor lock retains all 20 ordinary records
+unchanged. The source manifest separately preserves the ten original records
+removed by that migration: two reusable parent records and eight action records,
+including their original ref, commit, owner/repository IDs and nested edges.
+The verifier derives one additional EA governance parent, yielding 11
+source-attested records in the integrated audit. The vendor lock itself is not
+rewritten to pretend that the official tool locks these external reusables.
+
+`scripts/lib/pinned-reusable-sources.json` binds each active caller/job to an
+exact repository, full commit, workflow path, Git blob and direct `uses` set.
+Two old workflows remain explicitly labelled `retained-review`. The manifest's
+reviewed inventory SHA-256 is
+`63ffe6145c51bf5c44ac5f7d2ae9f304feb4acf7e9e3b52c6891e752ba126046`.
+No dependency SHA or caller pin is changed by this closure integration.
+
+== Active and retained source identities
+
+The five active remote callers are:
+
+* `.github/workflows/governance.yml`, job `governance`: standards governance at
+  `ea2f4d8a886585ed442687ae63d4ad7493379ba4`.
+* `.github/workflows/hypatia-scan.yml`, job `hypatia`: standards Hypatia at 75bd.
+* `.github/workflows/mirror.yml`, job `mirror`: standards mirror at 75bd.
+* `.github/workflows/scorecard.yml`, job `scorecard`: standards Scorecard at 75bd.
+* `.github/workflows/secret-scanner.yml`, job `scan`: cicd-suite scanner at
+  `4404c3c0474e17753fe7689f3485c02890aac113`.
+
+Here 75bd means `75bd5994470661a099df562d6d5ad2fe744dbd66`. The retained-review
+roots are standards governance and secret-scanner at that old commit; neither
+is represented as an active call there. The same-repository report-back
+workflow remains outside the seven-source remote-reusable manifest and is
+covered by the ordinary root-workflow audit.
+
+The table preserves the exact collected Git identities and content SHA-256
+receipts. Independent collection rehashed 21 Git blobs: these seven remote
+workflow sources, one local report-back workflow and thirteen action metadata
+objects. Those collection hashes describe source bytes, not execution.
+
+[cols="1,3,3,3,4",options="header"]
+|===
+|Role |Repository / source |Commit |Git blob |Content SHA-256
+|active |metadatastician/standards / .github/workflows/governance-reusable.yml |`ea2f4d8a886585ed442687ae63d4ad7493379ba4` |`8ac530b97d18f7d91972de91c448b7b44c055dfb` |`3b7b753935d0d40f8b854e1b337d7aced884eef60e139292533fdf9f4517577d`
+|active |metadatastician/standards / .github/workflows/hypatia-scan-reusable.yml |`75bd5994470661a099df562d6d5ad2fe744dbd66` |`0f1c5ba55861c84f6665a103deb6ae184bb89996` |`eb72f4afd7bf17d2b31b808131ad697bb808a6ae0c8aa07773b5e1dbb4b7df7c`
+|active |metadatastician/standards / .github/workflows/mirror-reusable.yml |`75bd5994470661a099df562d6d5ad2fe744dbd66` |`ec52acc3a975fbd528d9a38741bd868fb55de6e5` |`bc7443e325e255dd19baf48722583f07f7be1cd0cdce0f1ce229cfbeab3d17a1`
+|active |metadatastician/standards / .github/workflows/scorecard-reusable.yml |`75bd5994470661a099df562d6d5ad2fe744dbd66` |`4e4fd33a6259b34cdc8c5f08d0d4280a216fb492` |`db6ae19dcb09329533d1537e63c329d469dc602badcb4cc514af5da7b9b3a9b6`
+|active |hyperpolymath/cicd-suite / .github/workflows/secret-scanner-reusable.yml |`4404c3c0474e17753fe7689f3485c02890aac113` |`81b2ba1dfb074f6f8913baa81eb6768b7497cc2a` |`4745e9318346b1a3eae2e0bf65c6732f73d2ead78ef29de9e20659a71f8057d8`
+|retained-review |metadatastician/standards / .github/workflows/governance-reusable.yml |`75bd5994470661a099df562d6d5ad2fe744dbd66` |`b041be08dc971f789ef3bc4d7849ac336ab30206` |`2e8bab47c6fcdfa0b94cc866214c337950a20c13a8af4da179f06485bf494f0c`
+|retained-review |metadatastician/standards / .github/workflows/secret-scanner-reusable.yml |`75bd5994470661a099df562d6d5ad2fe744dbd66` |`2eee815b0e4c4c70a777b9c1d8c899b1fb7026c9` |`0c132f45da9832caf7cdb5dcfa164a727208e397f97e51f6a335a17464f2a0fd`
+|===
+
+== Object verification and evidence boundary
+
+`scripts/audit-pinned-reusable-sources.sh` fetches only when explicitly invoked
+with `--fetch-sources`. It reads published sources over HTTPS into a separate
+bare Git cache. Fetched code is never checked out or executed. Git configuration,
+replacement refs, source-rewriting settings and source-path file modes are
+checked within the verifier's supported profile.
+
+The verifier hashes the raw commit object, reads its tree identity, verifies
+each tree component, and requires the manifest's regular-file blob at the exact
+path. It hashes that blob's raw Git object content before parsing direct edges.
+It independently discovers active caller/job/path/commit bindings in the local
+workflows and compares them with the manifest. Receipt unions, dependency
+identities, overlaps and graph targets must also agree before any supplemental
+record is exported to the integrated audit.
+
+Absent cached objects produce nonzero `NOT-RUN`; corrupt or mismatched objects
+produce findings. Duplicate JSON keys, malformed dependency identities and
+ambiguous vendor fields fail closed. Unsupported YAML aliases, merges, flow
+forms, dynamic/local references or nested reusable calls cannot establish a
+source proof. Evidence unavailable to the parser is reported without a fabricated
+pass. An unsuccessful evidence pass exports no source attestation.
+
+The reviewed bound is the direct `uses` sets of the named reusable workflows
+plus the existing composite-action receipts and dependency graph. It does not
+establish arbitrary recursive provenance of invoked scripts, runtime downloads,
+container images or program dependencies. Collected metadata confirms the
+existing upload-pages composite's upload-artifact edge; the Rust toolchain
+composite has no nested `uses`.
+
+== Legacy receipt preservation
+
+All 13 original receipt rows remain byte-for-byte; six EA governance rows are
+appended, yielding 19. The old standards 75bd group retains its 11-reference
+union through three active and two retained-review source paths. Current active
+callers at 75bd alone cover eight refs. Deno, editorconfig-checker and Bun occur
+in the EA governance source instead, whose six direct refs are represented by
+the preserved ordinary records and supplemental records. The EA group has its
+own revision-bound receipt; the old group is not used as its evidence.
+
+== Local validation and CI entrypoints
+
+The final local acceptance results are:
+
+[cols="3,2",options="header"]
+|===
+|Check |Result
+|Pinned-source controls |55 pass
+|Preserved lock-closure controls |47 pass
+|Preflight entrypoint controls |9 pass
+|Workflow-map controls |22 pass
+|Explicit HTTPS fetch followed by offline helper |5 verified roots; 11 records
+|Integrated closure audit |fatal 0; review 0; not_run 0; accepted 3; source_attested_records 11
+|Vendor verify-local, full verify and lock sync |Pass
+|===
+
+The source job runs helper fixtures, explicit source fetching, the preserved
+closure controls, the integrated offline audit, preflight entrypoint controls
+and the prepared-migration preflight. Its cache is available to the proposed-tree
+preflight, which snapshots both the helper and manifest. A missing vendor parent
+is accepted only through successful integrated source verification; manifest
+presence alone is not proof. Existing secret, trigger, context and canary
+requirements remain enforced. Missing canary evidence still makes standalone
+preflight exit 2, so migration readiness is not asserted.
+
+The E2E job declares `needs: pinned-source-closure`, uses `always()`, and begins
+with a guard requiring that dependency's result to equal `success`. Failure,
+not-run, cancellation or skipping cannot quietly satisfy that guard. This is
+E2E dependency coupling. The live branch rules did not require the E2E context
+at the last observation; no branch-ruleset requirement or ruleset change is
+claimed.
+
+Reproduce from the repository root, with a separate source cache:
+
+[source,bash]
+----
+export PINNED_SOURCE_CACHE=/absolute/path/to/source-cache
+bash scripts/audit-pinned-reusable-sources.sh --fetch-sources --json
+bash scripts/audit-pinned-reusable-sources.sh --json
+bash scripts/tests/pinned-reusable-sources-test.sh
+bash scripts/tests/lock-closure-test.sh
+bash scripts/tests/pinned-source-entrypoints-test.sh
+python3 tests/workflow-lock-map-test.py
+bash scripts/audit-lock-closure.sh --json
+----
+
+The helper defaults to the tracked manifest. It also accepts explicit
+`--manifest`, `--repo-root`, `--lock`, `--receipts` and `--cache` paths. The first
+helper invocation fetches; the second uses cached objects offline. These checks
+inspect source data and fixtures, not fetched executable code.
+
+== Remaining observations
+
+Local Debian `en_GB.UTF-8` report-back runs have three ordering failures on both
+the base and candidate; this closure change does not claim to repair them or to
+make the full repository E2E suite pass. Nine governance findings remained at the
+last observation. Fresh hosted checks remain pending, so local acceptance is
+not a claim that every hosted repository check is green.
+
+No normative policy, standards draft 1419, fleet draft 651, ruleset, mirror or
+credential is changed by this closure integration. Source caches and raw local
+logs are local-only evidence. The tracked manifest and receipt rows carry the
+reviewable identities; local absolute paths are not presented as downloadable
+GitHub artifacts.

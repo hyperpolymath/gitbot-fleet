@@ -62,13 +62,35 @@ class WorkflowMapTests(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn('MISSING-DIRECT-EDGE', output)
 
-    def test_reusable_missing_edge_is_failure(self):
-        self.write('main.yml', {'jobs': {'scan': {'uses': 'acme/suite/.github/workflows/scan.yml@abc'}}})
+    def test_sha_reusable_empty_map_requires_source_review(self):
+        self.write('main.yml', {'jobs': {'scan': {'uses': 'acme/suite/.github/workflows/scan.yml@' + 'a' * 40}}})
+        self.lock['workflows']['.github/workflows/main.yml'] = []
+        code, output = self.run_audit()
+        self.assertEqual(code, 0, output)
+        self.assertIn('REMOTE-REUSABLE-SOURCE-REVIEW', output)
+        self.assertIn('UNSUPPORTED-LOCK-SCOPE', output)
+        self.assertNotIn('MISSING-DIRECT-EDGE', output)
+        self.assertNotIn('NO-USES-MAPPED .github/workflows/main.yml', output)
+
+    def test_remote_reusable_floating_and_short_pins_fail(self):
+        for ref in ('main', 'v1', 'abc1234', 'a' * 39, 'a' * 41, 'g' * 40):
+            with self.subTest(ref=ref):
+                self.write('main.yml', {'jobs': {'scan': {'uses': 'acme/suite/.github/workflows/scan.yml@' + ref}}})
+                self.lock['workflows']['.github/workflows/main.yml'] = []
+                code, output = self.run_audit()
+                self.assertEqual(code, 1, output)
+                self.assertIn('REMOTE-REUSABLE-NOT-SHA', output)
+
+    def test_reusable_does_not_exempt_missing_ordinary_action_edge(self):
+        self.write('main.yml', {'jobs': {
+            'scan': {'uses': 'acme/suite/.github/workflows/scan.yml@' + 'a' * 40},
+            'build': {'steps': [{'uses': 'acme/action@v1'}]},
+        }})
         self.lock['workflows']['.github/workflows/main.yml'] = []
         code, output = self.run_audit()
         self.assertEqual(code, 1, output)
-        self.assertIn('MISSING-DIRECT-EDGE', output)
-        self.assertIn('REMOTE-REUSABLE-SOURCE-REVIEW', output)
+        self.assertIn('MISSING-DIRECT-EDGE .github/workflows/main.yml acme/action@v1', output)
+        self.assertIn('UNSUPPORTED-LOCK-SCOPE', output)
 
     def test_missing_nested_record(self):
         self.lock['dependencies']['acme/action@v1']['uses'] = ['acme/child@v1']
@@ -199,20 +221,19 @@ class ScannerCallerTests(unittest.TestCase):
         self.assertNotIn('secrets', job)
         self.assertEqual(job['with'], {'fast-pr': 'false'})
 
-    def test_scanner_pin_and_lock_closure(self):
+    def test_scanner_source_pin_and_supported_lock_scope(self):
         sha = '4404c3c0474e17753fe7689f3485c02890aac113'
         suite = 'hyperpolymath/cicd-suite@' + sha
         checkout = 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         self.assertEqual(self.workflow['jobs']['scan']['uses'],
                          'hyperpolymath/cicd-suite/.github/workflows/secret-scanner-reusable.yml@' + sha)
-        self.assertEqual(self.lock['workflows']['.github/workflows/secret-scanner.yml'], [suite])
-        record = self.lock['dependencies'][suite]
-        self.assertEqual((record['ref'], record['commit']), (sha, 'sha1-' + sha))
-        self.assertEqual(record['uses'], [checkout])
+        # gh-actions-lock v0.4.1 does not lock external jobs.<id>.uses.
+        # The caller SHA above is checked separately from ordinary action records.
+        self.assertEqual(self.lock['workflows']['.github/workflows/secret-scanner.yml'], [])
+        self.assertNotIn(suite, self.lock['dependencies'])
         self.assertIn(checkout, self.lock['dependencies'])
-        standards = 'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66'
-        self.assertIn(standards, self.lock['dependencies'])
-        self.assertTrue(any(standards in edges for edges in self.lock['workflows'].values()))
+        self.assertEqual(self.lock['dependencies'][checkout]['commit'],
+                         'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1')
 
 
 if __name__ == '__main__':

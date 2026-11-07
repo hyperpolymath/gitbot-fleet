@@ -97,7 +97,7 @@ def inspect(root, unmanaged=()):
         doc = load(file)
         if not isinstance(doc, dict) or not isinstance(doc.get('jobs'), dict):
             raise ValueError(f'{name}: expected jobs mapping')
-        refs, local_calls, unsupported = set(), [], []
+        refs, remote_calls, local_calls, unsupported = set(), set(), [], []
         for job in doc['jobs'].values():
             if not isinstance(job, dict):
                 raise ValueError(f'{name}: invalid job')
@@ -115,9 +115,17 @@ def inspect(root, unmanaged=()):
             for raw, is_job in entries:
                 normalized = ref_key(raw)
                 if normalized:
-                    refs.add(normalized)
                     if is_job:
+                        # Official gh-actions-lock v0.4.1 excludes external
+                        # jobs.<id>.uses. Check their source pins separately;
+                        # do not infer reusable dependency closure from the lock.
+                        remote_calls.add(normalized)
+                        if not re.fullmatch(r'[0-9a-fA-F]{40}', normalized.rsplit('@', 1)[1]):
+                            findings.append(f'REMOTE-REUSABLE-NOT-SHA {name} {normalized}')
                         notes.append(f'REMOTE-REUSABLE-SOURCE-REVIEW {name} {normalized}')
+                        notes.append(f'UNSUPPORTED-LOCK-SCOPE {name} {normalized} (external reusable dependencies not locked)')
+                    else:
+                        refs.add(normalized)
                 elif raw.startswith('./') and is_job:
                     local = (root / raw).resolve()
                     if not local.is_relative_to(wfdir) or local.suffix not in ('.yml', '.yaml') or not local.is_file():
@@ -147,7 +155,7 @@ def inspect(root, unmanaged=()):
             findings.append(f'MISSING-DIRECT-EDGE {name} {ref}')
         for ref in sorted(mapped_set - depkeys):
             findings.append(f'MISSING-RECORD {name} {ref}')
-        if not refs and not local_calls and not unsupported and not mapped_set:
+        if not refs and not remote_calls and not local_calls and not unsupported and not mapped_set:
             notes.append(f'NO-USES-MAPPED {name}')
         for target in local_calls:
             notes.append(f'LOCAL-REUSABLE {name} -> {target} (callee checked separately)')
