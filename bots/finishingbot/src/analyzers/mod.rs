@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Analyzers for release readiness validation
 
+pub mod claims;
 pub mod license;
 pub mod placeholder;
-pub mod claims;
+mod references;
 pub mod release;
 pub mod scm_files;
 pub mod testing;

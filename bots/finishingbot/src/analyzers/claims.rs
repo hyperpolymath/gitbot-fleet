@@ -2,21 +2,26 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Claim verification analyzer
 
+use super::references::resolve_local_reference;
 use super::{AnalysisResult, Analyzer, Finding, Severity};
 use crate::config::Config;
 use crate::error::Result;
 use pulldown_cmark::{Event, Parser, Tag};
 use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
 use tracing::debug;
 use walkdir::WalkDir;
-use std::sync::LazyLock;
 
 // Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
-static MEMBER_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"members\s*=\s*\[([\s\S]*?)\]"#).expect("Cargo workspace members regex is a valid constant pattern"));
-static PATH_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#""([^"]+)""#).expect("Cargo workspace member-path regex is a valid constant pattern"));
+static MEMBER_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"members\s*=\s*\[([\s\S]*?)\]"#)
+        .expect("Cargo workspace members regex is a valid constant pattern")
+});
+static PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#""([^"]+)""#)
+        .expect("Cargo workspace member-path regex is a valid constant pattern")
+});
 
 /// Claim verification analyzer
 pub struct ClaimsAnalyzer;
@@ -123,7 +128,9 @@ impl ClaimsAnalyzer {
                     &format!("README is very short ({} words)", word_count),
                 )
                 .with_file(path.to_path_buf())
-                .with_suggestion("Add more documentation including installation, usage, and examples"),
+                .with_suggestion(
+                    "Add more documentation including installation, usage, and examples",
+                ),
             );
         }
 
@@ -168,7 +175,10 @@ impl ClaimsAnalyzer {
             "changelog.md",
         ];
 
-        if !changelog_variants.iter().any(|name| path.join(name).exists()) {
+        if !changelog_variants
+            .iter()
+            .any(|name| path.join(name).exists())
+        {
             result.add(
                 Finding::new(
                     "CLM-004",
@@ -219,7 +229,12 @@ impl ClaimsAnalyzer {
     }
 
     /// Verify documentation claims match reality
-    fn verify_documentation_claims(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
+    fn verify_documentation_claims(
+        &self,
+        path: &Path,
+        config: &Config,
+        result: &mut AnalysisResult,
+    ) {
         // Find all documentation files
         for entry in WalkDir::new(path)
             .follow_links(false)
@@ -280,9 +295,7 @@ impl ClaimsAnalyzer {
         for pattern in &file_ref_patterns {
             for caps in pattern.captures_iter(content) {
                 let file_ref = &caps[1];
-                let ref_path = repo_root.join(file_ref);
-
-                if !ref_path.exists() {
+                if resolve_local_reference(repo_root, doc_path, file_ref).is_none() {
                     debug!(doc = %doc_path.display(), reference = file_ref, "Broken file reference");
                     result.add(
                         Finding::new(
@@ -339,7 +352,9 @@ impl ClaimsAnalyzer {
     fn verify_test_claims(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
         // Look for test directories and files
         let test_indicators = ["tests", "test", "spec", "__tests__"];
-        let test_file_patterns = ["_test.rs", "_test.go", "_test.py", ".test.js", ".test.ts", ".spec.js", ".spec.ts"];
+        let test_file_patterns = [
+            "_test.rs", "_test.go", "_test.py", ".test.js", ".test.ts", ".spec.js", ".spec.ts",
+        ];
 
         let mut has_tests = false;
         let mut test_file_count = 0;
