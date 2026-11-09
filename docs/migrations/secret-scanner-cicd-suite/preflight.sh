@@ -341,8 +341,8 @@ if [ "$QUIET" -eq 0 ]; then
   fi
   if [ "${#FINDINGS[@]}" -eq 0 ] && [ "${#NOTRUN[@]}" -eq 0 ]; then
     echo
-    echo "PASS: static properties hold, lock closure is complete, and the live canary receipt is SHA-bound to this callee."
-    echo "The migration may now be applied by the reviewer; this script never edits the checkout."
+    echo "PASS: static properties hold, the source-augmented closure audit passes, and the recorded canary is SHA-bound to this callee."
+    echo "This validates the historical proposal, not the deployed caller or a regenerated vendor lock; inspect current main before acting."
   fi
 fi
 

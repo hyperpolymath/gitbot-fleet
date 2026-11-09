@@ -80,12 +80,36 @@ jobs:
         run: bash scripts/tests/pinned-source-entrypoints-test.sh
       - name: Prepared secret-scanner migration stays gated
         run: |
-          # 0 = every precondition holds, 2 = evidence still missing (expected
-          # until the unified-dataset-vocab canary lands). 1 and 3 are findings
-          # in the prepared migration and must fail the build.
+          # 0 = all preconditions hold; 2 = evidence is unavailable. The
+          # historical canary receipt is now present, but online/source evidence
+          # may still be unavailable. Findings (1 or 3) must fail the build.
           rc=0
           ./docs/migrations/secret-scanner-cicd-suite/preflight.sh --quiet || rc=$?
           case "$rc" in
             0|2) echo "preflight exit $rc (no findings)";;
             *) echo "preflight exit $rc: findings in the prepared migration" >&2; exit 1;;
           esac
+      - name: Regenerate vendor lock in a disposable worktree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/lock-regeneration" HEAD
+          gh extension install github/gh-actions-lock --pin v0.4.1
+          cd "$RUNNER_TEMP/lock-regeneration"
+          gh actions-lock --no-interactive
+          git diff --stat -- .github/workflows
+      - name: Compare regenerated and reviewed vendor closures
+        run: |
+          set -euo pipefail
+          bash scripts/audit-lock-regeneration.sh \
+            .github/workflows/actions.lock "$RUNNER_TEMP/lock-regeneration/.github/workflows/actions.lock"
+      - name: Verify reviewed source closure against regeneration
+        run: |
+          set -euo pipefail
+          # The regeneration comparison alone covers only shared vendor roots.
+          # Independently authenticate the job-level reusable closure, including
+          # the scanner, against the regenerated lock and caller tree.
+          bash scripts/audit-pinned-reusable-sources.sh \
+            --repo-root "$RUNNER_TEMP/lock-regeneration" \
+            --lock "$RUNNER_TEMP/lock-regeneration/.github/workflows/actions.lock"
