@@ -126,6 +126,24 @@ exit "$TEST_RC"''')
                 self.assertEqual(result.returncode, expected, result.stdout)
                 self.assertIn(f'dependency audit failed (exit {expected})', result.stdout)
 
+    def test_source_audit_without_diagnostics_still_fails(self):
+        result = self.source_result(17, '')
+        self.assertEqual(result.returncode, 17, result.stdout)
+        self.assertIn('::error::Regenerated source audit exited 17:', result.stdout)
+        self.assertEqual((self.tree / 'regenerated-source-audit.txt').read_text(), '')
+
+    def test_successful_audit_does_not_treat_log_words_as_failure(self):
+        result = self.cargo_result(0, 'warning: synthetic diagnostic\nRUSTSEC-example\n')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn('::error::', result.stdout)
+
+    def test_diagnostic_escaping_is_not_applied_twice(self):
+        result = self.cargo_result(1, 'error: literal %0A and %25\n')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn('error: literal %250A and %2525', result.stdout)
+        self.assertEqual((self.tree / 'gsbot-advisories.log').read_text(),
+                         'error: literal %0A and %25\n')
+
     def test_advisory_annotation_is_bounded(self):
         result = self.cargo_result(1, 'error: ' + 'x' * 6000)
         self.assertEqual(result.returncode, 1)

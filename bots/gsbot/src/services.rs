@@ -13,6 +13,13 @@ use crate::models::{Brand, Garment, Material, User};
 pub struct MaterialService;
 
 impl MaterialService {
+    /// Find one material whose name matches `name` within a SQLite LIKE pattern.
+    ///
+    /// Matching uses SQLite LOWER; `%` and `_` in `name` remain wildcards.
+    /// Returns `None` if no row matches; the choice among matches is unspecified.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_by_name(db: &SqlitePool, name: &str) -> Result<Option<Material>> {
         let q = "SELECT id, name, material_type, description, water_usage_score, carbon_footprint_score, biodegradability_score, chemical_usage_score, energy_consumption_score, water_liters_per_kg, co2_kg_per_kg, energy_mj_per_kg, is_biodegradable, recycling_potential, durability_rating, typical_wash_temp, drying_method FROM materials \
              WHERE LOWER(name) LIKE '%' || LOWER(?1) || '%' LIMIT 1";
@@ -22,6 +29,13 @@ impl MaterialService {
             .await?)
     }
 
+    /// Return materials after skipping `skip` rows, with at most `limit` rows.
+    ///
+    /// Row order is unspecified. SQLite treats a negative `skip` as zero and
+    /// a negative `limit` as unbounded; zero `limit` returns an empty vector.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_all(db: &SqlitePool, skip: i64, limit: i64) -> Result<Vec<Material>> {
         let q = "SELECT id, name, material_type, description, water_usage_score, carbon_footprint_score, biodegradability_score, chemical_usage_score, energy_consumption_score, water_liters_per_kg, co2_kg_per_kg, energy_mj_per_kg, is_biodegradable, recycling_potential, durability_rating, typical_wash_temp, drying_method FROM materials LIMIT ?1 OFFSET ?2";
         Ok(sqlx::query_as::<_, Material>(q)
@@ -31,6 +45,14 @@ impl MaterialService {
             .await?)
     }
 
+    /// Return materials whose name or description matches the search pattern.
+    ///
+    /// The pattern is `%query%`, matched using SQLite LOWER; `%` and `_` in
+    /// `query` remain wildcards. Returns an empty vector when nothing matches;
+    /// result order is unspecified.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn search(db: &SqlitePool, query: &str) -> Result<Vec<Material>> {
         let q = "SELECT id, name, material_type, description, water_usage_score, carbon_footprint_score, biodegradability_score, chemical_usage_score, energy_consumption_score, water_liters_per_kg, co2_kg_per_kg, energy_mj_per_kg, is_biodegradable, recycling_potential, durability_rating, typical_wash_temp, drying_method FROM materials \
              WHERE LOWER(name) LIKE '%' || LOWER(?1) || '%' \
@@ -43,6 +65,10 @@ impl MaterialService {
 
     /// Insert a material, returning the stored row. Mirrors
     /// `MaterialService.create`.
+    ///
+    /// # Errors
+    /// Propagates insert and read-back errors; a read-back failure does not
+    /// roll back the insert.
     #[allow(clippy::too_many_arguments)]
     pub async fn create(db: &SqlitePool, m: NewMaterial) -> Result<Material> {
         let ts = now();
@@ -88,6 +114,13 @@ impl MaterialService {
 pub struct GarmentService;
 
 impl GarmentService {
+    /// Find one garment whose name matches `name` within a SQLite LIKE pattern.
+    ///
+    /// Matching uses SQLite LOWER; `%` and `_` in `name` remain wildcards.
+    /// Returns `None` if no row matches; the choice among matches is unspecified.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_by_name(db: &SqlitePool, name: &str) -> Result<Option<Garment>> {
         let q = "SELECT id, name, category, description, typical_weight_kg, expected_lifespan_years, typical_wears, care_instructions, washing_frequency, sustainability_score FROM garments \
              WHERE LOWER(name) LIKE '%' || LOWER(?1) || '%' LIMIT 1";
@@ -97,6 +130,14 @@ impl GarmentService {
             .await?)
     }
 
+    /// Return garments whose name, category, or description matches the search pattern.
+    ///
+    /// The pattern is `%query%`, matched using SQLite LOWER; `%` and `_` in
+    /// `query` remain wildcards. Returns an empty vector when nothing matches;
+    /// result order is unspecified.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn search(db: &SqlitePool, query: &str) -> Result<Vec<Garment>> {
         let q = "SELECT id, name, category, description, typical_weight_kg, expected_lifespan_years, typical_wears, care_instructions, washing_frequency, sustainability_score FROM garments \
              WHERE LOWER(name) LIKE '%' || LOWER(?1) || '%' \
@@ -109,6 +150,10 @@ impl GarmentService {
     }
 
     /// Materials associated with a garment (the `garment_materials` M2M).
+    /// Returns an empty vector if no associated materials are found.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn materials_of(db: &SqlitePool, garment_id: i64) -> Result<Vec<Material>> {
         let q = "SELECT m.id, m.name, m.material_type, m.description, m.water_usage_score, m.carbon_footprint_score, m.biodegradability_score, m.chemical_usage_score, m.energy_consumption_score, m.water_liters_per_kg, m.co2_kg_per_kg, m.energy_mj_per_kg, m.is_biodegradable, m.recycling_potential, m.durability_rating, m.typical_wash_temp, m.drying_method FROM materials m JOIN garment_materials gm ON gm.material_id = m.id WHERE gm.garment_id = ?1";
         Ok(sqlx::query_as::<_, Material>(q)
@@ -120,6 +165,9 @@ impl GarmentService {
     /// Sustainable alternatives. Mirrors `GarmentService.get_alternatives`:
     /// same category, different id, stored score above the current
     /// computed score, top 5 descending.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_alternatives(
         db: &SqlitePool,
         garment: &Garment,
@@ -146,6 +194,13 @@ impl GarmentService {
 pub struct BrandService;
 
 impl BrandService {
+    /// Find one brand whose name matches `name` within a SQLite LIKE pattern.
+    ///
+    /// Matching uses SQLite LOWER; `%` and `_` in `name` remain wildcards.
+    /// Returns `None` if no row matches; the choice among matches is unspecified.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_by_name(db: &SqlitePool, name: &str) -> Result<Option<Brand>> {
         let q = "SELECT id, name, description, website, overall_rating, environmental_rating, labor_rating, animal_welfare_rating, is_certified_bcorp, is_fair_trade, is_organic_certified, uses_recycled_materials, carbon_neutral, country, price_range, transparency_score, good_on_you_rating FROM brands \
              WHERE LOWER(name) LIKE '%' || LOWER(?1) || '%' LIMIT 1";
@@ -155,6 +210,13 @@ impl BrandService {
             .await?)
     }
 
+    /// Return brands by descending overall rating, with unspecified tie order.
+    ///
+    /// `limit` caps the number of rows; zero returns an empty vector and a
+    /// negative value removes the cap.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_top_rated(db: &SqlitePool, limit: i64) -> Result<Vec<Brand>> {
         let q = "SELECT id, name, description, website, overall_rating, environmental_rating, labor_rating, animal_welfare_rating, is_certified_bcorp, is_fair_trade, is_organic_certified, uses_recycled_materials, carbon_neutral, country, price_range, transparency_score, good_on_you_rating FROM brands ORDER BY overall_rating DESC LIMIT ?1";
         Ok(sqlx::query_as::<_, Brand>(q).bind(limit).fetch_all(db).await?)
@@ -170,6 +232,10 @@ impl BrandService {
 pub struct UserService;
 
 impl UserService {
+    /// Find a user by their Discord account ID, returning `None` if absent.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_by_discord_id(db: &SqlitePool, discord_id: i64) -> Result<Option<User>> {
         let q = "SELECT id, discord_id, username, preferred_materials, budget_range, sustainability_priority, queries_count, sustainability_points, level, daily_tips_enabled FROM users WHERE discord_id = ?1";
         Ok(sqlx::query_as::<_, User>(q)
@@ -231,6 +297,13 @@ impl UserService {
         Ok(())
     }
 
+    /// Return users by descending sustainability points, with unspecified tie order.
+    ///
+    /// `limit` caps the number of rows; zero returns an empty vector and a
+    /// negative value removes the cap.
+    ///
+    /// # Errors
+    /// Propagates database query and row decoding errors.
     pub async fn get_leaderboard(db: &SqlitePool, limit: i64) -> Result<Vec<User>> {
         let q = "SELECT id, discord_id, username, preferred_materials, budget_range, sustainability_priority, queries_count, sustainability_points, level, daily_tips_enabled FROM users ORDER BY sustainability_points DESC LIMIT ?1";
         Ok(sqlx::query_as::<_, User>(q).bind(limit).fetch_all(db).await?)

@@ -104,3 +104,30 @@ async fn unknown_trust_metadata_is_ignored_without_changing_recognised_fields() 
     value["trust"]["backend_metadata"] = json!({"verified": true});
     assert_eq!(submit(Some(value)).await.unwrap(), expected);
 }
+
+#[tokio::test]
+async fn unknown_top_level_fields_are_rejected_instead_of_silently_discarded() {
+    let mut value = receipt();
+    value["verified"] = json!(true);
+    assert!(submit(Some(value)).await.is_err());
+}
+
+#[tokio::test]
+async fn malformed_trust_objects_are_not_upgraded_to_valid_receipts() {
+    for trust in [Value::Null, json!([]), json!({"confidence": 0.5}),
+        json!({"axioms": "sorryAx", "confidence": null}),
+        json!({"axioms": [12], "confidence": null}),
+        json!({"axioms": [], "confidence": "1.0"})] {
+        let mut value = receipt();
+        value["trust"] = trust;
+        assert!(submit(Some(value)).await.is_err());
+    }
+}
+
+#[tokio::test]
+async fn gateway_confidence_and_axioms_survive_even_a_failed_verdict() {
+    let mut value = receipt();
+    value["status"] = json!("failed");
+    value["trust"] = json!({"confidence": 0.25, "axioms": ["sorryAx", "backend-axiom"]});
+    assert_eq!(submit(Some(value.clone())).await.unwrap(), value);
+}
