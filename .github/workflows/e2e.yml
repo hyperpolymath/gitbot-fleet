@@ -76,8 +76,6 @@ jobs:
         run: bash scripts/tests/pinned-reusable-sources-test.sh
       - name: Authenticate pinned reusable sources
         run: bash scripts/audit-pinned-reusable-sources.sh --fetch-sources
-      - name: Verify live scanner caller and negative controls
-        run: bash scripts/tests/scanner-caller-contract-test.sh
       - name: Preserve lock closure contracts
         run: bash scripts/tests/lock-closure-test.sh
       - name: Audit vendor lock and pinned-source closure

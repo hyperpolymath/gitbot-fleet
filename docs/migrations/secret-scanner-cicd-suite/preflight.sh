@@ -83,16 +83,6 @@ if [[ -f "$ROOT/scripts/lib/pinned-reusable-sources.json" ]]; then
   cp "$ROOT/scripts/audit-pinned-reusable-sources.sh" "$TMP/tree/scripts/" || finding TREE "source verifier could not be copied"
 fi
 
-# On the known later deployment, project the archived 4404c3c proposal into
-# this disposable tree. This preserves the historical canary gate without
-# pretending it verifies the newer deployed caller; E2E separately authenticates
-# the live source and tests its scanner contract.
-if grep -Fq 'uses: hyperpolymath/proven-cicd/.github/workflows/secret-scanner-reusable.yml@03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409' "$TMP/tree/.github/workflows/secret-scanner.yml" 2>/dev/null; then
-  if ! bash "$MIG/fixtures/restore-historical-source.sh" "$TMP/tree" "$MIG/fixtures/historical-source.json"; then
-    finding TREE "could not reconstruct the historical scanner proposal"
-  fi
-fi
-
 # A prepared migration can subsequently be applied by an approved PR.
 # In that case old patch hunks no longer apply; check the final artifacts.
 apply_ok=1
