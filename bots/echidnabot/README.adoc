@@ -29,6 +29,13 @@ Part of the https://github.com/hyperpolymath/gitbot-fleet[gitbot-fleet]
 (Tier-1 Verifier role), coordinated by
 https://github.com/hyperpolymath/hypatia[Hypatia].
 
+=== Build and development setup
+
+See link:docs/DEVELOPMENT.adoc[Development environment] for a fresh-checkout
+setup using pinned mise/Rust/Just tools, a Guix build environment, or a
+rootless Podman development container based on Chainguard Wolfi.
+The setup requires internet access; toolchain binaries are not vendored.
+
 === Why does it exist?
 
 You’re writing formally verified software — proofs in Coq, Lean, Agda,

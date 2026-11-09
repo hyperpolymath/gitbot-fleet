@@ -5,6 +5,7 @@
 
 pub mod echidna_client;
 pub mod prove_result;
+pub mod verisim_echidna;
 
 pub use echidna_client::{EchidnaClient, EchidnaHandshake, MIN_ECHIDNA_VERSION};
 pub use prove_result::{ProveResult, PROVE_RESULT_SCHEMA};
@@ -42,12 +43,13 @@ pub struct ProofResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TrustSource {
-    /// ECHIDNA reported the axiom data itself (an `echidna.prove.result/1`
-    /// `trust` object). echidnabot transports it unchanged (a receipt); the
-    /// level is still computed by ECHIDNA's trust kernel, linked in.
+    /// ECHIDNA reported axioms in an `echidna.prove.result/1` receipt.
+    /// The direct REST path also merges a local source scan and recomputes
+    /// confidence using the linked trust kernel. This label does not mean
+    /// the enriched trust data is an unchanged receipt or a sound warrant.
     Echidna,
-    /// echidnabot computed the trust data from what ECHIDNA returned, using
-    /// ECHIDNA's trust kernel and source scanner: a warrant, not a receipt.
+    /// echidnabot derived trust data locally using the linked ECHIDNA trust
+    /// kernel and source scanner. No formal warrant soundness is established.
     #[default]
     LocalFallback,
 }

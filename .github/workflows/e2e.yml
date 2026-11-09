@@ -126,3 +126,29 @@ jobs:
             echo "::error::Regenerated source audit exited $rc: $detail"
             exit "$rc"
           fi
+      - name: Generate proposed scanner lock in a disposable worktree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/scanner-regeneration" HEAD
+          cd "$RUNNER_TEMP/scanner-regeneration"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/secret-scanner.yml')
+          old = 'hyperpolymath/cicd-suite/.github/workflows/secret-scanner-reusable.yml@4404c3c0474e17753fe7689f3485c02890aac113'
+          new = 'hyperpolymath/proven-cicd/.github/workflows/secret-scanner-reusable.yml@03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409'
+          s = p.read_text()
+          if s.count(old) != 1:
+              raise SystemExit('unexpected scanner caller; refusing candidate')
+          p.write_text(s.replace(old, new))
+          PY
+          gh actions-lock --no-interactive
+          # This is a candidate only. Publish its complete diff and checksum in
+          # bounded annotations so it can be reviewed even when logs/artifact
+          # downloads are inaccessible. Do not apply it in this job.
+          git diff --binary -- .github/workflows > "$RUNNER_TEMP/scanner-lock.patch"
+          sha256sum "$RUNNER_TEMP/scanner-lock.patch"
+          digest=$(sha256sum "$RUNNER_TEMP/scanner-lock.patch" | cut -d ' ' -f 1)
+          echo "::notice title=Scanner candidate SHA256::$digest"
+          gzip -n -c "$RUNNER_TEMP/scanner-lock.patch" | base64 -w0 | fold -w 2500 | awk '{printf "::notice title=Scanner candidate %03d::%s\n", NR, $0}'

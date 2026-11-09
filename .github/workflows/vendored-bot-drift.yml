@@ -29,6 +29,20 @@ jobs:
           persist-credentials: false
       - run: bash scripts/tests/sync-vendored-bot.sh
 
+  echidnabot-tests:
+    name: echidnabot vendored build and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: bots/echidnabot
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test the vendored crate at the pinned lock
+        run: cargo test --locked --all-targets
+
   drift:
     name: echidnabot pinned to hyperpolymath/echidnabot
     runs-on: ubuntu-24.04

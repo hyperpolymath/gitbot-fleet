@@ -8,7 +8,7 @@
 //!
 //! Run: `ECHIDNABOT_LIVE_ECHIDNA_URL=http://127.0.0.1:8081 cargo test --test live_echidna`
 
-use echidna_core_spark::axiom_tracker::DangerLevel;
+use echidna_core::trust::axiom_tracker::DangerLevel;
 use echidnabot::config::{EchidnaApiMode, EchidnaConfig};
 use echidnabot::dispatcher::echidna_client::{EchidnaClient, MIN_ECHIDNA_VERSION};
 use echidnabot::dispatcher::{ProofStatus, ProverKind};

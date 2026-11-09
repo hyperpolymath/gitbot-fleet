@@ -56,7 +56,8 @@ enum Commands {
     /// Start the webhook server
     Serve {
         /// Host to bind to. If omitted, reads `[server].host` from the TOML
-        /// config (which itself defaults to `0.0.0.0` if unset there).
+        /// config (which itself defaults to `127.0.0.1` if unset there). A
+        /// non-loopback host needs API credentials; see `[api]` in the docs.
         #[arg(short = 'H', long)]
         host: Option<String>,
 
@@ -251,8 +252,42 @@ async fn serve(
     port: u16,
     tracer_hook: Option<TracerFlushHook>,
 ) -> Result<()> {
-    use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-    use axum::{routing::get, routing::post, Extension, Router};
+    use axum::{routing::get, Extension, Router};
+    use echidnabot::api::auth::{self as api_auth, ApiCredentials, ApiGate, RepoScope};
+
+    // GraphQL API credentials. Refuse to start rather than serve the schema
+    // unauthenticated on a reachable address: before this gate, any caller
+    // could rewrite a repository webhook secret or write training rows.
+    let credentials = ApiCredentials::from_env(RepoScope::new(config.api.route_repos.clone()))
+        .map_err(|e| echidnabot::Error::Config(format!("API credentials: {e}")))?;
+    if credentials.is_empty() {
+        if !api_auth::is_loopback_host(host) {
+            return Err(echidnabot::Error::Config(format!(
+                "refusing to bind {host}: set {} and/or {} before serving \
+                 /graphql on a non-loopback address",
+                api_auth::ROUTE_TOKEN_ENV,
+                api_auth::ADMIN_TOKEN_ENV
+            )));
+        }
+        tracing::warn!(
+            "No API credentials set: every /graphql request will be refused \
+             with 401. Set {} / {} to use the API.",
+            api_auth::ROUTE_TOKEN_ENV,
+            api_auth::ADMIN_TOKEN_ENV
+        );
+    }
+    if credentials.has_route_token() && credentials.route_scope().is_empty() {
+        tracing::warn!(
+            "{} is set but [api] route_repos is empty: the route credential \
+             can submit obligations for no repository.",
+            api_auth::ROUTE_TOKEN_ENV
+        );
+    }
+    let api_rate_limit = (config.api.rate_limit_rpm > 0).then_some(config.api.rate_limit_rpm);
+    if api_rate_limit.is_none() {
+        tracing::warn!("/graphql rate limiting is disabled ([api] rate_limit_rpm = 0)");
+    }
+    let api_gate = Arc::new(ApiGate::new(credentials, api_rate_limit));
 
     // Webhook signature verification is per-integration (handled in
     // src/api/webhooks.rs). When no `webhook_secret` is configured for a
@@ -329,13 +364,7 @@ async fn serve(
         .route("/", get(root))
         .route(
             "/graphql",
-            post(
-                |Extension(schema): Extension<echidnabot::api::graphql::EchidnabotSchema>,
-                 req: GraphQLRequest| async move {
-                    GraphQLResponse::from(schema.execute(req.into_inner()).await)
-                },
-            )
-            .get(graphql_playground),
+            api_auth::graphql_post_route(api_gate.clone()).get(graphql_playground),
         )
         .merge(webhook_router(app_state.clone()))
         .layer(Extension(schema))

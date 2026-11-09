@@ -16,8 +16,10 @@
 //! as this shape, and anything else falls back to the legacy REST shape.
 //!
 //! The `trust` object is ECHIDNA's own judgement (a *receipt*, in the
-//! vocabulary of `hyperpolymath/epistemic-types`). echidnabot transports it
-//! instead of re-deriving a score; see [`super::TrustSource`].
+//! vocabulary of `hyperpolymath/epistemic-types`). This type preserves its
+//! recognised fields. The current direct REST consumer subsequently merges
+//! local axioms and re-derives confidence; its enriched `ProofResult` is not
+//! an unchanged receipt. Structural validation does not establish soundness.
 //!
 //! Validation here is deliberately strict about the parts a consumer depends
 //! on (schema tag, status vocabulary, the I-JSON integer bound on
