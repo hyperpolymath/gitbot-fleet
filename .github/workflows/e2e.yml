@@ -143,7 +143,9 @@ jobs:
               raise SystemExit('unexpected scanner caller; refusing candidate')
           p.write_text(s.replace(old, new))
           PY
-          gh actions-lock --no-interactive
+          # Scope the supported generator to the only changed caller: a full
+          # run rewrites unrelated immutable action refs to tags.
+          gh actions-lock --no-interactive .github/workflows/secret-scanner.yml
           # This is a candidate only. Publish its complete diff and checksum in
           # bounded annotations so it can be reviewed even when logs/artifact
           # downloads are inaccessible. Do not apply it in this job.
