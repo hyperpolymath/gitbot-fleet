@@ -23,6 +23,13 @@ bad()  { fail=$((fail + 1)); echo "  FAIL $1" >&2; }
 check(){ if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 # Capture both channels and the exit status, including expected failures.
 run_fix() { rc=0; out=$("$@" 2>&1) || rc=$?; }
+# The stale-pin fixtures spell standards by its former name
+# (hyperpolymath/standards): they test the SHA and lock mechanics, which do
+# not depend on the name, so they run with no known moves. The moved-repository
+# contracts (sp-moved*, at the end) pass the shipped table explicitly.
+: > "$fx/no-moves.tsv"
+export MOVED_TABLE="$fx/no-moves.tsv"
+shipped_moves="$fleet/scripts/lib/moved-repositories.tsv"
 
 # ── 1. fix-rust-toolchain-input.sh ───────────────────────────────────────────
 mkdir -p "$fx/tc/.github/workflows"
@@ -3806,6 +3813,125 @@ check "ls47b a record whose own ref is a tag is no self-SHA record: its quoted n
 dq_out=$(printf '%s\n' 'uses: "\x64tolnay/x@1" # "\x41"' "name: 'a\\x41' \"b\\\"c\"" | awk "$(cat "$fleet/scripts/lib/yaml-anchors.awk")"'{ printf "%s|", yaml_decode_dq($0) }')
 check "yaml_decode_dq decodes double-quoted escapes only, an escaped quote to a byte no reference holds" \
   "[ \"\$dq_out\" = \"\$(printf 'uses: \"dtolnay/x@1\" # \"\\\\x41\"|name: '\"'\"'a\\\\x41'\"'\"' \"b\\001c\"|')\" ]"
+
+# sp-moved: standards moved to metadatastician/standards (lib/moved-repositories.tsv).
+# A reusable `uses:` does not follow the redirect, so a caller of the former
+# name is dead whatever its SHA: a table pin is rewritten to the CURRENT name
+# with its replacement SHA, and the lock — whose owner_id the move changed —
+# is left for `gh actions-lock` (exit 3). A caller already on the current
+# name is matched by the table's former-name rows and gets the ordinary
+# SHA move and lock surgery.
+mv_new=metadatastician/standards
+mkdir -p "$fx/sp-moved/.github/workflows"
+printf 'jobs:\n  rust-ci:\n    uses: hyperpolymath/standards/.github/workflows/rust-ci-reusable.yml@%s\n' "$STALE_A" > "$fx/sp-moved/.github/workflows/rust-ci.yml"
+cat > "$fx/sp-moved/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/rust-ci.yml':
+        - 'hyperpolymath/standards@$STALE_A'
+dependencies:
+    'hyperpolymath/standards@$STALE_A':
+        ref: '$STALE_A'
+        commit: 'sha1-$STALE_A'
+        owner_id: 6759885
+        repo_id: 1116521501
+LOCK
+cp "$fx/sp-moved/.github/workflows/actions.lock" "$fx/sp-moved-before.lock"
+MOVED_TABLE="$shipped_moves" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-moved"
+check "sp-moved a former-name dead pin is rewritten to the current name AND the replacement SHA" \
+  "grep -qx \"    uses: $mv_new/.github/workflows/rust-ci-reusable.yml@$GOOD\" '$fx/sp-moved/.github/workflows/rust-ci.yml'"
+check "sp-moved the rename is reported, the lock is left untouched for gh actions-lock, and the run exits 3" \
+  "[ \$rc -eq 3 ] && grep -q 'hyperpolymath/standards moved to $mv_new' <<<\"\$out\" && grep -q 'current name; actions.lock still names the former one' <<<\"\$out\" && cmp -s '$fx/sp-moved-before.lock' '$fx/sp-moved/.github/workflows/actions.lock'"
+tar -C "$fx/sp-moved" -cf "$fx/sp-moved1.tar" .github
+MOVED_TABLE="$shipped_moves" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-moved"
+tar -C "$fx/sp-moved" -cf "$fx/sp-moved2.tar" .github
+check "sp-moved second run changes nothing and exits 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp-moved1.tar' '$fx/sp-moved2.tar' && ! grep -q '^FIXED' <<<\"\$out\""
+
+# sp-moved-current: a caller already on the current name, at a SHA the table
+# names under the former name (wildcard row), is that row's pin: its SHA
+# moves, its name stays, and its own lock edge and record move as usual.
+mkdir -p "$fx/sp-moved-current/.github/workflows"
+printf 'jobs:\n  governance:\n    uses: %s/.github/workflows/governance-reusable.yml@%s\n' "$mv_new" "$STALE_B" > "$fx/sp-moved-current/.github/workflows/governance.yml"
+cat > "$fx/sp-moved-current/.github/workflows/actions.lock" <<LOCK
+version: 'v0.0.3'
+workflows:
+    '.github/workflows/governance.yml':
+        - '$mv_new@$STALE_B'
+dependencies:
+    '$mv_new@$STALE_B':
+        ref: '$STALE_B'
+        commit: 'sha1-$STALE_B'
+        owner_id: 297579217
+        repo_id: 1116521501
+LOCK
+MOVED_TABLE="$shipped_moves" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-moved-current"
+check "sp-moved-current a current-name caller of a former-name table row is rewritten, name kept" \
+  "grep -qx \"    uses: $mv_new/.github/workflows/governance-reusable.yml@$GOOD\" '$fx/sp-moved-current/.github/workflows/governance.yml'"
+check "sp-moved-current its lock edge and record move to the replacement (exit 3: nested list not recomputed)" \
+  "[ \$rc -eq 3 ] && grep -qx \"        - '$mv_new@$GOOD'\" '$fx/sp-moved-current/.github/workflows/actions.lock' && grep -qx \"    '$mv_new@$GOOD':\" '$fx/sp-moved-current/.github/workflows/actions.lock' && ! grep -q \"$STALE_B\" '$fx/sp-moved-current/.github/workflows/actions.lock' && ! grep -q 'names the former one' <<<\"\$out\""
+# Without the moved table, the current name is not a name the table knows.
+mkdir -p "$fx/sp-moved-unknown/.github/workflows"
+cp "$fx/sp-moved-current/.github/workflows/governance.yml" "$fx/sp-moved-unknown-before.yml"
+sed -i "s/@$GOOD/@$STALE_B/" "$fx/sp-moved-unknown-before.yml"
+cp "$fx/sp-moved-unknown-before.yml" "$fx/sp-moved-unknown/.github/workflows/governance.yml"
+run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-moved-unknown"
+check "sp-moved-unknown with no moves recorded, a current-name caller is not the former name's pin (exit 0, untouched)" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp-moved-unknown-before.yml' '$fx/sp-moved-unknown/.github/workflows/governance.yml'"
+
+# sp-moved-plain: non-defects and spellings. A mixed-case former name is the
+# same repository; a former-name caller at a SHA the table does not name is
+# not this script's (no table row says where to move it); another repository
+# of the new owner at a dead standards SHA is not standards; no lock, exit 0.
+mkdir -p "$fx/sp-moved-plain/.github/workflows"
+cat > "$fx/sp-moved-plain/.github/workflows/ci.yml" <<YML
+jobs:
+  rust:
+    uses: Hyperpolymath/Standards/.github/workflows/rust-ci-reusable.yml@$STALE_A
+  live:
+    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@$GOOD
+  other:
+    uses: $mv_new-other/.github/workflows/governance-reusable.yml@$STALE_B
+  current:
+    uses: $mv_new/.github/workflows/governance-reusable.yml@$GOOD
+YML
+cat > "$fx/sp-moved-plain-expected.yml" <<YML
+jobs:
+  rust:
+    uses: $mv_new/.github/workflows/rust-ci-reusable.yml@$GOOD
+  live:
+    uses: hyperpolymath/standards/.github/workflows/governance-reusable.yml@$GOOD
+  other:
+    uses: $mv_new-other/.github/workflows/governance-reusable.yml@$STALE_B
+  current:
+    uses: $mv_new/.github/workflows/governance-reusable.yml@$GOOD
+YML
+MOVED_TABLE="$shipped_moves" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-moved-plain"
+check "sp-moved-plain a mixed-case former name is moved; untabled SHAs and other repositories are left; no lock, exit 0" \
+  "[ \$rc -eq 0 ] && cmp -s '$fx/sp-moved-plain-expected.yml' '$fx/sp-moved-plain/.github/workflows/ci.yml'"
+
+# sp-moved-alias: the widened scan also finds a current-name dead pin held by
+# an anchor, which the rewrite cannot place: UNSUPPORTED, exit 2, untouched.
+mkdir -p "$fx/sp-moved-alias/.github/workflows"
+printf 'env:\n  CALL: &call %s/.github/workflows/rust-ci-reusable.yml@%s\njobs:\n  rust:\n    uses: *call\n' "$mv_new" "$STALE_A" > "$fx/sp-moved-alias/.github/workflows/ci.yml"
+cp "$fx/sp-moved-alias/.github/workflows/ci.yml" "$fx/sp-moved-alias-before.yml"
+MOVED_TABLE="$shipped_moves" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-moved-alias"
+check "sp-moved-alias a current-name dead pin behind an alias is UNSUPPORTED (exit 2), file untouched" \
+  "[ \$rc -eq 2 ] && grep -q 'UNSUPPORTED.*uses: \\*call' <<<\"\$out\" && cmp -s '$fx/sp-moved-alias-before.yml' '$fx/sp-moved-alias/.github/workflows/ci.yml'"
+
+# sp-moved-invalid: a moved table that is unreadable, malformed, or chains a
+# move is refused before any caller changes.
+printf 'a/b\tc/d\t1\tx\nc/d\te/f\t2\tx\n' > "$fx/moves-chain.tsv"
+printf 'a/b\tc/d\tnot-an-id\tx\n' > "$fx/moves-badid.tsv"
+printf 'a/b\tA/B\t1\tx\n' > "$fx/moves-self.tsv"
+cp "$fx/sp-moved/.github/workflows/rust-ci.yml" "$fx/sp-moved-invalid-before.yml"
+for t in chain badid self missing; do
+    MOVED_TABLE="$fx/moves-$t.tsv" run_fix bash "$fleet/scripts/fix-stale-reusable-pin.sh" "$fx/sp-moved"
+    check "sp-moved-invalid a $t moved table exits 2 and changes nothing" \
+      "[ \$rc -eq 2 ] && grep -q 'moved' <<<\"\$out\" && cmp -s '$fx/sp-moved-invalid-before.yml' '$fx/sp-moved/.github/workflows/rust-ci.yml'"
+done
+check "the shipped moved table records standards' move under its stable repo_id" \
+  "grep -qxP 'hyperpolymath/standards\\tmetadatastician/standards\\t1116521501\\t.*' '$shipped_moves'"
 
 bash "$fleet/scripts/tests/fix-workflow-resources.sh"
 

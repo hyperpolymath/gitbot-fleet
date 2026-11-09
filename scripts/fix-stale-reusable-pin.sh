@@ -42,11 +42,22 @@
 # Table: scripts/lib/stale-reusable-pins.tsv — reusable_path<TAB>stale_sha<TAB>
 # replacement_sha<TAB>reason. reusable_path may end in `/*` to cover every
 # reusable of that repository.
+#
+# Moved repositories: scripts/lib/moved-repositories.tsv (MOVED_TABLE) —
+# former<TAB>current<TAB>repo_id<TAB>reason. A table row and a caller are
+# matched under the repository's current name, so a row written with either
+# name covers callers written with either. A reusable `uses:` does not follow
+# GitHub's redirect, so a caller still written with the former name is
+# rewritten to the current name along with its SHA; its lock entry carries
+# the former owner_id and is left for `gh actions-lock` (exit 3). A
+# former-name caller at a SHA the table does not name is not this script's:
+# no row says where to move it (hypatia WF028 reports it).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PINS_TABLE="${PINS_TABLE:-$SCRIPT_DIR/lib/stale-reusable-pins.tsv}"
+MOVED_TABLE="${MOVED_TABLE:-$SCRIPT_DIR/lib/moved-repositories.tsv}"
 REPO_PATH="${1:?Usage: fix-stale-reusable-pin.sh <repo-path>}"
 
 [ -r "$PINS_TABLE" ] || { echo "fix-stale-reusable-pin: table not readable: $PINS_TABLE" >&2; exit 2; }
@@ -57,11 +68,55 @@ REPO_PATH="${1:?Usage: fix-stale-reusable-pin.sh <repo-path>}"
 # candidate scan is built from them, so a private table for another owner
 # (`octo/example/.github/workflows/*`) finds its callers.
 TABLE_OWNERS_RE=""
+# Moved repositories (lib/moved-repositories.tsv): former `owner/repo`, in
+# lower case, to the current name as the table spells it. GitHub's redirect
+# serves an API read of the former name but not a reusable `uses:` — a caller
+# of the former name fails at startup whatever its SHA — so a table row and a
+# caller are compared under the CURRENT name, and a caller written with the
+# former name is rewritten to the current one along with its SHA.
+declare -A MOVED_TO=()
+validate_moved() {
+    local n=0 m_former m_current m_id bad=0
+    [ -r "$MOVED_TABLE" ] || { echo "fix-stale-reusable-pin: moved-repository table not readable: $MOVED_TABLE" >&2; exit 2; }
+    while IFS=$'\t' read -r m_former m_current m_id _ || [ -n "$m_former" ]; do
+        n=$((n + 1))
+        case "$m_former" in ''|'#'*) continue ;; esac
+        [[ "$m_former" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "fix-stale-reusable-pin: moved row $n: bad former name '$m_former'" >&2; bad=1; }
+        [[ "$m_current" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "fix-stale-reusable-pin: moved row $n: bad current name '$m_current'" >&2; bad=1; }
+        [[ "$m_id" =~ ^[0-9]+$ ]] || { echo "fix-stale-reusable-pin: moved row $n: bad repo_id '$m_id'" >&2; bad=1; }
+        [ "${m_former,,}" != "${m_current,,}" ] || { echo "fix-stale-reusable-pin: moved row $n: '$m_former' moves to itself" >&2; bad=1; }
+        # One name, one destination; and a current name is never itself moved
+        # on (a chain would need a second lookup the rewrite does not make).
+        if [ -n "${MOVED_TO[${m_former,,}]:-}" ] && [ "${MOVED_TO[${m_former,,}],,}" != "${m_current,,}" ]; then
+            echo "fix-stale-reusable-pin: moved row $n: '$m_former' already moves to '${MOVED_TO[${m_former,,}]}'" >&2; bad=1
+        fi
+        MOVED_TO[${m_former,,}]="$m_current"
+    done < "$MOVED_TABLE"
+    local f
+    for f in "${!MOVED_TO[@]}"; do
+        [ -z "${MOVED_TO[${MOVED_TO[$f],,}]:-}" ] || { echo "fix-stale-reusable-pin: moved table: '$f' moves to '${MOVED_TO[$f]}', which moves again; record the final name" >&2; bad=1; }
+    done
+    [ "$bad" -eq 0 ] || { echo "fix-stale-reusable-pin: table $MOVED_TABLE is invalid; nothing was changed" >&2; exit 2; }
+}
+# <var> <owner/repo/.github/workflows/...>: the path in lower case, its
+# repository under its current name. No subshell: lookup_replacement runs
+# this once per candidate.
+canon_path_into() {
+    local p="${2,,}" pre
+    pre="${p%%/.github/workflows/*}"
+    [ -n "${MOVED_TO[$pre]:-}" ] && p="${MOVED_TO[$pre],,}${p#"$pre"}"
+    printf -v "$1" '%s' "$p"
+}
+validate_moved
+# The table, read once: each row's path canonical (lower case, current name),
+# in file order — lookup_replacement keeps first-match-wins.
+T_PATH=(); T_STALE=(); T_NEW=(); T_REASON=()
 validate_table() {
-    local n=0 v_path v_stale v_new bad=0 owners=""
+    local n=0 v_path v_stale v_new v_reason bad=0 owners="" canon pre f
+    local -A table_repos=()
     # `|| [ -n ... ]`: a final row the file ends on without a newline is a
     # row too — `read` returns 1 on it with the fields filled in.
-    while IFS=$'\t' read -r v_path v_stale v_new _ || [ -n "$v_path" ]; do
+    while IFS=$'\t' read -r v_path v_stale v_new v_reason || [ -n "$v_path" ]; do
         n=$((n + 1))
         case "$v_path" in ''|'#'*) continue ;; esac
         [[ "$v_stale" =~ ^[0-9a-f]{40}$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad stale SHA '$v_stale'" >&2; bad=1; }
@@ -73,8 +128,18 @@ validate_table() {
         # a `*` anywhere else would be matched literally, never as a glob.
         [[ "$v_path" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\.github/workflows/([A-Za-z0-9_.-]+|\*)$ ]] || { echo "fix-stale-reusable-pin: table row $n: bad reusable path '$v_path' (the only wildcard is a terminal /*)" >&2; bad=1; }
         owners="$owners${v_path%%/*}"$'\n'
+        canon_path_into canon "$v_path"
+        T_PATH+=("$canon"); T_STALE+=("$v_stale"); T_NEW+=("$v_new"); T_REASON+=("$v_reason")
+        table_repos[${canon%%/.github/workflows/*}]=1
     done < "$PINS_TABLE"
     [ "$bad" -eq 0 ] || { echo "fix-stale-reusable-pin: table $PINS_TABLE is invalid; nothing was changed" >&2; exit 2; }
+    # A caller may write a table repository under either of its names: the
+    # scan covers the owners of both.
+    for f in "${!MOVED_TO[@]}"; do
+        pre="${MOVED_TO[$f],,}"
+        [ -n "${table_repos[$pre]:-}" ] || continue
+        owners="$owners${f%%/*}"$'\n'"${pre%%/*}"$'\n'
+    done
     TABLE_OWNERS_RE=$(printf '%s' "$owners" | sed -E 's/[.]/\\./g' | sort -u | paste -sd'|' -)
     [ -n "$TABLE_OWNERS_RE" ] || TABLE_OWNERS_RE="hyperpolymath"
 }
@@ -113,7 +178,7 @@ anchor_value() { # <file> <name> <line>
 pin_fixer_lock "$REPO_PATH"
 
 LOCK="$REPO_PATH/.github/workflows/actions.lock"
-rewrites=0; lock_touched=0
+rewrites=0; lock_touched=0; lock_moved=0
 
 # Two callers pinned at two different dead SHAs move to the SAME replacement,
 # so after substitution the lock can hold the same dependency key twice. A
@@ -303,18 +368,18 @@ merge_duplicate_records() {
 # wildcard paths. Set replacement/reason and return 0 on a match; otherwise
 # clear both variables and return 1.
 lookup_replacement() { # <reusable-path> <stale-sha>
-    local t_path t_stale t_new t_reason t_path_lc
+    local i caller
     replacement=""; reason=""
-    while IFS=$'\t' read -r t_path t_stale t_new t_reason || [ -n "$t_path" ]; do
-        [[ -z "$t_path" || "$t_path" == \#* ]] && continue
-        t_path_lc="${t_path,,}"
-        [[ "$t_stale" == "$2" ]] || continue
-        # GitHub resolves an owner or repository name in either case: the
-        # table and the caller are compared case-folded.
-        if [[ "${t_path,,}" == "${1,,}" ]] || { [[ "$t_path" == */\* ]] && [[ "${1,,}" == "${t_path_lc%\*}"* ]]; }; then
-            replacement="$t_new"; reason="$t_reason"; return 0
+    # GitHub resolves an owner or repository name in either case, and the
+    # table may name a moved repository by either of its names: both sides
+    # are compared case-folded under the current name (canon_path_into).
+    canon_path_into caller "$1"
+    for i in "${!T_PATH[@]}"; do
+        [[ "${T_STALE[$i]}" == "$2" ]] || continue
+        if [[ "${T_PATH[$i]}" == "$caller" ]] || { [[ "${T_PATH[$i]}" == */\* ]] && [[ "$caller" == "${T_PATH[$i]%\*}"* ]]; }; then
+            replacement="${T_NEW[$i]}"; reason="${T_REASON[$i]}"; return 0
         fi
-    done < "$PINS_TABLE"
+    done
     return 1
 }
 
@@ -506,7 +571,7 @@ while IFS= read -r -d '' wf; do
         [ -n "$ref" ] || continue
         stale="${ref##*@}"; stale="${stale,,}"
         lookup_replacement "${ref%@*}" "$stale" || continue
-        key="${ref%%/.github/workflows/*}"; key="${key,,}@$stale"
+        canon_path_into key "${ref%@*}"; key="${key%%/.github/workflows/*}@$stale"
         if [ -n "${move_to[$key]:-}" ] && [ "${move_to[$key]}" != "$replacement" ]; then
             echo "CONFLICT  ${wf#"$REPO_PATH"/}:$lineno: $key would move to ${move_to[$key]:0:7} here and to ${replacement:0:7} elsewhere; one lock edge and one record cannot carry both. Fix the table or the callers by hand; nothing was changed." >&2
             conflict=1
@@ -634,12 +699,27 @@ while IFS= read -r -d '' wf; do
         # ERE: a `$` inside a BRE group is literal to sed, so the boundary
         # alternation needs -E (and a delimiter the pattern does not use).
         # The path as the caller spells it, matched literally (a `.` in it
-        # is a dot).
+        # is a dot). A caller of a moved repository's former name is written
+        # with the current name: the reusable does not run under the former
+        # one, whatever its SHA.
         path_re=$(printf '%s' "$path" | sed -E 's/[][\.^$*+?(){}|~\\]/\\&/g')
-        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?$path_re)@$stale_raw([\"'[:space:]]|\$)~\1@$replacement\3~" "$wf"
-        echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
+        repo_prefix="${path%%/.github/workflows/*}"; moved_to="${MOVED_TO[${repo_prefix,,}]:-}"
+        new_path="$path"; [ -z "$moved_to" ] || new_path="$moved_to${path#"$repo_prefix"}"
+        sed -i -E "${lineno}s~^([[:space:]]*(-[[:space:]]+)?[\"']?uses[\"']?[[:space:]]*:[[:space:]]*[\"']?)$path_re@$stale_raw([\"'[:space:]]|\$)~\1$new_path@$replacement\3~" "$wf"
+        if [ -n "$moved_to" ]; then
+            echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason; $repo_prefix moved to $moved_to)"
+        else
+            echo "FIXED  ${wf#"$REPO_PATH"/}:$lineno  $path  ${stale:0:7} -> ${replacement:0:7}  ($reason)"
+        fi
         rewrites=$((rewrites + 1))
-        pending+=("$stale"$'\t'"$replacement"$'\t'"${path%%/.github/workflows/*}")
+        # A lock edge and record carry the repository's owner_id, which a
+        # transfer changes: the renamed caller's lock entry is left for
+        # `gh actions-lock` to write, and the run ends 3.
+        if [ -n "$moved_to" ]; then
+            [ -f "$LOCK" ] && lock_moved=1
+            continue
+        fi
+        pending+=("$stale"$'\t'"$replacement"$'\t'"$repo_prefix")
     done
     # A lock edge is per repository@SHA, shared by every reusable of that
     # repository the workflow calls. When a job of this workflow still calls
@@ -886,6 +966,10 @@ fi
 if [ "$merge_refused" -ne 0 ]; then
     echo "fix-stale-reusable-pin: actions.lock still lists a dependency twice (UNSUPPORTED above); not a clean success." >&2
     exit 2
+fi
+if [ "$lock_moved" -eq 1 ]; then
+    echo "fix-stale-reusable-pin: a caller was moved to its repository's current name; actions.lock still names the former one (and its owner_id) and was not edited for it — run \`gh actions-lock\` before pushing. Exit 3: not a clean success." >&2
+    exit 3
 fi
 if [ "$lock_stale" -eq 1 ]; then
     echo "fix-stale-reusable-pin: a rewritten caller had no matching lock edge (WARN above); the lock is out of sync. Exit 3: not a clean success." >&2

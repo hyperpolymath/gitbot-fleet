@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MPL-2.0
+# moved-repositories.tsv — estate repositories that were transferred or renamed, and the name a caller must use now.
+# Columns (tab-separated): former<TAB>current<TAB>repo_id<TAB>reason
+# former and current are `owner/repo`; repo_id is GitHub's numeric id, which a transfer keeps (it is how the two names are known to be one repository).
+# Consumed by scripts/fix-stale-reusable-pin.sh: a table row for either name matches a caller written with either name, and a caller still
+# written with the former name is rewritten to the current one. A reusable `uses:` does NOT follow GitHub's redirect — a caller of the former
+# name dies at startup_failure whatever its SHA — so moving only the SHA would leave it dead.
+# Mirrored by hypatia (Hypatia.Rules.MovedRepositories, rule WF028) so detection and repair carry the same facts.
+hyperpolymath/standards	metadatastician/standards	1116521501	transferred 2026-10-25; a reusable call of the former name fails at startup (hypatia WF028)
