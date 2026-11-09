@@ -110,6 +110,19 @@ jobs:
           # The regeneration comparison alone covers only shared vendor roots.
           # Independently authenticate the job-level reusable closure, including
           # the scanner, against the regenerated lock and caller tree.
+          rc=0
           bash scripts/audit-pinned-reusable-sources.sh \
             --repo-root "$RUNNER_TEMP/lock-regeneration" \
-            --lock "$RUNNER_TEMP/lock-regeneration/.github/workflows/actions.lock"
+            --lock "$RUNNER_TEMP/lock-regeneration/.github/workflows/actions.lock" \
+            > "$RUNNER_TEMP/regenerated-source-audit.txt" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/regenerated-source-audit.txt"
+          if [ "$rc" -ne 0 ]; then
+            # Surface a bounded, escaped diagnostic in the check annotation as
+            # well as the logs; never turn an incomplete comparison into green.
+            detail=$(head -c 3000 "$RUNNER_TEMP/regenerated-source-audit.txt")
+            detail=${detail//'%'/'%25'}
+            detail=${detail//$'\r'/'%0D'}
+            detail=${detail//$'\n'/'%0A'}
+            echo "::error::Regenerated source audit exited $rc: $detail"
+            exit "$rc"
+          fi
