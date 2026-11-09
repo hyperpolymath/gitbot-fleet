@@ -93,21 +93,6 @@ jobs:
       - name: Pre-push gate rejects missing and failed scans
         run: bash tests/pre-push-gate-test.sh
 
-  gsbot-sqlx-candidate:
-    name: GSBot SQLx security upgrade candidate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install native TLS build dependencies
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
-      - name: Install dependency graph auditor
-        run: cargo install cargo-deny --version 0.20.2 --locked
-      - name: Resolve and test a disposable SQLx candidate
-        run: bash scripts/probe-gsbot-sqlx.sh
-
   gsbot:
     name: GSBot build, tests and dependency security
     runs-on: ubuntu-24.04

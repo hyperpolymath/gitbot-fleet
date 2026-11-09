@@ -3,9 +3,9 @@
 //! tests/integration/test_bot_commands.py — service queries and the
 //! sustainability analyzer over an in-memory database.
 
-use gsbot::db;
+use gsbot::{db, fixtures};
 use gsbot::models::MaterialType;
-use gsbot::services::{MaterialService, NewMaterial};
+use gsbot::services::{BrandService, GarmentService, MaterialService, NewMaterial, UserService};
 use gsbot::sustainability as analyzer;
 
 async fn pool() -> sqlx::SqlitePool {
@@ -60,6 +60,29 @@ async fn search_matches_name_and_description() {
     }
     let results = MaterialService::search(&p, "cotton").await.unwrap();
     assert_eq!(results.len(), 2);
+}
+
+#[tokio::test]
+async fn literal_queries_keep_bound_values_and_joined_materials() {
+    let p = pool().await;
+    fixtures::load_all_fixtures(&p).await.unwrap();
+
+    let garment = GarmentService::get_by_name(&p, "Linen Summer Shirt")
+        .await.unwrap().unwrap();
+    let materials = GarmentService::materials_of(&p, garment.id).await.unwrap();
+    assert_eq!(materials.len(), 1);
+    assert_eq!(materials[0].name, "Linen");
+    assert!(BrandService::get_by_name(&p, "Patagonia").await.unwrap().is_some());
+    assert!(!MaterialService::get_all(&p, 0, 2).await.unwrap().is_empty());
+    let user = UserService::create(&p, 1234, "test user").await.unwrap();
+    assert_eq!(UserService::get_by_discord_id(&p, 1234).await.unwrap().unwrap().id, user.id);
+    assert!(!UserService::get_leaderboard(&p, 1).await.unwrap().is_empty());
+
+    // A SQL fragment must be interpreted only as a bound search value.
+    let injection = "' OR 1=1 --";
+    assert!(MaterialService::search(&p, injection).await.unwrap().is_empty());
+    assert!(GarmentService::search(&p, injection).await.unwrap().is_empty());
+    assert!(BrandService::get_by_name(&p, injection).await.unwrap().is_none());
 }
 
 #[test]

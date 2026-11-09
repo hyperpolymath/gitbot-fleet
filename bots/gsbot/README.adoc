@@ -46,7 +46,7 @@ Discord Platform
          |
          v
 +------------------+
-|   Data Layer     |  sqlx 0.8, SQLite, sqlx::migrate!
+|   Data Layer     |  SQLx (temporary pinned upstream commit), SQLite, sqlx::migrate!
 +--------+---------+
          |
          v
