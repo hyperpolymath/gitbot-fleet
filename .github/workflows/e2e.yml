@@ -76,12 +76,33 @@ jobs:
         run: bash scripts/tests/pinned-reusable-sources-test.sh
       - name: Authenticate pinned reusable sources
         run: bash scripts/audit-pinned-reusable-sources.sh --fetch-sources
+      - name: Verify live scanner caller and negative controls
+        run: bash scripts/tests/scanner-caller-contract-test.sh
+      - name: Authenticate historical scanner source for archived preflight
+        run: |
+          set -euo pipefail
+          tree="$RUNNER_TEMP/historical-scanner-source"
+          mkdir -p "$tree/scripts/lib"
+          cp -R .github "$tree/"
+          cp scripts/lib/{pinned-reusable-sources.json,lock-closure-receipts.tsv} "$tree/scripts/lib/"
+          bash docs/migrations/secret-scanner-cicd-suite/fixtures/restore-historical-source.sh \
+            "$tree" docs/migrations/secret-scanner-cicd-suite/fixtures/historical-source.json
+          bash scripts/audit-pinned-reusable-sources.sh --repo-root "$tree" --fetch-sources
       - name: Preserve lock closure contracts
         run: bash scripts/tests/lock-closure-test.sh
       - name: Audit vendor lock and pinned-source closure
         run: ./scripts/audit-lock-closure.sh
       - name: Test source closure through migration preflight
-        run: bash scripts/tests/pinned-source-entrypoints-test.sh
+        run: |
+          rc=0
+          bash scripts/tests/pinned-source-entrypoints-test.sh > "$RUNNER_TEMP/preflight-tests.log" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/preflight-tests.log"
+          if [ "$rc" -ne 0 ]; then
+            detail=$(tail -c 5000 "$RUNNER_TEMP/preflight-tests.log")
+            detail=${detail//'%'/'%25'}; detail=${detail//$'\r'/'%0D'}; detail=${detail//$'\n'/'%0A'}
+            echo "::error::Historical preflight tests failed (exit $rc): $detail"
+          fi
+          exit "$rc"
       - name: Prepared secret-scanner migration stays gated
         run: |
           # 0 = all preconditions hold; 2 = evidence is unavailable. The

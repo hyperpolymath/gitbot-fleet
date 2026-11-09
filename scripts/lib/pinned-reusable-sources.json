@@ -443,35 +443,6 @@
       "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\scorecard-reusable.yml"
     },
     {
-      "repository": "hyperpolymath/cicd-suite",
-      "commit": "4404c3c0474e17753fe7689f3485c02890aac113",
-      "path": ".github/workflows/secret-scanner-reusable.yml",
-      "blob": "81b2ba1dfb074f6f8913baa81eb6768b7497cc2a",
-      "content_sha256": "4745e9318346b1a3eae2e0bf65c6732f73d2ead78ef29de9e20659a71f8057d8",
-      "role": "active",
-      "callers": [
-        {
-          "workflow": ".github/workflows/secret-scanner.yml",
-          "job": "scan",
-          "line": 39
-        }
-      ],
-      "uses": [
-        {
-          "kind": "step",
-          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 28
-        },
-        {
-          "kind": "step",
-          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 50
-        }
-      ],
-      "source_url": "https://github.com/hyperpolymath/cicd-suite/blob/4404c3c0474e17753fe7689f3485c02890aac113/.github/workflows/secret-scanner-reusable.yml",
-      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\hyperpolymath\\cicd-suite\\4404c3c0474e17753fe7689f3485c02890aac113\\.github\\workflows\\secret-scanner-reusable.yml"
-    },
-    {
       "repository": "metadatastician/standards",
       "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
       "path": ".github/workflows/governance-reusable.yml",
@@ -726,6 +697,34 @@
       ],
       "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/secret-scanner-reusable.yml",
       "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\secret-scanner-reusable.yml"
+    },
+    {
+      "repository": "hyperpolymath/proven-cicd",
+      "commit": "03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409",
+      "path": ".github/workflows/secret-scanner-reusable.yml",
+      "blob": "b75b630ab6bee9943573502f0ace580078ef92ae",
+      "content_sha256": "02e34046c20f25c6b1e9ada99bd46294e33cc90a792fefa427f09aef098dcad9",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/secret-scanner.yml",
+          "job": "scan",
+          "line": 39
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 28
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 55
+        }
+      ],
+      "source_url": "https://github.com/hyperpolymath/proven-cicd/blob/03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409/.github/workflows/secret-scanner-reusable.yml"
     }
   ],
   "dependencies": {
@@ -768,16 +767,6 @@
       "repo_id": 259445878,
       "uses": [],
       "original_lock_record": "    'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63':\n        ref: 'v4.38.0'\n        commit: 'sha1-b96794f015dfd88f77b49b1c93e0fa7110f94c63'\n        owner_id: 9919\n        repo_id: 259445878\n"
-    },
-    "hyperpolymath/cicd-suite@4404c3c0474e17753fe7689f3485c02890aac113": {
-      "ref": "4404c3c0474e17753fe7689f3485c02890aac113",
-      "commit": "sha1-4404c3c0474e17753fe7689f3485c02890aac113",
-      "owner_id": 6759885,
-      "repo_id": 1326697643,
-      "uses": [
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
-      ],
-      "original_lock_record": "    'hyperpolymath/cicd-suite@4404c3c0474e17753fe7689f3485c02890aac113':\n        ref: '4404c3c0474e17753fe7689f3485c02890aac113'\n        commit: 'sha1-4404c3c0474e17753fe7689f3485c02890aac113'\n        owner_id: 6759885\n        repo_id: 1326697643\n        uses:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n"
     },
     "metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66": {
       "ref": "75bd5994470661a099df562d6d5ad2fe744dbd66",
@@ -843,6 +832,15 @@
       "uses": [],
       "owner_id": 44036562,
       "repo_id": 192625955
+    },
+    "hyperpolymath/proven-cicd@03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409": {
+      "ref": "03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409",
+      "commit": "sha1-03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409",
+      "owner_id": 6759885,
+      "repo_id": 1446155688,
+      "uses": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      ]
     }
   }
 }
