@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# Repo-local toolchain pin (AGENTS §1a: a repo's own pins stay in the repo so
+# it builds standalone). CI's reusable workflow installs floating `stable`;
+# this file overrides it inside the checkout, so a new clippy release can no
+# longer turn `main` red without a commit. 2026-10-02: stable moved to 1.99.0
+# and its clippy flagged `double_must_use` on the `#[async_trait]` adapter
+# trait, which is exactly that failure mode.
+#
+# Bump deliberately: change `channel`, run `cargo clippy --all-targets -- -D
+# warnings` and `cargo test`, commit both together.
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

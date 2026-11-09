@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MPL-2.0
+# PyPI wheel SHA-256 digests for CPython 3.12–3.14 on the Ubuntu x86_64 runner.
+PyYAML==6.0.3 \
+    --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc \
+    --hash=sha256:0f29edc409a6392443abf94b9cf89ce99889a1dd5376d94316ae5145dfedd5d6 \
+    --hash=sha256:c458b6d084f9b935061bc36216e8a69a7e293a2f1e68bf956dcd9e6cbcd143f5
