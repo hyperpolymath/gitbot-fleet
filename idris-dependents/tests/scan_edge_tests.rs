@@ -387,9 +387,24 @@ fn raw_content_fetches_retry_rate_limits_and_propagate_hard_failures() {
         false,
         vec![item("alice/app", "a.ipkg", "contents/a")],
     );
-    io.respond("contents/a", true, Ok(response(404, &[], "")));
+    io.respond("contents/a", true, Ok(response(500, &[], "")));
     let error = run(&options(), &mut io).unwrap_err().to_string();
-    assert!(error.contains("HTTP 404 for contents/a"), "{error}");
+    assert!(error.contains("HTTP 500 for contents/a"), "{error}");
+    io.done();
+
+    // A file deleted since GitHub indexed it is skipped, not fatal.
+    let mut io = Script::default();
+    io.search(
+        QUERY,
+        1,
+        1,
+        false,
+        vec![item("alice/app", "a.ipkg", "contents/a")],
+    );
+    io.respond("contents/a", true, Ok(response(404, &[], "")));
+    let report = run(&options(), &mut io).unwrap();
+    assert!(report.rows.is_empty());
+    assert_eq!(report.skipped_urls, vec!["contents/a"]);
     io.done();
 }
 
@@ -440,7 +455,32 @@ fn report_json_keeps_public_field_names_and_confidence_spelling() {
                 "confidence": "MEDIUM",
             }],
             "incompleteQueries": [],
+            "skippedUrls": [],
         })
+    );
+    io.done();
+}
+
+#[test]
+fn http_errors_carry_github_reason() {
+    // CodeRabbit: surface the body (e.g. "Bad credentials"), not just the status.
+    let mut io = Script::default();
+    io.search(
+        QUERY,
+        1,
+        1,
+        false,
+        vec![item("alice/app", "a.ipkg", "contents/a")],
+    );
+    io.respond(
+        "contents/a",
+        true,
+        Ok(response(500, &[], "{\"message\":\"Bad credentials\"}")),
+    );
+    let error = run(&options(), &mut io).unwrap_err().to_string();
+    assert!(
+        error.contains("HTTP 500 for contents/a: {\"message\":\"Bad credentials\"}"),
+        "{error}"
     );
     io.done();
 }

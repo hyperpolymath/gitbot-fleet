@@ -28,8 +28,8 @@ fn mock_assail_report() -> AssailReport {
                 severity: "High".to_string(),
                 description: "3 unsafe blocks in FFI boundary".to_string(),
                 recommended_attack: vec!["Memory".to_string()],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
             WeakPoint {
                 category: "HardcodedSecret".to_string(),
@@ -37,8 +37,8 @@ fn mock_assail_report() -> AssailReport {
                 severity: "Critical".to_string(),
                 description: "AWS_SECRET_ACCESS_KEY found in source code".to_string(),
                 recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
             WeakPoint {
                 category: "PanicPath".to_string(),
@@ -46,8 +46,8 @@ fn mock_assail_report() -> AssailReport {
                 severity: "Medium".to_string(),
                 description: "unwrap() on user-provided input".to_string(),
                 recommended_attack: vec!["CPU".to_string()],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
             WeakPoint {
                 category: "RaceCondition".to_string(),
@@ -55,8 +55,8 @@ fn mock_assail_report() -> AssailReport {
                 severity: "High".to_string(),
                 description: "Shared mutable state without synchronisation".to_string(),
                 recommended_attack: vec!["Concurrency".to_string()],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
             WeakPoint {
                 category: "UncheckedError".to_string(),
@@ -64,8 +64,8 @@ fn mock_assail_report() -> AssailReport {
                 severity: "Medium".to_string(),
                 description: "Result ignored from database query".to_string(),
                 recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
         ],
         statistics: serde_json::json!({"total_lines": 5000}),
@@ -92,12 +92,12 @@ fn test_full_translation_pipeline() {
     }
 
     // Check specific translations
-    let unsafe_finding = findings.iter().find(|f| f.rule_id == "PA001").unwrap();
+    let unsafe_finding = findings.iter().find(|f| f.rule_id == "PA004").unwrap();
     assert_eq!(unsafe_finding.severity, Severity::Warning); // High → Warning
     assert_eq!(unsafe_finding.category, "static-analysis/unsafe-code");
     assert!(!unsafe_finding.fixable);
 
-    let secret_finding = findings.iter().find(|f| f.rule_id == "PA004").unwrap();
+    let secret_finding = findings.iter().find(|f| f.rule_id == "PA017").unwrap();
     assert_eq!(secret_finding.severity, Severity::Error); // Critical → Error
     assert!(secret_finding.fixable);
     assert_eq!(secret_finding.triangle_tier, Some(TriangleTier::Eliminate));
@@ -118,8 +118,8 @@ fn test_fixability_classification_pipeline() {
     assert_eq!(unfixable.len(), 3);
 
     let fixable_ids: Vec<&str> = fixable.iter().map(|f| f.rule_id.as_str()).collect();
-    assert!(fixable_ids.contains(&"PA004"));
-    assert!(fixable_ids.contains(&"PA006"));
+    assert!(fixable_ids.contains(&"PA017"));
+    assert!(fixable_ids.contains(&"PA018"));
 }
 
 #[test]
@@ -129,12 +129,7 @@ fn test_a2ml_generation_from_translated_findings() {
     let findings = translator::translate_all(&report.weak_points, &config);
     let (fixable, unfixable) = translator::classify_fixability(&findings);
 
-    let doc = a2ml_writer::generate_a2ml(
-        &fixable,
-        &unfixable,
-        "hyperpolymath/test-repo",
-        "2.1.0",
-    );
+    let doc = a2ml_writer::generate_a2ml(&fixable, &unfixable, "hyperpolymath/test-repo", "2.1.0");
 
     assert_eq!(doc.a2ml.schema, "panicbot.findings");
     assert_eq!(doc.payload.summary.total, 5);

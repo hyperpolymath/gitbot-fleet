@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Local pre-push gate
+:revdate: 2026-11-07
+
+Run `bash scripts/install-pre-push-gate.sh /path/to/consumer` from a reviewed
+fleet checkout. The installer uses Git's hooks path, including linked worktrees
+and `core.hooksPath`. It refuses to replace a different existing hook. Compose
+such a hook explicitly; do not overwrite its checks. A second identical
+installation is a no-op. A future upgrade also requires reviewing the existing
+copy rather than overwriting custom changes.
+
+The gate requires `jq`, GNU `timeout`, and at least one available scanner on
+the hook's PATH. With the default `auto` selection it runs every available
+scanner; a failure from either blocks even if another scanner succeeds.
+Set repository config `fleet.prePushScanners` to `hypatia`, `panic-attack`, or
+`hypatia panic-attack` to require those particular scanners. An unavailable
+required scanner blocks. `fleet.prePushTimeoutSeconds` defaults to 180 and
+accepts 1 through 1800 seconds per scanner.
+
+Hypatia uses `hypatia-cli.sh scan` with JSON output and the critical threshold.
+Both its Elixir findings array and Bash submission envelope are validated.
+Panic-attack uses `assail --headless --output-format json --fail-on-incomplete`;
+its 2.6 report must record complete, non-empty declared coverage. Older reports
+with no coverage receipt cannot certify this gate. Unknown formats, severities,
+malformed output, scanner errors and timeouts block. Explicit suppressed or
+advisory findings do not block; unsuppressed critical findings do.
+
+Static scanning does not execute changed workflows. Set `fleet.prePushCiRunner`
+to an absolute executable path for the consumer's owned execution gate. It runs
+in the consumer working tree and receives the original pre-push arguments and
+ref-update stdin. A missing or failed configured runner blocks. Without one,
+the output explicitly reports static scanning only; it is not local CI parity
+or hosted validation. The consumer remains responsible for selecting changed
+scripts and fixtures and validating unsupported hosted semantics.
+
+`bash tests/pre-push-gate-test.sh` uses fixture scanner processes to exercise
+failure boundaries, actual Git hook installation and a real script/fixture
+execution adapter. Those controls are not deployment evidence or a real scan.
+Record actual scanner and consumer execution receipts separately before
+claiming a consumer has adopted the full gate.
