@@ -6,6 +6,9 @@ require 'psych'
 path = ARGV.fetch(0, '.github/workflows/secret-scanner.yml')
 expected = 'hyperpolymath/proven-cicd/.github/workflows/secret-scanner-reusable.yml@03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409'
 
+# Validate a Psych node and its descendants before loading the workflow.
+# Raises RuntimeError for aliases, non-scalar mapping keys, or duplicate keys
+# within a mapping. The caller reports these failures and exits with status 1.
 def validate_nodes(node)
   raise 'YAML aliases are not supported' if node.is_a?(Psych::Nodes::Alias)
   if node.is_a?(Psych::Nodes::Mapping)
@@ -18,6 +21,9 @@ def validate_nodes(node)
   node.children&.each { |child| validate_nodes(child) }
 end
 
+# Require Ruby equality with the reviewed value; returns nil on success.
+# Raises RuntimeError on mismatch, using label to identify the contract field.
+# The caller reports the failure and exits with status 1.
 def require_equal(actual, expected, label)
   raise "#{label} does not match the reviewed contract" unless actual == expected
 end
