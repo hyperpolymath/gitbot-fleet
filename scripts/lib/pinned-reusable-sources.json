@@ -1,0 +1,827 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "repository": "metadatastician/standards",
+      "commit": "ea2f4d8a886585ed442687ae63d4ad7493379ba4",
+      "path": ".github/workflows/governance-reusable.yml",
+      "blob": "8ac530b97d18f7d91972de91c448b7b44c055dfb",
+      "content_sha256": "3b7b753935d0d40f8b854e1b337d7aced884eef60e139292533fdf9f4517577d",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/governance.yml",
+          "job": "governance",
+          "line": 38
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 51
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 77
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 118
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 138
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 164
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 184
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 207
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 227
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 279
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 343
+        },
+        {
+          "kind": "step",
+          "ref": "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124",
+          "line": 349
+        },
+        {
+          "kind": "step",
+          "ref": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+          "line": 376
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 446
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 544
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 590
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 885
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 916
+        },
+        {
+          "kind": "step",
+          "ref": "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
+          "line": 934
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 962
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1204
+        },
+        {
+          "kind": "step",
+          "ref": "editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393",
+          "line": 1251
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1278
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1393
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1474
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1487
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1596
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1636
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1655
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1787
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1815
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1832
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1860
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1880
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1904
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1966
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1990
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 2053
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 2073
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 2109
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 2141
+        },
+        {
+          "kind": "step",
+          "ref": "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
+          "line": 2152
+        },
+        {
+          "kind": "step",
+          "ref": "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+          "line": 2157
+        }
+      ],
+      "source_url": "https://github.com/metadatastician/standards/blob/ea2f4d8a886585ed442687ae63d4ad7493379ba4/.github/workflows/governance-reusable.yml",
+      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\ea2f4d8a886585ed442687ae63d4ad7493379ba4\\.github\\workflows\\governance-reusable.yml"
+    },
+    {
+      "repository": "metadatastician/standards",
+      "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "path": ".github/workflows/hypatia-scan-reusable.yml",
+      "blob": "0f1c5ba55861c84f6665a103deb6ae184bb89996",
+      "content_sha256": "eb72f4afd7bf17d2b31b808131ad697bb808a6ae0c8aa07773b5e1dbb4b7df7c",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/hypatia-scan.yml",
+          "job": "hypatia",
+          "line": 34
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 55
+        },
+        {
+          "kind": "step",
+          "ref": "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124",
+          "line": 61
+        },
+        {
+          "kind": "step",
+          "ref": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+          "line": 87
+        },
+        {
+          "kind": "step",
+          "ref": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+          "line": 234
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 389
+        },
+        {
+          "kind": "step",
+          "ref": "github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+          "line": 439
+        },
+        {
+          "kind": "step",
+          "ref": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+          "line": 445
+        }
+      ],
+      "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/hypatia-scan-reusable.yml",
+      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\hypatia-scan-reusable.yml"
+    },
+    {
+      "repository": "metadatastician/standards",
+      "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "path": ".github/workflows/mirror-reusable.yml",
+      "blob": "ec52acc3a975fbd528d9a38741bd868fb55de6e5",
+      "content_sha256": "bc7443e325e255dd19baf48722583f07f7be1cd0cdce0f1ce229cfbeab3d17a1",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/mirror.yml",
+          "job": "mirror",
+          "line": 18
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 91
+        },
+        {
+          "kind": "step",
+          "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
+          "line": 95
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 149
+        },
+        {
+          "kind": "step",
+          "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
+          "line": 153
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 201
+        },
+        {
+          "kind": "step",
+          "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
+          "line": 205
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 253
+        },
+        {
+          "kind": "step",
+          "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
+          "line": 257
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 305
+        },
+        {
+          "kind": "step",
+          "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
+          "line": 309
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 357
+        },
+        {
+          "kind": "step",
+          "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
+          "line": 361
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 411
+        },
+        {
+          "kind": "step",
+          "ref": "dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f",
+          "line": 427
+        }
+      ],
+      "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/mirror-reusable.yml",
+      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\mirror-reusable.yml"
+    },
+    {
+      "repository": "metadatastician/standards",
+      "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "path": ".github/workflows/scorecard-reusable.yml",
+      "blob": "4e4fd33a6259b34cdc8c5f08d0d4280a216fb492",
+      "content_sha256": "db6ae19dcb09329533d1537e63c329d469dc602badcb4cc514af5da7b9b3a9b6",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/scorecard.yml",
+          "job": "scorecard",
+          "line": 21
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 33
+        },
+        {
+          "kind": "step",
+          "ref": "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+          "line": 38
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 55
+        },
+        {
+          "kind": "step",
+          "ref": "github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+          "line": 102
+        },
+        {
+          "kind": "step",
+          "ref": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+          "line": 107
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 139
+        },
+        {
+          "kind": "step",
+          "ref": "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+          "line": 146
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 199
+        },
+        {
+          "kind": "step",
+          "ref": "github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+          "line": 246
+        },
+        {
+          "kind": "step",
+          "ref": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+          "line": 250
+        }
+      ],
+      "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/scorecard-reusable.yml",
+      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\scorecard-reusable.yml"
+    },
+    {
+      "repository": "hyperpolymath/cicd-suite",
+      "commit": "4404c3c0474e17753fe7689f3485c02890aac113",
+      "path": ".github/workflows/secret-scanner-reusable.yml",
+      "blob": "81b2ba1dfb074f6f8913baa81eb6768b7497cc2a",
+      "content_sha256": "4745e9318346b1a3eae2e0bf65c6732f73d2ead78ef29de9e20659a71f8057d8",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/secret-scanner.yml",
+          "job": "scan",
+          "line": 39
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 28
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 50
+        }
+      ],
+      "source_url": "https://github.com/hyperpolymath/cicd-suite/blob/4404c3c0474e17753fe7689f3485c02890aac113/.github/workflows/secret-scanner-reusable.yml",
+      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\hyperpolymath\\cicd-suite\\4404c3c0474e17753fe7689f3485c02890aac113\\.github\\workflows\\secret-scanner-reusable.yml"
+    },
+    {
+      "repository": "metadatastician/standards",
+      "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "path": ".github/workflows/governance-reusable.yml",
+      "blob": "b041be08dc971f789ef3bc4d7849ac336ab30206",
+      "content_sha256": "2e8bab47c6fcdfa0b94cc866214c337950a20c13a8af4da179f06485bf494f0c",
+      "role": "retained-review",
+      "callers": [],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 41
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 53
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 94
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 100
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 126
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 132
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 155
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 161
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 199
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 263
+        },
+        {
+          "kind": "step",
+          "ref": "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124",
+          "line": 269
+        },
+        {
+          "kind": "step",
+          "ref": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+          "line": 296
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 352
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 435
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 470
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 765
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 782
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 815
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1057
+        },
+        {
+          "kind": "step",
+          "ref": "editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393",
+          "line": 1104
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1117
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1232
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1298
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1311
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1415
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1452
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1457
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1589
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1603
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1620
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1634
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1654
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1664
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1699
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1709
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1770
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1776
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1811
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 1829
+        },
+        {
+          "kind": "step",
+          "ref": "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
+          "line": 1840
+        },
+        {
+          "kind": "step",
+          "ref": "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+          "line": 1845
+        }
+      ],
+      "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/governance-reusable.yml",
+      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\governance-reusable.yml"
+    },
+    {
+      "repository": "metadatastician/standards",
+      "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "path": ".github/workflows/secret-scanner-reusable.yml",
+      "blob": "2eee815b0e4c4c70a777b9c1d8c899b1fb7026c9",
+      "content_sha256": "0c132f45da9832caf7cdb5dcfa164a727208e397f97e51f6a335a17464f2a0fd",
+      "role": "retained-review",
+      "callers": [],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 123
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 199
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 275
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 541
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 702
+        }
+      ],
+      "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/secret-scanner-reusable.yml",
+      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\secret-scanner-reusable.yml"
+    }
+  ],
+  "dependencies": {
+    "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed": {
+      "ref": "v2.0.5",
+      "commit": "sha1-22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+      "owner_id": 42048915,
+      "repo_id": 356423100,
+      "uses": [],
+      "original_lock_record": "    'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed':\n        ref: 'v2.0.5'\n        commit: 'sha1-22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'\n        owner_id: 42048915\n        repo_id: 356423100\n"
+    },
+    "dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f": {
+      "ref": "v1",
+      "commit": "sha1-e2a55d2ffb04f378e9626c28d38b36d230d1e12f",
+      "owner_id": 1940490,
+      "repo_id": 260749683,
+      "uses": [],
+      "original_lock_record": "    'dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f':\n        ref: 'v1'\n        commit: 'sha1-e2a55d2ffb04f378e9626c28d38b36d230d1e12f'\n        owner_id: 1940490\n        repo_id: 260749683\n"
+    },
+    "editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393": {
+      "ref": "v3.0.0",
+      "commit": "sha1-51f63319f592f97930c73d9c46184d20bd206393",
+      "owner_id": 26415196,
+      "repo_id": 297874902,
+      "uses": [],
+      "original_lock_record": "    'editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393':\n        ref: 'v3.0.0'\n        commit: 'sha1-51f63319f592f97930c73d9c46184d20bd206393'\n        owner_id: 26415196\n        repo_id: 297874902\n"
+    },
+    "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124": {
+      "ref": "v1.24.1",
+      "commit": "sha1-54075bcc5e249e4758d363f27d099f55d843f124",
+      "owner_id": 47606891,
+      "repo_id": 331103973,
+      "uses": [],
+      "original_lock_record": "    'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124':\n        ref: 'v1.24.1'\n        commit: 'sha1-54075bcc5e249e4758d363f27d099f55d843f124'\n        owner_id: 47606891\n        repo_id: 331103973\n"
+    },
+    "github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63": {
+      "ref": "v4.38.0",
+      "commit": "sha1-b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+      "owner_id": 9919,
+      "repo_id": 259445878,
+      "uses": [],
+      "original_lock_record": "    'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63':\n        ref: 'v4.38.0'\n        commit: 'sha1-b96794f015dfd88f77b49b1c93e0fa7110f94c63'\n        owner_id: 9919\n        repo_id: 259445878\n"
+    },
+    "hyperpolymath/cicd-suite@4404c3c0474e17753fe7689f3485c02890aac113": {
+      "ref": "4404c3c0474e17753fe7689f3485c02890aac113",
+      "commit": "sha1-4404c3c0474e17753fe7689f3485c02890aac113",
+      "owner_id": 6759885,
+      "repo_id": 1326697643,
+      "uses": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      ],
+      "original_lock_record": "    'hyperpolymath/cicd-suite@4404c3c0474e17753fe7689f3485c02890aac113':\n        ref: '4404c3c0474e17753fe7689f3485c02890aac113'\n        commit: 'sha1-4404c3c0474e17753fe7689f3485c02890aac113'\n        owner_id: 6759885\n        repo_id: 1326697643\n        uses:\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n"
+    },
+    "metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66": {
+      "ref": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "commit": "sha1-75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "owner_id": 297579217,
+      "repo_id": 1116521501,
+      "uses": [
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+        "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+        "dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f",
+        "editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393",
+        "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124",
+        "github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+        "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
+        "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555"
+      ],
+      "original_lock_record": "    'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66':\n        ref: '75bd5994470661a099df562d6d5ad2fe744dbd66'\n        commit: 'sha1-75bd5994470661a099df562d6d5ad2fe744dbd66'\n        owner_id: 297579217\n        repo_id: 1116521501\n        uses:\n            - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n            - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'\n            - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'\n            - 'dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f'\n            - 'editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393'\n            - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'\n            - 'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63'\n            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\n            - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'\n            - 'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555'\n"
+    },
+    "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc": {
+      "ref": "v2.4.4",
+      "commit": "sha1-2d1146689b8cda280b9bc96326124645441f03bc",
+      "owner_id": 67707773,
+      "repo_id": 421101922,
+      "uses": [],
+      "original_lock_record": "    'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc':\n        ref: 'v2.4.4'\n        commit: 'sha1-2d1146689b8cda280b9bc96326124645441f03bc'\n        owner_id: 67707773\n        repo_id: 421101922\n"
+    },
+    "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": {
+      "ref": "v2.2.0",
+      "commit": "sha1-0c5077e51419868618aeaa5fe8019c62421857d6",
+      "owner_id": 108928776,
+      "repo_id": 512644635,
+      "uses": [],
+      "original_lock_record": "    'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6':\n        ref: 'v2.2.0'\n        commit: 'sha1-0c5077e51419868618aeaa5fe8019c62421857d6'\n        owner_id: 108928776\n        repo_id: 512644635\n"
+    },
+    "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555": {
+      "ref": "v0.10.0",
+      "commit": "sha1-e83874834305fe9a4a2997156cb26c5de65a8555",
+      "owner_id": 135788,
+      "repo_id": 208510314,
+      "uses": [],
+      "original_lock_record": "    'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555':\n        ref: 'v0.10.0'\n        commit: 'sha1-e83874834305fe9a4a2997156cb26c5de65a8555'\n        owner_id: 135788\n        repo_id: 208510314\n"
+    }
+  }
+}

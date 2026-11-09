@@ -3,7 +3,7 @@
 #
 # fix-resource-leak.sh — Annotate potential resource leaks
 #
-# Fixes PA020 ResourceLeak findings.
+# Fixes PA008 (ResourceLeak) findings.
 # Adds annotations where file handles, connections, or streams may not be closed.
 #
 # Usage: fix-resource-leak.sh <repo-path> <finding-json>

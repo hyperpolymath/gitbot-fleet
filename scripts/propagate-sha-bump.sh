@@ -80,9 +80,14 @@ if [[ "$old_sha" == "$new_sha" ]]; then
     exit 1
 fi
 
+# The old standards alias resolves in API reads but cannot execute as reusable.
+# Refuse a misleading SHA-only bump; the owner migration is a separate event.
 case "$source_repo" in
-    hyperpolymath/*) ;;
-    *) echo "ERROR: source_repo not in hyperpolymath/* : '$source_repo'" >&2; exit 1 ;;
+    hyperpolymath/standards)
+        echo "ERROR: hyperpolymath/standards is a transferred alias; migrate to metadatastician/standards first" >&2
+        exit 1 ;;
+    hyperpolymath/*|metadatastician/standards|catachresis-colloquium/*|stuff-of-awe/*) ;;
+    *) echo "ERROR: source_repo outside approved estate: '$source_repo'" >&2; exit 1 ;;
 esac
 
 case "$source_workflow" in
@@ -216,8 +221,11 @@ else
         done
     }
 
+    # Include every named estate, rather than silently ignoring two organisations.
     search_scope "user:hyperpolymath"
     search_scope "org:metadatastician"
+    search_scope "org:catachresis-colloquium"
+    search_scope "org:stuff-of-awe"
     sort -u -o "$CONSUMERS_TSV" "$CONSUMERS_TSV"
 fi
 

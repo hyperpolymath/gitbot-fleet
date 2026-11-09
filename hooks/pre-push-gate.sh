@@ -1,161 +1,112 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
-# pre-push-gate.sh — Local pre-push hook for static analysis.
-#
-# Runs panic-attack and hypatia locally before allowing a push.
-# Exits non-zero if critical findings are detected.
-#
-# Installation (symlink into any repo):
-#   ln -sf /path/to/gitbot-fleet/hooks/pre-push-gate.sh .git/hooks/pre-push
-#
-# Or copy it:
-#   cp /path/to/gitbot-fleet/hooks/pre-push-gate.sh .git/hooks/pre-push
-#   chmod +x .git/hooks/pre-push
-
+# Fleet static pre-push gate. Install with scripts/install-pre-push-gate.sh.
+# A missing, failed or malformed scan is not a successful zero-finding scan.
 set -euo pipefail
 
-# Colours (disabled when stdout is not a terminal)
-if [ -t 1 ]; then
-  RED='\033[0;31m'
-  YELLOW='\033[0;33m'
-  GREEN='\033[0;32m'
-  BOLD='\033[1m'
-  RESET='\033[0m'
+# Report the supplied reason to stderr and exit the hook with status 1.
+fail() { printf 'BLOCKED: %s\n' "$*" >&2; exit 1; }
+REPO_ROOT=$(git rev-parse --show-toplevel) || fail 'not a Git working tree'
+cd "$REPO_ROOT"
+for dependency in jq timeout; do
+  command -v "$dependency" >/dev/null || fail "$dependency is required"
+done
+
+scanners=$(git config --get fleet.prePushScanners || true)
+scanners=${scanners:-auto}
+limit=$(git config --get fleet.prePushTimeoutSeconds || true)
+limit=${limit:-180}
+[[ "$limit" =~ ^[1-9][0-9]{0,3}$ ]] && (( limit <= 1800 )) ||
+  fail 'fleet.prePushTimeoutSeconds must be 1..1800'
+tmp=$(mktemp -d)
+trap 'rm -rf -- "$tmp"' EXIT
+scanners_run=0 critical=0 high=0 total=0
+
+# Run the named scanner (panic-attack or hypatia) with the given executable
+# and configured timeout in seconds. Add non-suppressed, non-advisory findings
+# to the global counts and increment scanners_run after validating the report.
+# Exit the hook on timeout, scanner failure, or invalid or incomplete output.
+# Hypatia exit 1 is accepted only with a non-suppressed, non-advisory critical
+# finding; the caller blocks on critical findings after scanning.
+run_scanner() {
+  local scanner=$1 binary=$2 rc=0 counts c h n
+  printf 'Running %s (timeout %ss)\n' "$scanner" "$limit"
+  if [[ "$scanner" == panic-attack ]]; then
+    timeout --kill-after=5s "${limit}s" "$binary" assail "$REPO_ROOT" \
+      --headless --output-format json --fail-on-incomplete </dev/null >"$tmp/report" 2>"$tmp/errors" || rc=$?
+    (( rc == 0 )) || fail "$scanner exited $rc; no successful scan recorded"
+  else
+    HYPATIA_FORMAT=json HYPATIA_SEVERITY=critical HYPATIA_EXIT_ZERO=false \
+      timeout --kill-after=5s "${limit}s" "$binary" scan "$REPO_ROOT" \
+      </dev/null >"$tmp/report" 2>"$tmp/errors" || rc=$?
+    (( rc == 0 || rc == 1 )) || fail "$scanner exited $rc; no successful scan recorded"
+  fi
+
+  # Slurp rejects multiple JSON documents. Validate the scanner's actual report
+  # envelope before counting; an error object or an unknown severity is fatal.
+  if ! counts=$(jq -er -s --arg scanner "$scanner" '
+    if length != 1 then error("expected one report") else .[0] end
+    | if $scanner == "panic-attack" then
+        if type == "object" and .schema_version == "2.6" and
+           .coverage.status == "complete" and
+           (.coverage.analyzed_files | type) == "number" and
+           .coverage.analyzed_files > 0 and (.weak_points | type) == "array"
+        then .weak_points else error("invalid or incomplete assail report") end
+      elif type == "array" then .
+      elif type == "object" and .submission_metadata.scanner == "hypatia" and
+           (.findings | type) == "array" and
+           .submission_metadata.finding_count == (.findings | length)
+      then .findings
+      else error("invalid Hypatia report") end
+    | if all(.[]; type == "object" and (.severity | type) == "string" and
+          (.severity | ascii_downcase | IN("critical", "high", "medium", "warn", "low", "info")) and
+          ((has("suppressed") | not) or (.suppressed | type) == "boolean") and
+          ((has("advisory") | not) or (.advisory | type) == "boolean"))
+      then . else error("invalid finding") end
+    | map(select(.suppressed != true and .advisory != true) | .severity |= ascii_downcase)
+    | [(map(select(.severity == "critical")) | length),
+       (map(select(.severity == "high")) | length), length] | @tsv
+  ' "$tmp/report" 2>/dev/null); then
+    fail "$scanner returned an invalid or incomplete report; no successful scan recorded"
+  fi
+  IFS=$'\t' read -r c h n <<< "$counts"
+  if [[ "$scanner" == hypatia && "$rc" == 1 && "$c" == 0 ]]; then
+    fail 'Hypatia failed without a blocking critical finding'
+  fi
+  critical=$((critical + c)); high=$((high + h)); total=$((total + n))
+  scanners_run=$((scanners_run + 1))
+  printf '%s: validated report, %s unsuppressed findings, %s critical\n' "$scanner" "$n" "$c"
+}
+
+seen=' '
+if [[ "$scanners" == auto ]]; then selected='panic-attack hypatia'; else selected=$scanners; fi
+read -r -a selected_scanners <<< "$selected"
+for scanner in "${selected_scanners[@]}"; do
+  case "$seen" in *" $scanner "*) continue ;; esac
+  seen="$seen$scanner "
+  case "$scanner" in
+    panic-attack) binary=$(command -v panic-attack || true) ;;
+    hypatia) binary=$(command -v hypatia-cli.sh || true) ;;
+    *) fail "unknown configured scanner: $scanner" ;;
+  esac
+  if [[ -z "$binary" ]]; then
+    [[ "$scanners" == auto ]] || fail "required scanner $scanner is unavailable"
+    printf 'Unavailable: %s\n' "$scanner"
+    continue
+  fi
+  run_scanner "$scanner" "$binary"
+done
+(( scanners_run > 0 )) || fail 'no scanner completed; install Hypatia or panic-attack'
+printf 'Completed scanners: %s; findings: %s; critical: %s; high: %s\n' \
+  "$scanners_run" "$total" "$critical" "$high"
+(( critical == 0 )) || fail "$critical critical finding(s); fix before pushing"
+
+# A consumer may configure an executable adapter for its owned CI receipt gate.
+# Pass the Git hook arguments and untouched ref-update stdin through to it.
+ci_runner=$(git config --get fleet.prePushCiRunner || true)
+if [[ -n "$ci_runner" ]]; then
+  [[ "$ci_runner" = /* && -x "$ci_runner" ]] || fail 'configured CI runner must be an executable absolute path'
+  "$ci_runner" "$@" || fail 'consumer CI execution gate did not pass'
 else
-  RED='' YELLOW='' GREEN='' BOLD='' RESET=''
+  printf 'Static scan passed; no consumer CI execution gate is configured.\n'
 fi
-
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-CRITICAL_COUNT=0
-HIGH_COUNT=0
-TOTAL_COUNT=0
-SCANNERS_RUN=0
-
-# --------------------------------------------------------------------------
-# Helper: parse JSON finding counts (requires jq)
-# --------------------------------------------------------------------------
-count_findings() {
-  local json_file="$1"
-  if [ ! -s "$json_file" ] || ! jq empty "$json_file" 2>/dev/null; then
-    return
-  fi
-  local c h m l
-  c=$(jq '[.[] | select(.severity == "critical")] | length' "$json_file" 2>/dev/null || echo 0)
-  h=$(jq '[.[] | select(.severity == "high")]     | length' "$json_file" 2>/dev/null || echo 0)
-  m=$(jq '[.[] | select(.severity == "medium")]   | length' "$json_file" 2>/dev/null || echo 0)
-  l=$(jq '[.[] | select(.severity == "low")]      | length' "$json_file" 2>/dev/null || echo 0)
-  CRITICAL_COUNT=$(( CRITICAL_COUNT + c ))
-  HIGH_COUNT=$(( HIGH_COUNT + h ))
-  TOTAL_COUNT=$(( TOTAL_COUNT + c + h + m + l ))
-}
-
-# --------------------------------------------------------------------------
-# Scanner 1: panic-attack assail
-# --------------------------------------------------------------------------
-run_panic_attack() {
-  if ! command -v panic-attack >/dev/null 2>&1; then
-    echo -e "${YELLOW}[skip]${RESET} panic-attack not installed — skipping assail"
-    return
-  fi
-
-  echo -e "${BOLD}[1/2]${RESET} Running panic-attack assail..."
-  local tmp
-  tmp=$(mktemp /tmp/pa-findings-XXXXXX.json)
-
-  set +e
-  panic-attack assail --format json "$REPO_ROOT" > "$tmp" 2>/dev/null
-  local rc=$?
-  set -e
-
-  if [ "$rc" -ne 0 ] && [ ! -s "$tmp" ]; then
-    echo -e "${YELLOW}[warn]${RESET} panic-attack exited $rc with no output"
-    rm -f "$tmp"
-    return
-  fi
-
-  count_findings "$tmp"
-  SCANNERS_RUN=$(( SCANNERS_RUN + 1 ))
-
-  local pa_total
-  pa_total=$(jq '. | length' "$tmp" 2>/dev/null || echo 0)
-  echo -e "       panic-attack: ${pa_total} finding(s)"
-  rm -f "$tmp"
-}
-
-# --------------------------------------------------------------------------
-# Scanner 2: hypatia-cli.sh scan
-# --------------------------------------------------------------------------
-run_hypatia() {
-  # Look for hypatia-cli.sh in common locations
-  local hypatia_bin=""
-  for candidate in \
-    "$(command -v hypatia-cli.sh 2>/dev/null || true)" \
-    "$HOME/hypatia/hypatia-cli.sh" \
-    "$HOME/.local/bin/hypatia-cli.sh"; do
-    if [ -x "$candidate" ]; then
-      hypatia_bin="$candidate"
-      break
-    fi
-  done
-
-  if [ -z "$hypatia_bin" ]; then
-    echo -e "${YELLOW}[skip]${RESET} hypatia-cli.sh not found — skipping scan"
-    return
-  fi
-
-  echo -e "${BOLD}[2/2]${RESET} Running hypatia scan..."
-  local tmp
-  tmp=$(mktemp /tmp/hyp-findings-XXXXXX.json)
-
-  set +e
-  HYPATIA_FORMAT=json "$hypatia_bin" scan "$REPO_ROOT" > "$tmp" 2>/dev/null
-  local rc=$?
-  set -e
-
-  if [ "$rc" -ne 0 ] && [ ! -s "$tmp" ]; then
-    echo -e "${YELLOW}[warn]${RESET} hypatia exited $rc with no output"
-    rm -f "$tmp"
-    return
-  fi
-
-  count_findings "$tmp"
-  SCANNERS_RUN=$(( SCANNERS_RUN + 1 ))
-
-  local hyp_total
-  hyp_total=$(jq '. | length' "$tmp" 2>/dev/null || echo 0)
-  echo -e "       hypatia: ${hyp_total} finding(s)"
-  rm -f "$tmp"
-}
-
-# --------------------------------------------------------------------------
-# Main
-# --------------------------------------------------------------------------
-echo -e "${BOLD}Static Analysis Gate (pre-push)${RESET}"
-echo "Repository: $REPO_ROOT"
-echo ""
-
-run_panic_attack
-run_hypatia
-
-echo ""
-echo -e "${BOLD}--- Summary ---${RESET}"
-echo "Scanners run : $SCANNERS_RUN"
-echo "Total findings: $TOTAL_COUNT"
-echo "  Critical    : $CRITICAL_COUNT"
-echo "  High        : $HIGH_COUNT"
-
-if [ "$SCANNERS_RUN" -eq 0 ]; then
-  echo ""
-  echo -e "${YELLOW}No scanners available — push allowed (install panic-attack or hypatia for local gating).${RESET}"
-  exit 0
-fi
-
-if [ "$CRITICAL_COUNT" -gt 0 ]; then
-  echo ""
-  echo -e "${RED}BLOCKED: $CRITICAL_COUNT critical finding(s) detected. Fix before pushing.${RESET}"
-  exit 1
-fi
-
-echo ""
-echo -e "${GREEN}No critical findings — push allowed.${RESET}"
-exit 0

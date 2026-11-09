@@ -4,7 +4,8 @@
 //! Core responsibility: map each `WeakPoint` from the scanner output into a
 //! `Finding` struct with appropriate:
 //! - Fleet category (e.g., "static-analysis/unsafe-code")
-//! - Rule ID (canonical PA001–PA025 pattern for dedup with Hypatia findings)
+//! - Rule ID (panic-attack's canonical table, vendored in `canon/`; Hypatia
+//!   deduplicates by it)
 //! - Triangle tier (Eliminate / Substitute / Control)
 //! - Confidence score (honest assessment of detection accuracy)
 //! - Fixability (whether automated remediation is possible)
@@ -43,7 +44,7 @@ pub enum Fixability {
 pub struct CategoryMapping {
     /// Fleet category string (e.g., "static-analysis/unsafe-code").
     pub fleet_category: &'static str,
-    /// Canonical rule ID for deduplication (e.g., "PA001").
+    /// Canonical panic-attack rule ID (e.g., "PA004" for UnsafeCode).
     pub rule_id: &'static str,
     /// Human-readable rule name.
     pub rule_name: &'static str,
@@ -63,7 +64,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
     match category {
         "UnsafeCode" => Some(CategoryMapping {
             fleet_category: "static-analysis/unsafe-code",
-            rule_id: "PA001",
+            rule_id: "PA004",
             rule_name: "Unsafe code block",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.70,
@@ -71,7 +72,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "PanicPath" => Some(CategoryMapping {
             fleet_category: "static-analysis/panic-path",
-            rule_id: "PA002",
+            rule_id: "PA005",
             rule_name: "Potential panic path",
             triangle_tier: TriangleTier::Substitute,
             default_confidence: 0.70,
@@ -79,7 +80,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "CommandInjection" => Some(CategoryMapping {
             fleet_category: "static-analysis/command-injection",
-            rule_id: "PA003",
+            rule_id: "PA009",
             rule_name: "Command injection risk",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.80,
@@ -87,7 +88,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "HardcodedSecret" => Some(CategoryMapping {
             fleet_category: "static-analysis/hardcoded-secret",
-            rule_id: "PA004",
+            rule_id: "PA017",
             rule_name: "Hardcoded secret or credential",
             triangle_tier: TriangleTier::Eliminate,
             default_confidence: 0.88,
@@ -95,7 +96,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "UnsafeDeserialization" => Some(CategoryMapping {
             fleet_category: "static-analysis/unsafe-deser",
-            rule_id: "PA005",
+            rule_id: "PA010",
             rule_name: "Unsafe deserialization",
             triangle_tier: TriangleTier::Eliminate,
             default_confidence: 0.87,
@@ -103,7 +104,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "UncheckedError" => Some(CategoryMapping {
             fleet_category: "static-analysis/unchecked-error",
-            rule_id: "PA006",
+            rule_id: "PA018",
             rule_name: "Unchecked error / unwrap",
             triangle_tier: TriangleTier::Eliminate,
             default_confidence: 0.75,
@@ -111,7 +112,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "UnsafeFFI" => Some(CategoryMapping {
             fleet_category: "static-analysis/unsafe-ffi",
-            rule_id: "PA007",
+            rule_id: "PA012",
             rule_name: "Unsafe FFI boundary",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.75,
@@ -119,7 +120,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "RaceCondition" => Some(CategoryMapping {
             fleet_category: "static-analysis/race-condition",
-            rule_id: "PA008",
+            rule_id: "PA006",
             rule_name: "Potential race condition",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.60,
@@ -127,7 +128,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "ResourceLeak" => Some(CategoryMapping {
             fleet_category: "static-analysis/resource-leak",
-            rule_id: "PA009",
+            rule_id: "PA008",
             rule_name: "Resource leak",
             triangle_tier: TriangleTier::Substitute,
             default_confidence: 0.78,
@@ -135,7 +136,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "PathTraversal" => Some(CategoryMapping {
             fleet_category: "static-analysis/path-traversal",
-            rule_id: "PA010",
+            rule_id: "PA016",
             rule_name: "Path traversal risk",
             triangle_tier: TriangleTier::Substitute,
             default_confidence: 0.78,
@@ -143,7 +144,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "AtomExhaustion" => Some(CategoryMapping {
             fleet_category: "static-analysis/atom-exhaustion",
-            rule_id: "PA011",
+            rule_id: "PA013",
             rule_name: "Atom table exhaustion",
             triangle_tier: TriangleTier::Eliminate,
             default_confidence: 0.93,
@@ -151,7 +152,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "ExcessivePermissions" => Some(CategoryMapping {
             fleet_category: "static-analysis/excessive-perms",
-            rule_id: "PA012",
+            rule_id: "PA015",
             rule_name: "Excessive permissions",
             triangle_tier: TriangleTier::Eliminate,
             default_confidence: 0.88,
@@ -159,7 +160,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "UnsafeTypeCoercion" => Some(CategoryMapping {
             fleet_category: "static-analysis/unsafe-coercion",
-            rule_id: "PA013",
+            rule_id: "PA020",
             rule_name: "Unsafe type coercion",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.70,
@@ -169,7 +170,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         // but still valid findings:
         "UncheckedAllocation" => Some(CategoryMapping {
             fleet_category: "static-analysis/unchecked-alloc",
-            rule_id: "PA014",
+            rule_id: "PA001",
             rule_name: "Unchecked memory allocation",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.72,
@@ -177,7 +178,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "UnboundedLoop" => Some(CategoryMapping {
             fleet_category: "static-analysis/unbounded-loop",
-            rule_id: "PA015",
+            rule_id: "PA002",
             rule_name: "Unbounded loop",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.68,
@@ -185,7 +186,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "BlockingIO" => Some(CategoryMapping {
             fleet_category: "static-analysis/blocking-io",
-            rule_id: "PA016",
+            rule_id: "PA003",
             rule_name: "Blocking I/O in async context",
             triangle_tier: TriangleTier::Substitute,
             default_confidence: 0.72,
@@ -193,7 +194,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "DeadlockPotential" => Some(CategoryMapping {
             fleet_category: "static-analysis/deadlock",
-            rule_id: "PA017",
+            rule_id: "PA007",
             rule_name: "Deadlock potential",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.55,
@@ -201,7 +202,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "DynamicCodeExecution" => Some(CategoryMapping {
             fleet_category: "static-analysis/dynamic-exec",
-            rule_id: "PA018",
+            rule_id: "PA011",
             rule_name: "Dynamic code execution",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.82,
@@ -209,7 +210,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "InsecureProtocol" => Some(CategoryMapping {
             fleet_category: "static-analysis/insecure-proto",
-            rule_id: "PA019",
+            rule_id: "PA014",
             rule_name: "Insecure protocol usage",
             triangle_tier: TriangleTier::Substitute,
             default_confidence: 0.85,
@@ -217,7 +218,7 @@ pub fn category_mapping(category: &str) -> Option<CategoryMapping> {
         }),
         "InfiniteRecursion" => Some(CategoryMapping {
             fleet_category: "static-analysis/infinite-recursion",
-            rule_id: "PA020",
+            rule_id: "PA019",
             rule_name: "Infinite recursion risk",
             triangle_tier: TriangleTier::Control,
             default_confidence: 0.65,
@@ -388,10 +389,7 @@ pub fn translate_weak_point(wp: &WeakPoint, config: &PanicbotConfig) -> Finding 
 ///
 /// Applies the configured minimum severity filter — findings below the
 /// threshold are silently dropped.
-pub fn translate_all(
-    weak_points: &[WeakPoint],
-    config: &PanicbotConfig,
-) -> Vec<Finding> {
+pub fn translate_all(weak_points: &[WeakPoint], config: &PanicbotConfig) -> Vec<Finding> {
     let min_threshold = config.min_severity.threshold();
 
     weak_points
@@ -413,10 +411,7 @@ pub fn translate_all(
             if wp.suppressed {
                 return None;
             }
-            if matches!(
-                wp.test_context.as_deref(),
-                Some("test_only") | Some("doc")
-            ) {
+            if matches!(wp.test_context.as_deref(), Some("test_only") | Some("doc")) {
                 return None;
             }
 
@@ -463,7 +458,7 @@ mod tests {
     fn test_category_mapping_known() {
         let m = category_mapping("UnsafeCode").unwrap();
         assert_eq!(m.fleet_category, "static-analysis/unsafe-code");
-        assert_eq!(m.rule_id, "PA001");
+        assert_eq!(m.rule_id, "PA004");
         assert_eq!(m.triangle_tier, TriangleTier::Control);
         assert!((m.default_confidence - 0.70).abs() < f64::EPSILON);
         assert_eq!(m.fixability, Fixability::No);
@@ -520,7 +515,7 @@ mod tests {
         let finding = translate_weak_point(&wp, &config);
 
         assert_eq!(finding.source, BotId::Panicbot);
-        assert_eq!(finding.rule_id, "PA004");
+        assert_eq!(finding.rule_id, "PA017");
         assert_eq!(finding.category, "static-analysis/hardcoded-secret");
         assert_eq!(finding.severity, Severity::Error);
         assert!(finding.fixable);
@@ -581,8 +576,8 @@ mod tests {
                 severity: "Low".to_string(),
                 description: "low severity".to_string(),
                 recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
             WeakPoint {
                 category: "CommandInjection".to_string(),
@@ -590,8 +585,8 @@ mod tests {
                 severity: "Critical".to_string(),
                 description: "critical severity".to_string(),
                 recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                suppressed: false,
+                test_context: None,
             },
         ];
         let config = PanicbotConfig {
@@ -602,7 +597,7 @@ mod tests {
 
         // Only the Critical finding should pass the High filter
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].rule_id, "PA003");
+        assert_eq!(findings[0].rule_id, "PA009");
     }
 
     #[test]
@@ -616,8 +611,8 @@ mod tests {
                     severity: "High".to_string(),
                     description: "fixable".to_string(),
                     recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                    suppressed: false,
+                    test_context: None,
                 },
                 &config,
             ),
@@ -628,8 +623,8 @@ mod tests {
                     severity: "High".to_string(),
                     description: "not fixable".to_string(),
                     recommended_attack: vec![],
-            suppressed: false,
-            test_context: None,
+                    suppressed: false,
+                    test_context: None,
                 },
                 &config,
             ),
@@ -638,25 +633,44 @@ mod tests {
         let (fixable, unfixable) = classify_fixability(&findings);
         assert_eq!(fixable.len(), 1);
         assert_eq!(unfixable.len(), 1);
-        assert_eq!(fixable[0].rule_id, "PA004"); // HardcodedSecret is fixable
-        assert_eq!(unfixable[0].rule_id, "PA001"); // UnsafeCode is not
+        assert_eq!(fixable[0].rule_id, "PA017"); // HardcodedSecret is fixable
+        assert_eq!(unfixable[0].rule_id, "PA004"); // UnsafeCode is not
     }
 
     #[test]
     fn test_all_categories_have_unique_rule_ids() {
         let categories = [
-            "UnsafeCode", "PanicPath", "CommandInjection", "HardcodedSecret",
-            "UnsafeDeserialization", "UncheckedError", "UnsafeFFI", "RaceCondition",
-            "ResourceLeak", "PathTraversal", "AtomExhaustion", "ExcessivePermissions",
-            "UnsafeTypeCoercion", "UncheckedAllocation", "UnboundedLoop", "BlockingIO",
-            "DeadlockPotential", "DynamicCodeExecution", "InsecureProtocol",
-            "InfiniteRecursion", "ProofDrift", "CryptoMisuse", "SupplyChain",
-            "InputBoundary", "MutationGap",
+            "UnsafeCode",
+            "PanicPath",
+            "CommandInjection",
+            "HardcodedSecret",
+            "UnsafeDeserialization",
+            "UncheckedError",
+            "UnsafeFFI",
+            "RaceCondition",
+            "ResourceLeak",
+            "PathTraversal",
+            "AtomExhaustion",
+            "ExcessivePermissions",
+            "UnsafeTypeCoercion",
+            "UncheckedAllocation",
+            "UnboundedLoop",
+            "BlockingIO",
+            "DeadlockPotential",
+            "DynamicCodeExecution",
+            "InsecureProtocol",
+            "InfiniteRecursion",
+            "ProofDrift",
+            "CryptoMisuse",
+            "SupplyChain",
+            "InputBoundary",
+            "MutationGap",
         ];
 
         let mut rule_ids = std::collections::HashSet::new();
         for cat in &categories {
-            let mapping = category_mapping(cat).unwrap_or_else(|| panic!("Missing mapping for {}", cat));
+            let mapping =
+                category_mapping(cat).unwrap_or_else(|| panic!("Missing mapping for {}", cat));
             assert!(
                 rule_ids.insert(mapping.rule_id),
                 "Duplicate rule_id {} for category {}",
