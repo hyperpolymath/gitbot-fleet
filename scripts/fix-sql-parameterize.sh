@@ -3,7 +3,8 @@
 #
 # fix-sql-parameterize.sh — Replace string-interpolated SQL with parameterized queries
 #
-# Fixes PA012 SQLInjection findings.
+# Fixes SQLInjection findings. No panic-attack rule ID covers SQL injection
+# (it is a taint sink in panic-attack's kanren analysis, not a category).
 # Adds warning annotations and performs safe mechanical replacements where possible.
 #
 # Usage: fix-sql-parameterize.sh <repo-path> <finding-json>

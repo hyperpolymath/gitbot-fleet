@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Workflow lock audit
+
+This Rust CLI replaces the retired Python lock-map and regeneration auditors.
+Run it with Rust/Cargo 1.85 or later; the committed Cargo.lock is required.
+
+[source,bash]
+----
+cargo test --locked --manifest-path tools/workflow-lock-audit/Cargo.toml
+bash scripts/audit-workflow-lock-map.sh .
+bash scripts/audit-lock-regeneration.sh /path/to/reviewed.lock .github/workflows/actions.lock
+----
+
+The map inventory checks workflow coverage, direct action edges, transitive
+record presence and reusable caller source-pin shape. External reusable
+workflow dependencies are outside gh-actions-lock v0.4.1's map scope; their
+source-review notes are not evidence of provenance. Map exit statuses are
+0 (no map findings), 1 (findings), and 2 (invalid input, usage or explicit
+unmanaged scope). The existing explicit unmanaged option still returns 2
+when no map finding exists; it does not confer a closure pass.
+
+Regeneration comparison preserves the reviewed reachable records, refs,
+commits and edges beneath proposed roots shared with the reviewed graph.
+It exits 0 on preservation and 1 on invalid input or a changed reviewed
+closure. Removed roots no longer force unused closure, and new roots/edges
+still require independent review. Use the pinned-source closure verifier
+and receipts separately; neither of these commands discovers remote closure.
+
+The parser is saphyr/saphyr-parser 0.3.3, with duplicate detection enabled,
+a 100,000-node alias-expansion budget and a second duplicate check after
+scalar resolution. Input must contain exactly one document. Complex mapping
+keys, explicit tags and YAML merge keys are rejected. Legacy YAML 1.1
+unquoted yes/no/on/off remain booleans, so a bare boolean cannot become a
+valid ref after migration. Ambiguous plain timestamps, sexagesimal values
+and overflowing or underscore-separated numbers fail closed; quote intended strings explicitly.
+These bounded, explicit restrictions avoid silently changing input meaning.
+
+The 42 CLI tests retain all 22 prior map/scanner controls and 16 prior
+regeneration controls, plus strict parsing, symlink containment and legacy
+scalar tests. Test fixtures use serde_json solely to write inputs; production
+uses the saphyr tree directly. ordered-float is locked to 5.3.0 to retain
+Rust 1.85 compatibility. Regenerate dependencies deliberately and rerun tests
+with that minimum toolchain.
+
+E2E audits this crate's Cargo.lock with cargo-audit 0.22.2 against the live
+RustSec advisory database and denies all warnings, including unmaintained,
+unsound and yanked dependencies. Its official Linux x86_64 release archive
+is SHA-256 checked before extraction. No advisory exclusion is configured.

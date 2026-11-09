@@ -98,7 +98,7 @@ fn parse_directive(content: &str) -> Result<PanicbotConfig> {
         .and_then(|c| c.min_severity.clone())
         .or(file.min_severity_top);
     if let Some(s) = severity_str {
-        if let Some(sev) = MinSeverity::from_str(&s) {
+        if let Ok(sev) = s.parse::<MinSeverity>() {
             config.min_severity = sev;
         } else {
             tracing::warn!("Unknown min-severity '{}', using default", s);

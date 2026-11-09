@@ -4,7 +4,8 @@
 #
 # fix-heredoc-install.sh — Replace eval/heredoc patterns with safe alternatives
 #
-# Fixes PA009-shell-heredoc-eval findings.
+# Fixes Hypatia pattern `PA009-shell-heredoc-eval`; panic-attack rule
+# PA009 (CommandInjection).
 # Replaces `curl | bash`, `eval $(...)`, and heredoc-eval patterns.
 #
 # Usage: fix-heredoc-install.sh <repo-path> <finding-json>

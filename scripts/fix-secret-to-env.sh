@@ -4,7 +4,7 @@
 #
 # fix-secret-to-env.sh — Replace hardcoded secrets with environment variable lookups
 #
-# Fixes PA013 HardcodedSecret findings.
+# Fixes PA017 (HardcodedSecret) findings.
 # Detects hardcoded passwords, API keys, and tokens, replaces with env var refs.
 #
 # Usage: fix-secret-to-env.sh <repo-path> <finding-json>

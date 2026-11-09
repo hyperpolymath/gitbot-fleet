@@ -190,14 +190,13 @@ run `scripts/fleet-report-back.sh`, upload the artifact under the same name.
 The standards canon's own `fork-governance.yml` is the worked example.
 . *A Hypatia lane that reads the artifact.* The `report-backs-artifact` input
   (default `fleet-report-backs`; `""` opts out) and the download step before
-  "Render the verdict grid" are a change to metadatastician/standards
-  `hypatia-scan-reusable.yml` that is prepared but NOT yet on its `main`: no
-  pinned standards revision at the time of writing carries them, so a caller
-  on today's standards pin produces the artifact and the lane does not read it
-  yet. Until that change lands and callers bump their pin, a repository gets
-  rows only through a fork-local copy of the reusable that carries the step
-  (hyperpolymath/metamanifold-webui does, as its fork delta 4). This document
-  will name the first standards commit that carries the input once it exists.
+  "Render the verdict grid" are in metadatastician/standards
+  `hypatia-scan-reusable.yml` from commit
+  `d253de273c5a6f688598fdd241b4c071159029b9` (standards#1363, 2026-10-27)
+  onward. A caller pinned to that commit or later gets the rows; a caller on an
+  older pin produces the artifact and its lane does not read it, so bump the
+  standards pin first. hyperpolymath/metamanifold-webui reads it through a
+  fork-local copy of the reusable (its fork delta 4) and needs no bump.
 
 == 6. Rolling it out across the estate
 
@@ -245,6 +244,10 @@ What the fixer writes, and what it refuses to:
 | Never bumped. The fixer reads the pinned `hypatia-scan-reusable.yml` from `STANDARDS_DIR` and exits 3 unless it takes `report-backs-artifact`: an artifact no lane downloads is unwired.
 |===
 
-Until the standards change in §5 step 3 is on `main`, every run against a
-remote standards pin ends in that exit 3. That is the intended order: the
-campaign starts when the standards pin can move, not before.
+The standards change in §5 step 3 is on `main` from `d253de27`, so the
+campaign can run. Measured 2026-11-04 on a scratch repository: with the
+standards pin at `d253de27` and `FLEET_REF` at this repository's
+`e44af814` the fixer exits 0 ("wired end to end"); on the earlier pin
+`9ae23875` it exits 3 and names the bump. A repository whose standards pin
+predates `d253de27` therefore takes the pin bump and the fixer in the same
+branch.
