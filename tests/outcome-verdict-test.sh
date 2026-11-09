@@ -19,6 +19,8 @@
 #   7. The E1 replay (audit-fix-outcomes.sh) counts as the fixers do, and
 #      reads NA when git grep cannot run.
 #   8. Run counters from background jobs reach the parent (--parallel).
+#   9. The runner's own run_entry and post-loop drain keep those counts
+#      (extracted; the quarantined main loop is not run).
 
 set -euo pipefail
 
@@ -227,6 +229,32 @@ count SKIPPED
 fold_counts
 check "background counts reach the parent" "EXECUTED=3 SUCCEEDED=1 FAILED=2 SKIPPED=1" \
     "EXECUTED=$EXECUTED SUCCEEDED=$SUCCEEDED FAILED=$FAILED SKIPPED=$SKIPPED"
+
+# --- 9. the loop's own job wrapper and drain ------------------------------
+# Section 8 drives count/fold_counts directly. This runs the runner's real
+# run_entry (which must start jobs with IN_JOB=1) and its post-loop drain
+# (which must wait, then fold), extracted as above. The main loop itself is
+# not run: it sits behind the automation quarantine (exit 78), which this
+# test does not bypass. execute_entry is a stub that counts what it is given.
+{
+    awk '/^run_entry\(\) \{/,/^}/' "$ROOT/scripts/dispatch-runner.sh"
+    awk '/^# Wait for all background jobs to finish/,/^fi/' "$ROOT/scripts/dispatch-runner.sh" \
+        | sed '1s/.*/drain() {/; $s/^fi$/fi; }/'
+} > "$TMP/loop.sh"
+check "run_entry and the drain were extracted" 2 "$(grep -cE '^(run_entry|drain)\(\) \{' "$TMP/loop.sh")"
+# shellcheck disable=SC1091
+source "$TMP/loop.sh"
+execute_entry() { sleep 0.1; count EXECUTED; count "$1"; }
+for PARALLEL in 1 2; do
+    # shellcheck disable=SC2034 # read by the sourced run_entry
+    PARALLEL_TMPDIR="$TMP/loop-$PARALLEL" ACTIVE_JOBS=0
+    mkdir -p "$PARALLEL_TMPDIR"
+    EXECUTED=0 SUCCEEDED=0 FAILED=0 SKIPPED=0
+    for verdict in FAILED SUCCEEDED FAILED SKIPPED SUCCEEDED; do run_entry "$verdict"; done
+    drain
+    check "dispatch loop counts with --parallel $PARALLEL" "EXECUTED=5 SUCCEEDED=2 FAILED=2 SKIPPED=1" \
+        "EXECUTED=$EXECUTED SUCCEEDED=$SUCCEEDED FAILED=$FAILED SKIPPED=$SKIPPED"
+done
 
 echo ""
 echo "Results: $pass passed, $fail failed"

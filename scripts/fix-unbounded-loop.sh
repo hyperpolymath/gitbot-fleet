@@ -3,7 +3,7 @@
 #
 # fix-unbounded-loop.sh — Add TODO comments above unbounded loops
 #
-# Fixes PA019 findings: unbounded loops that could cause resource exhaustion.
+# Fixes PA002 (UnboundedLoop) findings: unbounded loops that could cause resource exhaustion.
 # Detects unbounded loops in Rust, Elixir, and shell scripts, inserting
 # advisory TODO comments above them so developers add iteration limits
 # or break conditions.
@@ -28,7 +28,7 @@ FINDING_JSON="${2:?Missing finding JSON file}"
 TODO_RUST="// TODO: add break condition or iteration limit to prevent resource exhaustion"
 TODO_SHELL="# TODO: add iteration limit (e.g., MAX_ITER) to prevent infinite loop"
 
-echo "=== Unbounded Loop Fix (PA019) ==="
+echo "=== Unbounded Loop Fix: PA002 (UnboundedLoop) ==="
 echo "  Repo: $REPO_PATH"
 echo ""
 

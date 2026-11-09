@@ -23,6 +23,12 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AUDIT="$ROOT/scripts/audit-lock-closure.sh"
+# Repository-owned source authentication is an offline gate. Bootstrap the
+# reviewed bare Git cache separately; absence is not a passing test result.
+if [[ -f "$ROOT/scripts/lib/pinned-reusable-sources.json" && -z "${PINNED_SOURCE_CACHE:-}" ]]; then
+  echo 'lock-closure-test: set PINNED_SOURCE_CACHE to the prepared pinned-source cache' >&2
+  exit 64
+fi
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/lock-closure-test.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 

@@ -24,7 +24,7 @@ set -euo pipefail
 case "$*" in
   *'/compare/'*) printf '%s\n' "${MOCK_COMPARE_STATUS:-ahead}" ;;
   *'/contents/'*) printf '%s\n' file ;;
-  *'repos/hyperpolymath/standards --jq .default_branch'*) printf '%s\n' main ;;
+  *'repos/metadatastician/standards --jq .default_branch'*) printf '%s\n' main ;;
   *'--jq [.fork, .archived] | @tsv'*) printf 'false\tfalse\n' ;;
   *) printf '%s\n' '{}' ;;
 esac
@@ -51,7 +51,7 @@ assert_exit() {
 cat > "$tmp/wrong-rule.json" <<'EOF'
 {
   "rule": "some_other_rule",
-  "source_repo": "hyperpolymath/standards",
+  "source_repo": "metadatastician/standards",
   "source_workflow": ".github/workflows/governance-reusable.yml",
   "old_sha": "0011223344556677889900112233445566778899",
   "new_sha": "abcdef0123456789abcdef0123456789abcdef01",
@@ -68,7 +68,7 @@ set -e
 cat > "$tmp/bad-sha.json" <<'EOF'
 {
   "rule": "reusable_workflow_sha_bump_needs_propagation",
-  "source_repo": "hyperpolymath/standards",
+  "source_repo": "metadatastician/standards",
   "source_workflow": ".github/workflows/governance-reusable.yml",
   "old_sha": "not-a-sha",
   "new_sha": "abcdef0123456789abcdef0123456789abcdef01",
@@ -85,7 +85,7 @@ set -e
 cat > "$tmp/same-sha.json" <<'EOF'
 {
   "rule": "reusable_workflow_sha_bump_needs_propagation",
-  "source_repo": "hyperpolymath/standards",
+  "source_repo": "metadatastician/standards",
   "source_workflow": ".github/workflows/governance-reusable.yml",
   "old_sha": "abcdef0123456789abcdef0123456789abcdef01",
   "new_sha": "abcdef0123456789abcdef0123456789abcdef01",
@@ -119,7 +119,7 @@ set -e
 cat > "$tmp/license-title.json" <<'EOF'
 {
   "rule": "reusable_workflow_sha_bump_needs_propagation",
-  "source_repo": "hyperpolymath/standards",
+  "source_repo": "metadatastician/standards",
   "source_workflow": ".github/workflows/governance-reusable.yml",
   "old_sha": "0011223344556677889900112233445566778899",
   "new_sha": "abcdef0123456789abcdef0123456789abcdef01",
@@ -140,11 +140,35 @@ else
     ((fail++))
 fi
 
+# 5b. A transferred standards source must fail closed before dispatch.
+cat > "$tmp/transferred-source.json" <<'EOF'
+{
+  "rule": "reusable_workflow_sha_bump_needs_propagation",
+  "source_repo": "hyperpolymath/standards",
+  "source_workflow": ".github/workflows/governance-reusable.yml",
+  "old_sha": "0011223344556677889900112233445566778899",
+  "new_sha": "abcdef0123456789abcdef0123456789abcdef01",
+  "pr_title": "ci: tested governance update",
+  "pr_number": 1000
+}
+EOF
+set +e
+out=$("$SCRIPT" /ignored "$tmp/transferred-source.json" 2>&1)
+rc=$?
+set -e
+assert_exit "transferred source alias → hard refusal" 1 "$rc"
+if printf '%s' "$out" | grep -q 'transferred alias'; then
+    echo "ok    transferred alias explains canonical migration"
+    ((pass++))
+else
+    echo "FAIL  transferred alias explanation missing"
+    ((fail++))
+fi
 # 6. DRY_RUN with valid finding + override TSV → exit 0, payload printed.
 cat > "$tmp/good.json" <<'EOF'
 {
   "rule": "reusable_workflow_sha_bump_needs_propagation",
-  "source_repo": "hyperpolymath/standards",
+  "source_repo": "metadatastician/standards",
   "source_workflow": ".github/workflows/governance-reusable.yml",
   "old_sha": "0011223344556677889900112233445566778899",
   "new_sha": "abcdef0123456789abcdef0123456789abcdef01",

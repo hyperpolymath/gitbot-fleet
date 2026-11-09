@@ -8,6 +8,26 @@ use crate::error::Result;
 use std::path::Path;
 use tracing::debug;
 
+// Conservative recognition of a direct command, not a shell/YAML parser and
+// not evidence that the compiler ran successfully.
+fn is_direct_agda_source_check(command: &str) -> bool {
+    let mut tokens = command.split_whitespace();
+    if tokens.next() != Some("agda") {
+        return false;
+    }
+    let args: Vec<_> = tokens.collect();
+    let informational = args.iter().any(|arg| {
+        matches!(*arg, "--version" | "-V" | "--help" | "-h" | "-?")
+            || arg.starts_with("--help=")
+            || arg.starts_with("--print-")
+    });
+    !informational
+        && args.iter().any(|arg| {
+            let operand = arg.trim_matches(['\'', '"']);
+            !operand.starts_with('-') && operand.ends_with(".agda")
+        })
+}
+
 /// Testing infrastructure analyzer
 pub struct TestingAnalyzer;
 
@@ -28,20 +48,37 @@ impl Analyzer for TestingAnalyzer {
 
         let is_rust = path.join("Cargo.toml").exists();
         let is_deno = path.join("deno.json").exists();
+        let is_agda = path.join("proofs/agda").is_dir()
+            || walkdir::WalkDir::new(path.join("verification/proofs"))
+                .follow_links(false)
+                .into_iter()
+                .filter_map(|entry| entry.ok())
+                .any(|entry| {
+                    entry.file_type().is_file()
+                        && entry
+                            .path()
+                            .extension()
+                            .is_some_and(|extension| extension == "agda")
+                });
 
         if is_rust {
             self.check_rust_testing(path, &mut result);
-        } else if is_deno {
+        }
+        if is_deno {
             self.check_deno_testing(path, &mut result);
-        } else {
+        }
+        if is_agda {
+            self.check_agda_testing(path, &mut result);
+        }
+        if !is_rust && !is_deno && !is_agda {
             result.add(
                 Finding::new(
                     "TEST-001",
                     "Unknown project type",
                     Severity::Warning,
-                    "Could not determine if this is a Rust or Deno project.",
+                    "No supported Rust, Deno, or Agda source layout was identified.",
                 )
-                .with_suggestion("Ensure Cargo.toml or deno.json exists"),
+                .with_suggestion("Document the actual verification entrypoint; do not add an unrelated language manifest"),
             );
         }
 
@@ -58,6 +95,57 @@ impl Analyzer for TestingAnalyzer {
 }
 
 impl TestingAnalyzer {
+    /// Recognize Agda source and direct check infrastructure. No prover or
+    /// test is executed here, and command discovery is deliberately limited
+    /// to single-line direct calls in known workflow/recipe locations.
+    fn check_agda_testing(&self, path: &Path, result: &mut AnalysisResult) {
+        let has_source = ["proofs/agda", "verification/proofs"].iter().any(|root| {
+            walkdir::WalkDir::new(path.join(root))
+                .follow_links(false)
+                .into_iter()
+                .filter_map(|entry| entry.ok())
+                .any(|entry| {
+                    entry.file_type().is_file()
+                        && entry
+                            .path()
+                            .extension()
+                            .is_some_and(|extension| extension == "agda")
+                        && entry.metadata().is_ok_and(|metadata| metadata.len() > 0)
+                })
+        });
+        if !has_source {
+            result.add(Finding::new(
+                "TEST-AG-001", "Missing Agda source", Severity::Error,
+                "The proof layout contains no nonempty .agda source files.",
+            ).with_suggestion("Provide actual proof sources; an empty directory is not verification infrastructure"));
+        }
+        let has_entrypoint = [
+            ".github/workflows/agda.yml",
+            ".github/workflows/agda.yaml",
+            "Justfile",
+            "justfile",
+            "scripts/verify.sh",
+            "scripts/check-agda.sh",
+        ]
+        .iter()
+        .any(|file| {
+            std::fs::read_to_string(path.join(file)).is_ok_and(|content| {
+                content.lines().any(|line| {
+                    let command = line.split('#').next().unwrap_or("").trim();
+                    let command = command.strip_prefix("- ").unwrap_or(command);
+                    let command = command.strip_prefix("run:").unwrap_or(command).trim();
+                    is_direct_agda_source_check(command)
+                })
+            })
+        });
+        if !has_entrypoint {
+            result.add(Finding::new(
+                "TEST-AG-002", "Agda runner not statically identified", Severity::Warning,
+                "No direct single-line Agda source check was identified in the known workflow or recipe locations. Dynamic runners need separate review; no proof was executed.",
+            ).with_suggestion("Provide or document the real Agda check entrypoint instead of adding Rust or Deno scaffolding"));
+        }
+    }
+
     /// Check Rust project testing infrastructure
     fn check_rust_testing(&self, path: &Path, result: &mut AnalysisResult) {
         // Check for benchmarks
@@ -123,7 +211,9 @@ impl TestingAnalyzer {
                             ".clusterfuzzlite/project.yaml not found.",
                         )
                         .with_file(clusterfuzz_dir.to_path_buf())
-                        .with_suggestion("Add project.yaml, Dockerfile, and build.sh to .clusterfuzzlite/"),
+                        .with_suggestion(
+                            "Add project.yaml, Dockerfile, and build.sh to .clusterfuzzlite/",
+                        ),
                     );
                 }
             }
@@ -203,14 +293,12 @@ impl TestingAnalyzer {
         let test_files_exist = std::fs::read_dir(path)
             .ok()
             .and_then(|entries| {
-                entries
-                    .filter_map(|e| e.ok())
-                    .find(|e| {
-                        e.path()
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .is_some_and(|n| n.ends_with("_test.ts") || n.ends_with(".test.ts"))
-                    })
+                entries.filter_map(|e| e.ok()).find(|e| {
+                    e.path()
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.ends_with("_test.ts") || n.ends_with(".test.ts"))
+                })
             })
             .is_some();
 
@@ -225,5 +313,112 @@ impl TestingAnalyzer {
                 .with_suggestion("Add test files following Deno conventions (*_test.ts)"),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod agda_layout_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write(root: &Path, relative: &str, content: &str) {
+        let target = root.join(relative);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::write(target, content).unwrap();
+    }
+    fn analyze(root: &Path) -> AnalysisResult {
+        TestingAnalyzer.analyze(root, &Config::default()).unwrap()
+    }
+    #[test]
+    fn real_agda_source_and_workflow_are_recognized_without_rust_or_deno() {
+        let root = TempDir::new().unwrap();
+        write(
+            root.path(),
+            "proofs/agda/Witness.agda",
+            "module Witness where\ndata Unit : Set where unit : Unit\n",
+        );
+        write(root.path(), ".github/workflows/agda.yml", "steps:\n  - run: agda --safe --without-K --cubical-compatible -i proofs/agda proofs/agda/Witness.agda\n");
+        assert!(analyze(root.path()).findings.is_empty());
+    }
+    #[test]
+    fn empty_or_prose_only_proof_layout_is_not_successful_infrastructure() {
+        let root = TempDir::new().unwrap();
+        write(root.path(), "proofs/agda/README.adoc", "Intended proofs\n");
+        write(root.path(), "proofs/agda/Empty.agda", "");
+        let result = analyze(root.path());
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.id == "TEST-AG-001"));
+        assert!(result
+            .findings
+            .iter()
+            .any(|finding| finding.id == "TEST-AG-002"));
+    }
+    #[test]
+    fn comments_and_version_checks_are_not_proof_runners() {
+        let root = TempDir::new().unwrap();
+        write(
+            root.path(),
+            "verification/proofs/Witness.agda",
+            "module Witness where\n",
+        );
+        write(
+            root.path(),
+            ".github/workflows/agda.yml",
+            "# agda --safe Witness.agda\nrun: agda --version # Witness.agda\n",
+        );
+        assert!(analyze(root.path())
+            .findings
+            .iter()
+            .any(|finding| finding.id == "TEST-AG-002"));
+    }
+    #[test]
+    fn informational_modes_with_source_operands_are_not_proof_runners() {
+        let root = TempDir::new().unwrap();
+        write(
+            root.path(),
+            "proofs/agda/Witness.agda",
+            "module Witness where\n",
+        );
+        for mode in [
+            "--version",
+            "-V",
+            "--help",
+            "--help=warning",
+            "-h",
+            "-?",
+            "--print-dir",
+            "--print-agda-dir",
+        ] {
+            write(
+                root.path(),
+                ".github/workflows/agda.yml",
+                &format!("run: agda {mode} Witness.agda # actual-looking operand\n"),
+            );
+            assert!(
+                analyze(root.path())
+                    .findings
+                    .iter()
+                    .any(|finding| finding.id == "TEST-AG-002"),
+                "{mode} must not count as a source check"
+            );
+        }
+    }
+    #[test]
+    fn an_agda_substring_or_option_value_is_not_a_source_operand() {
+        assert!(!is_direct_agda_source_check("agda --safe Witness.agda.bak"));
+        assert!(!is_direct_agda_source_check("agda --output=Generated.agda"));
+        assert!(is_direct_agda_source_check(
+            "agda --safe 'proofs/agda/Witness.agda'"
+        ));
+    }
+    #[test]
+    fn an_empty_or_unrecognized_project_does_not_gain_an_agda_pass() {
+        let root = TempDir::new().unwrap();
+        assert!(analyze(root.path())
+            .findings
+            .iter()
+            .any(|finding| finding.id == "TEST-001"));
     }
 }
