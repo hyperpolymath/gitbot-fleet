@@ -13,12 +13,12 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+use panicbot::a2ml_writer;
 use panicbot::cli::{Cli, Command, OutputFormat};
+use panicbot::directives;
 use panicbot::fleet;
 use panicbot::scanner;
 use panicbot::translator;
-use panicbot::directives;
-use panicbot::a2ml_writer;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -48,8 +48,8 @@ fn cmd_scan(dir: &std::path::Path, format: OutputFormat) -> Result<()> {
     tracing::info!("Scanning: {}", dir.display());
 
     let config = directives::load_directives(dir).unwrap_or_default();
-    let report = scanner::run_assail(dir, config.timeout)
-        .context("Failed to run panic-attack assail")?;
+    let report =
+        scanner::run_assail(dir, config.timeout).context("Failed to run panic-attack assail")?;
 
     let findings = translator::translate_all(&report.weak_points, &config);
 
@@ -83,8 +83,8 @@ fn cmd_scan(dir: &std::path::Path, format: OutputFormat) -> Result<()> {
             }
         }
         OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&findings)
-                .context("Failed to serialize findings")?;
+            let json =
+                serde_json::to_string_pretty(&findings).context("Failed to serialize findings")?;
             println!("{}", json);
         }
     }
@@ -153,8 +153,8 @@ fn cmd_report(
     tracing::info!("Generating A2ML report for: {}", dir.display());
 
     let config = directives::load_directives(dir).unwrap_or_default();
-    let report = scanner::run_assail(dir, config.timeout)
-        .context("Failed to run panic-attack assail")?;
+    let report =
+        scanner::run_assail(dir, config.timeout).context("Failed to run panic-attack assail")?;
 
     let findings = translator::translate_all(&report.weak_points, &config);
     let (fixable, unfixable) = translator::classify_fixability(&findings);
@@ -181,8 +181,8 @@ fn cmd_report(
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create {}", parent.display()))?;
         }
-        let json = serde_json::to_string_pretty(&a2ml_doc)
-            .context("Failed to serialize A2ML document")?;
+        let json =
+            serde_json::to_string_pretty(&a2ml_doc).context("Failed to serialize A2ML document")?;
         std::fs::write(output_path, &json)
             .with_context(|| format!("Failed to write {}", output_path.display()))?;
         println!("A2ML report written to {}", output_path.display());

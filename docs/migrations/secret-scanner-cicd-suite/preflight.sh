@@ -76,16 +76,47 @@ cp -R "$ROOT/.github" "$TMP/tree/" 2>/dev/null || finding TREE "$ROOT/.github mi
 cp "$ROOT/scripts/audit-lock-closure.sh" "$TMP/tree/scripts/" 2>/dev/null || finding TREE "audit-lock-closure.sh missing"
 cp "$ROOT/scripts/lib/lock-closure-receipts.tsv" "$TMP/tree/scripts/lib/" 2>/dev/null || true
 cp "$ROOT/scripts/lib/lock-audit-baseline.tsv" "$TMP/tree/scripts/lib/" 2>/dev/null || true
+# Preserve the independent source proof in the proposed tree when the vendor
+# lock omits remote reusables. The closure audit below must still verify it.
+if [[ -f "$ROOT/scripts/lib/pinned-reusable-sources.json" ]]; then
+  cp "$ROOT/scripts/lib/pinned-reusable-sources.json" "$TMP/tree/scripts/lib/" || finding TREE "source manifest could not be copied"
+  cp "$ROOT/scripts/audit-pinned-reusable-sources.sh" "$TMP/tree/scripts/" || finding TREE "source verifier could not be copied"
+fi
 
+# A prepared migration can subsequently be applied by an approved PR.
+# In that case old patch hunks no longer apply; check the final artifacts.
 apply_ok=1
-for p in secret-scanner.yml.patch actions.lock.patch lock-closure-receipts.tsv.patch; do
-  if ! ( cd "$TMP/tree" && patch -p1 -s -f --no-backup-if-mismatch < "$MIG/patches/$p" ); then
-    finding PATCH-APPLY "patch does not apply to the current checkout: $p"
+already_applied=0
+if [ -f "$TMP/tree/.github/workflows/secret-scanner.yml" ] &&
+   grep -Fq "uses: $CALLEE" "$TMP/tree/.github/workflows/secret-scanner.yml"; then
+  already_applied=1
+  source_key="'hyperpolymath/cicd-suite@$SUITE_SHA'"
+  # Legacy representation needs both vendor records. Supported vendor locks
+  # may instead carry a source manifest; its presence is not proof. The
+  # integrated audit below must authenticate every active binding and edge,
+  # and missing evidence remains nonzero NOT RUN, never a migration pass.
+  count=$(grep -Fc "$source_key" "$TMP/tree/.github/workflows/actions.lock" 2>/dev/null || true)
+  if [[ "$count" -lt 2 ]] && [[ ! -f "$TMP/tree/scripts/lib/pinned-reusable-sources.json" ]]; then
+    finding LOCK-MISSING "applied scanner lacks both pinned suite vendor records and a source-verification route"
     apply_ok=0
   fi
-done
+  receipt=$(printf 'hyperpolymath/cicd-suite\t%s\tactions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' "$SUITE_SHA")
+  if ! grep -Fxq "$receipt" "$TMP/tree/scripts/lib/lock-closure-receipts.tsv" 2>/dev/null; then
+    finding CLOSURE-NO-RECEIPT "applied scanner lacks the reviewed pinned-suite closure receipt"
+    apply_ok=0
+  fi
+else
+  for p in secret-scanner.yml.patch actions.lock.patch lock-closure-receipts.tsv.patch; do
+    if ! ( cd "$TMP/tree" && patch -p1 -s -f --no-backup-if-mismatch < "$MIG/patches/$p" ); then
+      finding PATCH-APPLY "patch does not apply to the current checkout: $p"
+      apply_ok=0
+    fi
+  done
+fi
 
-if [ "$CHECK_APPLY" -eq 1 ]; then
+# The intended migration must be applicable OR already applied with its
+# reviewed pinned artifacts. Partial transitions never count as success.
+if [ "$CHECK_APPLY" -eq 1 ] && [ "$already_applied" -eq 0 ]; then
   for p in "$MIG"/patches/*.patch; do
     if ! ( cd "$ROOT" && patch -p1 --dry-run -s -f < "$p" >/dev/null 2>&1 ); then
       finding PATCH-APPLY "patch --dry-run failed against $ROOT: $(basename "$p")"

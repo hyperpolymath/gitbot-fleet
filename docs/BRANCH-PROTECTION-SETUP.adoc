@@ -74,24 +74,20 @@ Then add the status checks in *Settings > Branches* as described above.
 
 === Local Pre-Push Hook
 
-A local hook mirrors the CI gate so developers catch critical findings
-before pushing. Install it from `+gitbot-fleet/hooks/pre-push-gate.sh+`:
+A local static-analysis hook catches critical findings before pushing.
+Use the installer from a reviewed fleet checkout; it preserves existing hooks
+and resolves configured hooks paths and linked worktrees through Git:
 
 [source,bash]
 ----
-# Symlink (recommended — always picks up updates)
-ln -sf ~/Documents/hyperpolymath-repos/gitbot-fleet/hooks/pre-push-gate.sh \
-       .git/hooks/pre-push
-
-# Or copy
-cp ~/Documents/hyperpolymath-repos/gitbot-fleet/hooks/pre-push-gate.sh \
-   .git/hooks/pre-push
-chmod +x .git/hooks/pre-push
+bash /path/to/gitbot-fleet/scripts/install-pre-push-gate.sh /path/to/consumer
 ----
 
-The hook gracefully degrades: if neither panic-attack nor hypatia is
-installed locally, it prints a notice and allows the push (CI will catch
-it).
+The hook blocks if no scanner completes, a configured scanner is unavailable,
+a report is malformed, a scanner fails or times out, or a critical finding is
+reported. Static scanning is not CI execution parity. Configure the consumer's
+owned execution adapter separately. See xref:PRE-PUSH-GATE.adoc[the gate's
+dependencies, configuration, installation and validation limits].
 
 '''''
 

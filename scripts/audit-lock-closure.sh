@@ -71,6 +71,10 @@ ONLINE=0
 QUIET=0
 EMIT_KEY=""
 EMIT_SOURCES=()
+DUMP_LOCK_RECORDS=0
+SOURCE_MANIFEST=""
+SOURCE_CACHE="${PINNED_SOURCE_CACHE:-}"
+FETCH_SOURCES=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -84,6 +88,10 @@ while [ $# -gt 0 ]; do
     --repo-root) REPO_ROOT="${2:?--repo-root needs a directory}"; shift ;;
     --emit-receipt) EMIT_KEY="${2:?--emit-receipt needs owner/repo@sha}"; shift ;;
     --source) EMIT_SOURCES+=("${2:?--source needs a file or directory}"); shift ;;
+    --dump-lock-records) DUMP_LOCK_RECORDS=1 ;;
+    --source-manifest) SOURCE_MANIFEST="${2:?--source-manifest needs a file}"; shift ;;
+    --source-cache) SOURCE_CACHE="${2:?--source-cache needs a directory}"; shift ;;
+    --fetch-sources) FETCH_SOURCES=1 ;;
     -h|--help) sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "audit-lock-closure: unknown argument: $1" >&2; exit 64 ;;
   esac
@@ -386,6 +394,21 @@ cat > "$TMP/lock.awk" <<'AWK'
   }
 AWK
 "$AWK" -f "$TMP/lock.awk" "$LOCK" > "$TMP/lock.tsv"
+# The record parser deliberately ignores unrelated top-level lines; the
+# trusted dump must still reject missing/duplicate sections and non-mapping
+# section shapes rather than treating malformed YAML as an empty lock.
+"$AWK" '
+  { sub(/\r$/, "") }
+  /^version:/ {
+    versions++; value=$0; sub(/^version:[[:space:]]*/, "", value)
+    sub(/[[:space:]]*#.*/, "", value); sub(/[[:space:]]*$/, "", value)
+    quote=substr(value,1,1); if((quote=="\"" || quote=="\047") && substr(value,length(value),1)==quote) value=substr(value,2,length(value)-2)
+    if(value!="v0.0.2" && value!="v0.0.3") print "PARSE\tunsupported lock version"
+  }
+  /^workflows:/ { workflows++; if($0 !~ /^workflows:[[:space:]]*(\{\})?[[:space:]]*$/) print "PARSE\tworkflows must be a mapping" }
+  /^dependencies:/ { dependencies++; if($0 !~ /^dependencies:[[:space:]]*(\{\})?[[:space:]]*$/) print "PARSE\tdependencies must be a mapping" }
+  END { if(versions!=1 || workflows!=1 || dependencies!=1) print "PARSE\tlock requires one version, workflows and dependencies section" }
+' "$LOCK" >> "$TMP/lock.tsv"
 
 # GitHub resolves owner and repository case-insensitively; the ref is case
 # sensitive. Fold exactly the owner/repo half everywhere a set is keyed, so a
@@ -404,6 +427,8 @@ declare -A LOCK_ENTRIES=()        # path -> " folded-ref ..."
 declare -A WF_ORDER=()
 declare -A DEP_REF=()
 declare -A DEP_COMMIT=()
+declare -A DEP_OWNER_ID=()
+declare -A DEP_REPO_ID=()
 declare -A DEP_USES=()
 declare -A DEP_HASFIELD=()
 declare -A DEP_SEEN=()
@@ -457,12 +482,17 @@ while IFS=$'\t' read -r tag a b c; do
       ;;
     DEPFIELD)
       key="$a"; field="$b"; val="$c"
+      if [[ -n "${DEP_HASFIELD["$key|$field"]:-}" ]]; then
+        add_finding FATAL LOCK-DUP-FIELD "$key" "dependency field $field appears more than once" "Keep one unambiguous value per field"
+      fi
+      DEP_HASFIELD["$key|$field"]=1
       case "$field" in
         ref) DEP_REF["$key"]="$val" ;;
         commit) DEP_COMMIT["$key"]="$val" ;;
         uses) DEP_USES["$key"]="${DEP_USES["$key"]:-} $val" ;;
         owner_id|repo_id)
           [[ "$val" =~ ^[0-9]+$ ]] || add_finding FATAL REF-FIELD "$key" "$field is '$val', not an integer" "Record the numeric GitHub id or omit the field"
+          if [[ "$field" = owner_id ]]; then DEP_OWNER_ID["$key"]="$val"; else DEP_REPO_ID["$key"]="$val"; fi
           ;;
         *) add_finding REVIEW REF-FIELD "$key" "unknown dependency field '$field'" "Remove it or extend the audit" ;;
       esac
@@ -509,6 +539,73 @@ for key in "${DEP_KEYS[@]}"; do
 done
 
 # --------------------------------------------------------- parse the workflows --
+# Internal data-only interface used by the independent source verifier. It
+# exits before source verification, avoiding recursion, and never emits a
+# successful record dump for malformed lock/receipt input.
+if [[ "$DUMP_LOCK_RECORDS" -eq 1 ]]; then
+  if [[ "${#F_SEV[@]}" -gt 0 ]] || [[ "${#N_RULE[@]}" -gt 0 ]]; then
+    printf '%s\n' 'audit-lock-closure: cannot dump invalid or incomplete input' >&2
+    exit 1
+  fi
+  : > "$TMP/records.jsonl"
+  for key in "${DEP_KEYS[@]}"; do
+    edges="$(printf '%s\n' "${DEP_USES[$key]:-}" | jq -Rc 'split(" ") | map(select(length > 0))')"
+    jq -nc --arg key "$key" --arg ref "${DEP_REF[$key]}" \
+      --arg commit "sha1-${DEP_COMMIT[$key]}" --argjson uses "$edges" \
+      --argjson owner_id "${DEP_OWNER_ID[$key]:-null}" --argjson repo_id "${DEP_REPO_ID[$key]:-null}" \
+      '{($key):({ref:$ref,commit:$commit,uses:$uses} + (if $owner_id==null then {} else {owner_id:$owner_id} end) + (if $repo_id==null then {} else {repo_id:$repo_id} end))}' >> "$TMP/records.jsonl"
+  done
+  jq -sc 'add // {}' "$TMP/records.jsonl"
+  exit 0
+fi
+
+# Vendor locks deliberately omit remote job calls. A separate verifier may
+# supply additional records only after exact commit/tree/blob, caller/path,
+# reviewed-edge and receipt checks all succeed. These are source-attested
+# records, not a claim that gh-actions-lock generated or verified them.
+if [[ -z "$SOURCE_MANIFEST" ]] && { [[ -f "$REPO_ROOT/scripts/lib/pinned-reusable-sources.json" ]] || [[ -f "$REPO_ROOT/scripts/audit-pinned-reusable-sources.sh" ]]; }; then
+  SOURCE_MANIFEST="$REPO_ROOT/scripts/lib/pinned-reusable-sources.json"
+fi
+SOURCE_ATTESTED_COUNT=0
+if [[ -n "$SOURCE_MANIFEST" ]]; then
+  helper="$(dirname "${BASH_SOURCE[0]}")/audit-pinned-reusable-sources.sh"
+  args=(--manifest "$SOURCE_MANIFEST" --repo-root "$REPO_ROOT" --lock "$LOCK" --receipts "$RECEIPTS" --json)
+  [[ -z "$SOURCE_CACHE" ]] || args+=(--cache "$SOURCE_CACHE")
+  [[ "$FETCH_SOURCES" -eq 0 ]] || args+=(--fetch-sources)
+  source_rc=0
+  bash "$helper" "${args[@]}" > "$TMP/source-report.json" || source_rc=$?
+  if ! jq -e '(.findings | type == "array") and (.not_run | type == "array") and (.dependencies | type == "object")' "$TMP/source-report.json" >/dev/null 2>&1; then
+    add_notrun SOURCE-REPORT "$SOURCE_MANIFEST" "pinned-source verifier did not return a valid report" "Restore the verifier and its dependencies; no supplemental record is trusted"
+  else
+    while IFS= read -r item; do
+      add_finding "$(jq -r .severity <<< "$item")" "$(jq -r .rule <<< "$item")" "$(jq -r .subject <<< "$item")" "$(jq -r .detail <<< "$item")" "$(jq -r .fix <<< "$item")"
+    done < <(jq -c '.findings[]' "$TMP/source-report.json")
+    while IFS= read -r item; do
+      add_notrun "$(jq -r .rule <<< "$item")" "$(jq -r .subject <<< "$item")" "$(jq -r .detail <<< "$item")" "$(jq -r .fix <<< "$item")"
+    done < <(jq -c '.not_run[]' "$TMP/source-report.json")
+    if [[ "$source_rc" -eq 0 ]] && jq -e '(.findings | length == 0) and (.not_run | length == 0)' "$TMP/source-report.json" >/dev/null; then
+      while IFS= read -r item; do
+        key="$(jq -r .key <<< "$item")"
+        f="$(fold_ref "$key")"
+        # Overlaps have already been compared by the verifier. Keep every
+        # existing vendor record untouched, including its spelling.
+        [[ -z "${DEP_IDX[$f]:-}" ]] || continue
+        DEP_KEYS+=("$key"); DEP_IDX["$f"]="$key"; DISP["$f"]="$key"
+        DEP_REF["$key"]="$(jq -r .value.ref <<< "$item")"
+        commit="$(jq -r .value.commit <<< "$item")"
+        DEP_COMMIT["$key"]="${commit#sha1-}"
+        owner_id="$(jq -r '.value.owner_id//empty' <<< "$item")"; repo_id="$(jq -r '.value.repo_id//empty' <<< "$item")"
+        [[ -z "$owner_id" ]] || DEP_OWNER_ID["$key"]="$owner_id"
+        [[ -z "$repo_id" ]] || DEP_REPO_ID["$key"]="$repo_id"
+        DEP_USES["$key"]="$(jq -r '(.value.uses // []) | join(" ")' <<< "$item")"
+        SOURCE_ATTESTED_COUNT=$((SOURCE_ATTESTED_COUNT + 1))
+      done < <(jq -c '.dependencies | to_entries[]' "$TMP/source-report.json")
+    elif [[ "$(jq '(.findings | length) + (.not_run | length)' "$TMP/source-report.json")" -eq 0 ]]; then
+      add_notrun SOURCE-REPORT "$SOURCE_MANIFEST" "source verifier exited $source_rc without a diagnostic" "Inspect the verifier; no supplemental record is trusted"
+    fi
+  fi
+fi
+
 declare -A WF_FILES=()
 declare -A STEP_SET=()            # path|folded-ref
 declare -A STEP_LIST=()           # path -> " folded-ref ..."
@@ -701,7 +798,10 @@ done
 # One reviewed ref must not resolve to two immutable commits: the snapshot is
 # then ambiguous, and a regeneration may pick either.
 declare -A TAG_DIGEST=()
-for key in "${DEP_KEYS[@]}"; do
+# Supplemental records are appended after vendor parsing. Preserve a stable
+# ordering so the same reviewed ambiguity keeps the same subject regardless
+# of which artifact carries its records (and baseline matches do not drift).
+while IFS= read -r key; do
   repo="$(printf '%s' "${key%@*}" | tr '[:upper:]' '[:lower:]')"
   ref="${DEP_REF["$key"]:-${key##*@}}"
   f="$repo@$ref"
@@ -712,7 +812,7 @@ for key in "${DEP_KEYS[@]}"; do
     add_finding REVIEW REF-AMBIGUOUS "$key" "the same reviewed ref resolves to two immutable commits (${TAG_DIGEST["$f"]} and $digest)" "Keep one reviewed snapshot per ref; delete or re-resolve the stale record"
   fi
   TAG_DIGEST["$f"]="$digest"
-done
+done < <(printf '%s\n' "${DEP_KEYS[@]}" | LC_ALL=C sort)
 
 # A mutable branch at step level is not an immutable pin: the lock freezes a
 # snapshot, but resolution follows the branch. Flag only conventional branch
@@ -813,10 +913,11 @@ n_accepted=${#ACC_RULE[@]}
 if [ "$JSON" -eq 1 ]; then
   jq -n --argjson fatal "$n_fatal" --argjson review "$n_review" \
     --argjson not_run "$n_notrun" --argjson accepted "$n_accepted" \
+    --argjson source_attested "$SOURCE_ATTESTED_COUNT" \
     --arg lock "$LOCK" --arg wf "$WF_DIR" \
     --slurpfile findings "$TMP/findings.jsonl" --slurpfile notrun "$TMP/notrun.jsonl" \
     '{lock:$lock,workflows:$wf,
-      summary:{fatal:$fatal,review:$review,accepted:$accepted,not_run:$not_run},
+      summary:{fatal:$fatal,review:$review,accepted:$accepted,not_run:$not_run,source_attested_records:$source_attested},
       findings:$findings, not_run:$notrun}'
 else
   echo "audit-lock-closure: $LOCK"
@@ -855,7 +956,7 @@ else
     echo "INCOMPLETE: no findings, but $n_notrun check(s) did not run; this is not a pass."
   fi
   echo
-  echo "summary: fatal=$n_fatal review=$n_review accepted=$n_accepted not-run=$n_notrun"
+  echo "summary: fatal=$n_fatal review=$n_review accepted=$n_accepted not-run=$n_notrun source-attested-records=$SOURCE_ATTESTED_COUNT"
 fi
 
 if [ $((n_fatal + n_review)) -gt 0 ] && [ "$n_notrun" -gt 0 ]; then exit 3; fi

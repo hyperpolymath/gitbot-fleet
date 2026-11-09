@@ -3,7 +3,8 @@
 #
 # fix-todo-markers.sh — Resolve unchecked TODO/FIXME markers
 #
-# Fixes PA018-unchecked-todo findings.
+# Fixes Hypatia pattern `PA018-unchecked-todo`; no panic-attack rule ID
+# covers TODO markers.
 # Converts bare TODOs to structured FILL markers or resolves them.
 #
 # Uses git ls-files for fast traversal and hash-based caching to skip
