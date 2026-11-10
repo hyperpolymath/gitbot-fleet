@@ -107,6 +107,23 @@ printf '# SPDX-License-Identifier: MPL-2.0\n  name: a\n  jobs: {}\n' > "$TMP/s5"
 if awk "$RULE" "$TMP/s4"; then fail "$R: the new rule accepts a licence after an indented body"; fi
 awk "$RULE" "$TMP/s5" || fail "$R: the new rule refuses a licence before an indented body"
 
+# Form 2, the first template rule that reads the leading comment block, is a
+# target too. Only the rule text changes: the result is the same file.
+REPO=$(new_repo spdx-form2); F="$REPO/.github/workflows/workflow-linter.yml"
+OLD_STOP='/^[^#[:space:]]/ { exit }'
+NEW_STOP='/^[[:space:]]*[^#[:space:]]/ { exit }'
+awk -v old="$OLD_STOP" -v new="$NEW_STOP" '{ p = index($0, new); if (p) $0 = substr($0, 1, p - 1) old substr($0, p + length(new)); print }' "$TMP/expected" > "$F"
+grep -qF -- "$OLD_STOP" "$F" || fail "$R: the test file does not have form 2"
+# Form 2 accepts a licence after an indented body. That is its defect.
+FORM2=$(sed -n "s/^ *if ! awk '\(.*\)' \"\$file\"; then\$/\1/p" "$F")
+awk "$FORM2" "$TMP/s4" || fail "$R: the test file does not have the defect of form 2"
+repair "$R" "$REPO" "$F" 1 "$TMP/expected"
+
+# The rule text of form 2 in a line of a different shape is not a target.
+REPO=$(new_repo spdx-form2-other); F="$REPO/.github/workflows/workflow-linter.yml"
+printf '%s\n' "            awk '/^# SPDX-License-Identifier:/ { found=1 } $OLD_STOP END { exit !found }' \"\$file\" || failed=1" > "$F"
+expect_untouched "$R" "$REPO" "$F"
+
 # A linter with a different rule is not a target.
 REPO=$(new_repo spdx-other); F="$REPO/.github/workflows/workflow-linter.yml"
 printf '%s\n' '            if ! head -5 "$f" | grep -q "SPDX-License-Identifier"; then' > "$F"
