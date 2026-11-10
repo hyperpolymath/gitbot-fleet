@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # stale-reusable-pins.tsv — pins of estate reusables that are KNOWN DEAD, and the pin to move to.
 # Columns (tab-separated): reusable_path<TAB>stale_sha<TAB>replacement_sha<TAB>reason
-# reusable_path is `hyperpolymath/<repo>/.github/workflows/<file>` or `hyperpolymath/<repo>/.github/workflows/*` (every reusable of that repo).
+# reusable_path is `hyperpolymath/<repo>/.github/workflows/<file>` or `hyperpolymath/<repo>/.github/workflows/*` (every reusable of that repo). A moved repository (lib/moved-repositories.tsv) may be named by either name: rows and callers are matched under its current name.
 # Consumed by scripts/fix-stale-reusable-pin.sh; mirrored by hypatia (pin denylist PIN-003) so detection and repair carry the same facts.
 #
 # Window A — standards main 2026-06-01..2026-06-24 (d73c93e0..49ed4715): rust-ci-reusable.yml pins dtolnay/rust-toolchain by SHA and passes
