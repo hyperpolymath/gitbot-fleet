@@ -1,10 +1,9 @@
 # SPDX-License-Identifier: MPL-2.0
 
 [advisories]
-ignore = [
-    # rsa is retained in Cargo.lock only through SQLx's inactive optional
-    # MySQL backend. This crate enables SQLite and PostgreSQL, and
-    # `cargo tree -i rsa --target all` is empty. Octocrab's active JWT
-    # backend is AWS-LC, so RUSTSEC-2023-0071 is not in the build graph.
-    "RUSTSEC-2023-0071",
-]
+# No advisory is ignored.
+#
+# Until sqlx 0.9 this list had RUSTSEC-2023-0071 (`rsa`), which was in
+# Cargo.lock only through the inactive MySQL backend of sqlx 0.8. With sqlx
+# 0.9, `rsa` is not in Cargo.lock any more, so the entry went out.
+ignore = []

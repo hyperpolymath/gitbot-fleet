@@ -59,7 +59,16 @@ toml = "1.1"
 # NOTE: `default-features = false` + explicit re-add of `macros`/`migrate`
 # mirrors echidnabot#46 (chore(deps): trim sqlx default-features) —
 # preserve forward-compat so a #46/#OTel merge doesn't churn this line.
-sqlx = { version = "0.8.1", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "postgres", "uuid", "chrono", "macros", "migrate"] }
+#
+# sqlx is at a commit of its `main` branch, and not at a crates.io release,
+# for one reason: RUSTSEC-2026-0459 (CVE-2026-119375, the SQLite copy in
+# `libsqlite3-sys`). The patched crate is 0.39.0 or later. The release 0.9.0
+# stops below 0.38. Commit 10462fa (sqlx pull request 4502, 2026-11-08) is
+# the first one that permits 0.39.
+# EXIT: at the first sqlx release after 0.9.0, go back to `version = "..."`.
+# The 2 features `runtime-tokio` and `tls-rustls-ring-webpki` are the 0.9
+# names of what `runtime-tokio-rustls` was in 0.8.
+sqlx = { git = "https://github.com/launchbadge/sqlx", rev = "10462fa4414c6c7f1ed1d39bb31678e3b726878c", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "sqlite", "postgres", "uuid", "chrono", "macros", "migrate"] }
 
 # GitHub API. Use Octocrab's AWS-LC JWT backend instead of its default
 # `rust_crypto` backend, which currently pulls the unfixed rsa 0.9 timing
