@@ -27,7 +27,7 @@ set -euo pipefail
 
 REL=".github/workflows/workflow-linter.yml"
 OLD_RULE='^[[:space:]]*if ! head -1 "\$[A-Za-z_][A-Za-z0-9_]*" \| grep -q "\^# SPDX-License-Identifier:"; then[[:space:]]*$'
-NEW_RULE='/^# SPDX-License-Identifier:/ { found=1 } /^[^#[:space:]]/ { exit } END { exit !found }'
+NEW_RULE='/^# SPDX-License-Identifier:/ { found=1 } /^[[:space:]]*[^#[:space:]]/ { exit } END { exit !found }'
 
 # Print the path of the linter when it is a regular file inside the repository.
 # A missing file, a symlink, or a path that leaves the repository is no target.
