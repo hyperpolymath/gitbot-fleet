@@ -34,8 +34,11 @@ No rule in `AGENTIC.a2ml` assigns these recipes; that grant is the owner's.
 | `workflow-linter.yml` with the rule `head -1 "$file" \| grep -q "^# SPDX-License-Identifier:"`.
   The tool `gh actions-lock` writes its comment on line 1, so each lock run
   makes each managed workflow fail the lint.
+  Also a `workflow-linter.yml` with the first form of the template rule,
+  which stops only at a line in column 1 (`/^[^#[:space:]]/`). A workflow
+  with an indented body then passes with a licence line after the body.
 | The rule of the template: the licence line can be at any position in the
-  leading comment block.
+  leading comment block, and the block ends at the first line of the body.
 
 | `recipe-sonarqube-token-guard`
 | `fix-sonarqube-token-guard.sh`
@@ -73,6 +76,9 @@ Each recipe was also run on the files of `system-et` at `main` (`04a8b6e`):
 * SPDX rule: the step is identical to the step of the template branch
   (`rsr-template-repo` pull request 323, `915acb2`). That pull request makes
   the rule stop at an indented workflow body also.
+* SPDX rule, first form of the template rule: run on the linter of
+  `system-et` at `main` (`bbe1d13`), which has that form. 1 line changes, and
+  the step is identical to the step of the template at `main` (`0208563`).
 * Token guard: the job is identical to the job in pull request 92
   (`9f529ef`). The guard step is identical to the guard step of the template
   branch (`rsr-template-repo` pull request 321, `806dac0`).
@@ -102,10 +108,10 @@ and `fix-lock-self-sha-refs.sh` already cover these.
   inactive file (`e2e.yml.template`).
 * The token guard recipe edits only the shape of the old template. It does
   not rewrite a workflow that a person changed.
-* The SPDX recipe has 1 target: the `head -1` rule. A linter that has the
-  first form of the template rule (the form before `rsr-template-repo` pull
-  request 323, for example in `system-et`) is not a target, and keeps that
-  form.
+* The SPDX recipe has 2 targets: the `head -1` rule, and the first form of
+  the template rule (the form before `rsr-template-repo` pull request 323,
+  for example in `system-et`). A linter with any other rule is not a target,
+  and keeps its rule.
 * The number of repositories with each target is not known. No estate scan
   was made.
 
