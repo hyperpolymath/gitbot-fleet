@@ -42,11 +42,10 @@ No rule in `AGENTIC.a2ml` assigns these recipes; that grant is the owner's.
 | `sonarqube.yml` that scans with `secrets.SONAR_TOKEN` and has no `if:` line.
   With no secret, the scan fails on each run.
 | The guard of the template (2026-07-28): the first step tests the token. With
-  no token the job says that the scan is not configured and passes. One
-  difference from the template: the token is in the environment of the guard
-  step and of the scan step only, and not of the job. The guard step sets
-  `shell: bash`; the template gets that line in `rsr-template-repo` pull
-  request 321.
+  no token the job says that the scan is not configured and passes. The guard
+  step is the text of the template after `rsr-template-repo` pull request 321
+  (2026-11-10): the token is in the environment of the guard step and of the
+  scan step only, and the guard step sets `shell: bash`.
 
 | `recipe-workflow-split-comment-keys`
 | `fix-split-comment-keys.sh`
@@ -72,9 +71,9 @@ repair refuses the repository, and no file is changed.
 Each recipe was also run on the files of `system-et` at `main` (`04a8b6e`):
 
 * SPDX rule: the step is identical to the step of the template (`c5a1da7`).
-* Token guard: the job is identical to the job in pull request 92, plus the
-  3 lines of `shell: bash` in the guard step. Pull request 92 was made before
-  the owner decided on that line.
+* Token guard: the job is identical to the job in pull request 92
+  (`9f529ef`). The guard step is identical to the guard step of the template
+  branch (`rsr-template-repo` pull request 321, `806dac0`).
 * Split keys: 19 lines restored. The 19 lines are the lines that the file had
   before the sweep. The file is identical to the repair in pull request 90,
   except for the order of the first 2 comment lines, which a different commit

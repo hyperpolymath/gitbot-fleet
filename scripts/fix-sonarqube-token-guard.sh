@@ -13,14 +13,11 @@
 # configured and passes. With a token, the scan runs, with no further edit.
 # This recipe adds that guard.
 #
-# One difference from the template: the template puts the token in the
-# environment of the job. This recipe puts it in the environment of the guard
-# step only. The scan step keeps its own entry. No other step, for example
-# the checkout, can then read the secret.
-#
-# The guard step sets `shell: bash`, with the comment of the template. The
-# template gets that line in pull request 321 of rsr-template-repo
-# (2026-11-10, owner decision: the template first, then this recipe).
+# The guard step is the text of the template after pull request 321 of
+# rsr-template-repo (2026-11-10, owner decisions: the template first, then
+# this recipe). The token is in the environment of the guard step only. The
+# scan step keeps its own entry. No other step, for example the checkout, can
+# then read the secret. The guard step sets `shell: bash`.
 #
 # Target: .github/workflows/sonarqube.yml that uses a SonarSource scan action
 # with `secrets.SONAR_TOKEN` and has no `if:` line. A file with an `if:` line
