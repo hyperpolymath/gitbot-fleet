@@ -24,7 +24,7 @@ cp "$ROOT/$MIG/preflight.sh" "$ROOT/$MIG/required-contexts.txt" "$BASE/$MIG/"
 cp -R "$ROOT/$MIG/fixtures" "$ROOT/$MIG/patches" "$BASE/$MIG/"
 # Exercise the original migration proposal, not the newer live caller.
 # Its archived source and receipt are reconstructed only in this fixture.
-if grep -Fq 'uses: hyperpolymath/proven-cicd/.github/workflows/secret-scanner-reusable.yml@03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409' "$BASE/.github/workflows/secret-scanner.yml"; then
+if grep -Fq 'uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6' "$BASE/.github/workflows/secret-scanner.yml"; then
   bash "$BASE/$MIG/fixtures/restore-historical-source.sh" "$BASE" "$BASE/$MIG/fixtures/historical-source.json"
 fi
 # Deliberately omit the canary directory. Every invocation binds --receipt to
