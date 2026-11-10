@@ -181,6 +181,13 @@ jobs:
 YAML
 repair "$R" "$REPO" "$F" 1 "$TMP/expected"
 
+# The older name of the scan action is the same shape: repaired, name not changed.
+REPO=$(new_repo sonar-legacy-action); F="$REPO/.github/workflows/sonarqube.yml"
+sed 's#/sonarqube-scan-action@#/sonarcloud-github-action@#' "$TMP/sonar-old.orig" > "$F"
+sed 's#/sonarqube-scan-action@#/sonarcloud-github-action@#' "$TMP/expected" > "$TMP/expected-legacy"
+grep -q 'sonarcloud-github-action@' "$TMP/expected-legacy" || fail "sonar-legacy-action: the test case is the fixture"
+repair "$R" "$REPO" "$F" 1 "$TMP/expected-legacy"
+
 # The old template with one difference is not the old template: refused, and
 # the file is not changed. Each case is one change of the fixture.
 refuse_variant() {  # <name> <awk-program>
@@ -327,6 +334,13 @@ repair "$R" "$REPO" "$F" 3 "$TMP/expected"
 REPO=$(new_repo split-no-next); F="$REPO/.github/workflows/e2e.yml"
 printf '%s\n' 'name: E2E' '#' 'steps:' '#' > "$F"
 expect_count "$R" "$REPO" 1
+expect_refused "$R" "$REPO" "$F"
+
+# One file that cannot be repaired refuses the repository: no file is changed.
+REPO=$(new_repo split-partial); F="$REPO/.github/workflows/a.yml"
+printf '%s\n' '#' 'steps:' '#     - run: x' > "$F"
+printf '%s\n' 'name: E2E' '#' 'steps:' '#' > "$REPO/.github/workflows/b.yml"
+expect_count "$R" "$REPO" 2
 expect_refused "$R" "$REPO" "$F"
 
 # A symlink is not followed.

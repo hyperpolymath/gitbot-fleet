@@ -103,6 +103,17 @@ trap 'rm -f "$TMP"' EXIT
 FAILED=0
 REPAIRED=0
 
+# Validate each file before the first write: a repository is repaired fully or
+# not at all. The runner does not undo the edits of a recipe that fails.
+while IFS= read -r FILE; do
+    awk "$PAIR_LIB"'
+        END { for (i = 1; i <= NR; i++) if (is_pair(i) && key_indent(i) < 0) exit 1 }
+    ' "$FILE" || {
+        echo "$ME: ${FILE##*/} has a split key with no usable next line; no file is changed" >&2
+        exit 1
+    }
+done < <(list_files "$REPO_PATH")
+
 while IFS= read -r FILE; do
     PAIRS=$(count_file "$FILE")
     [[ "$PAIRS" == 0 ]] && continue

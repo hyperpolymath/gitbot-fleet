@@ -24,7 +24,9 @@
 #
 # The recipe edits only the old template: the `jobs:` section must be the text
 # of the old template, line for line. Only these can differ: the reference of
-# the 2 actions, the version of the Ubuntu runner, the value of the timeout,
+# the 2 actions, the name of the scan action (`sonarqube-scan-action` or the
+# older `sonarcloud-github-action`, which reads the same token from the
+# environment), the version of the Ubuntu runner, the value of the timeout,
 # and the comment on `fetch-depth`. Before `jobs:`, the workflow can have only
 # the top-level keys of the old template: `name`, `on`, `concurrency` and
 # `permissions`. A target with any other difference is not changed, and the
@@ -89,6 +91,7 @@ YAML
 neutral_jobs() {
     sed -n '/^jobs:[[:space:]]*$/,$p' "$1" | sed -E \
         -e 's/[[:space:]]+$//' \
+        -e 's#^( +uses:[[:space:]]*SonarSource/)sonarcloud-github-action@#\1sonarqube-scan-action@#' \
         -e 's/^( +uses:[[:space:]]*[^@[:space:]]+)@.*$/\1@REF/' \
         -e 's/^(    runs-on:[[:space:]]*ubuntu)-[A-Za-z0-9.]+$/\1/' \
         -e 's/^(    timeout-minutes:[[:space:]]*)[0-9]+$/\1N/' \

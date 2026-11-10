@@ -59,7 +59,9 @@ targets and changes nothing. Each recipe is idempotent, does not follow a
 symlink, and edits the working tree only: it makes no commit.
 
 A recipe that finds a target with an unknown shape does not change the file
-and exits 1. The run then does not read as a repair.
+and exits 1. The run then does not read as a repair. The split-key recipe
+examines each workflow before the first write: one workflow that it cannot
+repair refuses the repository, and no file is changed.
 
 == Evidence
 
