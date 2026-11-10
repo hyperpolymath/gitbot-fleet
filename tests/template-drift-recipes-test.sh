@@ -137,6 +137,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 YAML
+cp "$F" "$TMP/sonar-old.orig"
 cat > "$TMP/expected" <<'YAML'
 # SPDX-License-Identifier: MPL-2.0
 name: SonarQube
@@ -179,6 +180,27 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 YAML
 repair "$R" "$REPO" "$F" 1 "$TMP/expected"
+
+# The old template with one difference is not the old template: refused, and
+# the file is not changed. Each case is one change of the fixture.
+refuse_variant() {  # <name> <awk-program>
+    local repo file
+    repo=$(new_repo "sonar-$1"); file="$repo/.github/workflows/sonarqube.yml"
+    awk "$2" "$TMP/sonar-old.orig" > "$file"
+    cmp -s "$file" "$TMP/sonar-old.orig" && fail "$R sonar-$1: the test case is the fixture"
+    expect_count "$R" "$repo" 1
+    expect_refused "$R" "$repo" "$file"
+}
+# One more step, with the step identifier that the guard uses.
+refuse_variant step-id-cfg '{ print } /^    steps:$/ { print "      - name: Other"; print "        id: cfg"; print "        run: echo x" }'
+# A step name that is a block scalar.
+refuse_variant block-name '/^      - name: Checkout$/ { print "      - name: >"; print "          Checkout"; next } { print }'
+# The token below `with:` and not below `env:`.
+refuse_variant token-in-with '/^        env:$/ { print "        with:"; next } { print }'
+# A runner that is not Ubuntu.
+refuse_variant windows-runner '/^    runs-on: / { print "    runs-on: windows-latest"; next } { print }'
+# A default shell for the workflow.
+refuse_variant default-shell '/^jobs:$/ { print "defaults:"; print "  run:"; print "    shell: pwsh" } { print }'
 
 # The guard step does what the recipe says, with and with no token.
 sed -n '/^        run: |$/,/^          fi$/p' "$F" | sed '1d; s/^          //' > "$TMP/guard.sh"

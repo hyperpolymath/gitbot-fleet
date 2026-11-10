@@ -22,11 +22,11 @@
 # with `secrets.SONAR_TOKEN` and has no `if:` line. A file with an `if:` line
 # is not a target, because a person can have written a different guard.
 #
-# The recipe edits only the shape of the old template: 1 job, a `steps:` line
-# with 4 spaces, each step with `- name:` and 6 spaces, no `env:` line at the
-# job level, and 1 scan step that has `SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}`
-# in its own environment. A target with a different shape is not changed, and
-# the recipe exits 1 so that the run does not read as a repair.
+# The recipe edits only the old template: the `jobs:` section must be the text
+# of the old template, line for line. Only these can differ: the reference of
+# the 2 actions, the version of the Ubuntu runner, the value of the timeout,
+# and the comment on `fetch-depth`. A target with any other difference is not
+# changed, and the recipe exits 1 so that the run does not read as a repair.
 #
 # Idempotent: a file that has the guard is not a target.
 #
@@ -63,29 +63,42 @@ count_targets() {
     fi
 }
 
-# Succeed when the file has the shape of the old template. The secret must be
-# in the environment of the scan step itself.
+# The `jobs:` section of the old template, in a neutral form: no action
+# reference, no runner version, no timeout value, no comment on `fetch-depth`.
+OLD_JOBS=$(cat <<'YAML'
+jobs:
+  sonarqube:
+    name: SonarQube
+    runs-on: ubuntu
+    timeout-minutes: N
+    steps:
+      - name: Checkout
+        uses: actions/checkout@REF
+        with:
+          fetch-depth: 0
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@REF
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+YAML
+)
+
+# Print the `jobs:` section of a workflow in the neutral form.
+neutral_jobs() {
+    sed -n '/^jobs:[[:space:]]*$/,$p' "$1" | sed -E \
+        -e 's/[[:space:]]+$//' \
+        -e 's/^( +uses:[[:space:]]*[^@[:space:]]+)@.*$/\1@REF/' \
+        -e 's/^(    runs-on:[[:space:]]*ubuntu)-[A-Za-z0-9.]+$/\1/' \
+        -e 's/^(    timeout-minutes:[[:space:]]*)[0-9]+$/\1N/' \
+        -e 's/^(          fetch-depth: 0)[[:space:]]+#.*$/\1/'
+}
+
+# Succeed when the `jobs:` section IS the old template, and the workflow sets
+# no default shell. This is an exact comparison: a workflow with one more
+# step, another runner, another step name or another place for the token is
+# not the old template, and it is refused.
 known_shape() {
-    local file="$1"
-    awk '
-        /^jobs:[[:space:]]*$/                           { in_jobs = 1; next }
-        in_jobs && /^  [A-Za-z0-9_-]+:[[:space:]]*$/    { jobs++ }
-        in_jobs && /^    steps:[[:space:]]*$/           { steps_lines++; in_steps = 1; next }
-        in_jobs && !in_steps && /^    env:/             { job_env++ }
-        in_steps && /^      - /                         { items++; in_scan = 0 }
-        in_steps && /^      - name: /                   { named++ }
-        in_steps && /^        uses:[[:space:]]*SonarSource\/(sonarqube-scan-action|sonarcloud-github-action)@/ {
-            in_scan = 1; scans++
-        }
-        in_scan && /^          SONAR_TOKEN:[[:space:]]*\$\{\{[[:space:]]*secrets\.SONAR_TOKEN[[:space:]]*\}\}[[:space:]]*$/ {
-            scan_secret++
-        }
-        in_steps && /^ ? ? ? ? ?[^ #]/                    { after_steps++ }
-        END {
-            exit !(jobs == 1 && steps_lines == 1 && job_env == 0 && items >= 1 &&
-                   items == named && after_steps == 0 && scans == 1 && scan_secret == 1)
-        }
-    ' "$file"
+    ! grep -qE '^defaults:' "$1" && [[ "$(neutral_jobs "$1")" == "$OLD_JOBS" ]]
 }
 
 if [[ "${1:-}" == "--check" ]]; then
