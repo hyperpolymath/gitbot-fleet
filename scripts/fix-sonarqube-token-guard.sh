@@ -26,7 +26,8 @@
 # of the old template, line for line. Only these can differ: the reference of
 # the 2 actions, the name of the scan action (`sonarqube-scan-action` or the
 # older `sonarcloud-github-action`, which reads the same token from the
-# environment), the version of the Ubuntu runner, the value of the timeout,
+# environment), the version of the Ubuntu runner
+# (`ubuntu-latest` or `ubuntu-<number>.<number>`), the value of the timeout,
 # and the comment on `fetch-depth`. Before `jobs:`, the workflow can have only
 # the top-level keys of the old template: `name`, `on`, `concurrency` and
 # `permissions`. A target with any other difference is not changed, and the
@@ -73,7 +74,7 @@ OLD_JOBS=$(cat <<'YAML'
 jobs:
   sonarqube:
     name: SonarQube
-    runs-on: ubuntu
+    runs-on: ubuntu-VERSION
     timeout-minutes: N
     steps:
       - name: Checkout
@@ -93,7 +94,7 @@ neutral_jobs() {
         -e 's/[[:space:]]+$//' \
         -e 's#^( +uses:[[:space:]]*SonarSource/)sonarcloud-github-action@#\1sonarqube-scan-action@#' \
         -e 's/^( +uses:[[:space:]]*[^@[:space:]]+)@.*$/\1@REF/' \
-        -e 's/^(    runs-on:[[:space:]]*ubuntu)-[A-Za-z0-9.]+$/\1/' \
+        -e 's/^(    runs-on:[[:space:]]*ubuntu)-(latest|[0-9]+\.[0-9]+)$/\1-VERSION/' \
         -e 's/^(    timeout-minutes:[[:space:]]*)[0-9]+$/\1N/' \
         -e 's/^(          fetch-depth: 0)[[:space:]]+#.*$/\1/'
 }

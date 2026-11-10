@@ -206,6 +206,9 @@ refuse_variant block-name '/^      - name: Checkout$/ { print "      - name: >";
 refuse_variant token-in-with '/^        env:$/ { print "        with:"; next } { print }'
 # A runner that is not Ubuntu.
 refuse_variant windows-runner '/^    runs-on: / { print "    runs-on: windows-latest"; next } { print }'
+# A label that starts with `ubuntu` and is not a hosted Ubuntu version.
+refuse_variant custom-runner '/^    runs-on: / { print "    runs-on: ubuntu-windows"; next } { print }'
+refuse_variant bare-runner '/^    runs-on: / { print "    runs-on: ubuntu"; next } { print }'
 # A default shell for the workflow.
 refuse_variant default-shell '/^jobs:$/ { print "defaults:"; print "  run:"; print "    shell: pwsh" } { print }'
 # The same key in the quoted form. Each top-level key that is not a key of the
