@@ -41,8 +41,10 @@ serenity = { version = "0.12.5", default-features = false, features = [
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal"] }
 
 # Persistence (SQLAlchemy/Alembic analogue)
-sqlx = { version = "0.8.6", default-features = false, features = [
-  "runtime-tokio-rustls", "sqlite", "macros", "chrono", "migrate",
+# Temporary unreleased pin permits patched libsqlite3-sys 0.39.1 (RUSTSEC-2026-0459).
+# Replace with a reviewed SQLx release when one supports the patched SQLite.
+sqlx = { git = "https://github.com/launchbadge/sqlx", rev = "ae659a0ca4e5e6708e589abc216f734deddb8e29", default-features = false, features = [
+  "runtime-tokio", "tls-rustls", "sqlite", "macros", "chrono", "migrate",
 ] }
 
 # Config / env (.env -> python-dotenv analogue)

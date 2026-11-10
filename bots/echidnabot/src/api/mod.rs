@@ -3,6 +3,7 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! API layer - GraphQL and webhook handlers
 
+pub mod auth;
 pub mod graphql;
 pub mod rate_limit;
 pub mod webhooks;

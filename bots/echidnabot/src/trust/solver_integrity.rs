@@ -238,7 +238,7 @@ fn prover_key(prover: &ProverKind) -> String {
 /// Constant-time byte comparison to prevent timing side channels.
 ///
 /// Returns true if both slices are equal in length and content.
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }

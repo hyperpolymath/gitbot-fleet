@@ -22,6 +22,11 @@ for name in lock-closure-receipts.tsv lock-audit-baseline.tsv pinned-reusable-so
 done
 cp "$ROOT/$MIG/preflight.sh" "$ROOT/$MIG/required-contexts.txt" "$BASE/$MIG/"
 cp -R "$ROOT/$MIG/fixtures" "$ROOT/$MIG/patches" "$BASE/$MIG/"
+# Exercise the original migration proposal, not the newer live caller.
+# Its archived source and receipt are reconstructed only in this fixture.
+if grep -Fq 'uses: hyperpolymath/proven-cicd/.github/workflows/secret-scanner-reusable.yml@03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409' "$BASE/.github/workflows/secret-scanner.yml"; then
+  bash "$BASE/$MIG/fixtures/restore-historical-source.sh" "$BASE" "$BASE/$MIG/fixtures/historical-source.json"
+fi
 # Deliberately omit the canary directory. Every invocation binds --receipt to
 # a nonexistent isolated path, so these static tests cannot authorize rollout.
 new_case() { CASE="$WORK/$1"; cp -R "$BASE" "$CASE"; }

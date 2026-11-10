@@ -4,6 +4,8 @@
 //! GraphQL schema and resolvers
 
 use async_graphql::{Context, EmptySubscription, Object, Schema, SimpleObject, ID};
+
+use super::auth::{admin_only, check_repo_scope, route_or_admin};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -199,6 +201,7 @@ pub struct QueryRoot;
 #[Object]
 impl QueryRoot {
     /// Get a repository by platform, owner, and name
+    #[graphql(guard = "admin_only")]
     async fn repository(
         &self,
         ctx: &Context<'_>,
@@ -216,6 +219,7 @@ impl QueryRoot {
     }
 
     /// List all registered repositories
+    #[graphql(guard = "admin_only")]
     async fn repositories(&self, ctx: &Context<'_>, platform: Option<Platform>) -> Vec<Repository> {
         let state = match ctx.data::<GraphQLState>() {
             Ok(state) => state,
@@ -230,6 +234,7 @@ impl QueryRoot {
     }
 
     /// Get a proof job by ID
+    #[graphql(guard = "admin_only")]
     async fn job(&self, ctx: &Context<'_>, id: ID) -> Option<ProofJob> {
         let state = ctx.data::<GraphQLState>().ok()?;
         let job_id = Uuid::parse_str(id.as_str()).ok()?;
@@ -242,6 +247,7 @@ impl QueryRoot {
     }
 
     /// List jobs for a repository
+    #[graphql(guard = "admin_only")]
     async fn jobs_for_repo(
         &self,
         ctx: &Context<'_>,
@@ -266,6 +272,7 @@ impl QueryRoot {
     }
 
     /// List available provers
+    #[graphql(guard = "admin_only")]
     async fn available_provers(&self, ctx: &Context<'_>) -> Vec<ProverInfo> {
         let state = match ctx.data::<GraphQLState>() {
             Ok(state) => state,
@@ -293,6 +300,7 @@ impl QueryRoot {
     }
 
     /// Check prover status
+    #[graphql(guard = "admin_only")]
     async fn prover_status(&self, ctx: &Context<'_>, prover: ProverKind) -> ProverStatus {
         let state = match ctx.data::<GraphQLState>() {
             Ok(state) => state,
@@ -309,6 +317,7 @@ impl QueryRoot {
     ///
     /// Used by LLM agents to inspect historical success rates before suggesting
     /// a tactic, and by operators to audit the feedback store.
+    #[graphql(guard = "admin_only")]
     async fn tactic_outcomes(
         &self,
         ctx: &Context<'_>,
@@ -337,6 +346,7 @@ impl QueryRoot {
 
     /// List recorded tactic outcomes for a specific (prover, tactic) pair
     /// across all goal fingerprints. Useful for global win-rate queries.
+    #[graphql(guard = "admin_only")]
     async fn tactic_outcomes_by_tactic(
         &self,
         ctx: &Context<'_>,
@@ -424,6 +434,7 @@ pub struct ProofObligationPayload {
 #[Object]
 impl MutationRoot {
     /// Register a repository for monitoring
+    #[graphql(guard = "admin_only")]
     async fn register_repository(
         &self,
         ctx: &Context<'_>,
@@ -446,6 +457,7 @@ impl MutationRoot {
     }
 
     /// Manually trigger a proof check
+    #[graphql(guard = "admin_only")]
     async fn trigger_check(
         &self,
         ctx: &Context<'_>,
@@ -502,6 +514,7 @@ impl MutationRoot {
     }
 
     /// Request ML-powered tactic suggestions
+    #[graphql(guard = "admin_only")]
     async fn request_suggestions(
         &self,
         ctx: &Context<'_>,
@@ -519,6 +532,7 @@ impl MutationRoot {
     }
 
     /// Update repository settings
+    #[graphql(guard = "admin_only")]
     async fn update_repo_settings(
         &self,
         ctx: &Context<'_>,
@@ -561,6 +575,7 @@ impl MutationRoot {
     }
 
     /// Enable or disable repository monitoring
+    #[graphql(guard = "admin_only")]
     async fn set_repo_enabled(
         &self,
         ctx: &Context<'_>,
@@ -592,6 +607,7 @@ impl MutationRoot {
     /// tactic being applied in a proof session. The outcome feeds the local
     /// Reranker store so future suggestions for the same goal fingerprint are
     /// ranked by historical success rate.
+    #[graphql(guard = "admin_only")]
     async fn record_tactic_outcome(
         &self,
         ctx: &Context<'_>,
@@ -628,6 +644,7 @@ impl MutationRoot {
     /// prover yet, and `inline: true` is recorded but not honoured. Invalid
     /// input or a store failure is returned as a GraphQL error, because one of
     /// the two senders reads only `errors` and ignores `success`.
+    #[graphql(guard = "route_or_admin")]
     async fn submit_proof_obligation(
         &self,
         ctx: &Context<'_>,
@@ -644,6 +661,7 @@ impl MutationRoot {
                 )))
             }
         };
+        check_repo_scope(ctx, &input.repo)?;
         if input.claim.trim().is_empty() {
             return Err(async_graphql::Error::new("claim must not be empty"));
         }

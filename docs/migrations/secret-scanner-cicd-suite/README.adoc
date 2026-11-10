@@ -2,7 +2,15 @@
 :toc: preamble
 :sectnums:
 
-*Status: PREPARED, NOT APPLIED.* The live workflow in this repository still
+[NOTE]
+====
+The text below is the historical 2026-10-31 migration plan, not the current
+fleet deployment status. PRs #632 and #631 were merged. See
+link:2026-11-09-fleet-evidence.md[the dated fleet evidence] and the live
+`canary/receipt.json`; do not apply the historical patches to current main.
+====
+
+*Historical status: PREPARED, NOT APPLIED.* The live workflow in this repository still
 calls `hyperpolymath/standards/.github/workflows/secret-scanner-reusable.yml@75bd5994…`.
 Nothing in this directory changes it.
 

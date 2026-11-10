@@ -2,10 +2,26 @@
 # Copy to echidnabot.toml and customize
 
 [server]
-# Host to bind to (0.0.0.0 for all interfaces)
-host = "0.0.0.0"
+# Host to bind to. Loopback by default. Binding every interface
+# ("0.0.0.0") needs ECHIDNABOT_API_ROUTE_TOKEN and/or
+# ECHIDNABOT_API_ADMIN_TOKEN in the environment, or the daemon refuses to start.
+host = "127.0.0.1"
 # Port to listen on
 port = 8080
+
+[api]
+# The GraphQL API at /graphql needs a bearer credential. The two credentials
+# are read only from the environment, never from this file:
+#   ECHIDNABOT_API_ROUTE_TOKEN  submitProofObligation only, for route_repos
+#   ECHIDNABOT_API_ADMIN_TOKEN  every query and mutation
+# Each must be at least 32 bytes and they must differ: `openssl rand -hex 32`.
+# Repositories the route credential may submit for: "owner/name" or "owner/*".
+# Empty allows none.
+route_repos = ["hyperpolymath/*"]
+# /graphql requests per minute per TCP peer address (0 disables). The peer is
+# the address that connected, so behind a reverse proxy every client shares
+# the proxy's budget: limit at the proxy instead and set 0 here.
+rate_limit_rpm = 120
 
 [database]
 # SQLite for development, PostgreSQL for production

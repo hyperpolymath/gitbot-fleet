@@ -77,6 +77,15 @@ pub struct Config {
     /// `OTEL_EXPORTER_OTLP_ENDPOINT` env var (env wins over TOML).
     #[serde(default)]
     pub observability: ObservabilityConfig,
+
+    /// GraphQL API access: which repositories the route credential may
+    /// submit obligations for, and the per-IP rate limit on `/graphql`.
+    /// The credentials themselves are read only from the environment
+    /// (`ECHIDNABOT_API_ROUTE_TOKEN`, `ECHIDNABOT_API_ADMIN_TOKEN`).
+    ///
+    /// TOML: `[api]\nroute_repos = ["hyperpolymath/*"]\nrate_limit_rpm = 120`
+    #[serde(default)]
+    pub api: ApiConfig,
 }
 
 /// Lifecycle settings — how long to wait for in-flight work to drain
@@ -311,11 +320,51 @@ impl Default for ServerConfig {
 }
 
 fn default_host() -> String {
-    "0.0.0.0".to_string()
+    // Loopback by default: binding every interface is an explicit choice,
+    // and the daemon refuses it unless API credentials are configured
+    // (see `api::auth`).
+    "127.0.0.1".to_string()
 }
 
 fn default_port() -> u16 {
     8080
+}
+
+/// GraphQL API access settings. The two credentials are not here: they are
+/// read only from `ECHIDNABOT_API_ROUTE_TOKEN` and `ECHIDNABOT_API_ADMIN_TOKEN`
+/// so they never sit in a config file.
+///
+/// ```toml
+/// [api]
+/// route_repos = ["hyperpolymath/*"]
+/// rate_limit_rpm = 120
+/// ```
+#[derive(Debug, Deserialize, Clone)]
+pub struct ApiConfig {
+    /// Repositories the route credential may submit obligations for:
+    /// exact `owner/name` slugs or `owner/*`. Empty allows none.
+    #[serde(default)]
+    pub route_repos: Vec<String>,
+
+    /// Maximum `/graphql` requests per minute per TCP peer address. Default
+    /// 120; set `0` to disable. Forwarding headers are not trusted, so
+    /// behind a reverse proxy every client shares the proxy's budget: limit
+    /// at the proxy and set `0` here.
+    #[serde(default = "default_api_rate_limit_rpm")]
+    pub rate_limit_rpm: u32,
+}
+
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self {
+            route_repos: Vec::new(),
+            rate_limit_rpm: default_api_rate_limit_rpm(),
+        }
+    }
+}
+
+fn default_api_rate_limit_rpm() -> u32 {
+    120
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -486,16 +535,33 @@ fn default_queue_size() -> usize {
 impl Config {
     /// Load configuration from file
     pub fn load(path: &str) -> Result<Self> {
+        Self::load_with_env(path, Self::environment())
+    }
+
+    /// The `ECHIDNABOT__SECTION__KEY` environment source.
+    fn environment() -> config::Environment {
+        config::Environment::with_prefix("ECHIDNABOT").separator("__")
+    }
+
+    /// [`Config::load`] with the environment source supplied, so tests can
+    /// pass a fixed map instead of mutating the process environment.
+    ///
+    /// The environment applies whether or not the file exists: a container
+    /// that ships no config file is configured by `ECHIDNABOT__…` variables
+    /// alone (see `.env.example`).
+    fn load_with_env(path: &str, env: config::Environment) -> Result<Self> {
         let path = Path::new(path);
 
         if !path.exists() {
-            tracing::warn!("Config file {} not found, using defaults", path.display());
-            return Ok(Self::default());
+            tracing::warn!(
+                "Config file {} not found, using defaults and ECHIDNABOT__* overrides",
+                path.display()
+            );
         }
 
         let builder = config::Config::builder()
-            .add_source(config::File::from(path))
-            .add_source(config::Environment::with_prefix("ECHIDNABOT").separator("__"));
+            .add_source(config::File::from(path).required(false))
+            .add_source(env);
 
         let config = builder.build()?;
         let parsed: Config = config.try_deserialize()?;
@@ -578,5 +644,45 @@ mod redaction_tests {
             assert!(!out.contains("SECRET"), "{out}");
             assert!(out.contains("<redacted>"), "{out}");
         }
+    }
+}
+
+#[cfg(test)]
+mod load_tests {
+    use super::*;
+
+    fn env(pairs: &[(&str, &str)]) -> config::Environment {
+        let map: config::Map<String, String> = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect();
+        Config::environment().source(Some(map))
+    }
+
+    /// A container ships no config file and sets `ECHIDNABOT__SERVER__HOST`
+    /// in `.env`: the override must apply, not the loopback default.
+    #[test]
+    fn environment_applies_when_the_config_file_is_missing() {
+        let missing = "/nonexistent/echidnabot-test-config.toml";
+        let c = Config::load_with_env(
+            missing,
+            env(&[
+                ("ECHIDNABOT__SERVER__HOST", "0.0.0.0"),
+                ("ECHIDNABOT__SERVER__PORT", "9091"),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(c.server.host, "0.0.0.0");
+        assert_eq!(c.server.port, 9091);
+    }
+
+    #[test]
+    fn missing_file_and_no_overrides_gives_the_defaults() {
+        let c =
+            Config::load_with_env("/nonexistent/echidnabot-test-config.toml", env(&[])).unwrap();
+        assert_eq!(c.server.host, "127.0.0.1");
+        assert_eq!(c.server.port, 8080);
+        assert_eq!(c.api.rate_limit_rpm, 120);
+        assert!(c.api.route_repos.is_empty());
     }
 }
