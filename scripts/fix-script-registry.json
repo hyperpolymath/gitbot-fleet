@@ -127,7 +127,10 @@
       "workflow_audit/known_broken_reusable_revision": "fix-stale-reusable-pin.sh",
       "PIN-003": "fix-stale-reusable-pin.sh",
       "PI006": "fix-lock-self-sha-refs.sh",
-      "pin_integrity/self_sha_lock_record": "fix-lock-self-sha-refs.sh"
+      "pin_integrity/self_sha_lock_record": "fix-lock-self-sha-refs.sh",
+      "recipe-workflow-linter-spdx-rule": "fix-workflow-linter-spdx-rule.sh",
+      "recipe-sonarqube-token-guard": "fix-sonarqube-token-guard.sh",
+      "recipe-workflow-split-comment-keys": "fix-split-comment-keys.sh"
     }
   }
 }

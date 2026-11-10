@@ -1,0 +1,110 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Template Drift Campaign: 2026-11-10
+:toc:
+:toclevels: 2
+
+== Purpose
+
+A repository gets a copy of the estate template (`hyperpolymath/rsr-template-repo`)
+when it is made. Later repairs in the template do not reach that copy. The
+same CI failures then show in each older repository, although the template
+has the repair.
+
+This campaign has 3 recipes for 3 such failures. Each recipe makes the change
+that the template already has. The worked example is `hyperpolymath/system-et`
+(pull requests 90 and 92, 2026-11-10), where each repair was first made by
+hand.
+
+== Status
+
+*The recipes are not dispatched.* The fleet dispatch is under quarantine
+(`docs/AUTOMATION-QUARANTINE.adoc`), and this change does not touch the
+interlock. There is no manifest in this campaign, because a manifest needs an
+estate scan, and the quarantine document forbids a scan as a workaround.
+No rule in `AGENTIC.a2ml` assigns these recipes; that grant is the owner's.
+
+== Recipes
+
+[cols="2,2,3,3"]
+|===
+| Recipe id | Script | Target | Repair
+
+| `recipe-workflow-linter-spdx-rule`
+| `fix-workflow-linter-spdx-rule.sh`
+| `workflow-linter.yml` with the rule `head -1 "$file" \| grep -q "^# SPDX-License-Identifier:"`.
+  The tool `gh actions-lock` writes its comment on line 1, so each lock run
+  makes each managed workflow fail the lint.
+| The rule of the template: the licence line can be at any position in the
+  leading comment block.
+
+| `recipe-sonarqube-token-guard`
+| `fix-sonarqube-token-guard.sh`
+| `sonarqube.yml` that scans with `secrets.SONAR_TOKEN` and has no `if:` line.
+  With no secret, the scan fails on each run.
+| The guard of the template (2026-07-28): the first step tests the token. With
+  no token the job says that the scan is not configured and passes.
+
+| `recipe-workflow-split-comment-keys`
+| `fix-split-comment-keys.sh`
+| A workflow where the lock sweep of 2026-08 split a comment line such as
+  `#   steps:` into a line `#` and a line `steps:` at column 1. GitHub refuses
+  the file ("Unexpected value 'steps'").
+| The 2 lines become 1 comment line again.
+|===
+
+Each recipe has the predicate `--check <repo-path>`. It prints the number of
+targets and changes nothing. Each recipe is idempotent, does not follow a
+symlink, and edits the working tree only: it makes no commit.
+
+A recipe that finds a target with an unknown shape does not change the file
+and exits 1. The run then does not read as a repair.
+
+== Evidence
+
+`tests/template-drift-recipes-test.sh` runs in the `e2e` workflow.
+
+Each recipe was also run on the files of `system-et` at `main` (`04a8b6e`):
+
+* SPDX rule: the step is identical to the step of the template (`c5a1da7`).
+* Token guard: the job is identical to the job in pull request 92.
+* Split keys: 19 lines restored. The 19 lines are the lines that the file had
+  before the sweep. The file is identical to the repair in pull request 90,
+  except for the order of the first 2 comment lines, which a different commit
+  of that pull request changed.
+
+A second repository (`anytype`) has the first 2 targets and not the third.
+
+== Not in this campaign
+
+*Descriptile files in a retired directory* (`.machine_readable/6a2/` or
+directly in `.machine_readable/`). Hypatia reports these as critical. No
+recipe moves the files: they include `AGENTIC.a2ml`, which holds the
+permissions of the bots, and the quarantine document says that a job must not
+relocate directive files. A person moves the files. After that,
+`recipe-retired-descriptile-policy` repairs the references.
+
+*Reusable-workflow callers that do not start.* `fix-stale-reusable-pin.sh`
+and `fix-lock-self-sha-refs.sh` already cover these.
+
+== Limits
+
+* Not verified: that a later run of `gh actions-lock` does not split the
+  restored comment lines again. The template avoids the problem with an
+  inactive file (`e2e.yml.template`).
+* The token guard recipe edits only the shape of the old template. It does
+  not rewrite a workflow that a person changed.
+* The number of repositories with each target is not known. No estate scan
+  was made.
+
+== Use by a person
+
+Count the targets in one checkout. This reads only:
+
+[source,bash]
+----
+bash scripts/fix-split-comment-keys.sh --check /absolute/path/to/repo
+----
+
+A person can run one recipe on one checkout and review the diff before a
+commit. That is a manual repair. It is not a fleet dispatch, and it does not
+show that other repositories consent.
