@@ -699,11 +699,11 @@
       "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\secret-scanner-reusable.yml"
     },
     {
-      "repository": "hyperpolymath/proven-cicd",
-      "commit": "03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409",
+      "repository": "hyperpolymath/proven-cicd-and-workflows",
+      "commit": "1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6",
       "path": ".github/workflows/secret-scanner-reusable.yml",
-      "blob": "b75b630ab6bee9943573502f0ace580078ef92ae",
-      "content_sha256": "02e34046c20f25c6b1e9ada99bd46294e33cc90a792fefa427f09aef098dcad9",
+      "blob": "3ac563a8da07619459d190a2e75d1742216a9818",
+      "content_sha256": "21ae8d1ba45cf078106fcce5314f68635e17f6636991b8466f1c2a5e1d6e9cbf",
       "role": "active",
       "callers": [
         {
@@ -724,7 +724,7 @@
           "line": 55
         }
       ],
-      "source_url": "https://github.com/hyperpolymath/proven-cicd/blob/03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409/.github/workflows/secret-scanner-reusable.yml"
+      "source_url": "https://github.com/hyperpolymath/proven-cicd-and-workflows/blob/1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6/.github/workflows/secret-scanner-reusable.yml"
     }
   ],
   "dependencies": {
@@ -833,11 +833,11 @@
       "owner_id": 44036562,
       "repo_id": 192625955
     },
-    "hyperpolymath/proven-cicd@03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409": {
-      "ref": "03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409",
-      "commit": "sha1-03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409",
+    "hyperpolymath/proven-cicd-and-workflows@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6": {
+      "ref": "1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6",
+      "commit": "sha1-1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6",
       "owner_id": 6759885,
-      "repo_id": 1446155688,
+      "repo_id": 1326697643,
       "uses": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
       ]

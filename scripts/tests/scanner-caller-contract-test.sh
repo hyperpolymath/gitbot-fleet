@@ -19,7 +19,7 @@ reject() {
 sed -i 's/fast-pr: false/fast-pr: true/' "$wf"; reject 'fast PR scanning'
 printf '    secrets: inherit\n' >> "$wf"; reject 'inherited secrets'
 sed -i 's/contents: read/contents: write/' "$wf"; reject 'excess permissions'
-sed -i 's/03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409/main/' "$wf"; reject 'mutable suite ref'
+sed -i 's/1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6/main/' "$wf"; reject 'mutable suite ref'
 printf '\n  scan:\n    uses: bad/repo/.github/workflows/bad.yml@main\n' >> "$wf"; reject 'duplicate job'
 echo 'scanner caller negative controls passed'
 
