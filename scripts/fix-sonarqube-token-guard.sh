@@ -25,8 +25,10 @@
 # The recipe edits only the old template: the `jobs:` section must be the text
 # of the old template, line for line. Only these can differ: the reference of
 # the 2 actions, the version of the Ubuntu runner, the value of the timeout,
-# and the comment on `fetch-depth`. A target with any other difference is not
-# changed, and the recipe exits 1 so that the run does not read as a repair.
+# and the comment on `fetch-depth`. Before `jobs:`, the workflow can have only
+# the top-level keys of the old template: `name`, `on`, `concurrency` and
+# `permissions`. A target with any other difference is not changed, and the
+# recipe exits 1 so that the run does not read as a repair.
 #
 # Idempotent: a file that has the guard is not a target.
 #
@@ -93,12 +95,24 @@ neutral_jobs() {
         -e 's/^(          fetch-depth: 0)[[:space:]]+#.*$/\1/'
 }
 
-# Succeed when the `jobs:` section IS the old template, and the workflow sets
-# no default shell. This is an exact comparison: a workflow with one more
+# Succeed when each top-level key before `jobs:` is a key of the old template.
+# This is an allow list: a key in any other form, for example `defaults:` or
+# `"defaults":` (a default shell), is refused.
+known_header() {
+    awk '
+        /^jobs:[[:space:]]*$/ { exit }
+        /^[[:space:]#]/ || /^$/ || /^(name|on|concurrency|permissions):/ { next }
+        { bad = 1; exit }
+        END { exit bad }
+    ' "$1"
+}
+
+# Succeed when the workflow IS the old template: the known header, and then
+# the `jobs:` section. This is an exact comparison: a workflow with one more
 # step, another runner, another step name or another place for the token is
 # not the old template, and it is refused.
 known_shape() {
-    ! grep -qE '^defaults:' "$1" && [[ "$(neutral_jobs "$1")" == "$OLD_JOBS" ]]
+    known_header "$1" && [[ "$(neutral_jobs "$1")" == "$OLD_JOBS" ]]
 }
 
 if [[ "${1:-}" == "--check" ]]; then

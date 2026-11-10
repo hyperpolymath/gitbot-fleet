@@ -201,6 +201,9 @@ refuse_variant token-in-with '/^        env:$/ { print "        with:"; next } {
 refuse_variant windows-runner '/^    runs-on: / { print "    runs-on: windows-latest"; next } { print }'
 # A default shell for the workflow.
 refuse_variant default-shell '/^jobs:$/ { print "defaults:"; print "  run:"; print "    shell: pwsh" } { print }'
+# The same key in the quoted form. Each top-level key that is not a key of the
+# old template is refused, in any form.
+refuse_variant quoted-defaults '/^jobs:$/ { print "\"defaults\":"; print "  run:"; print "    shell: pwsh" } { print }'
 
 # The guard step does what the recipe says, with and with no token.
 sed -n '/^        run: |$/,/^          fi$/p' "$F" | sed '1d; s/^          //' > "$TMP/guard.sh"
