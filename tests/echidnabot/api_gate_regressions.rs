@@ -7,7 +7,9 @@ use axum_test::TestServer;
 use echidnabot::api::auth::{api_gate_middleware, ApiCredentials, ApiGate, Principal, RepoScope};
 use std::{net::SocketAddr, sync::Arc};
 
-const TOKEN: &str = "test-admin-credential-0123456789abcdef";
+// Test-only credential. The Rust rule of the secret scan has no rule for the
+// `test-` prefix: the pragma marks the value for it.
+const TOKEN: &str = "test-admin-credential-0123456789abcdef"; // scanner-allow: rust-secrets
 
 fn server(limit: Option<u32>, peer: Option<SocketAddr>) -> TestServer {
     let credentials = ApiCredentials::new(None, Some(TOKEN.into()), RepoScope::default()).unwrap();

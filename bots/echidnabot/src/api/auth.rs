@@ -41,11 +41,15 @@ use super::graphql::EchidnabotSchema;
 use super::rate_limit::WebhookRateLimiter;
 use crate::trust::solver_integrity::constant_time_eq;
 
+// The 2 values below are names of environment variables, not credentials.
+// The pragma says so to the Rust rule of the estate secret scan, which reads
+// a `TOKEN` constant with a string literal as a possible secret.
+
 /// Environment variable holding the route credential.
-pub const ROUTE_TOKEN_ENV: &str = "ECHIDNABOT_API_ROUTE_TOKEN";
+pub const ROUTE_TOKEN_ENV: &str = "ECHIDNABOT_API_ROUTE_TOKEN"; // scanner-allow: rust-secrets
 
 /// Environment variable holding the administrative credential.
-pub const ADMIN_TOKEN_ENV: &str = "ECHIDNABOT_API_ADMIN_TOKEN";
+pub const ADMIN_TOKEN_ENV: &str = "ECHIDNABOT_API_ADMIN_TOKEN"; // scanner-allow: rust-secrets
 
 /// Shortest credential accepted, in bytes. Generate one with
 /// `openssl rand -hex 32` (64 characters).
