@@ -18,6 +18,10 @@
 # step only. The scan step keeps its own entry. No other step, for example
 # the checkout, can then read the secret.
 #
+# The guard step sets `shell: bash`, with the comment of the template. The
+# template gets that line in pull request 321 of rsr-template-repo
+# (2026-11-10, owner decision: the template first, then this recipe).
+#
 # Target: .github/workflows/sonarqube.yml that uses a SonarSource scan action
 # with `secrets.SONAR_TOKEN` and has no `if:` line. A file with an `if:` line
 # is not a target, because a person can have written a different guard.
@@ -151,6 +155,9 @@ GUARD=$(cat <<'YAML'
         # environment of this step and of the scan step only.
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # The script of this step is Bash. `shell: bash` says so in the step:
+        # a default shell or a runner with a different shell cannot change it.
+        shell: bash
         run: |
           if [ -z "${SONAR_TOKEN}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"

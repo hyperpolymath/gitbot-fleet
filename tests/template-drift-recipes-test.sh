@@ -158,6 +158,9 @@ jobs:
         # environment of this step and of the scan step only.
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # The script of this step is Bash. `shell: bash` says so in the step:
+        # a default shell or a runner with a different shell cannot change it.
+        shell: bash
         run: |
           if [ -z "${SONAR_TOKEN}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"

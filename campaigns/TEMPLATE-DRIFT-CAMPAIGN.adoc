@@ -44,7 +44,9 @@ No rule in `AGENTIC.a2ml` assigns these recipes; that grant is the owner's.
 | The guard of the template (2026-07-28): the first step tests the token. With
   no token the job says that the scan is not configured and passes. One
   difference from the template: the token is in the environment of the guard
-  step and of the scan step only, and not of the job.
+  step and of the scan step only, and not of the job. The guard step sets
+  `shell: bash`; the template gets that line in `rsr-template-repo` pull
+  request 321.
 
 | `recipe-workflow-split-comment-keys`
 | `fix-split-comment-keys.sh`
@@ -70,7 +72,9 @@ repair refuses the repository, and no file is changed.
 Each recipe was also run on the files of `system-et` at `main` (`04a8b6e`):
 
 * SPDX rule: the step is identical to the step of the template (`c5a1da7`).
-* Token guard: the job is identical to the job in pull request 92.
+* Token guard: the job is identical to the job in pull request 92, plus the
+  3 lines of `shell: bash` in the guard step. Pull request 92 was made before
+  the owner decided on that line.
 * Split keys: 19 lines restored. The 19 lines are the lines that the file had
   before the sweep. The file is identical to the repair in pull request 90,
   except for the order of the first 2 comment lines, which a different commit
