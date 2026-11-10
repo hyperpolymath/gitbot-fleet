@@ -70,7 +70,9 @@ repair refuses the repository, and no file is changed.
 
 Each recipe was also run on the files of `system-et` at `main` (`04a8b6e`):
 
-* SPDX rule: the step is identical to the step of the template (`c5a1da7`).
+* SPDX rule: the step is identical to the step of the template branch
+  (`rsr-template-repo` pull request 323, `915acb2`). That pull request makes
+  the rule stop at an indented workflow body also.
 * Token guard: the job is identical to the job in pull request 92
   (`9f529ef`). The guard step is identical to the guard step of the template
   branch (`rsr-template-repo` pull request 321, `806dac0`).
@@ -100,6 +102,10 @@ and `fix-lock-self-sha-refs.sh` already cover these.
   inactive file (`e2e.yml.template`).
 * The token guard recipe edits only the shape of the old template. It does
   not rewrite a workflow that a person changed.
+* The SPDX recipe has 1 target: the `head -1` rule. A linter that has the
+  first form of the template rule (the form before `rsr-template-repo` pull
+  request 323, for example in `system-et`) is not a target, and keeps that
+  form.
 * The number of repositories with each target is not known. No estate scan
   was made.
 

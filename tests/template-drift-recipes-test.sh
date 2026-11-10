@@ -82,7 +82,7 @@ cat > "$TMP/expected" <<'YAML'
           for file in .github/workflows/*.yml; do
             # actions-lock may prepend its own comment. Require the licence
             # in the leading comment block, before the workflow body.
-            if ! awk '/^# SPDX-License-Identifier:/ { found=1 } /^[^#[:space:]]/ { exit } END { exit !found }' "$file"; then
+            if ! awk '/^# SPDX-License-Identifier:/ { found=1 } /^[[:space:]]*[^#[:space:]]/ { exit } END { exit !found }' "$file"; then
               echo "ERROR: $file missing SPDX header"
             fi
           done
@@ -100,6 +100,12 @@ printf '# comment\nname: a\n# SPDX-License-Identifier: MPL-2.0\n' > "$TMP/s3"
 awk "$RULE" "$TMP/s1" || fail "$R: the new rule refuses a licence on line 2"
 if awk "$RULE" "$TMP/s2"; then fail "$R: the new rule accepts a file with no licence"; fi
 if awk "$RULE" "$TMP/s3"; then fail "$R: the new rule accepts a licence after the body"; fi
+# A workflow with an indented root mapping: the body starts at the first line
+# that is not a comment, so a licence line after it does not count.
+printf '# comment\n  name: a\n  jobs: {}\n# SPDX-License-Identifier: MPL-2.0\n' > "$TMP/s4"
+printf '# SPDX-License-Identifier: MPL-2.0\n  name: a\n  jobs: {}\n' > "$TMP/s5"
+if awk "$RULE" "$TMP/s4"; then fail "$R: the new rule accepts a licence after an indented body"; fi
+awk "$RULE" "$TMP/s5" || fail "$R: the new rule refuses a licence before an indented body"
 
 # A linter with a different rule is not a target.
 REPO=$(new_repo spdx-other); F="$REPO/.github/workflows/workflow-linter.yml"
