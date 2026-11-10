@@ -29,6 +29,29 @@ jobs:
           persist-credentials: false
       - run: bash scripts/tests/sync-vendored-bot.sh
 
+  echidnabot-tests:
+    name: echidnabot vendored build and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: bots/echidnabot
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test the vendored crate at the pinned lock
+        run: |
+          set -euo pipefail
+          # Fleet-owned regression tests are kept outside the pinned source.
+          # Stage them only in this runner and refuse to mask upstream tests.
+          for source in "$GITHUB_WORKSPACE"/tests/echidnabot/*.rs; do
+            target="tests/$(basename "$source")"
+            test ! -e "$target" || { echo "upstream test collision: $target" >&2; exit 1; }
+            cp "$source" "$target"
+          done
+          cargo test --locked --all-targets
+
   drift:
     name: echidnabot pinned to hyperpolymath/echidnabot
     runs-on: ubuntu-24.04

@@ -160,9 +160,38 @@ async fn obligation_schema() -> echidnabot::api::graphql::EchidnabotSchema {
     })
 }
 
-/// Execute `query` and return the response as JSON (data + errors).
+/// The principal Hypatia holds: the route credential, scoped as a deployment
+/// would scope it, plus the slug the contract tests use for invalid inputs.
+fn hypatia_principal() -> echidnabot::api::auth::Principal {
+    echidnabot::api::auth::Principal::Route(echidnabot::api::auth::RepoScope::new([
+        "hyperpolymath/*",
+        "a/b",
+    ]))
+}
+
+/// Execute `query` as Hypatia and return the response as JSON (data + errors).
 async fn run(schema: &echidnabot::api::graphql::EchidnabotSchema, query: &str) -> Value {
-    serde_json::to_value(schema.execute(query).await).unwrap()
+    run_as(schema, query, Some(hypatia_principal())).await
+}
+
+/// Execute `query` as `principal` (or with none) and return the response.
+async fn run_as(
+    schema: &echidnabot::api::graphql::EchidnabotSchema,
+    query: &str,
+    principal: Option<echidnabot::api::auth::Principal>,
+) -> Value {
+    let mut request = async_graphql::Request::new(query);
+    if let Some(p) = principal {
+        request = request.data(p);
+    }
+    serde_json::to_value(schema.execute(request).await).unwrap()
+}
+
+/// The `code` extension of the first error, if any.
+fn error_code(resp: &Value) -> Option<String> {
+    resp["errors"][0]["extensions"]["code"]
+        .as_str()
+        .map(str::to_string)
 }
 
 /// FleetDispatcher's mutation; `prover_line` is "" or "        prover: X,\n".
@@ -271,4 +300,84 @@ async fn invalid_obligations_are_graphql_errors_not_success_false() {
             "expected a GraphQL error for {q:.80}: {resp}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Authorization inside the schema. The HTTP gate (src/api/auth.rs) answers
+// 401 before the schema runs; these tests show the field guards fail closed
+// for anything that executes the schema directly.
+// ---------------------------------------------------------------------------
+
+const UPDATE_SETTINGS: &str =
+    "mutation { updateRepoSettings(repoId: \"00000000-0000-0000-0000-000000000000\", \
+     settings: { webhookSecret: \"forged\" }) { id } }";
+const RECORD_OUTCOME: &str = "mutation { recordTacticOutcome(input: { \
+     prover: COQ, goalState: \"g\", tactic: \"auto\", succeeded: true, durationMs: 1 }) { id } }";
+const REGISTER_REPO: &str = "mutation { registerRepository(input: { \
+     platform: GIT_HUB, owner: \"someone-else\", name: \"repo\", webhookSecret: \"forged\" }) { id } }";
+const TRIGGER_CHECK: &str =
+    "mutation { triggerCheck(repoId: \"00000000-0000-0000-0000-000000000000\") { id } }";
+
+#[tokio::test]
+async fn obligation_outside_the_route_scope_is_forbidden() {
+    let schema = obligation_schema().await;
+    let q = fleet_mutation("someone-else/repo", "forall x, x = x", "pattern P1", "");
+    let resp = run(&schema, &q).await;
+    assert_eq!(error_code(&resp).as_deref(), Some("FORBIDDEN"), "{resp}");
+    assert!(resp["data"].is_null(), "{resp}");
+}
+
+#[tokio::test]
+async fn schema_executed_without_a_principal_refuses_the_guarded_fields() {
+    let schema = obligation_schema().await;
+    let submit = fleet_mutation("hyperpolymath/echidnabot", "c", "d", "");
+    for q in [
+        submit.as_str(),
+        UPDATE_SETTINGS,
+        RECORD_OUTCOME,
+        REGISTER_REPO,
+        TRIGGER_CHECK,
+        "{ repositories { id } }",
+    ] {
+        let resp = run_as(&schema, q, None).await;
+        assert_eq!(
+            error_code(&resp).as_deref(),
+            Some("UNAUTHENTICATED"),
+            "{q:.60}: {resp}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn route_credential_cannot_reach_administrative_fields() {
+    let schema = obligation_schema().await;
+    for q in [
+        UPDATE_SETTINGS,
+        RECORD_OUTCOME,
+        REGISTER_REPO,
+        TRIGGER_CHECK,
+        "{ repositories { id } }",
+    ] {
+        let resp = run(&schema, q).await;
+        assert_eq!(
+            error_code(&resp).as_deref(),
+            Some("FORBIDDEN"),
+            "{q:.60}: {resp}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn admin_credential_passes_the_guards() {
+    let schema = obligation_schema().await;
+    let admin = Some(echidnabot::api::auth::Principal::Admin);
+    let resp = run_as(&schema, "{ repositories { id } }", admin.clone()).await;
+    assert!(
+        resp.get("errors")
+            .is_none_or(|e| e.as_array().unwrap().is_empty()),
+        "{resp}"
+    );
+    // Any repository, in scope or not.
+    let q = fleet_mutation("someone-else/repo", "forall x, x = x", "pattern P1", "");
+    accepted(&run_as(&schema, &q, admin).await);
 }

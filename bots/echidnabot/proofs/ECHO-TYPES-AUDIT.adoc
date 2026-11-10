@@ -74,3 +74,12 @@ echo-types audit lives at `+echidna/docs/PROOF-NEEDS.md+` § "`Echo-types
 audit (2026-06-01)`". Two L3-shape obligations are cross-referenced
 there (`+ProofStateSerialisation+` roundtrip = EQUIV;
 `+ProverKindInjectivity+` = INJ); none flow through echidnabot.
+
+=== Follow-up (2026-11-01)
+
+The classification above is historical, not a claim that all current proof
+material is verified. See link:../docs/PROOF-STATUS.adoc[the current ledger]
+for new unverified Agda theory, the identity-fixture semantic reconstruction,
+and explicit ABI scaffold debt. The negative fixtures remain deliberately
+incomplete. The ABI templates are not checked proofs; the earlier scope
+exclusion does not discharge their obligations.

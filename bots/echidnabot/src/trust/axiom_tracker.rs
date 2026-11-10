@@ -19,14 +19,14 @@
 //! Two scanners live here and they read different things:
 //!
 //! - [`AxiomTracker::scan_source`] reads the **proof source** and delegates to
-//!   ECHIDNA's canonical scanner (`echidna_core_spark::axiom_tracker`), which
+//!   ECHIDNA's canonical scanner (`echidna_core::trust::axiom_tracker`), which
 //!   skips comment lines and ECHIDNA's own scaffold markers. This is the
 //!   primary signal and is shared with ECHIDNA, not re-implemented.
 //! - [`AxiomTracker::scan`] reads the **prover's output text** (for example
 //!   Lean's "declaration uses 'sorry'"). ECHIDNA has no equivalent, so this
 //!   stays local, as a fallback for when the source is unavailable.
 
-use echidna_core_spark::axiom_tracker::{
+use echidna_core::trust::axiom_tracker::{
     AxiomTracker as EchidnaAxiomTracker, AxiomUsage, DangerLevel,
 };
 use serde::{Deserialize, Serialize};

@@ -4,19 +4,20 @@
 //! Proof confidence level assessment
 //!
 //! The trust-level *algorithm* is ECHIDNA's, not echidnabot's: every call
-//! goes through [`echidna_core_spark::compute_trust_level`] (the Creusot-
+//! goes through [`echidna_core::trust::compute_trust_level`] (the Creusot-
 //! annotated kernel shared with ECHIDNA). This module only translates
 //! echidnabot's inputs (prover slug, status, artefacts, axiom scan) into
 //! ECHIDNA's [`TrustFactors`] and wraps the answer in a report.
 //!
 //! Epistemic note (pattern from `hyperpolymath/epistemic-types`, not a
-//! dependency): a level computed here is a *warrant* — echidnabot's own
-//! reading of ECHIDNA's output. When ECHIDNA itself supplies trust data in an
-//! `echidna.prove.result/1` object, that is the *receipt* and is preferred;
-//! see [`crate::dispatcher::TrustSource`].
+//! dependency): a level computed here is a local assessment, not a formally
+//! sound warrant. The direct REST path parses ECHIDNA's typed receipt but
+//! merges local axioms and recomputes confidence; the enriched result is not
+//! the original receipt. See [`crate::dispatcher::TrustSource`]. Mathesis
+//! Grade 3 is a separate proof-evidence grade, not `ConfidenceLevel::Level3`.
 
-use echidna_core_spark::axiom_tracker::DangerLevel;
-use echidna_core_spark::{compute_trust_level, ProverClass, TrustFactors, TrustLevel};
+use echidna_core::trust::axiom_tracker::DangerLevel;
+use echidna_core::trust::{compute_trust_level, ProverClass, TrustFactors, TrustLevel};
 use serde::{Deserialize, Serialize};
 
 use crate::dispatcher::{ProofStatus, ProverKind};

@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MPL-2.0
+# Rust (including Cargo, rustfmt and Clippy) comes from rust-toolchain.toml.
+[settings]
+idiomatic_version_file_enable_tools = ["rust"]
+
+[tools]
+just = "1.58.0"
+
+[tasks.build]
+description = "Build with the committed dependency lock"
+run = "cargo build --locked"
+
+[tasks.test]
+description = "Run the full Rust test suite"
+run = "cargo test --locked"
+
+[tasks.trust-test]
+description = "Run both shared trust-kernel integration paths"
+run = "cargo test --locked --lib trust::"
+
+[tasks.check]
+description = "Check formatting and lint all Rust targets"
+run = ["cargo fmt --all -- --check", "cargo clippy --locked --all-targets -- -D warnings"]
+
+[tasks.dev-container]
+description = "Build the Wolfi development image with Podman"
+run = "podman build --target development -t localhost/echidnabot-dev -f Containerfile ."
+
+[tasks.dev-tools-test]
+description = "Offline bootstrap and Podman-wrapper control-flow tests"
+run = ["bash -n scripts/bootstrap.sh scripts/dev-container.sh tests/dev-tools.sh", "bash tests/dev-tools.sh"]

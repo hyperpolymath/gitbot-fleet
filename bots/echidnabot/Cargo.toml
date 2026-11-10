@@ -30,12 +30,9 @@ gitbot-shared-context = { version = "0.1.0", git = "https://github.com/hyperpoly
 
 # ECHIDNA trust kernel. Canonical trust-level algorithm and source-level
 # axiom scanner, shared with ECHIDNA so echidnabot no longer re-implements
-# them. Pinned by full rev (immutable). At this rev the crate is still named
-# `echidna-core-spark`; it is being renamed `echidna-core-creusot` upstream,
-# and the trust types are meant to move into `echidna-core` proper. Follow-up:
-# re-point this line once that lands on echidna `main` (see
-# docs/ECHIDNA-INTEGRATION.adoc).
-echidna-core-spark = { git = "https://github.com/hyperpolymath/echidna", rev = "b761b3a832981be51d4e88076ef1b90fe5037e9c" }
+# them via echidna-core 0.2.0's stable `trust` surface. Pinned by full rev
+# on echidna `main` (see docs/ECHIDNA-INTEGRATION.adoc).
+echidna-core = { git = "https://github.com/hyperpolymath/echidna", rev = "645d7a2489c644706210e171acba6f52741ad3b8" }
 
 # Minimum-version handshake with the ECHIDNA server.
 semver = "1"
@@ -88,7 +85,7 @@ uuid = { version = "1.10", features = ["v7", "v8", "serde"] }
 # RFC 8785 (JCS) canonical bytes for src/ids.rs content ids. The estate
 # crate hyperpolymath/ijson-jcs is not public, so a public build cannot
 # depend on it; swap once it is (docs/ECHIDNA-INTEGRATION.adoc).
-serde_json_canonicalizer = "0.3"
+serde_json_canonicalizer = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 anyhow = "1"

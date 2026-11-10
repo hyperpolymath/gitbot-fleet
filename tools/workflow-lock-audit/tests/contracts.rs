@@ -367,11 +367,11 @@ fn scanner_source_pin_and_supported_lock_scope() {
     let lock: Value =
         parse_yaml(&fs::read_to_string(repo().join(".github/workflows/actions.lock")).unwrap())
             .unwrap();
-    let pin = "4404c3c0474e17753fe7689f3485c02890aac113";
+    let pin = "03e858b6015e67cc1f9bc31ac1e29ddc1b6fd409";
     assert_eq!(
         workflow["jobs"]["scan"]["uses"],
         text(&format!(
-            "hyperpolymath/cicd-suite/.github/workflows/secret-scanner-reusable.yml@{pin}"
+            "hyperpolymath/proven-cicd/.github/workflows/secret-scanner-reusable.yml@{pin}"
         ))
     );
     assert_eq!(
@@ -379,8 +379,29 @@ fn scanner_source_pin_and_supported_lock_scope() {
         value("[]")
     );
     assert!(lock["dependencies"]
-        .get(format!("hyperpolymath/cicd-suite@{pin}"))
+        .get(format!("hyperpolymath/proven-cicd@{pin}"))
         .is_none());
+    // Job-level reusables are outside the supported lock generator's scope.
+    // Require a separately source-verified active root for this exact caller.
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(repo().join("scripts/lib/pinned-reusable-sources.json")).unwrap(),
+    )
+    .unwrap();
+    let matching: Vec<_> = manifest["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|source| {
+            source["repository"] == "hyperpolymath/proven-cicd"
+                && source["commit"] == pin
+                && source["role"] == "active"
+                && source["callers"].as_array().unwrap().iter().any(|caller| {
+                    caller["workflow"] == ".github/workflows/secret-scanner.yml"
+                        && caller["job"] == "scan"
+                })
+        })
+        .collect();
+    assert_eq!(matching.len(), 1);
     assert_eq!(
         lock["dependencies"]["actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"]["commit"],
         text("sha1-3d3c42e5aac5ba805825da76410c181273ba90b1")

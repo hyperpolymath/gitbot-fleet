@@ -113,4 +113,20 @@ jobs:
       - name: Audit enabled dependencies (no advisory exclusions)
         # Poise's unmaintained derive macro is reported as maintenance debt;
         # vulnerabilities, unsoundness and yanked crates remain blocking.
-        run: cargo deny --locked --config deny.toml check advisories --warn unmaintained
+        run: |
+          set -uo pipefail
+          set +e
+          cargo deny --locked --config deny.toml check advisories --warn unmaintained 2>&1 | tee "$RUNNER_TEMP/gsbot-advisories.log"
+          statuses=("${PIPESTATUS[@]}")
+          set -e
+          rc=${statuses[0]}
+          if [ "${statuses[1]}" -ne 0 ] && [ "$rc" -eq 0 ]; then rc=${statuses[1]}; fi
+          if [ "$rc" -ne 0 ]; then
+            detail=$(grep -Ei -C 3 'RUSTSEC-|error:|vulnerab|advisories FAILED|failed to|error\[' "$RUNNER_TEMP/gsbot-advisories.log" | head -c 5000 || true)
+            [ -n "$detail" ] || detail='Audit failed; inspect the full job log.'
+            detail=${detail//'%'/'%25'}
+            detail=${detail//$'\r'/'%0D'}
+            detail=${detail//$'\n'/'%0A'}
+            echo "::error::GSBot dependency audit failed (exit $rc): $detail"
+          fi
+          exit "$rc"
