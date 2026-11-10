@@ -121,7 +121,7 @@ while IFS= read -r FILE; do
                 }
             }
         }
-    ' "$FILE" > "$TMP"; then
+    ' "$FILE" > "$TMP" && [[ -s "$TMP" ]]; then
         cat "$TMP" > "$FILE"
         REPAIRED=$((REPAIRED + PAIRS))
         echo "$ME: restored $PAIRS comment line(s) in ${FILE##*/}"

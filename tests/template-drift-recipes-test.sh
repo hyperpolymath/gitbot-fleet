@@ -149,13 +149,14 @@ jobs:
     name: SonarQube
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Secrets cannot be referenced from a job-level `if:`, so the presence test
-    # is carried through an env var set at job scope and read in a first step.
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Report configuration state
         id: cfg
+        # A job-level `if:` cannot read a secret. This step reads the token
+        # and gives the result to the steps after it. The token is in the
+        # environment of this step and of the scan step only.
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           if [ -z "${SONAR_TOKEN}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -206,6 +207,31 @@ YAML
 expect_count "$R" "$REPO" 1
 expect_refused "$R" "$REPO" "$F"
 expect_count "$R" "$REPO" 1
+
+# The token must not be in the environment of the job or of the checkout step.
+if grep -qE '^    env:' "$TMP/sonar-old/.github/workflows/sonarqube.yml"; then
+    fail "$R: the repair puts an environment on the job"
+fi
+[[ "$(grep -c 'secrets.SONAR_TOKEN' "$TMP/sonar-old/.github/workflows/sonarqube.yml")" == 2 ]] \
+    || fail "$R: the token is not in exactly 2 steps (the guard and the scan)"
+
+# The scan step uses another credential, and the secret is named in another
+# step: refused, because the secret is not in the scan step.
+REPO=$(new_repo sonar-other-credential); F="$REPO/.github/workflows/sonarqube.yml"
+cat > "$F" <<'YAML'
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Note
+        run: echo "the old name was secrets.SONAR_TOKEN"
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
+        env:
+          SONAR_TOKEN: ${{ vars.OTHER_TOKEN }}
+YAML
+expect_count "$R" "$REPO" 1
+expect_refused "$R" "$REPO" "$F"
 
 # A scan with an `if:` line can have a guard of a person: not a target.
 REPO=$(new_repo sonar-own-guard); F="$REPO/.github/workflows/sonarqube.yml"

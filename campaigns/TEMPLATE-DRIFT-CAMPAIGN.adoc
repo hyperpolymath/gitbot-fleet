@@ -42,7 +42,9 @@ No rule in `AGENTIC.a2ml` assigns these recipes; that grant is the owner's.
 | `sonarqube.yml` that scans with `secrets.SONAR_TOKEN` and has no `if:` line.
   With no secret, the scan fails on each run.
 | The guard of the template (2026-07-28): the first step tests the token. With
-  no token the job says that the scan is not configured and passes.
+  no token the job says that the scan is not configured and passes. One
+  difference from the template: the token is in the environment of the guard
+  step and of the scan step only, and not of the job.
 
 | `recipe-workflow-split-comment-keys`
 | `fix-split-comment-keys.sh`

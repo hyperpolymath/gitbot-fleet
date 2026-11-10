@@ -81,6 +81,7 @@ AWK
 )
 
 NEW_RULE="$NEW_RULE" awk "$PROGRAM" "$FILE" > "$TMP"
+[[ -s "$TMP" ]] || { echo "fix-workflow-linter-spdx-rule: the edit gave no text; $REL is not changed" >&2; exit 1; }
 cat "$TMP" > "$FILE"
 
 if [[ "$(count_targets "$REPO_PATH")" != 0 ]]; then

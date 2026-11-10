@@ -13,14 +13,20 @@
 # configured and passes. With a token, the scan runs, with no further edit.
 # This recipe adds that guard.
 #
+# One difference from the template: the template puts the token in the
+# environment of the job. This recipe puts it in the environment of the guard
+# step only. The scan step keeps its own entry. No other step, for example
+# the checkout, can then read the secret.
+#
 # Target: .github/workflows/sonarqube.yml that uses a SonarSource scan action
 # with `secrets.SONAR_TOKEN` and has no `if:` line. A file with an `if:` line
 # is not a target, because a person can have written a different guard.
 #
 # The recipe edits only the shape of the old template: 1 job, a `steps:` line
-# with 4 spaces, each step with `- name:` and 6 spaces, and no `env:` line at
-# the job level. A target with a different shape is not changed, and the
-# recipe exits 1 so that the run does not read as a repair.
+# with 4 spaces, each step with `- name:` and 6 spaces, no `env:` line at the
+# job level, and 1 scan step that has `SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}`
+# in its own environment. A target with a different shape is not changed, and
+# the recipe exits 1 so that the run does not read as a repair.
 #
 # Idempotent: a file that has the guard is not a target.
 #
@@ -57,7 +63,8 @@ count_targets() {
     fi
 }
 
-# Succeed when the file has the shape of the old template.
+# Succeed when the file has the shape of the old template. The secret must be
+# in the environment of the scan step itself.
 known_shape() {
     local file="$1"
     awk '
@@ -65,10 +72,19 @@ known_shape() {
         in_jobs && /^  [A-Za-z0-9_-]+:[[:space:]]*$/    { jobs++ }
         in_jobs && /^    steps:[[:space:]]*$/           { steps_lines++; in_steps = 1; next }
         in_jobs && !in_steps && /^    env:/             { job_env++ }
-        in_steps && /^      - /                         { items++ }
+        in_steps && /^      - /                         { items++; in_scan = 0 }
         in_steps && /^      - name: /                   { named++ }
+        in_steps && /^        uses:[[:space:]]*SonarSource\/(sonarqube-scan-action|sonarcloud-github-action)@/ {
+            in_scan = 1; scans++
+        }
+        in_scan && /^          SONAR_TOKEN:[[:space:]]*\$\{\{[[:space:]]*secrets\.SONAR_TOKEN[[:space:]]*\}\}[[:space:]]*$/ {
+            scan_secret++
+        }
         in_steps && /^ ? ? ? ? ?[^ #]/                    { after_steps++ }
-        END { exit !(jobs == 1 && steps_lines == 1 && job_env == 0 && items >= 1 && items == named && after_steps == 0) }
+        END {
+            exit !(jobs == 1 && steps_lines == 1 && job_env == 0 && items >= 1 &&
+                   items == named && after_steps == 0 && scans == 1 && scan_secret == 1)
+        }
     ' "$file"
 }
 
@@ -96,13 +112,14 @@ TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
 GUARD=$(cat <<'YAML'
-    # Secrets cannot be referenced from a job-level `if:`, so the presence test
-    # is carried through an env var set at job scope and read in a first step.
-    env:
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Report configuration state
         id: cfg
+        # A job-level `if:` cannot read a secret. This step reads the token
+        # and gives the result to the steps after it. The token is in the
+        # environment of this step and of the scan step only.
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           if [ -z "${SONAR_TOKEN}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -121,6 +138,7 @@ GUARD="$GUARD" awk '
     in_steps && /^      - name: /           { print; print "        if: steps.cfg.outputs.configured == \047true\047"; next }
     { print }
 ' "$FILE" > "$TMP"
+[[ -s "$TMP" ]] || { echo "$ME: the edit gave no text; $REL is not changed" >&2; exit 1; }
 cat "$TMP" > "$FILE"
 
 if [[ "$(count_targets "$REPO_PATH")" != 0 ]]; then
