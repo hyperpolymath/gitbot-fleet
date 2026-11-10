@@ -308,15 +308,30 @@ async fn invalid_obligations_are_graphql_errors_not_success_false() {
 // for anything that executes the schema directly.
 // ---------------------------------------------------------------------------
 
-const UPDATE_SETTINGS: &str =
-    "mutation { updateRepoSettings(repoId: \"00000000-0000-0000-0000-000000000000\", \
-     settings: { webhookSecret: \"forged\" }) { id } }";
+/// A well-formed repository ID that names no repository: the nil UUID. It
+/// comes from the type, because the estate UUID gate refuses a UUID literal
+/// that is not version 8.
+fn absent_repo_id() -> uuid::Uuid {
+    uuid::Uuid::nil()
+}
+
+fn update_settings() -> String {
+    format!(
+        "mutation {{ updateRepoSettings(repoId: \"{}\", \
+         settings: {{ webhookSecret: \"forged\" }}) {{ id }} }}",
+        absent_repo_id()
+    )
+}
 const RECORD_OUTCOME: &str = "mutation { recordTacticOutcome(input: { \
      prover: COQ, goalState: \"g\", tactic: \"auto\", succeeded: true, durationMs: 1 }) { id } }";
 const REGISTER_REPO: &str = "mutation { registerRepository(input: { \
      platform: GIT_HUB, owner: \"someone-else\", name: \"repo\", webhookSecret: \"forged\" }) { id } }";
-const TRIGGER_CHECK: &str =
-    "mutation { triggerCheck(repoId: \"00000000-0000-0000-0000-000000000000\") { id } }";
+fn trigger_check() -> String {
+    format!(
+        "mutation {{ triggerCheck(repoId: \"{}\") {{ id }} }}",
+        absent_repo_id()
+    )
+}
 
 #[tokio::test]
 async fn obligation_outside_the_route_scope_is_forbidden() {
@@ -331,12 +346,13 @@ async fn obligation_outside_the_route_scope_is_forbidden() {
 async fn schema_executed_without_a_principal_refuses_the_guarded_fields() {
     let schema = obligation_schema().await;
     let submit = fleet_mutation("hyperpolymath/echidnabot", "c", "d", "");
+    let (update_settings, trigger_check) = (update_settings(), trigger_check());
     for q in [
         submit.as_str(),
-        UPDATE_SETTINGS,
+        update_settings.as_str(),
         RECORD_OUTCOME,
         REGISTER_REPO,
-        TRIGGER_CHECK,
+        trigger_check.as_str(),
         "{ repositories { id } }",
     ] {
         let resp = run_as(&schema, q, None).await;
@@ -351,11 +367,12 @@ async fn schema_executed_without_a_principal_refuses_the_guarded_fields() {
 #[tokio::test]
 async fn route_credential_cannot_reach_administrative_fields() {
     let schema = obligation_schema().await;
+    let (update_settings, trigger_check) = (update_settings(), trigger_check());
     for q in [
-        UPDATE_SETTINGS,
+        update_settings.as_str(),
         RECORD_OUTCOME,
         REGISTER_REPO,
-        TRIGGER_CHECK,
+        trigger_check.as_str(),
         "{ repositories { id } }",
     ] {
         let resp = run(&schema, q).await;

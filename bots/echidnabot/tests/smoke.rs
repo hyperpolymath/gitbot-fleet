@@ -22,8 +22,10 @@ use echidnabot::store::SqliteStore;
 use std::sync::Arc;
 
 // Test-only credentials (the `test-` prefix marks them for the secret scanner).
-const ROUTE_TOKEN: &str = "test-route-credential-0123456789abcdef";
-const ADMIN_TOKEN: &str = "test-admin-credential-0123456789abcdef";
+// The Rust rule of that scan has no rule for the prefix: the pragma marks the
+// 2 values for it.
+const ROUTE_TOKEN: &str = "test-route-credential-0123456789abcdef"; // scanner-allow: rust-secrets
+const ADMIN_TOKEN: &str = "test-admin-credential-0123456789abcdef"; // scanner-allow: rust-secrets
 
 async fn make_test_server() -> TestServer {
     let config = Arc::new(Config::default());
@@ -253,9 +255,15 @@ async fn smoke_graphql_route_credential_cannot_rewrite_webhook_secret() {
     let response = server
         .post("/graphql")
         .authorization_bearer(ROUTE_TOKEN)
+        // The nil UUID is a well-formed ID that names no repository. It comes
+        // from the type: the estate UUID gate refuses a literal that is not
+        // version 8.
         .json(&serde_json::json!({
-            "query": "mutation { updateRepoSettings(repoId: \"00000000-0000-0000-0000-000000000000\", \
-                      settings: { webhookSecret: \"forged\" }) { id } }"
+            "query": format!(
+                "mutation {{ updateRepoSettings(repoId: \"{}\", \
+                 settings: {{ webhookSecret: \"forged\" }}) {{ id }} }}",
+                uuid::Uuid::nil()
+            )
         }))
         .await;
     response.assert_status_ok();
