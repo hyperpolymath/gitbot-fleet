@@ -221,6 +221,50 @@ check "valid crate names may contain uppercase letters, underscores, digits and 
 check "invalid crate tokens count as failures while the valid build completes" yes \
   "$(grep -q '1 crate(s) built, 4 failed' "$TMP/crate-names.log" && echo yes || echo no)"
 
+
+# --- pons for ponsbot: pinned install, cached by commit, never fatal -----------
+PSHA=bca1ea289a4f8a86bac6212731e6f8ec15c67ad4
+PH="$TMP/pons-home"; mkdir -p "$PH" "$TMP/pons-tools"
+cat > "$TMP/pons-tools/cargo" <<'STUB'
+#!/usr/bin/env bash
+# Records the call; on `install --root R ... pons-cli` fakes the installed binary.
+set -euo pipefail
+printf '%s\n' "$*" >> "$FLEET_PONS_CALLS"
+[[ "$1" == install ]] || exit 99
+[[ -z "${FLEET_PONS_FAIL:-}" ]] || exit 1
+root=""; rev=""
+while [ $# -gt 0 ]; do case "$1" in --root) root="$2"; shift 2 ;; --rev) rev="$2"; shift 2 ;; *) shift ;; esac; done
+mkdir -p "$root/bin"; printf '#!/usr/bin/env bash\necho pons\n' > "$root/bin/pons"; chmod +x "$root/bin/pons"
+printf '%s\n' "git+https://github.com/hyperpolymath/pons-asinorum?rev=$rev#$rev" > "$root/.crates.toml"
+STUB
+cp "$TOOLS/timeout" "$TMP/pons-tools/timeout"; sed -i '/slow/d' "$TMP/pons-tools/timeout"
+chmod +x "$TMP/pons-tools/cargo" "$TMP/pons-tools/timeout"
+export FLEET_PONS_CALLS="$TMP/pons-calls"
+run_pons_build() { # label args... ; own HOME so ~/.pons is a scratch cache
+  local label="$1"; shift; : > "$FLEET_PONS_CALLS"; rc=0
+  HOME="$PH" PATH="$TMP/pons-tools:$PATH" GITHUB_ACTIONS='' bash "$BUILDER" \
+    --fleet "$FLEET" --bin-dir "$TMP/$label" --crates "" "$@" < "$TMP/plan" > "$TMP/$label.log" 2>&1 || rc=$?
+}
+run_pons_build pons-ok --pons "$PSHA"
+check "pons: installed from the pinned commit with --locked into a private root" \
+  "install --git https://github.com/hyperpolymath/pons-asinorum --rev $PSHA --locked --force --root $PH/.pons pons-cli" \
+  "$(cat "$FLEET_PONS_CALLS")"
+check "pons: the binary is copied next to the adapters" pons "$(files "$TMP/pons-ok")"
+run_pons_build pons-cached --pons "$PSHA"
+check "pons: a cache hit at the same commit does not reinstall" 0 "$(grep -c . "$FLEET_PONS_CALLS" || true)"
+check "pons: ...and still provides the binary" pons "$(files "$TMP/pons-cached")"
+rm -rf "$PH/.pons"
+FLEET_PONS_FAIL=1 run_pons_build pons-fail --pons "$PSHA"
+check "pons: a failed install is a warning, not a failed run" 0 "$rc"
+check "pons: ...it says ponsbot will read not_run" yes "$(grep -q 'ponsbot will read not_run' "$TMP/pons-fail.log" && echo yes || echo no)"
+check "pons: ...and leaves no binary and no cache behind" "no no" \
+  "$([ -n "$(files "$TMP/pons-fail")" ] && echo yes || echo no) $([ -e "$PH/.pons" ] && echo yes || echo no)"
+run_pons_build pons-badsha --pons 'not-a-commit; rm -rf /'
+check "pons: a non-commit value never reaches cargo" 0 "$(grep -c . "$FLEET_PONS_CALLS" || true)"
+check "pons: ...and is warned about" yes "$(grep -q 'not a 40-hex commit' "$TMP/pons-badsha.log" && echo yes || echo no)"
+run_pons_build pons-budget --pons "$PSHA" --build-budget 0
+check "pons: a spent build budget skips the install with a warning" "0 yes" \
+  "$(grep -c . "$FLEET_PONS_CALLS" || true) $(grep -q 'spent before its turn' "$TMP/pons-budget.log" && echo yes || echo no)"
 echo
 echo "fleet-report-back-build-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

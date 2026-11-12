@@ -30,6 +30,12 @@ pub enum BotId {
     Cipherbot,
     /// Targeted audit bot wrapping panic-attack static analysis
     Panicbot,
+    /// Thin adapter running pons asinorum at a pinned commit (`bots/ponsbot`).
+    /// Deliberately NOT in `all()` yet: it has the report-back `scan` mode only
+    /// (no `fleet` dispatch), so registering it would make the coordinator wait
+    /// on a verifier it cannot run (cutover design phase 4). Like `Oikosbot`,
+    /// it is excluded from `all()` on purpose.
+    Ponsbot,
     /// External ecological/economic code-analysis App (OikosBot,
     /// `hyperpolymath/oikosbot`) that publishes findings via the optional
     /// `oikosbot-fleet` bridge. NOT the reserved `Sustainabot` fleet slot and
@@ -54,6 +60,7 @@ impl fmt::Display for BotId {
             BotId::Accessibilitybot => write!(f, "accessibilitybot"),
             BotId::Cipherbot => write!(f, "cipherbot"),
             BotId::Panicbot => write!(f, "panicbot"),
+            BotId::Ponsbot => write!(f, "ponsbot"),
             BotId::Oikosbot => write!(f, "oikosbot"),
             BotId::Custom(id) => write!(f, "custom-{}", id),
         }
@@ -68,7 +75,8 @@ impl BotId {
             | BotId::Echidnabot
             | BotId::Sustainabot
             | BotId::Oikosbot
-            | BotId::Panicbot => Tier::Verifier,
+            | BotId::Panicbot
+            | BotId::Ponsbot => Tier::Verifier,
             BotId::Glambot | BotId::Seambot | BotId::Finishbot | BotId::Accessibilitybot => {
                 Tier::Finisher
             }
@@ -112,6 +120,7 @@ impl BotId {
             "accessibilitybot" | "accessibility-bot" => Some(BotId::Accessibilitybot),
             "cipherbot" | "cipher-bot" => Some(BotId::Cipherbot),
             "panicbot" | "panic-bot" => Some(BotId::Panicbot),
+            "ponsbot" | "pons-bot" => Some(BotId::Ponsbot),
             "oikosbot" | "oikos-bot" => Some(BotId::Oikosbot),
             _ => None,
         }
@@ -365,6 +374,15 @@ impl BotInfo {
                     "static-analysis/unchecked-error".to_string(),
                     "static-analysis/path-traversal".to_string(),
                 ],
+                can_fix: false,
+                depends_on: vec![BotId::Rhodibot],
+            },
+            BotId::Ponsbot => Self {
+                id,
+                name: "Ponsbot".to_string(),
+                description: "Thin adapter running pons asinorum at a pinned commit".to_string(),
+                version: "0.1.0".to_string(),
+                categories: vec!["static-analysis/pons".to_string()],
                 can_fix: false,
                 depends_on: vec![BotId::Rhodibot],
             },

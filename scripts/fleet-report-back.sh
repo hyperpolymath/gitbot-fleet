@@ -91,6 +91,7 @@ crate_dir_of() {
   case "$1" in
     rhodibot)         echo rhodibot ;;
     panicbot)         echo panicbot ;;
+    ponsbot)          echo ponsbot ;;
     seambot)          echo seambot ;;
     finishingbot|finishbot|finishing-bot) echo finishingbot ;;
     glambot)          echo glambot ;;
@@ -176,7 +177,7 @@ EOF
 binary_of() {
   case "$1" in
     finishingbot|finishbot|finishing-bot) echo finishing-bot ;;
-    rhodibot|panicbot|seambot|glambot|accessibilitybot|cipherbot) echo "$1" ;;
+    rhodibot|panicbot|ponsbot|seambot|glambot|accessibilitybot|cipherbot) echo "$1" ;;
     *) echo "" ;;
   esac
 }
@@ -185,6 +186,7 @@ default_title_of() {
   case "$1" in
     rhodibot)         echo "rhodibot (RSR compliance)" ;;
     panicbot)         echo "panicbot (panic recovery, error handling)" ;;
+    ponsbot)          echo "ponsbot (pons asinorum static analysis)" ;;
     echidnabot)       echo "echidnabot (formal verification)" ;;
     seambot)          echo "seambot (integration health)" ;;
     finishingbot)     echo "finishingbot (release readiness)" ;;
@@ -384,6 +386,11 @@ tool_version_of() {
       fi
       echo "panic-attack:unknown"
       ;;
+    ponsbot)
+      # ponsbot wraps pons asinorum; the commit is the adapter's own pin.
+      version=$(grep -m1 '^commit = ' "$FLEET_DIR/bots/ponsbot/canon/pin.toml" 2>/dev/null | sed -E 's/.*"([0-9a-f]+)".*/\1/' | cut -c1-12)
+      echo "pons:${version:-unknown}"
+      ;;
     echidnabot)
       # echidnabot uses ECHIDNA engine
       if [ -n "${ECHIDNA_URL:-}" ]; then
@@ -441,6 +448,7 @@ write_envelope() { # member status reason findings_json
            elif .rule_id | startswith("PA8") then "panic-attack:unchecked-error"
            elif .rule_id | startswith("PA9") then "panic-attack:path-traversal"
            else "panic-attack:unknown" end)
+        elif $member == "ponsbot" then "pons:unclassified"
         elif $member == "rhodibot" then "rsr:file-presence"
         elif $member == "cipherbot" then "cipherbot:crypto-hygiene"
         elif $member == "glambot" or $member == "accessibilitybot" then "wcag:accessibility"
@@ -536,6 +544,32 @@ FINDING='{rule_id: (.rule_id // .id // "?" | tostring), severity: (.severity // 
           file: ((.file // .location // "") | rel), line: ((.line // 0) | if type == "number" then . else 0 end),
           message: (.message // "" | tostring)}'
 
+# ponsbot prints either a findings array (the scan ran) or, when it did not,
+# {"status": "error"|"not_run", "reason": "..."} (pons failed, timed out, was
+# at another commit, or is not installed). The object form is the ONLY way a
+# non-ran status reaches the grid from this adapter; anything else that is not
+# an array falls through to translate_or_error and becomes an error. Nothing
+# maps to a pass: a status the adapter did not state is never invented here.
+# Each finding keeps pons' tier and evidence class (D1: SPECULATIVE findings are
+# carried, capped at severity `info` by ponsbot, so the grid never grades them
+# as blocking); the grid reads only severity, so the extra fields are provenance.
+translate_ponsbot() { # member
+  local m="$1" st reason
+  if [ "$ADAPTER_RC" -ne 124 ] \
+     && jq -e 'type == "object" and (.status | IN("error", "not_run")) and (.reason | type == "string" and length > 0)' "$ADAPTER_OUT" >/dev/null 2>&1; then
+    st=$(jq -r .status "$ADAPTER_OUT"); reason=$(jq -r '.reason[0:240]' "$ADAPTER_OUT")
+    write_envelope "$m" "$st" "$reason" '[]'
+    cleanup_adapter
+    return
+  fi
+  translate_or_error "$m" "$SHAPE_ARRAY"'
+    [ .[] | {rule_id: (.rule_id // "?" | tostring), severity: (.severity // "unknown" | tostring),
+             file: ((.file // "") | rel), line: ((.line // 0) | if type == "number" then . else 0 end),
+             message: (.message // "" | tostring),
+             tier: (.tier // "unknown" | tostring), evidence_class: (.evidence_class // "unknown" | tostring),
+             pons_severity: (.pons_severity // "unknown" | tostring)} ]'
+}
+
 # Run one member against repo and write its translated report-back envelope.
 # echidnabot and sustainabot yield not_run, even with ECHIDNA_URL configured;
 # unknown members, unavailable binaries, timeouts, and unusable output yield
@@ -589,6 +623,14 @@ run_member() {
       # into the scanned tree; A2ML is retired, so it is not used.)
       run_adapter "$bin" --format json scan "$repo"
       translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]" ;;
+    ponsbot)
+      # `scan` runs pons at the pinned commit (bots/ponsbot/canon/pin.toml) and
+      # writes nothing into the tree. Gating is NOT decided here: the grid reads
+      # it from the enrolment's per-reporter `gating` boolean, which must be
+      # true for ponsbot (owner ruling 2026-11-12) and is left unset for
+      # panicbot, which is advisory.
+      run_adapter "$bin" --format json scan "$repo"
+      translate_ponsbot "$m" ;;
     cipherbot)
       run_adapter "$bin" --format json scan "$repo"
       translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]" ;;

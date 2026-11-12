@@ -30,6 +30,8 @@
 #   9. empty scans, malformed output, normalization boundaries, aliases,
 #      failure isolation, invocation context, and an unchanged scanned tree.
 #  10. the build-helper unit suite (stubbed Cargo, no Rust builds or network).
+#  11. ponsbot: translation, status mapping (never a pass), SPECULATIVE carried at
+#      info, gating read from the enrolment; panicbot envelope-parity failure modes.
 #
 # Run: bash tests/fleet-report-back-test.sh
 
@@ -462,6 +464,139 @@ check "an explicit --member that is not a slug writes nothing" "" "$(find "$TMP/
 check "...and leaves no file beside the output directory" no "$([ -e "$TMP/escape.json" ] && echo yes || echo no)"
 check "usage errors create no output directory" no "$([ -e "$TMP/unused" ] && echo yes || echo no)"
 check "reporting never changes the scanned tree's files or directories" "$repo_before" "$(repo_state)"
+
+# 10. ponsbot (pons asinorum) and the panicbot envelope-parity cases ───────────
+# Stubs print ponsbot's documented output: a findings array when pons ran, or
+# {"status": "error"|"not_run", "reason": ...} when it did not. The adapter is
+# tested on its own in bots/ponsbot/tests; this section tests the DRIVER's side.
+PB="$TMP/pbin"; mkdir -p "$PB"
+pstub() { printf '#!/usr/bin/env bash\nset -u\n%s\n' "$2" > "$PB/$1"; chmod +x "$PB/$1"; }
+cat > "$TMP/pons-enrol.json" <<'JSON'
+{ "schema": 1,
+  "reporters": {
+    "ponsbot": { "enrolled": true, "gating": true },
+    "panicbot": { "enrolled": true } } }
+JSON
+runp() { # out-dir extra-args...
+  bash "$DRIVER" --repo "$REPO" --out "$1" --bin-dir "$PB" --fleet-ref deadbeef --enrolment "$TMP/pons-enrol.json" "${@:2}" > "$1.log" 2>&1
+}
+ARGS_OK='[ "$1 $2 $3" = "--format json scan" ] || { echo "bad args: $*" >&2; exit 9; }'
+pstub ponsbot "$ARGS_OK"'
+cat <<J
+[{"rule_id":"constant-condition","severity":"warning","pons_severity":"WARN","tier":"T0","evidence_class":"HEURISTIC","file":"$4/src/a.jl","line":3,"message":"constant condition (T0, HEURISTIC; a heuristic, not proof)","blocking":false},
+ {"rule_id":"div-by-literal-zero","severity":"error","pons_severity":"ERROR","tier":"T1","evidence_class":"DATAFLOW","file":"src/a.jl","line":4,"message":"division by zero (T1, DATAFLOW)","blocking":true},
+ {"rule_id":"spec-rule","severity":"info","pons_severity":"ERROR","tier":"T3","evidence_class":"SPECULATIVE","file":"./src/a.jl","line":5,"message":"maybe (T3, SPECULATIVE; carried, never graded as blocking)","blocking":false}]
+J
+exit 1'
+pstub panic-attack 'echo stub'
+runp "$TMP/p1" --member ponsbot
+pr="$TMP/p1/ponsbot.json"
+check "ponsbot: findings with a blocking one is still a run" ran "$(field "$pr" .status)"
+check "ponsbot: all three findings are kept" 3 "$(field "$pr" '.findings | length')"
+check "ponsbot: tier and evidence class survive" "T0|HEURISTIC,T1|DATAFLOW,T3|SPECULATIVE" \
+  "$(field "$pr" '[.findings[] | "\(.tier)|\(.evidence_class)"] | join(",")')"
+check "ponsbot: pons' own severity is carried" "WARN,ERROR,ERROR" "$(field "$pr" '[.findings[].pons_severity] | join(",")')"
+check "ponsbot: pons ERROR keeps its blocking word" error "$(field "$pr" '.findings[] | select(.rule_id == "div-by-literal-zero") | .severity')"
+check "ponsbot: a SPECULATIVE finding is carried at info, never error" info "$(field "$pr" '.findings[] | select(.rule_id == "spec-rule") | .severity')"
+check "ponsbot: absolute and ./ paths become repository-relative" "src/a.jl,src/a.jl,src/a.jl" "$(field "$pr" '[.findings[].file] | join(",")')"
+check "ponsbot: finding keys" "evidence_class file line message pons_severity rule_id semantic_fingerprint severity tier" "$(field "$pr" '.findings[0] | keys | join(" ")')"
+check "ponsbot: the default title" "ponsbot (pons asinorum static analysis)" "$(field "$pr" .title)"
+check "ponsbot: tool_version is the pinned pons commit" "pons:$(sed -n 's/^commit = "\([0-9a-f]\{12\}\).*/\1/p' "$ROOT/bots/ponsbot/canon/pin.toml")" "$(field "$pr" .tool_version)"
+check "ponsbot: the envelope never writes gating (the grid reads it from the enrolment)" no "$(jq 'has("gating")' "$pr" | sed 's/true/yes/;s/false/no/')"
+
+pstub ponsbot "$ARGS_OK"'
+echo "[]"'
+runp "$TMP/p2" --member ponsbot
+check "ponsbot: an empty array is a clean run" 'ran|0|null' "$(field "$TMP/p2/ponsbot.json" '"\(.status)|\(.findings | length)|\(.reason)"')"
+
+pstub ponsbot "$ARGS_OK"'
+echo "{\"status\":\"error\",\"reason\":\"pons exited 2 (no-applicable-input): pons: scanned 0 files\"}"; exit 2'
+runp "$TMP/p3" --member ponsbot
+check "ponsbot: pons exit 2 is error" error "$(field "$TMP/p3/ponsbot.json" .status)"
+check "ponsbot: ...with pons' message as the reason" "pons exited 2 (no-applicable-input): pons: scanned 0 files" "$(field "$TMP/p3/ponsbot.json" .reason)"
+check "ponsbot: ...and no findings" 0 "$(field "$TMP/p3/ponsbot.json" '.findings | length')"
+
+pstub ponsbot "$ARGS_OK"'
+echo "{\"status\":\"not_run\",\"reason\":\"pons is not installed\"}"; exit 3'
+runp "$TMP/p4" --member ponsbot
+check "ponsbot: a missing pons binary is not_run with the reason" "not_run|pons is not installed" "$(field "$TMP/p4/ponsbot.json" '"\(.status)|\(.reason)"')"
+
+# nothing the adapter prints can make a pass out of a non-run
+for body in 'echo "{\"status\":\"ran\",\"reason\":null}"' 'echo "{\"status\":\"error\"}"' 'echo "{\"status\":\"not_run\",\"reason\":\"\"}"' \
+            'echo "{}"' 'echo 42' 'true' 'echo "not json"; echo "ponsbot: crashed" >&2; exit 1'; do
+  pstub ponsbot "$ARGS_OK"$'\n'"$body"
+  runp "$TMP/p5" --member ponsbot
+  check "ponsbot: output [$body] is error, never ran" error "$(field "$TMP/p5/ponsbot.json" .status)"
+  check "ponsbot: ...with a reason" yes "$(field "$TMP/p5/ponsbot.json" '(.reason | type == "string") and (.reason | length) > 0' | sed 's/true/yes/;s/false/no/')"
+done
+
+pstub ponsbot 'sleep 5; echo "[]"'
+runp "$TMP/p6" --member ponsbot --timeout 1
+check "ponsbot: a timeout is error" error "$(field "$TMP/p6/ponsbot.json" .status)"
+runp "$TMP/p7" --member ponsbot --bin-dir "$TMP/nowhere"
+check "ponsbot: a missing adapter binary is error naming bots/ponsbot" yes "$(field "$TMP/p7/ponsbot.json" .reason | grep -q "ponsbot.*bots/ponsbot" && echo yes || echo no)"
+check "--plan lists ponsbot with its crate and binary" $'ponsbot\tponsbot\tponsbot' "$(bash "$DRIVER" --plan --enrolment "" --member ponsbot)"
+check "ponsbot has a built-in title and runs only when enrolled" "ponsbot" \
+  "$(bash "$DRIVER" --plan --enrolment "$TMP/pons-enrol.json" | cut -f1 | sort | tr '\n' ' ' | sed 's/panicbot //;s/ $//')"
+
+# panicbot parity (design section 5): each way a panic-attack scan can fail to
+# be one reads as error with a reason, never as an empty `ran`.
+PAN='[ "$1 $2 $3" = "--format json scan" ] || { echo "bad args: $*" >&2; exit 9; }'
+while IFS='|' read -r label body; do
+  pstub panicbot "$PAN"$'\n'"$body"
+  runp "$TMP/pp" --member panicbot
+  check "panicbot parity: $label is error" error "$(field "$TMP/pp/panicbot.json" .status)"
+  check "panicbot parity: $label carries a reason" yes "$(field "$TMP/pp/panicbot.json" '(.reason | type == "string") and (.reason | length) > 0' | sed 's/true/yes/;s/false/no/')"
+  check "panicbot parity: $label has no findings" 0 "$(field "$TMP/pp/panicbot.json" '.findings | length')"
+done <<'CASES'
+panic-attack not installed|echo "Error: Failed to run panic-attack assail: panic-attack binary not found" >&2; exit 1
+panic-attack timed out|echo "Error: panic-attack did not finish within 300s (timed out and killed)" >&2; exit 1
+panic-attack exited non-zero|echo "Error: panic-attack assail exited with exit status: 3" >&2; exit 1
+exit 0 with no output|exit 0
+exit 0 with an empty object|echo "{}"
+exit 0 with a non-array|echo "{\"weak_points\":[]}"
+CASES
+
+# 11. gating comes from the enrolment, never from the envelope. ───────────────
+GRID="${STANDARDS_DIR:-}/scripts/verdict-grid.sh"
+if [ -n "${STANDARDS_DIR:-}" ] && [ -f "$GRID" ]; then
+  pstub ponsbot "$ARGS_OK"'
+cat <<J
+[{"rule_id":"div-by-literal-zero","severity":"error","pons_severity":"ERROR","tier":"T1","evidence_class":"DATAFLOW","file":"src/a.jl","line":4,"message":"division by zero (T1, DATAFLOW)","blocking":true}]
+J
+exit 1'
+  pstub panicbot "$PAN"'
+echo "[]"'
+  runp "$TMP/pg" --enrolment "$TMP/pons-enrol.json"
+  ( cd "$REPO" && bash "$GRID" render --out "$TMP/pgrid" --hypatia /dev/null --panic /dev/null --pons /dev/null \
+      --report-backs "$TMP/pg" --enrolment "$TMP/pons-enrol.json" --sha 0000000 >/dev/null )
+  prow() { jq -r --arg id "$1" "[.reporters[] | select(.id == \$id) | $2][0]" "$TMP/pgrid/report.json"; }
+  check "renderer: ponsbot's row is gating when the enrolment says gating:true" true "$(prow ponsbot .gating)"
+  check "renderer: panicbot's row is advisory when the enrolment is silent" false "$(prow panicbot .gating)"
+  check "renderer: ponsbot's carried pons ERROR (DATAFLOW) is graded high" 1 "$(prow ponsbot .counts.high)"
+  check "renderer: ponsbot's error finding is a red row" red "$(prow ponsbot .state)"
+  # the same envelope with the enrolment's gating removed is advisory: the flag is the enrolment's alone
+  jq 'del(.reporters.ponsbot.gating)' "$TMP/pons-enrol.json" > "$TMP/pons-enrol-nogate.json"
+  ( cd "$REPO" && bash "$GRID" render --out "$TMP/pgrid2" --hypatia /dev/null --panic /dev/null --pons /dev/null \
+      --report-backs "$TMP/pg" --enrolment "$TMP/pons-enrol-nogate.json" --sha 0000000 >/dev/null )
+  check "renderer: without gating:true in the enrolment ponsbot would be advisory" false \
+    "$(jq -r '[.reporters[] | select(.id == "ponsbot") | .gating][0]' "$TMP/pgrid2/report.json")"
+  # a SPECULATIVE-only run: carried, graded info (minor), not blocking
+  pstub ponsbot "$ARGS_OK"'
+cat <<J
+[{"rule_id":"spec-rule","severity":"info","pons_severity":"ERROR","tier":"T3","evidence_class":"SPECULATIVE","file":"src/a.jl","line":5,"message":"maybe (T3, SPECULATIVE; carried, never graded as blocking)","blocking":false}]
+J'
+  runp "$TMP/pg3" --member ponsbot
+  ( cd "$REPO" && bash "$GRID" render --out "$TMP/pgrid3" --hypatia /dev/null --panic /dev/null --pons /dev/null \
+      --report-backs "$TMP/pg3" --enrolment "$TMP/pons-enrol.json" --sha 0000000 >/dev/null )
+  check "renderer: a SPECULATIVE-only ponsbot row is blue, not red" blue \
+    "$(jq -r '[.reporters[] | select(.id == "ponsbot") | .state][0]' "$TMP/pgrid3/report.json")"
+  check "renderer: ...and counts as no high or critical finding" 0 \
+    "$(jq -r '[.reporters[] | select(.id == "ponsbot") | .counts.high + .counts.critical][0]' "$TMP/pgrid3/report.json")"
+else
+  echo "SKIP: STANDARDS_DIR not set; ponsbot gating/evidence renderer round-trip not run"
+fi
+check "ponsbot and panicbot runs never change the scanned tree" "$repo_before" "$(repo_state)"
 
 # 8. the real renderer ─────────────────────────────────────────────────────────
 GRID="${STANDARDS_DIR:-}/scripts/verdict-grid.sh"

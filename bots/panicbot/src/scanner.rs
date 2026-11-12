@@ -182,23 +182,6 @@ pub struct DiagnosticsReport {
     pub messages: Vec<String>,
 }
 
-/// The top-level JSON envelope from `panic-attack assail`.
-///
-/// panic-attack wraps AssailReport inside an AssaultReport. When using
-/// `--output-format json`, the outer envelope may or may not be present
-/// depending on which subcommand was invoked.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AssaultReportEnvelope {
-    /// The static analysis report (always present for `assail`).
-    assail_report: Option<AssailReport>,
-    /// Direct weak_points at top level (alternative format).
-    #[serde(default)]
-    weak_points: Vec<WeakPoint>,
-    /// Direct fields for when the report IS the assail report.
-    program_path: Option<PathBuf>,
-    language: Option<String>,
-}
-
 /// Run `panic-attack assail <target> --output-format json`.
 ///
 /// Returns the parsed AssailReport containing all detected weak points.
@@ -208,32 +191,87 @@ pub fn run_assail(target: &Path, timeout: Duration) -> Result<AssailReport> {
     // `--headless` selects CI-safe output (JSON to stdout, no interactive
     // prompts). Required for panic-attack >= 2.5: without it the default
     // `--report-view accordion` renders a human report, not parseable JSON.
-    let output = invoke_panic_attack(
+    let run = run_panic_attack_raw(
         &["assail", &target.display().to_string(), "--headless"],
         timeout,
     )
     .context("Failed to run panic-attack assail")?;
 
+    // A non-zero exit is an error, whatever stdout holds: the estate's direct
+    // lane treats any non-zero `assail` exit as `error`, and a scan that died
+    // part-way can still have printed a parseable prefix. (assail exits 0 with
+    // findings; it exits non-zero on failure or, with --fail-on-incomplete,
+    // on incomplete coverage.)
+    if !run.status.success() {
+        bail!(
+            "panic-attack assail exited with {}: {}",
+            run.status,
+            first_diagnostic(&run.stderr)
+        );
+    }
+    if run.stdout.trim().is_empty() {
+        bail!(
+            "panic-attack assail exited 0 without a report (empty output). stderr: {}",
+            first_diagnostic(&run.stderr)
+        );
+    }
+    parse_assail_output(&run.stdout)
+}
+
+/// Parse and VALIDATE the stdout of a successful `assail` run.
+///
+/// Exit 0 is not evidence that anything was analysed. Mirroring the estate's
+/// direct lanes (standards `hypatia-scan-reusable.yml`, `deep-recon-reusable.yml`),
+/// a report is accepted only when it has a `weak_points` array, every weak
+/// point carries a known severity, and `statistics.total_lines` is a positive
+/// number. Anything else is an error, never an empty `ran` (cutover design
+/// section 5; a crashed or empty scanner must not summarise itself green).
+pub fn parse_assail_output(raw: &str) -> Result<AssailReport> {
     // Even in --headless mode panic-attack prints a human banner line
     // (e.g. "Running assail analysis on: .") to stdout before the JSON
     // document. Slice from the first JSON delimiter so serde sees pure JSON.
-    let json = extract_json(&output);
+    let json = extract_json(raw);
 
-    // Try parsing as AssaultReport envelope first
-    if let Ok(envelope) = serde_json::from_str::<AssaultReportEnvelope>(json) {
-        if let Some(report) = envelope.assail_report {
-            return Ok(report);
-        }
-        // Flat format — the JSON IS the assail report
-        if envelope.program_path.is_some() {
-            return serde_json::from_str::<AssailReport>(json)
-                .context("Failed to parse assail report (flat format)");
+    let value: serde_json::Value = serde_json::from_str(json)
+        .context("panic-attack assail exited 0 without a valid report (not JSON)")?;
+    // Handles both envelope formats: `{"assail_report": {...}}` and flat.
+    let report_value = value
+        .get("assail_report")
+        .filter(|v| v.is_object())
+        .unwrap_or(&value);
+
+    let weak_points = report_value
+        .get("weak_points")
+        .and_then(|w| w.as_array())
+        .context("panic-attack assail exited 0 without a valid report (no weak_points array)")?;
+    for (i, wp) in weak_points.iter().enumerate() {
+        let sev = wp.get("severity").and_then(|s| s.as_str()).unwrap_or("");
+        if !matches!(sev, "Low" | "Medium" | "High" | "Critical") {
+            bail!("panic-attack assail exited 0 without a valid report (weak point {i} has severity {sev:?})");
         }
     }
+    let total_lines = report_value
+        .pointer("/statistics/total_lines")
+        .and_then(|n| n.as_f64())
+        .unwrap_or(0.0);
+    if total_lines <= 0.0 {
+        bail!(
+            "panic-attack assail exited 0 but analysed nothing (statistics.total_lines is missing or not positive)"
+        );
+    }
 
-    // Direct parse as AssailReport
-    serde_json::from_str::<AssailReport>(json)
-        .context("Failed to parse panic-attack assail output as JSON")
+    serde_json::from_value::<AssailReport>(report_value.clone())
+        .context("panic-attack assail exited 0 without a valid report (unexpected shape)")
+}
+
+/// First nonblank line of captured stderr, at most 240 characters.
+fn first_diagnostic(stderr: &str) -> String {
+    stderr
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .map(|l| l.chars().take(240).collect())
+        .unwrap_or_else(|| "no diagnostic".to_string())
 }
 
 /// Slice a captured stdout buffer down to its JSON payload.
@@ -404,15 +442,21 @@ fn find_panic_attack_binary() -> Result<PathBuf> {
     )
 }
 
-/// Invoke `panic-attack` as a subprocess with JSON output.
+/// Captured result of one `panic-attack` run.
+struct RawRun {
+    status: std::process::ExitStatus,
+    stdout: String,
+    stderr: String,
+}
+
+/// Run `panic-attack <args> --output-format json` with an ENFORCED timeout.
 ///
-/// Handles:
-/// - Binary not found (clear error message)
-/// - Subprocess timeout (configurable, default 300s)
-/// - Non-zero exit codes (returns stdout anyway, as panic-attack may produce
-///   findings even on non-zero exit)
-/// - Invalid/empty output (error)
-fn invoke_panic_attack(args: &[&str], timeout: Duration) -> Result<String> {
+/// Handles: binary not found (clear error), a timeout (the child is killed and
+/// the call fails: a hung scanner must not hang the lane or read as a run).
+/// The exit status is returned for the caller to judge.
+fn run_panic_attack_raw(args: &[&str], timeout: Duration) -> Result<RawRun> {
+    use std::io::Read;
+
     let binary = find_panic_attack_binary()?;
 
     tracing::debug!(
@@ -425,50 +469,82 @@ fn invoke_panic_attack(args: &[&str], timeout: Duration) -> Result<String> {
     cmd.args(args);
     cmd.arg("--output-format");
     cmd.arg("json");
-
-    // Capture stdout and stderr
+    cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let child = cmd
+    let mut child = cmd
         .spawn()
         .with_context(|| format!("Failed to spawn panic-attack at {}", binary.display()))?;
 
-    let output = child
-        .wait_with_output()
-        .context("Failed to wait for panic-attack subprocess")?;
+    // Drain both pipes on threads so a large report cannot fill a pipe and
+    // block the child while this thread waits on the deadline.
+    let mut out_pipe = child.stdout.take().expect("stdout is piped");
+    let mut err_pipe = child.stderr.take().expect("stderr is piped");
+    let out_t = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = out_pipe.read_to_end(&mut b);
+        b
+    });
+    let err_t = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = err_pipe.read_to_end(&mut b);
+        b
+    });
 
-    // Log stderr for debugging (panic-attack may emit progress info there)
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child
+            .try_wait()
+            .context("Failed to wait for panic-attack subprocess")?
+        {
+            Some(s) => break s,
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                bail!(
+                    "panic-attack did not finish within {}s (timed out and killed)",
+                    timeout.as_secs()
+                );
+            }
+            None => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&out_t.join().unwrap_or_default()).to_string();
+    let stderr = String::from_utf8_lossy(&err_t.join().unwrap_or_default()).to_string();
     if !stderr.is_empty() {
         tracing::debug!("panic-attack stderr: {}", stderr.trim());
     }
+    Ok(RawRun {
+        status,
+        stdout,
+        stderr,
+    })
+}
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+/// Invoke `panic-attack` for the subcommands other than `assail`.
+///
+/// Non-zero exit with output is tolerated here (diagnostics and some report
+/// commands exit non-zero while still printing a usable document); `assail`
+/// does NOT use this path, it is strict (see [`run_assail`]).
+fn invoke_panic_attack(args: &[&str], timeout: Duration) -> Result<String> {
+    let run = run_panic_attack_raw(args, timeout)?;
 
-    if stdout.trim().is_empty() {
+    if run.stdout.trim().is_empty() {
         bail!(
             "panic-attack produced empty output (exit code: {}). stderr: {}",
-            output.status,
-            stderr.trim()
+            run.status,
+            run.stderr.trim()
         );
     }
-
-    // Non-zero exit is not necessarily an error — panic-attack exits non-zero
-    // when it finds critical issues, but still produces valid JSON output.
-    if !output.status.success() {
+    if !run.status.success() {
         tracing::warn!(
-            "panic-attack exited with code {} (findings may still be valid)",
-            output.status
+            "panic-attack exited with code {} (output may still be valid)",
+            run.status
         );
     }
-
-    // Ignore timeout for now since std::process::Command doesn't have native
-    // timeout support. The timeout parameter is reserved for future use with
-    // tokio::process::Command or manual polling.
-    let _ = timeout;
-
-    Ok(stdout)
+    Ok(run.stdout)
 }
 
 #[cfg(test)]
@@ -497,6 +573,7 @@ mod tests {
                 "program_path": "/tmp/test",
                 "language": "rust",
                 "frameworks": [],
+                "statistics": {"total_lines": 120},
                 "weak_points": [
                     {
                         "category": "UnsafeCode",
@@ -508,8 +585,7 @@ mod tests {
             }
         }"#;
 
-        let envelope: AssaultReportEnvelope = serde_json::from_str(json).unwrap();
-        let report = envelope.assail_report.unwrap();
+        let report = parse_assail_output(json).unwrap();
         assert_eq!(report.weak_points.len(), 1);
         assert_eq!(report.weak_points[0].category, "UnsafeCode");
         assert_eq!(report.language, "rust");
@@ -636,5 +712,71 @@ mod tests {
         let wp: WeakPoint = serde_json::from_str(json).unwrap();
         assert!(wp.location.is_none());
         assert!(wp.recommended_attack.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod parity_tests {
+    //! Envelope parity with the estate's direct lanes (cutover design section 5):
+    //! a report that is not exactly a real scan is an error, never an empty
+    //! `ran`.
+    use super::*;
+
+    const GOOD: &str = r#"Running assail analysis on: .
+{"program_path":"/t","language":"rust","statistics":{"total_lines":10},"weak_points":[
+  {"category":"PanicPath","location":"a.rs:1","severity":"Medium","description":"unwrap"}]}"#;
+
+    #[test]
+    fn a_real_report_with_its_banner_parses() {
+        assert_eq!(parse_assail_output(GOOD).unwrap().weak_points.len(), 1);
+    }
+
+    #[test]
+    fn a_clean_real_scan_is_accepted_as_zero_findings() {
+        let r = parse_assail_output(
+            r#"{"program_path":"/t","language":"rust","statistics":{"total_lines":10},"weak_points":[]}"#,
+        )
+        .unwrap();
+        assert!(r.weak_points.is_empty());
+    }
+
+    #[test]
+    fn exit_0_without_a_valid_report_is_an_error() {
+        for bad in [
+            "",
+            "Running assail analysis on: .\n",
+            "not json at all",
+            "{}",
+            "[]",
+            r#"{"statistics":{"total_lines":10}}"#,
+            r#"{"program_path":"/t","language":"x","statistics":{"total_lines":10},"weak_points":"none"}"#,
+        ] {
+            assert!(
+                parse_assail_output(bad).is_err(),
+                "accepted as a report: {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_scan_that_analysed_nothing_is_an_error_not_an_empty_ran() {
+        for stats in [
+            r#""statistics":{"total_lines":0}"#,
+            r#""statistics":{}"#,
+            r#""statistics":null"#,
+            r#""other":1"#,
+        ] {
+            let json =
+                format!(r#"{{"program_path":"/t","language":"x",{stats},"weak_points":[]}}"#);
+            let e = parse_assail_output(&json).unwrap_err().to_string();
+            assert!(e.contains("analysed nothing"), "{stats}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_weak_point_with_an_unknown_severity_is_an_error() {
+        let json = r#"{"program_path":"/t","language":"x","statistics":{"total_lines":5},
+            "weak_points":[{"category":"c","severity":"Catastrophic","description":"d"}]}"#;
+        assert!(parse_assail_output(json).is_err());
     }
 }
