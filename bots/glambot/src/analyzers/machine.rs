@@ -324,6 +324,7 @@ impl MachineAnalyzer {
                     Severity::Info,
                     "No robots.txt found. Consider adding one for crawler control.",
                 )
+                .with_file(path.join("robots.txt"))
                 .with_suggestion("Add robots.txt to repository root if hosting documentation"),
             );
         } else {
@@ -344,6 +345,7 @@ impl MachineAnalyzer {
                     "No .machine_readable/ directory found. SCM files (STATE.scm, META.scm, ECOSYSTEM.scm) should be placed here.",
                 )
                 .fixable()
+                .with_file(mr_dir.clone())
                 .with_suggestion("Create .machine_readable/ directory with STATE.scm, META.scm, ECOSYSTEM.scm"),
             );
             return;
@@ -365,6 +367,7 @@ impl MachineAnalyzer {
                         Severity::Info,
                         &format!("{} not found in .machine_readable/ directory.", scm_file),
                     )
+                    .with_file(mr_dir.join(scm_file))
                     .with_suggestion(&format!("Add {} to .machine_readable/", scm_file)),
                 );
             }

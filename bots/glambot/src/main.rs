@@ -134,8 +134,11 @@ fn main() -> ExitCode {
 fn init_logging(level: &str) {
     let filter = EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"));
 
+    // Logs go to stderr: stdout carries the JSON report that the fleet driver
+    // parses, and a log line there makes the report unreadable.
     fmt()
         .with_target(true)
+        .with_writer(std::io::stderr)
         .with_ansi(true)
         .with_env_filter(filter)
         .init();

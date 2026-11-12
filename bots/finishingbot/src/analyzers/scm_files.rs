@@ -76,6 +76,7 @@ impl Analyzer for ScmFilesAnalyzer {
                         Severity::Error,
                         &format!("Required SCM file {} not found ({}).", filename, description),
                     )
+                    .with_file(correct_path.clone())
                     .with_suggestion(&format!(
                         "Create .machine_readable/{} with proper metadata and content. See hyperpolymath SCM file specs.",
                         filename

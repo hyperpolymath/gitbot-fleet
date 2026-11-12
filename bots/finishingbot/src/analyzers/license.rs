@@ -113,6 +113,7 @@ impl LicenseAnalyzer {
                         Severity::Error,
                         "No LICENSE file found in repository root",
                     )
+                    .with_file(path.join("LICENSE"))
                     .with_suggestion("Add a LICENSE file with your chosen license"),
                 );
             }

@@ -149,6 +149,8 @@ check "seambot: check name becomes the rule id" "SEAM-register-exists|error|spec
 check "finishingbot: analyzers are flattened" 2 "$(field "$TMP/o1/finishingbot.json" '.findings | length')"
 check "finishingbot: ./ prefix is stripped" config/tools.yml "$(field "$TMP/o1/finishingbot.json" '.findings[] | select(.rule_id == "LIC-002") | .file')"
 check "finishingbot: a repository-level finding has an empty path" "" "$(field "$TMP/o1/finishingbot.json" '.findings[] | select(.rule_id == "REL-001") | .file')"
+check "driver: warns loudly about a finding with no path" 1 "$(grep -c 'WARNING: finishingbot reported 1 finding(s) with no path' "$TMP/o1.log")"
+check "driver: does not warn about members whose findings all carry a path" 0 "$(grep -c 'WARNING: glambot' "$TMP/o1.log")"
 check "glambot: line numbers survive" 7 "$(field "$TMP/o1/glambot.json" '.findings[0].line')"
 check "accessibilitybot: absolute paths become repository-relative" src/index.html "$(field "$TMP/o1/accessibilitybot.json" '.findings[0].file')"
 check "a default title is used when the manifest has none" "glambot (presentation quality)" "$(field "$TMP/o1/glambot.json" .title)"

@@ -138,6 +138,7 @@ impl VisualAnalyzer {
                         Severity::Error,
                         "No README file found in repository root.",
                     )
+                    .with_file(path.join("README.adoc"))
                     .with_suggestion("Add a README.md or README.adoc file"),
                 );
             }
@@ -272,6 +273,7 @@ impl VisualAnalyzer {
                     Severity::Info,
                     "No logo file found. Consider adding branding.",
                 )
+                .with_file(path.join("logo.svg"))
                 .with_suggestion("Add logo.png or logo.svg to repository root or docs/ directory"),
             );
         }
