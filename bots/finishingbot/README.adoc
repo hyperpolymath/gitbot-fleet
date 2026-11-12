@@ -171,6 +171,19 @@ finishing-bot release
 finishing-bot security --panic-attacker-path /path/to/panic-attacker
 ----
 
+=== Estate canon and exemptions
+
+The analyzers accept the estate's canonical locations, not only one spelling:
+
+* `ROADMAP.adoc` at `docs/status/ROADMAP.adoc` (or the root); `SECURITY`, `CONTRIBUTING` and `CODE_OF_CONDUCT` as `.md` or `.adoc`, at the root or in `.github/` (V1-DOC, V1-SEC-001, V1-COM, REL-004).
+* `mise.toml` in place of `.tool-versions` (TOOL-001).
+* `tests/fuzz/` as well as `fuzz/` and `.clusterfuzzlite/` (TEST-RU-003); a crate with no code yet (no `.rs` line that is not blank or a comment) is exempt from TEST-RU-005 and TEST-RU-006.
+* A workflow named by file name in prose resolves under `.github/workflows/` (CLM-006).
+* SCM-001 is retired: STATE, META, ECOSYSTEM, PLAYBOOK, AGENTIC and NEUROSYM are clauses of `<name>_chora.deed`, not files.
+* REL-008 matches key material (PEM headers, AWS key ids, vendor token shapes, long key literals), not the words "private key".
+
+A repository can exempt a path from a rule in its `.hypatia-ignore` (the file the RSR template ships), using this bot's module name: `finishing_bot/PH:build/just/` exempts the placeholder family under `build/just/`; `finishing_bot/*:<fragment>` exempts every finishing-bot rule. Entries for other modules are not read. Currently only the placeholder analyzer (PH-nnn, hence PH-100) honours it.
+
 === Security Analysis
 
 finishing-bot integrates with `panic-attacker` for security validation:

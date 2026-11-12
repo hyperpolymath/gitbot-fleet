@@ -38,7 +38,7 @@ impl Analyzer for ScmFilesAnalyzer {
 
         let machine_readable_dir = path.join(".machine_readable");
 
-        for (filename, description) in &required_scm_files {
+        for (filename, _description) in &required_scm_files {
             let correct_path = machine_readable_dir.join(filename);
             let root_path = path.join(filename);
 
@@ -69,18 +69,12 @@ impl Analyzer for ScmFilesAnalyzer {
                     )),
                 );
             } else {
-                result.add(
-                    Finding::new(
-                        &format!("SCM-001-{}", filename),
-                        &format!("Missing {}", filename),
-                        Severity::Error,
-                        &format!("Required SCM file {} not found ({}).", filename, description),
-                    )
-                    .with_suggestion(&format!(
-                        "Create .machine_readable/{} with proper metadata and content. See hyperpolymath SCM file specs.",
-                        filename
-                    )),
-                );
+                // SCM-001 (a required .scm file is missing) is retired. The six
+                // descriptive documents (STATE, META, ECOSYSTEM, PLAYBOOK,
+                // AGENTIC, NEUROSYM) are clauses of the repository's
+                // `<name>_chora.deed`, not files, so absence is the canonical
+                // state. Files that DO exist are still validated above.
+                debug!("{} not present (retired: now a clause of the chora deed)", filename);
             }
         }
 
@@ -182,5 +176,43 @@ impl ScmFilesAnalyzer {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn ids(dir: &Path) -> Vec<String> {
+        ScmFilesAnalyzer
+            .analyze(dir, &Config::default())
+            .unwrap()
+            .findings
+            .into_iter()
+            .map(|f| f.id)
+            .collect()
+    }
+
+    #[test]
+    fn absent_scm_files_are_not_a_finding() {
+        // The six descriptive documents are clauses of <name>_chora.deed now.
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("x_chora.deed"), "(deed)").unwrap();
+        let got = ids(d.path());
+        assert!(
+            got.iter().all(|i| !i.starts_with("SCM-001")),
+            "SCM-001 is retired, got {:?}",
+            got
+        );
+        assert!(got.is_empty(), "got {:?}", got);
+    }
+
+    #[test]
+    fn a_misplaced_scm_file_is_still_reported() {
+        // Negative control: the analyzer still runs for files that exist.
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("STATE.scm"), ";; x\n").unwrap();
+        assert!(ids(d.path()).contains(&"SCM-005-STATE.scm".to_string()));
     }
 }

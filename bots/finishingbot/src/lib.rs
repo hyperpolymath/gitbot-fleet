@@ -16,6 +16,7 @@
 pub mod analyzers;
 pub mod config;
 pub mod error;
+pub mod ignore;
 
 pub use analyzers::{
     claims::ClaimsAnalyzer, license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer,

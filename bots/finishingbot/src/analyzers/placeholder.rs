@@ -5,6 +5,7 @@
 use super::{AnalysisResult, Analyzer, Finding, Severity};
 use crate::config::{Config, PlaceholderAction};
 use crate::error::Result;
+use crate::ignore::IgnoreFile;
 use regex::{Regex, RegexSet};
 use std::path::Path;
 use tracing::debug;
@@ -38,6 +39,9 @@ impl Analyzer for PlaceholderAnalyzer {
 
         // Add custom regex patterns
         patterns.extend(config.placeholders.custom_patterns.clone());
+
+        // Exemptions from the repository's own .hypatia-ignore (finishing_bot/PH:...).
+        let ignore = IgnoreFile::load(path);
 
         let pattern_set = RegexSet::new(&patterns)?;
         let patterns_with_context: Vec<Regex> = patterns
@@ -75,6 +79,8 @@ impl Analyzer for PlaceholderAnalyzer {
                     &pattern_set,
                     &patterns_with_context,
                     config,
+                    &ignore,
+                    path,
                     &mut result,
                 );
             }
@@ -140,6 +146,7 @@ impl PlaceholderAnalyzer {
     }
 
     /// Scan file content for placeholders
+    #[allow(clippy::too_many_arguments)]
     fn scan_file_content(
         &self,
         path: &Path,
@@ -147,6 +154,8 @@ impl PlaceholderAnalyzer {
         pattern_set: &RegexSet,
         patterns: &[Regex],
         config: &Config,
+        ignore: &IgnoreFile,
+        root: &Path,
         result: &mut AnalysisResult,
     ) {
         let pattern_names = &config.placeholders.patterns;
@@ -157,6 +166,12 @@ impl PlaceholderAnalyzer {
                 if let Some(pattern) = patterns.get(match_idx) {
                     if let Some(m) = pattern.find(line) {
                         let pattern_name = pattern_names.get(match_idx).map(|s| s.as_str()).unwrap_or("custom");
+                        let rule_id = format!("PH-{:03}", match_idx + 1);
+                        let rel = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
+                        if ignore.suppresses(&rule_id, &rel) {
+                            debug!(file = %rel, rule = %rule_id, "Exempted by .hypatia-ignore");
+                            continue;
+                        }
 
                         debug!(
                             file = %path.display(),
@@ -316,5 +331,85 @@ impl PlaceholderAnalyzer {
         }
 
         Ok(fixed)
+    }
+}
+
+#[cfg(test)]
+mod ignore_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write(dir: &Path, rel: &str, body: &str) {
+        let p = dir.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+
+    /// A template-shaped repo: its own scanners legitimately name the tokens.
+    fn repo(ignore: Option<&str>) -> TempDir {
+        let d = TempDir::new().unwrap();
+        write(d.path(), "build/just/scan.just", "grep -E 'TODO|FIXME' .\n");
+        write(d.path(), "src/main.rs", "// TODO: real placeholder\n");
+        if let Some(text) = ignore {
+            write(d.path(), ".hypatia-ignore", text);
+        }
+        d
+    }
+
+    fn files(d: &TempDir) -> Vec<String> {
+        PlaceholderAnalyzer
+            .analyze(d.path(), &Config::default())
+            .unwrap()
+            .findings
+            .into_iter()
+            .filter(|f| f.id.starts_with("PH-0"))
+            .map(|f| {
+                f.file
+                    .unwrap()
+                    .strip_prefix(d.path())
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn without_an_ignore_file_every_placeholder_is_reported() {
+        let d = repo(None);
+        let got = files(&d);
+        assert!(got.contains(&"build/just/scan.just".to_string()), "{got:?}");
+        assert!(got.contains(&"src/main.rs".to_string()), "{got:?}");
+    }
+
+    #[test]
+    fn hypatia_ignore_exempts_the_named_path_only() {
+        let d = repo(Some("finishing_bot/PH:build/just/\n"));
+        let got = files(&d);
+        assert!(!got.contains(&"build/just/scan.just".to_string()), "{got:?}");
+        // A real placeholder elsewhere still counts.
+        assert!(got.contains(&"src/main.rs".to_string()), "{got:?}");
+    }
+
+    #[test]
+    fn another_modules_entry_exempts_nothing_here() {
+        let d = repo(Some("structural_drift/SD022:build/just/\n"));
+        assert!(files(&d).contains(&"build/just/scan.just".to_string()));
+    }
+
+    #[test]
+    fn exempted_scanner_files_no_longer_inflate_ph_100() {
+        let mut cfg = Config::default();
+        cfg.placeholders.max_allowed = 2; // 2 hits in the scanner file, none elsewhere
+        let d = TempDir::new().unwrap();
+        write(d.path(), "build/just/scan.just", "grep -E 'TODO|FIXME' .\n");
+        let over = PlaceholderAnalyzer.analyze(d.path(), &cfg).unwrap();
+        assert!(!over.findings.iter().any(|f| f.id == "PH-100"), "at the limit");
+        cfg.placeholders.max_allowed = 1;
+        let over = PlaceholderAnalyzer.analyze(d.path(), &cfg).unwrap();
+        assert!(over.findings.iter().any(|f| f.id == "PH-100"), "over the limit");
+        write(d.path(), ".hypatia-ignore", "finishing_bot/PH:build/just/\n");
+        let ok = PlaceholderAnalyzer.analyze(d.path(), &cfg).unwrap();
+        assert!(ok.findings.is_empty(), "{:?}", ok.findings);
     }
 }

@@ -17,6 +17,25 @@ use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// First of `candidates` (repo-relative, in preference order) that exists
+/// under `root`. Estate canon allows a document in more than one place
+/// (`.adoc` or `.md`, repo root or `.github/`), and a rule that names exactly
+/// one spelling reports a false positive for the others.
+pub(crate) fn first_existing(root: &Path, candidates: &[&str]) -> Option<PathBuf> {
+    candidates
+        .iter()
+        .map(|c| root.join(c))
+        .find(|p| p.exists())
+}
+
+/// Accepted spellings and locations of a security policy.
+pub(crate) const SECURITY_POLICY: &[&str] = &[
+    "SECURITY.md",
+    "SECURITY.adoc",
+    ".github/SECURITY.md",
+    ".github/SECURITY.adoc",
+];
+
 /// Severity levels for findings
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

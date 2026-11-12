@@ -185,15 +185,16 @@ impl TestingAnalyzer {
 
         // Check for fuzzing (cargo-fuzz or ClusterFuzzLite)
         let fuzz_dir = path.join("fuzz");
+        let tests_fuzz_dir = path.join("tests/fuzz");
         let clusterfuzz_dir = path.join(".clusterfuzzlite");
 
-        if !fuzz_dir.exists() && !clusterfuzz_dir.exists() {
+        if !fuzz_dir.exists() && !tests_fuzz_dir.exists() && !clusterfuzz_dir.exists() {
             result.add(
                 Finding::new(
                     "TEST-RU-003",
                     "Missing fuzzing infrastructure",
                     Severity::Error,
-                    "Rust project missing fuzz/ or .clusterfuzzlite/ for fuzzing.",
+                    "Rust project missing fuzz/, tests/fuzz/ or .clusterfuzzlite/ for fuzzing.",
                 )
                 .with_suggestion("Add ClusterFuzzLite configuration for automated fuzzing"),
             );
@@ -219,9 +220,13 @@ impl TestingAnalyzer {
             }
         }
 
+        // A crate with no code yet has nothing to stress or benchmark, so
+        // TEST-RU-005 and TEST-RU-006 wait until there is some (see `rust_has_code`).
+        let has_code = rust_has_code(path);
+
         // Check for stress test workflow
         let stress_workflow = path.join(".github/workflows/stress-test.yml");
-        if !stress_workflow.exists() {
+        if !stress_workflow.exists() && has_code {
             result.add(
                 Finding::new(
                     "TEST-RU-005",
@@ -237,7 +242,7 @@ impl TestingAnalyzer {
 
         // Check Cargo.toml for criterion dependency
         if let Ok(content) = std::fs::read_to_string(path.join("Cargo.toml")) {
-            if !content.contains("criterion") {
+            if has_code && !content.contains("criterion") {
                 result.add(
                     Finding::new(
                         "TEST-RU-006",
@@ -420,5 +425,121 @@ mod agda_layout_tests {
             .findings
             .iter()
             .any(|finding| finding.id == "TEST-001"));
+    }
+}
+
+/// Whether the Rust project at `root` has any code yet.
+///
+/// "No code" is exact: no `.rs` file outside build output (`target/`),
+/// vendored trees, `node_modules/` and hidden directories contains a line that
+/// is neither blank nor a comment. An empty `src/lib.rs`, one holding only
+/// `//!` docs or an SPDX header, and a crate with no `.rs` files at all, are
+/// all "no code"; `fn main() {}` is code. Used to exempt benchmark and stress
+/// requirements from a freshly scaffolded crate.
+pub(crate) fn rust_has_code(root: &Path) -> bool {
+    static BLOCK_COMMENT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?s)/\*.*?\*/").expect("block-comment regex is a valid constant pattern")
+    });
+    walkdir::WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| {
+            if e.depth() == 0 || !e.file_type().is_dir() {
+                return true;
+            }
+            let name = e.file_name().to_string_lossy();
+            !(name.starts_with('.') || matches!(name.as_ref(), "target" | "vendor" | "node_modules"))
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|x| x == "rs"))
+        .any(|e| {
+            std::fs::read_to_string(e.path()).is_ok_and(|src| {
+                BLOCK_COMMENT
+                    .replace_all(&src, "")
+                    .lines()
+                    .map(str::trim)
+                    .any(|l| !l.is_empty() && !l.starts_with("//"))
+            })
+        })
+}
+
+#[cfg(test)]
+mod no_code_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn write(dir: &Path, rel: &str, body: &str) {
+        let p = dir.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+
+    fn rust_repo(lib: Option<&str>) -> TempDir {
+        let d = TempDir::new().unwrap();
+        write(d.path(), "Cargo.toml", "[package]\nname = \"x\"\nversion = \"0.1.0\"\n");
+        if let Some(body) = lib {
+            write(d.path(), "src/lib.rs", body);
+        }
+        d
+    }
+
+    fn ids(dir: &Path) -> Vec<String> {
+        TestingAnalyzer
+            .analyze(dir, &Config::default())
+            .unwrap()
+            .findings
+            .into_iter()
+            .map(|f| f.id)
+            .collect()
+    }
+
+    #[test]
+    fn no_code_means_no_non_comment_line_in_any_rs_file() {
+        for body in [
+            None,
+            Some(""),
+            Some("// SPDX-License-Identifier: MPL-2.0\n\n//! docs only\n"),
+            Some("/* block\n comment */\n// c\n"),
+        ] {
+            let d = rust_repo(body);
+            assert!(!rust_has_code(d.path()), "{body:?}");
+        }
+        for body in ["fn main() {}\n", "// c\npub fn f() {}\n", "/* c */ pub struct S;\n"] {
+            let d = rust_repo(Some(body));
+            assert!(rust_has_code(d.path()), "{body:?}");
+        }
+    }
+
+    #[test]
+    fn code_in_build_output_vendor_or_hidden_dirs_does_not_count() {
+        let d = rust_repo(Some("// nothing\n"));
+        write(d.path(), "target/debug/build/x.rs", "fn a() {}\n");
+        write(d.path(), "vendor/dep/lib.rs", "fn b() {}\n");
+        write(d.path(), ".claude/worktrees/w/src/lib.rs", "fn c() {}\n");
+        assert!(!rust_has_code(d.path()));
+    }
+
+    #[test]
+    fn stress_and_criterion_are_exempt_for_a_crate_with_no_code() {
+        let d = rust_repo(Some("// SPDX only\n"));
+        let got = ids(d.path());
+        assert!(!got.contains(&"TEST-RU-005".to_string()), "{got:?}");
+        assert!(!got.contains(&"TEST-RU-006".to_string()), "{got:?}");
+    }
+
+    #[test]
+    fn stress_and_criterion_still_required_once_there_is_code() {
+        let d = rust_repo(Some("pub fn f() {}\n"));
+        let got = ids(d.path());
+        assert!(got.contains(&"TEST-RU-005".to_string()), "{got:?}");
+        assert!(got.contains(&"TEST-RU-006".to_string()), "{got:?}");
+    }
+
+    #[test]
+    fn fuzz_under_tests_satisfies_ru_003() {
+        let d = rust_repo(Some("pub fn f() {}\n"));
+        assert!(ids(d.path()).contains(&"TEST-RU-003".to_string()));
+        write(d.path(), "tests/fuzz/fuzz_targets/t.rs", "// target\n");
+        assert!(!ids(d.path()).contains(&"TEST-RU-003".to_string()));
     }
 }

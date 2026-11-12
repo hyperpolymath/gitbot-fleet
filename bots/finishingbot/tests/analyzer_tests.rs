@@ -629,24 +629,19 @@ mod scm_files_analyzer {
     use super::*;
 
     #[test]
-    fn test_missing_state_scm_error() {
+    fn test_missing_state_scm_is_retired() {
         let (_temp, path) = setup_test_repo();
-        // No .machine_readable/ directory at all
+        // No .machine_readable/ directory at all: the descriptive documents are
+        // clauses of the chora deed now, so absence is not a finding.
 
         let analyzer = ScmFilesAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
         assert!(
-            result.findings.iter().any(|f| f.id == "SCM-001-STATE.scm"),
-            "Should report missing STATE.scm"
-        );
-        assert!(
-            result
-                .findings
-                .iter()
-                .any(|f| f.id == "SCM-001-STATE.scm" && f.severity == Severity::Error),
-            "Missing STATE.scm should be Error severity"
+            result.findings.iter().all(|f| !f.id.starts_with("SCM-001")),
+            "SCM-001 is retired; got {:?}",
+            result.findings.iter().map(|f| &f.id).collect::<Vec<_>>()
         );
     }
 

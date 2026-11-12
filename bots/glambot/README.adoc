@@ -96,16 +96,16 @@ Validates JSON/YAML file syntax, structured data presence, robots.txt, and `.mac
 |===
 | Finding ID | Description | Severity
 
-| MACH-001 | Invalid JSON | Error
+| MACH-001 | Invalid JSON | Error (`.devcontainer/*.json` and `.vscode/*.json` are tool-demanded JSONC and are parsed as JSONC)
 | MACH-002 | Invalid YAML | Error
 | MACH-003 | Missing structured data (HTML) | Warning
 | MACH-004 | Invalid JSON-LD | Error
 | MACH-005 | Missing robots.txt | Info
 | MACH-006 | Missing .machine_readable/ directory | Warning
-| MACH-007 | Missing SCM file (STATE/META/ECOSYSTEM) | Info
+| MACH-007 | _Retired_: the STATE/META/ECOSYSTEM `.scm` files are clauses of the repository's `<name>_chora.deed`, so their absence is not reported | n/a
 |===
 
-**Auto-fixes:** Creates `.machine_readable/` directory with STATE.scm, META.scm, ECOSYSTEM.scm templates (MACH-006), adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).
+**Auto-fixes:** Creates the `.machine_readable/` directory (MACH-006), adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).
 
 === Git-SEO Integration (`GitSeoAnalyzer`)
 
@@ -115,7 +115,7 @@ Shells out to the `git-seo` CLI tool for comprehensive forge-based SEO scoring (
 |===
 | Finding ID | Description | Severity
 
-| GS-001 | git-seo not installed | Info
+| GS-001 | _Retired as a finding_: git-seo not being installed is a property of the machine running glambot, not of the repository, so it is logged (`warn`) and the analyzer reports nothing | n/a
 | GS-002 | git-seo analysis failed | Warning
 | GS-003 | No git remote found | Info
 | GS-100 | Overall SEO score | Varies

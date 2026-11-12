@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! V1 release readiness analyzer
 
-use super::{AnalysisResult, Analyzer, Finding, Severity};
+use super::{first_existing, AnalysisResult, Analyzer, Finding, Severity, SECURITY_POLICY};
 use crate::config::Config;
 use crate::error::Result;
 use std::path::Path;
@@ -53,15 +53,22 @@ impl Analyzer for V1ReadinessAnalyzer {
 impl V1ReadinessAnalyzer {
     /// Check for core documentation files
     fn check_core_docs(&self, path: &Path, result: &mut AnalysisResult) {
-        let required_docs = [
-            ("README.adoc", "Main project documentation"),
-            ("ROADMAP.adoc", "Project roadmap"),
-            ("LICENSE", "License file"),
+        // (name, description, accepted locations in preference order). The
+        // first location is the canonical one and is the path reported when
+        // the document is missing. Estate canon keeps the roadmap at
+        // docs/status/ROADMAP.adoc (the STATE journal).
+        let required_docs: [(&str, &str, &[&str]); 3] = [
+            ("README.adoc", "Main project documentation", &["README.adoc"]),
+            (
+                "ROADMAP.adoc",
+                "Project roadmap",
+                &["docs/status/ROADMAP.adoc", "ROADMAP.adoc"],
+            ),
+            ("LICENSE", "License file", &["LICENSE"]),
         ];
 
-        for (filename, description) in &required_docs {
-            let file_path = path.join(filename);
-            if !file_path.exists() {
+        for (filename, description, locations) in &required_docs {
+            if first_existing(path, locations).is_none() {
                 result.add(
                     Finding::new(
                         &format!("V1-DOC-{}", filename),
@@ -69,7 +76,8 @@ impl V1ReadinessAnalyzer {
                         Severity::Error,
                         &format!("Required file {} not found ({}).", filename, description),
                     )
-                    .with_suggestion(&format!("Create {} file", filename)),
+                    .with_file(path.join(locations[0]))
+                    .with_suggestion(&format!("Create {} file", locations[0])),
                 );
             } else {
                 debug!("Found {}", filename);
@@ -79,19 +87,19 @@ impl V1ReadinessAnalyzer {
 
     /// Check for security files
     fn check_security_files(&self, path: &Path, result: &mut AnalysisResult) {
-        let security_file = path.join("SECURITY.md");
-        if !security_file.exists() {
+        if first_existing(path, SECURITY_POLICY).is_none() {
             result.add(
                 Finding::new(
                     "V1-SEC-001",
                     "Missing SECURITY.md",
                     Severity::Warning,
-                    "SECURITY.md not found for responsible disclosure.",
+                    "No security policy (SECURITY.md or .github/SECURITY.md) found for responsible disclosure.",
                 )
+                .with_file(path.join(SECURITY_POLICY[0]))
                 .with_suggestion("Add SECURITY.md with security policy and contact information"),
             );
         } else {
-            debug!("Found SECURITY.md");
+            debug!("Found security policy");
         }
     }
 
@@ -158,14 +166,33 @@ impl V1ReadinessAnalyzer {
 
     /// Check for community files
     fn check_community_files(&self, path: &Path, result: &mut AnalysisResult) {
-        let community_files = [
-            ("CODE_OF_CONDUCT.md", "Code of conduct"),
-            ("CONTRIBUTING.md", "Contribution guidelines"),
+        // The rule id keeps the historical .md spelling; the estate writes
+        // these as .adoc, and GitHub reads them from the root or .github/.
+        let community_files: [(&str, &str, &[&str]); 2] = [
+            (
+                "CODE_OF_CONDUCT.md",
+                "Code of conduct",
+                &[
+                    "CODE_OF_CONDUCT.md",
+                    "CODE_OF_CONDUCT.adoc",
+                    ".github/CODE_OF_CONDUCT.md",
+                    ".github/CODE_OF_CONDUCT.adoc",
+                ],
+            ),
+            (
+                "CONTRIBUTING.md",
+                "Contribution guidelines",
+                &[
+                    "CONTRIBUTING.md",
+                    "CONTRIBUTING.adoc",
+                    ".github/CONTRIBUTING.md",
+                    ".github/CONTRIBUTING.adoc",
+                ],
+            ),
         ];
 
-        for (filename, description) in &community_files {
-            let file_path = path.join(filename);
-            if !file_path.exists() {
+        for (filename, description, locations) in &community_files {
+            if first_existing(path, locations).is_none() {
                 result.add(
                     Finding::new(
                         &format!("V1-COM-{}", filename),
@@ -173,11 +200,96 @@ impl V1ReadinessAnalyzer {
                         Severity::Warning,
                         &format!("{} file not found ({}).", filename, description),
                     )
+                    .with_file(path.join(locations[0]))
                     .with_suggestion(&format!("Add {} for community health", filename)),
                 );
             } else {
                 debug!("Found {}", filename);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn run(dir: &Path) -> Vec<Finding> {
+        V1ReadinessAnalyzer
+            .analyze(dir, &Config::default())
+            .unwrap()
+            .findings
+    }
+
+    fn ids(dir: &Path) -> Vec<String> {
+        run(dir).into_iter().map(|f| f.id).collect()
+    }
+
+    fn touch(dir: &Path, rel: &str) {
+        let p = dir.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, "x").unwrap();
+    }
+
+    #[test]
+    fn roadmap_is_missing_when_absent_and_names_the_canonical_path() {
+        let d = TempDir::new().unwrap();
+        let f = run(d.path())
+            .into_iter()
+            .find(|f| f.id == "V1-DOC-ROADMAP.adoc")
+            .expect("missing roadmap is reported");
+        assert_eq!(
+            f.file.as_deref(),
+            Some(d.path().join("docs/status/ROADMAP.adoc").as_path())
+        );
+    }
+
+    #[test]
+    fn roadmap_accepts_docs_status_and_root() {
+        for rel in ["docs/status/ROADMAP.adoc", "ROADMAP.adoc"] {
+            let d = TempDir::new().unwrap();
+            touch(d.path(), rel);
+            assert!(!ids(d.path()).contains(&"V1-DOC-ROADMAP.adoc".to_string()), "{rel}");
+        }
+    }
+
+    #[test]
+    fn community_files_accept_adoc_and_dot_github() {
+        let none = TempDir::new().unwrap();
+        let got = ids(none.path());
+        assert!(got.contains(&"V1-COM-CONTRIBUTING.md".to_string()));
+        assert!(got.contains(&"V1-COM-CODE_OF_CONDUCT.md".to_string()));
+        for rel in [
+            "CONTRIBUTING.md",
+            "CONTRIBUTING.adoc",
+            ".github/CONTRIBUTING.md",
+            ".github/CONTRIBUTING.adoc",
+        ] {
+            let d = TempDir::new().unwrap();
+            touch(d.path(), rel);
+            assert!(!ids(d.path()).contains(&"V1-COM-CONTRIBUTING.md".to_string()), "{rel}");
+        }
+        for rel in ["CODE_OF_CONDUCT.adoc", ".github/CODE_OF_CONDUCT.md"] {
+            let d = TempDir::new().unwrap();
+            touch(d.path(), rel);
+            assert!(
+                !ids(d.path()).contains(&"V1-COM-CODE_OF_CONDUCT.md".to_string()),
+                "{rel}"
+            );
+        }
+        // Accepting one document does not excuse the other.
+        let d = TempDir::new().unwrap();
+        touch(d.path(), "CONTRIBUTING.adoc");
+        assert!(ids(d.path()).contains(&"V1-COM-CODE_OF_CONDUCT.md".to_string()));
+    }
+
+    #[test]
+    fn security_policy_accepts_dot_github() {
+        let none = TempDir::new().unwrap();
+        assert!(ids(none.path()).contains(&"V1-SEC-001".to_string()));
+        let d = TempDir::new().unwrap();
+        touch(d.path(), ".github/SECURITY.md");
+        assert!(!ids(d.path()).contains(&"V1-SEC-001".to_string()));
     }
 }

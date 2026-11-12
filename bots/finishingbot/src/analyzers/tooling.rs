@@ -2,11 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Tooling and version management analyzer
 
-use super::{AnalysisResult, Analyzer, Finding, Severity};
+use super::{first_existing, AnalysisResult, Analyzer, Finding, Severity};
 use crate::config::Config;
 use crate::error::Result;
 use std::path::Path;
 use tracing::debug;
+
+/// mise manifests that pin tool versions (accepted in place of `.tool-versions`).
+const MISE_MANIFESTS: &[&str] = &["mise.toml", ".mise.toml"];
 
 /// Tooling and version management analyzer
 pub struct ToolingAnalyzer;
@@ -26,17 +29,22 @@ impl Analyzer for ToolingAnalyzer {
         let mut result = AnalysisResult::new();
         let start = std::time::Instant::now();
 
-        // Check for .tool-versions (asdf/mise)
+        // Check for a tool-version pin: .tool-versions (asdf/mise) or mise.toml
+        // (mise's own manifest, which the estate uses). Either satisfies TOOL-001.
         let tool_versions = path.join(".tool-versions");
-        if !tool_versions.exists() {
+        let mise_manifest = first_existing(path, MISE_MANIFESTS);
+        if !tool_versions.exists() && mise_manifest.is_some() {
+            debug!("Found mise manifest instead of .tool-versions");
+        } else if !tool_versions.exists() {
             result.add(
                 Finding::new(
                     "TOOL-001",
-                    "Missing .tool-versions",
+                    "Missing tool-version pin",
                     Severity::Error,
-                    ".tool-versions file not found for asdf/mise version management.",
+                    "Neither .tool-versions nor mise.toml found for asdf/mise version management.",
                 )
-                .with_suggestion("Create .tool-versions file with required tool versions (rust, just, etc.)"),
+                .with_file(path.join("mise.toml"))
+                .with_suggestion("Create mise.toml (or .tool-versions) with required tool versions (rust, just, etc.)"),
             );
         } else {
             debug!("Found .tool-versions");
@@ -168,5 +176,50 @@ impl ToolingAnalyzer {
                 .with_suggestion("Add tool versions (e.g., 'rust 1.83.0')"),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn ids(dir: &Path) -> Vec<String> {
+        ToolingAnalyzer
+            .analyze(dir, &Config::default())
+            .unwrap()
+            .findings
+            .into_iter()
+            .map(|f| f.id)
+            .collect()
+    }
+
+    #[test]
+    fn tool_001_fires_when_neither_pin_exists_and_names_mise_toml() {
+        let d = TempDir::new().unwrap();
+        let f = ToolingAnalyzer
+            .analyze(d.path(), &Config::default())
+            .unwrap()
+            .findings
+            .into_iter()
+            .find(|f| f.id == "TOOL-001")
+            .expect("TOOL-001 on a repo with no pin");
+        assert_eq!(f.file.as_deref(), Some(d.path().join("mise.toml").as_path()));
+    }
+
+    #[test]
+    fn mise_toml_satisfies_tool_001() {
+        for name in ["mise.toml", ".mise.toml"] {
+            let d = TempDir::new().unwrap();
+            std::fs::write(d.path().join(name), "[tools]\nrust = \"1.90\"\n").unwrap();
+            assert!(!ids(d.path()).contains(&"TOOL-001".to_string()), "{name}");
+        }
+    }
+
+    #[test]
+    fn tool_versions_still_satisfies_tool_001() {
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join(".tool-versions"), "rust 1.90.0\n").unwrap();
+        assert!(!ids(d.path()).contains(&"TOOL-001".to_string()));
     }
 }

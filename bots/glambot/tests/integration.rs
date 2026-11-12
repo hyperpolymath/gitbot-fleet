@@ -223,3 +223,21 @@ fn test_analysis_result_methods() {
     assert!(result.has_errors(), "has_errors() should return true");
     assert!(result.files_checked > 0, "Should have checked some files");
 }
+
+/// The fleet driver parses stdout as the JSON report, so nothing else may be
+/// written there: log lines belong on stderr.
+#[test]
+fn json_audit_stdout_is_only_the_report() {
+    let dir = TempDir::new().unwrap();
+    // Exactly the invocation scripts/fleet-report-back.sh uses.
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_glambot"))
+        .arg("--path")
+        .arg(dir.path())
+        .args(["--format", "json", "audit"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8(out.stdout).unwrap();
+    let parsed: serde_json::Value =
+        serde_json::from_str(&text).unwrap_or_else(|e| panic!("stdout is not pure JSON ({e}): {text}"));
+    assert!(parsed.is_object());
+}

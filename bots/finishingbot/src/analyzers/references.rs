@@ -23,6 +23,19 @@ fn local_file(root: &Path, candidate: &Path) -> Option<PathBuf> {
     (resolved.starts_with(root) && resolved.is_file()).then_some(resolved)
 }
 
+/// `Some(file name)` when `path` is a bare `*.yml`/`*.yaml` name or
+/// `workflows/<name>`, the two spellings prose uses for a GitHub workflow.
+fn workflow_file_name(path: &Path) -> Option<&std::ffi::OsStr> {
+    let name = path.file_name()?;
+    let is_yaml = path
+        .extension()
+        .is_some_and(|e| e == "yml" || e == "yaml");
+    let parts: Vec<_> = path.components().collect();
+    let qualified_ok = parts.len() == 1
+        || (parts.len() == 2 && parts[0].as_os_str() == "workflows");
+    (is_yaml && qualified_ok).then_some(name)
+}
+
 /// Prose can name a document-relative path, a repository-relative path, or an
 /// unanchored module basename. The last form is accepted only when unique.
 /// This resolves a file's identity; it does not verify its contents or claims.
@@ -43,6 +56,15 @@ pub(super) fn resolve_local_reference(
     }
     if let Some(found) = local_file(&root, &root.join(path)) {
         return Some(found);
+    }
+    // A workflow is named by its file name in prose (`estate-rules.yml`, or
+    // `workflows/estate-rules.yml`) but lives under .github/workflows/. Look
+    // there first, so the reference resolves even when the same basename also
+    // exists elsewhere (which would make the basename search ambiguous).
+    if let Some(name) = workflow_file_name(path) {
+        if let Some(found) = local_file(&root, &root.join(".github/workflows").join(name)) {
+            return Some(found);
+        }
     }
     // A qualified missing path must not be "repaired" by a same-named file
     // elsewhere. Nor may generated output stand in for a source module.
@@ -125,6 +147,26 @@ mod tests {
         assert!(s.resolves("docs/note.adoc", "Echo.agda"));
         s.file("examples/Echo.agda");
         assert!(!s.resolves("docs/note.adoc", "Echo.agda"));
+    }
+
+    #[test]
+    fn workflow_names_resolve_under_dot_github_workflows() {
+        let s = Scratch::new();
+        s.file(".github/workflows/estate-rules.yml");
+        assert!(s.resolves("docs/note.adoc", "estate-rules.yml"));
+        assert!(s.resolves("docs/note.adoc", "workflows/estate-rules.yml"));
+        assert!(s.resolves("docs/note.adoc", ".github/workflows/estate-rules.yml"));
+        // Ambiguous basenames elsewhere do not defeat the workflow directory.
+        s.file("tools/estate-rules.yml");
+        assert!(s.resolves("docs/note.adoc", "estate-rules.yml"));
+    }
+
+    #[test]
+    fn a_workflow_name_with_no_such_workflow_is_still_unresolved() {
+        let s = Scratch::new();
+        s.file(".github/workflows/other.yml");
+        assert!(!s.resolves("docs/note.adoc", "estate-rules.yml"));
+        assert!(!s.resolves("docs/note.adoc", "workflows/estate-rules.yml"));
     }
 
     #[test]

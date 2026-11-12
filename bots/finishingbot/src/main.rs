@@ -5,6 +5,7 @@
 mod analyzers;
 mod config;
 mod error;
+mod ignore;
 #[cfg(feature = "fleet")]
 mod fleet;
 
@@ -262,7 +263,10 @@ fn handle_fleet_mode(
 fn init_logging(level: &str) {
     let filter = EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"));
 
+    // Logs go to stderr: stdout carries the JSON report that the fleet driver
+    // parses, and a log line there makes the report unreadable.
     let layer = fmt::layer()
+        .with_writer(std::io::stderr)
         .with_target(true)
         .with_span_events(FmtSpan::CLOSE)
         .with_ansi(true);

@@ -20,26 +20,24 @@ impl Default for GitSeoAnalyzer {
     }
 }
 
-impl Analyzer for GitSeoAnalyzer {
-    fn name(&self) -> &str {
-        "Git-SEO"
-    }
-
-    fn analyze(&self, path: &Path, config: &Config) -> Result<AnalysisResult> {
+impl GitSeoAnalyzer {
+    /// Analyze with an explicit git-seo availability (testable seam).
+    fn analyze_with(
+        &self,
+        path: &Path,
+        config: &Config,
+        git_seo_installed: bool,
+    ) -> Result<AnalysisResult> {
         let mut result = AnalysisResult::new();
         let start = std::time::Instant::now();
 
-        // Check if git-seo is installed
-        if !is_git_seo_installed() {
-            result.add(
-                Finding::new(
-                    "GS-001",
-                    "git-seo not installed",
-                    Severity::Info,
-                    "Install git-seo for comprehensive SEO analysis: https://github.com/hyperpolymath/git-seo",
-                )
-                .with_suggestion("Install: git clone https://github.com/hyperpolymath/git-seo && cd git-seo && julia --project=. -e 'using Pkg; Pkg.instantiate()'"),
-            );
+        // git-seo missing is a property of the machine running glambot, not of
+        // the repository under review, so it must never become a finding: a
+        // finding is graded as the change (an info finding turns the lane
+        // "minor" on every pull request). The analyzer did not run, which is
+        // logged loudly instead; install hint: https://github.com/hyperpolymath/git-seo
+        if !git_seo_installed {
+            warn!("git-seo is not installed; the Git-SEO analyzer did not run (no findings reported, not a clean result)");
             result.duration_ms = start.elapsed().as_millis() as u64;
             return Ok(result);
         }
@@ -75,12 +73,23 @@ impl Analyzer for GitSeoAnalyzer {
                     Severity::Info,
                     "Repository has no git remote. git-seo requires a forge URL (GitHub/GitLab/Bitbucket).",
                 )
+                .with_file(path.join(".git/config"))
                 .with_suggestion("Add remote: git remote add origin <url>"),
             );
         }
 
         result.duration_ms = start.elapsed().as_millis() as u64;
         Ok(result)
+    }
+}
+
+impl Analyzer for GitSeoAnalyzer {
+    fn name(&self) -> &str {
+        "Git-SEO"
+    }
+
+    fn analyze(&self, path: &Path, config: &Config) -> Result<AnalysisResult> {
+        self.analyze_with(path, config, is_git_seo_installed())
     }
 
     fn fix(&self, path: &Path, config: &Config, findings: &[Finding]) -> Result<Vec<String>> {
@@ -321,30 +330,41 @@ mod tests {
         Config::default()
     }
 
-    #[test]
-    fn test_repo_without_git_remote() {
+    fn git_repo_without_remote() -> TempDir {
         let dir = TempDir::new().unwrap();
-        // Initialize a git repo without a remote
         std::process::Command::new("git")
             .arg("init")
             .arg(dir.path())
             .output()
             .unwrap();
+        dir
+    }
 
-        let analyzer = GitSeoAnalyzer::default();
-        let config = default_config();
-        let result = analyzer.analyze(dir.path(), &config).unwrap();
+    #[test]
+    fn test_repo_without_git_remote() {
+        let dir = git_repo_without_remote();
+        let result = GitSeoAnalyzer::default()
+            .analyze_with(dir.path(), &default_config(), true)
+            .unwrap();
+        let gs003: Vec<_> = result.findings.iter().filter(|f| f.id == "GS-003").collect();
+        assert_eq!(gs003.len(), 1, "a repo with no remote reports GS-003");
+        assert_eq!(
+            gs003[0].file.as_deref(),
+            Some(dir.path().join(".git/config").as_path()),
+            "GS-003 names the file that would fix it so the grid can scope it"
+        );
+    }
 
-        // Should find no remote (GS-003) or git-seo not installed (GS-001)
-        let ids: Vec<&str> = result
-            .findings
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+    #[test]
+    fn missing_git_seo_is_not_a_finding() {
+        let dir = git_repo_without_remote();
+        let result = GitSeoAnalyzer::default()
+            .analyze_with(dir.path(), &default_config(), false)
+            .unwrap();
         assert!(
-            ids.contains(&"GS-001") || ids.contains(&"GS-003"),
-            "Should report GS-001 (no git-seo) or GS-003 (no remote), got: {:?}",
-            ids
+            result.findings.is_empty(),
+            "tool-availability advice is not a repo finding, got: {:?}",
+            result.findings.iter().map(|f| f.id.as_str()).collect::<Vec<_>>()
         );
     }
 
