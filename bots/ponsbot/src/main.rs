@@ -19,7 +19,17 @@ use std::time::Duration;
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let Command::Scan { dir, timeout } = cli.command;
-    let pin = pin::pinned();
+    let pin = match pin::pinned() {
+        Ok(p) => p,
+        Err(e) => {
+            return report_not_ran(
+                "error",
+                &format!("canon/pin.toml is malformed: {e}"),
+                cli.format,
+                2,
+            )
+        }
+    };
     match run_pons(&dir, Duration::from_secs(timeout.max(1)), &pin.commit) {
         Outcome::Ran(found) => {
             let findings = translator::translate_all(&found);

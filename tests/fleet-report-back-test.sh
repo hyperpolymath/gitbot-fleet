@@ -470,7 +470,7 @@ check "reporting never changes the scanned tree's files or directories" "$repo_b
 # {"status": "error"|"not_run", "reason": ...} when it did not. The adapter is
 # tested on its own in bots/ponsbot/tests; this section tests the DRIVER's side.
 PB="$TMP/pbin"; mkdir -p "$PB"
-pstub() { printf '#!/usr/bin/env bash\nset -u\n%s\n' "$2" > "$PB/$1"; chmod +x "$PB/$1"; }
+pstub() { local name="$1" body="$2"; printf '#!/usr/bin/env bash\nset -u\n%s\n' "$body" > "$PB/$name"; chmod +x "$PB/$name"; }
 cat > "$TMP/pons-enrol.json" <<'JSON'
 { "schema": 1,
   "reporters": {
@@ -478,7 +478,8 @@ cat > "$TMP/pons-enrol.json" <<'JSON'
     "panicbot": { "enrolled": true } } }
 JSON
 runp() { # out-dir extra-args...
-  bash "$DRIVER" --repo "$REPO" --out "$1" --bin-dir "$PB" --fleet-ref deadbeef --enrolment "$TMP/pons-enrol.json" "${@:2}" > "$1.log" 2>&1
+  local out="$1"; shift
+  bash "$DRIVER" --repo "$REPO" --out "$out" --bin-dir "$PB" --fleet-ref deadbeef --enrolment "$TMP/pons-enrol.json" "$@" > "$out.log" 2>&1
 }
 ARGS_OK='[ "$1 $2 $3" = "--format json scan" ] || { echo "bad args: $*" >&2; exit 9; }'
 pstub ponsbot "$ARGS_OK"'
@@ -570,7 +571,7 @@ echo "[]"'
   runp "$TMP/pg" --enrolment "$TMP/pons-enrol.json"
   ( cd "$REPO" && bash "$GRID" render --out "$TMP/pgrid" --hypatia /dev/null --panic /dev/null --pons /dev/null \
       --report-backs "$TMP/pg" --enrolment "$TMP/pons-enrol.json" --sha 0000000 >/dev/null )
-  prow() { jq -r --arg id "$1" "[.reporters[] | select(.id == \$id) | $2][0]" "$TMP/pgrid/report.json"; }
+  prow() { local id="$1" expr="$2"; jq -r --arg id "$id" "[.reporters[] | select(.id == \$id) | $expr][0]" "$TMP/pgrid/report.json"; }
   check "renderer: ponsbot's row is gating when the enrolment says gating:true" true "$(prow ponsbot .gating)"
   check "renderer: panicbot's row is advisory when the enrolment is silent" false "$(prow panicbot .gating)"
   check "renderer: ponsbot's carried pons ERROR (DATAFLOW) is graded high" 1 "$(prow ponsbot .counts.high)"

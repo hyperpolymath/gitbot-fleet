@@ -479,8 +479,12 @@ fn run_panic_attack_raw(args: &[&str], timeout: Duration) -> Result<RawRun> {
 
     // Drain both pipes on threads so a large report cannot fill a pipe and
     // block the child while this thread waits on the deadline.
-    let mut out_pipe = child.stdout.take().expect("stdout is piped");
-    let mut err_pipe = child.stderr.take().expect("stderr is piped");
+    let (Some(mut out_pipe), Some(mut err_pipe)) = (child.stdout.take(), child.stderr.take())
+    else {
+        let _ = child.kill();
+        let _ = child.wait();
+        anyhow::bail!("panic-attack stdout/stderr pipes were not captured");
+    };
     let out_t = std::thread::spawn(move || {
         let mut b = Vec::new();
         let _ = out_pipe.read_to_end(&mut b);

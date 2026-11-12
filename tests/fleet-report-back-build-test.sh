@@ -258,7 +258,7 @@ FLEET_PONS_FAIL=1 run_pons_build pons-fail --pons "$PSHA"
 check "pons: a failed install is a warning, not a failed run" 0 "$rc"
 check "pons: ...it says ponsbot will read not_run" yes "$(grep -q 'ponsbot will read not_run' "$TMP/pons-fail.log" && echo yes || echo no)"
 check "pons: ...and leaves no binary and no cache behind" "no no" \
-  "$([ -n "$(files "$TMP/pons-fail")" ] && echo yes || echo no) $([ -e "$PH/.pons" ] && echo yes || echo no)"
+  "$([[ -n "$(files "$TMP/pons-fail")" ]] && echo yes || echo no) $([[ -e "$PH/.pons" ]] && echo yes || echo no)"
 run_pons_build pons-badsha --pons 'not-a-commit; rm -rf /'
 check "pons: a non-commit value never reaches cargo" 0 "$(grep -c . "$FLEET_PONS_CALLS" || true)"
 check "pons: ...and is warned about" yes "$(grep -q 'not a 40-hex commit' "$TMP/pons-badsha.log" && echo yes || echo no)"

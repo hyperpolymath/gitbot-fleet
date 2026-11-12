@@ -14,7 +14,7 @@ use std::process::{Command, Output};
 use tempfile::TempDir;
 
 fn pin_commit() -> String {
-    ponsbot::pin::pinned().commit
+    ponsbot::pin::pinned().map(|p| p.commit).unwrap_or_default()
 }
 
 fn stub(dir: &Path, body: &str) -> PathBuf {

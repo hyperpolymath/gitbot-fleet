@@ -175,9 +175,10 @@ EOF
 # Print the adapter executable name for a member, or an empty line if unknown
 # or unsupported locally. The finishingbot aliases all use finishing-bot.
 binary_of() {
-  case "$1" in
+  local member="$1"
+  case "$member" in
     finishingbot|finishbot|finishing-bot) echo finishing-bot ;;
-    rhodibot|panicbot|ponsbot|seambot|glambot|accessibilitybot|cipherbot) echo "$1" ;;
+    rhodibot|panicbot|ponsbot|seambot|glambot|accessibilitybot|cipherbot) echo "$member" ;;
     *) echo "" ;;
   esac
 }
@@ -555,7 +556,7 @@ FINDING='{rule_id: (.rule_id // .id // "?" | tostring), severity: (.severity // 
 # as blocking); the grid reads only severity, so the extra fields are provenance.
 translate_ponsbot() { # member
   local m="$1" st reason
-  if [ "$ADAPTER_RC" -ne 124 ] \
+  if [[ "$ADAPTER_RC" -ne 124 ]] \
      && jq -e 'type == "object" and (.status | IN("error", "not_run")) and (.reason | type == "string" and length > 0)' "$ADAPTER_OUT" >/dev/null 2>&1; then
     st=$(jq -r .status "$ADAPTER_OUT"); reason=$(jq -r '.reason[0:240]' "$ADAPTER_OUT")
     write_envelope "$m" "$st" "$reason" '[]'

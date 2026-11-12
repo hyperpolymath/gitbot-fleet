@@ -20,12 +20,11 @@ pub struct Source {
 
 /// The pin, parsed from the compiled-in `canon/pin.toml`.
 ///
-/// Panics only if the file shipped in this crate is malformed, which the
-/// `pin_is_a_full_commit` test rejects before release.
-pub fn pinned() -> Source {
-    toml::from_str::<PinFile>(PIN_TOML)
-        .expect("canon/pin.toml is well-formed")
-        .source
+/// Fails only if the file shipped in this crate is malformed, which the
+/// `pin_is_a_full_commit` test rejects before release; the caller reports
+/// that as an error rather than panicking.
+pub fn pinned() -> Result<Source, toml::de::Error> {
+    toml::from_str::<PinFile>(PIN_TOML).map(|f| f.source)
 }
 
 /// True for a full 40-hex lowercase commit.
@@ -38,13 +37,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pin_is_a_full_commit() {
-        let p = pinned();
+    fn pin_is_a_full_commit() -> Result<(), toml::de::Error> {
+        let p = pinned()?;
         assert!(
             is_full_commit(&p.commit),
             "pin must be 40 hex: {}",
             p.commit
         );
         assert_eq!(p.repo, "hyperpolymath/pons-asinorum");
+        Ok(())
     }
 }

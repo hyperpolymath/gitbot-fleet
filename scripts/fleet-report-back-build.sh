@@ -117,22 +117,22 @@ if [ -n "$pa_sha" ]; then
   endgroup
 fi
 
-if [ -n "$pons_sha" ]; then
+if [[ -n "$pons_sha" ]]; then
   if ! [[ "$pons_sha" =~ ^[0-9a-f]{40}$ ]]; then
     warn "pons not installed" "$(printf '%q' "$pons_sha") is not a 40-hex commit; ponsbot will read not_run"
   else
     root="$HOME/.pons"; bin="$root/bin/pons"
     group "pons at $pons_sha"
-    if [ -x "$bin" ] && grep -qF "#$pons_sha" "$root/.crates.toml" 2>/dev/null; then
+    if [[ -x "$bin" ]] && grep -qF "#$pons_sha" "$root/.crates.toml" 2>/dev/null; then
       echo "pons restored from cache at $pons_sha"
-    elif [ "$(remaining)" -eq 0 ]; then
+    elif [[ "$(remaining)" -eq 0 ]]; then
       warn "pons not installed" "the ${build_budget}s build budget was spent before its turn; ponsbot will read not_run"
     elif ! timeout "$(slice 600)" cargo install --git https://github.com/hyperpolymath/pons-asinorum \
         --rev "$pons_sha" --locked --force --root "$root" pons-cli; then
       rm -rf "$root"
       warn "pons not installed" "source build at $pons_sha failed or exceeded 10 minutes; ponsbot will read not_run"
     fi
-    if [ -x "$bin" ]; then cp "$bin" "$bindir/"; fi
+    if [[ -x "$bin" ]]; then cp "$bin" "$bindir/"; fi
     endgroup
   fi
 fi
