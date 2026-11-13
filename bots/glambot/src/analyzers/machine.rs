@@ -335,6 +335,10 @@ fn strip_jsonc(src: &str) -> String {
                 i += 1;
             }
             if i + 1 < chars.len() {
+                // A comment is whitespace, not nothing: `1/*c*/2` must not
+                // fuse into `12`. Newlines inside it are kept (line numbers).
+                out.push(' ');
+                out.extend(chars[start..i].iter().filter(|c| **c == '\n'));
                 i += 2;
             } else {
                 // Unterminated block comment: keep the text so parsing fails.
@@ -541,5 +545,24 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&strip_jsonc(JSONC)).unwrap();
         assert_eq!(v["url"], "http://x//y");
         assert_eq!(v["list"], serde_json::json!([1, 2]));
+    }
+
+    #[test]
+    fn a_block_comment_is_whitespace_so_it_cannot_fuse_tokens() {
+        // `1/*c*/2` must not become the valid number 12.
+        let stripped = strip_jsonc(r#"{"value": 1/*c*/2}"#);
+        assert!(
+            serde_json::from_str::<serde_json::Value>(&stripped).is_err(),
+            "fused into valid JSON: {stripped}"
+        );
+        // A comment between tokens that need no separator still parses.
+        let ok = strip_jsonc("{\"a\": 1, /* c */ \"b\": 2}");
+        assert!(serde_json::from_str::<serde_json::Value>(&ok).is_ok());
+    }
+
+    #[test]
+    fn a_multiline_block_comment_keeps_its_newlines() {
+        let stripped = strip_jsonc("{\"a\":\n/* one\ntwo\nthree */ 1}");
+        assert_eq!(stripped.matches('\n').count(), 3, "{stripped:?}");
     }
 }
