@@ -58,7 +58,11 @@ impl V1ReadinessAnalyzer {
         // the document is missing. Estate canon keeps the roadmap at
         // docs/status/ROADMAP.adoc (the STATE journal).
         let required_docs: [(&str, &str, &[&str]); 3] = [
-            ("README.adoc", "Main project documentation", &["README.adoc"]),
+            (
+                "README.adoc",
+                "Main project documentation",
+                &["README.adoc"],
+            ),
             (
                 "ROADMAP.adoc",
                 "Project roadmap",
@@ -110,7 +114,10 @@ impl V1ReadinessAnalyzer {
         // Check for banned language files
         let banned_patterns = [
             ("*.ts", "TypeScript files found (use AffineScript instead)"),
-            ("*.py", "Python files found (use Julia/Rust/AffineScript instead)"),
+            (
+                "*.py",
+                "Python files found (use Julia/Rust/AffineScript instead)",
+            ),
             ("*.go", "Go files found (use Rust instead)"),
         ];
 
@@ -143,7 +150,10 @@ impl V1ReadinessAnalyzer {
                         &format!("{}. Found {} file(s).", message, found_files.len()),
                     )
                     .with_file(found_files[0].clone())
-                    .with_suggestion(&format!("Remove or convert {} files to allowed languages", pattern)),
+                    .with_suggestion(&format!(
+                        "Remove or convert {} files to allowed languages",
+                        pattern
+                    )),
                 );
             }
         }
@@ -250,7 +260,10 @@ mod tests {
         for rel in ["docs/status/ROADMAP.adoc", "ROADMAP.adoc"] {
             let d = TempDir::new().unwrap();
             touch(d.path(), rel);
-            assert!(!ids(d.path()).contains(&"V1-DOC-ROADMAP.adoc".to_string()), "{rel}");
+            assert!(
+                !ids(d.path()).contains(&"V1-DOC-ROADMAP.adoc".to_string()),
+                "{rel}"
+            );
         }
     }
 
@@ -268,7 +281,10 @@ mod tests {
         ] {
             let d = TempDir::new().unwrap();
             touch(d.path(), rel);
-            assert!(!ids(d.path()).contains(&"V1-COM-CONTRIBUTING.md".to_string()), "{rel}");
+            assert!(
+                !ids(d.path()).contains(&"V1-COM-CONTRIBUTING.md".to_string()),
+                "{rel}"
+            );
         }
         for rel in ["CODE_OF_CONDUCT.adoc", ".github/CODE_OF_CONDUCT.md"] {
             let d = TempDir::new().unwrap();

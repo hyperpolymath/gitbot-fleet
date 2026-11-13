@@ -40,11 +40,20 @@ pub mod cicd_hyper_a {
     #[serde(tag = "type", rename_all = "kebab-case")]
     pub enum ReleaseCheck {
         /// License validation
-        License { spdx_id: Option<String>, require_header: bool },
+        License {
+            spdx_id: Option<String>,
+            require_header: bool,
+        },
         /// Placeholder detection
-        Placeholder { patterns: Vec<String>, allow_in_tests: bool },
+        Placeholder {
+            patterns: Vec<String>,
+            allow_in_tests: bool,
+        },
         /// Claim verification
-        Claim { claim_type: String, verify_method: String },
+        Claim {
+            claim_type: String,
+            verify_method: String,
+        },
         /// Release artifact check
         Artifact { required_files: Vec<String> },
         /// Version consistency
@@ -129,17 +138,11 @@ pub mod cicd_hyper_a {
     }
 
     /// Check if release should be blocked based on cicd-hyper-a rules
-    pub fn should_block_release(
-        findings: &[super::Finding],
-        rules: &[ReleaseRule],
-    ) -> bool {
+    pub fn should_block_release(findings: &[super::Finding], rules: &[ReleaseRule]) -> bool {
         for finding in findings {
             for rule in rules {
                 if finding.id == rule.id && rule.blocks_release {
-                    if matches!(
-                        finding.severity,
-                        super::Severity::Error
-                    ) {
+                    if matches!(finding.severity, super::Severity::Error) {
                         return true;
                     }
                 }
@@ -366,8 +369,12 @@ pub fn run_in_context(ctx: &mut Context, config: &Config) -> AuditResult {
     }
 
     // Complete bot execution
-    if let Err(e) = ctx.complete_bot(BotId::Finishbot, findings_count, errors_count, files_checked)
-    {
+    if let Err(e) = ctx.complete_bot(
+        BotId::Finishbot,
+        findings_count,
+        errors_count,
+        files_checked,
+    ) {
         error!("Failed to complete finishing-bot in context: {}", e);
     }
 
@@ -448,9 +455,14 @@ mod tests {
 
     #[test]
     fn test_finding_conversion() {
-        let finding = Finding::new("LIC-001", "Missing License", Severity::Error, "No LICENSE file")
-            .with_file(PathBuf::from("LICENSE"))
-            .with_suggestion("Add a LICENSE file");
+        let finding = Finding::new(
+            "LIC-001",
+            "Missing License",
+            Severity::Error,
+            "No LICENSE file",
+        )
+        .with_file(PathBuf::from("LICENSE"))
+        .with_suggestion("Add a LICENSE file");
 
         let fleet_finding = to_fleet_finding(&finding, "license");
 

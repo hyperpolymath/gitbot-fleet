@@ -21,8 +21,8 @@ pub mod fleet;
 
 pub use analyzers::{
     accessibility::AccessibilityAnalyzer, git_seo_integration::GitSeoAnalyzer,
-    machine::MachineAnalyzer, seo::SeoAnalyzer, visual::VisualAnalyzer, AnalysisResult,
-    Analyzer, AuditResult, Finding, Severity,
+    machine::MachineAnalyzer, seo::SeoAnalyzer, visual::VisualAnalyzer, AnalysisResult, Analyzer,
+    AuditResult, Finding, Severity,
 };
 pub use config::Config;
 pub use error::{GlambotError, Result};

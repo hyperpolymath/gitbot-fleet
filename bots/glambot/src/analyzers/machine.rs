@@ -478,7 +478,10 @@ mod tests {
         assert!(!f.fixable, "an empty dir is untracked by git; not fixable");
         let findings = vec![f.clone()];
         let fixes = analyzer.fix(dir.path(), &config, &findings).unwrap();
-        assert_eq!(fixes, vec!["No machine-readability fixes applicable".to_string()]);
+        assert_eq!(
+            fixes,
+            vec!["No machine-readability fixes applicable".to_string()]
+        );
         assert!(!dir.path().join(".machine_readable").exists());
     }
 
@@ -573,8 +576,15 @@ mod tests {
 
     #[test]
     fn valid_trailing_commas_still_work() {
-        for body in ["{\"a\":1,}", "[1,2,]", "{\"a\":[1,],}", "{\"a\":1 , \n}", "[\"x\", /* c */ ]"] {
-            let v: std::result::Result<serde_json::Value, _> = serde_json::from_str(&strip_jsonc(body));
+        for body in [
+            "{\"a\":1,}",
+            "[1,2,]",
+            "{\"a\":[1,],}",
+            "{\"a\":1 , \n}",
+            "[\"x\", /* c */ ]",
+        ] {
+            let v: std::result::Result<serde_json::Value, _> =
+                serde_json::from_str(&strip_jsonc(body));
             assert!(v.is_ok(), "{body}");
         }
     }
@@ -587,7 +597,10 @@ mod tests {
         std::fs::write(root.join("config.json"), JSONC).unwrap();
         assert!(ids(&root).contains(&"MACH-001".to_string()));
         assert!(!is_tool_demanded_jsonc(&root, &root.join("config.json")));
-        assert!(is_tool_demanded_jsonc(&root, &root.join(".vscode/settings.json")));
+        assert!(is_tool_demanded_jsonc(
+            &root,
+            &root.join(".vscode/settings.json")
+        ));
     }
 
     #[test]

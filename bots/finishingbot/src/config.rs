@@ -308,7 +308,10 @@ fn default_log_format() -> String {
 /// Load configuration from a path
 pub fn load_config(path: &Path) -> Result<Config> {
     if !path.exists() {
-        debug!("Config file not found at {}, using defaults", path.display());
+        debug!(
+            "Config file not found at {}, using defaults",
+            path.display()
+        );
         return Ok(Config::default());
     }
 
@@ -362,9 +365,8 @@ mod tests {
     #[test]
     fn test_placeholder_action_serde() {
         let yaml = "action: remove";
-        let config: PlaceholderConfig = serde_yaml::from_str(&format!(
-            "patterns: [TODO]\n{}", yaml
-        )).unwrap();
+        let config: PlaceholderConfig =
+            serde_yaml::from_str(&format!("patterns: [TODO]\n{}", yaml)).unwrap();
         assert_eq!(config.action, PlaceholderAction::Remove);
     }
 }

@@ -22,10 +22,7 @@ use std::path::{Path, PathBuf};
 /// (`.adoc` or `.md`, repo root or `.github/`), and a rule that names exactly
 /// one spelling reports a false positive for the others.
 pub(crate) fn first_existing(root: &Path, candidates: &[&str]) -> Option<PathBuf> {
-    candidates
-        .iter()
-        .map(|c| root.join(c))
-        .find(|p| p.exists())
+    candidates.iter().map(|c| root.join(c)).find(|p| p.exists())
 }
 
 /// Accepted spellings and locations of a security policy.

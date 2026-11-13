@@ -174,7 +174,10 @@ fn handle_show(config: &config::Config) -> ExitCode {
 
     println!("Accessibility:");
     println!("  WCAG level: {:?}", config.accessibility.wcag_level);
-    println!("  Require alt text: {}", config.accessibility.require_alt_text);
+    println!(
+        "  Require alt text: {}",
+        config.accessibility.require_alt_text
+    );
     println!();
 
     println!("SEO:");
@@ -184,7 +187,10 @@ fn handle_show(config: &config::Config) -> ExitCode {
 
     println!("Machine:");
     println!("  Validate JSON: {}", config.machine.validate_json);
-    println!("  Require schema.org: {}", config.machine.require_schema_org);
+    println!(
+        "  Require schema.org: {}",
+        config.machine.require_schema_org
+    );
     println!();
 
     println!("General:");
@@ -197,8 +203,7 @@ fn handle_show(config: &config::Config) -> ExitCode {
 fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &str) -> ExitCode {
     use crate::analyzers::{
         accessibility::AccessibilityAnalyzer, git_seo_integration::GitSeoAnalyzer,
-        machine::MachineAnalyzer, seo::SeoAnalyzer, visual::VisualAnalyzer, Analyzer,
-        AuditResult,
+        machine::MachineAnalyzer, seo::SeoAnalyzer, visual::VisualAnalyzer, Analyzer, AuditResult,
     };
 
     let mut result = AuditResult::default();

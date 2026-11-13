@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Analyzers for presentation quality validation
 
-pub mod visual;
 pub mod accessibility;
-pub mod seo;
-pub mod machine;
 pub mod git_seo_integration;
+pub mod machine;
+pub mod seo;
+pub mod visual;
 
 use crate::config::Config;
 use crate::error::Result;

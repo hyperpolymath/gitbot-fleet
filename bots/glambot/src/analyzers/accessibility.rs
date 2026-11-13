@@ -5,18 +5,21 @@
 use super::{AnalysisResult, Analyzer, Finding, Severity};
 use crate::config::Config;
 use crate::error::Result;
-use std::path::Path;
-use walkdir::WalkDir;
-use std::sync::LazyLock;
 use regex::Regex;
+use std::path::Path;
+use std::sync::LazyLock;
+use walkdir::WalkDir;
 
 // Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
-static MD_IMAGE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"!\[(.*?)\]\((.*?)\)").expect("static markdown image regex literal is valid"));
-static ADOC_IMAGE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"image::(.*?)\[(.*?)\]").expect("static asciidoc image regex literal is valid"));
-static MD_LINK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\[(.*?)\]\((.*?)\)").expect("static markdown link regex literal is valid"));
+static MD_IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"!\[(.*?)\]\((.*?)\)").expect("static markdown image regex literal is valid")
+});
+static ADOC_IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"image::(.*?)\[(.*?)\]").expect("static asciidoc image regex literal is valid")
+});
+static MD_LINK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\[(.*?)\]\((.*?)\)").expect("static markdown link regex literal is valid")
+});
 
 /// Accessibility analyzer
 pub struct AccessibilityAnalyzer;
@@ -64,8 +67,7 @@ impl Analyzer for AccessibilityAnalyzer {
                     // Add alt text placeholders to images in markdown files
                     if let Some(ref file) = finding.file {
                         if let Ok(content) = std::fs::read_to_string(file) {
-                            let updated = content
-                                .replace("![](", "![TODO: Add alt text](");
+                            let updated = content.replace("![](", "![TODO: Add alt text](");
                             if updated != content {
                                 std::fs::write(file, &updated)?;
                                 fixes.push(format!(
@@ -131,7 +133,6 @@ impl Analyzer for AccessibilityAnalyzer {
 
 impl AccessibilityAnalyzer {
     fn check_image_alt_text(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
-
         let md_image_re = &*MD_IMAGE_RE;
         let adoc_image_re = &*ADOC_IMAGE_RE;
 
@@ -162,7 +163,9 @@ impl AccessibilityAnalyzer {
                                     )
                                     .with_file(entry.path().to_path_buf())
                                     .with_line(line_num + 1)
-                                    .with_suggestion("Add descriptive alt text: ![Description](image.png)"),
+                                    .with_suggestion(
+                                        "Add descriptive alt text: ![Description](image.png)",
+                                    ),
                                 );
                             } else if alt_text.len() < 3 {
                                 result.add(
@@ -192,7 +195,9 @@ impl AccessibilityAnalyzer {
                                     )
                                     .with_file(entry.path().to_path_buf())
                                     .with_line(line_num + 1)
-                                    .with_suggestion("Add descriptive alt text: image::file[Description]"),
+                                    .with_suggestion(
+                                        "Add descriptive alt text: image::file[Description]",
+                                    ),
                                 );
                             }
                         }
@@ -246,7 +251,6 @@ impl AccessibilityAnalyzer {
     }
 
     fn check_link_text(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
-
         let md_link_re = &*MD_LINK_RE;
 
         let non_descriptive = ["click here", "here", "read more", "link", "more"];
@@ -327,11 +331,7 @@ mod tests {
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
         assert!(result.has_errors(), "Missing alt text should be an error");
-        let error_ids: Vec<&str> = result
-            .errors()
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let error_ids: Vec<&str> = result.errors().iter().map(|f| f.id.as_str()).collect();
         assert!(
             error_ids.contains(&"ACC-001"),
             "Should report ACC-001 for missing alt text"
@@ -349,11 +349,7 @@ mod tests {
         let config = default_config();
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
-        let warning_ids: Vec<&str> = result
-            .warnings()
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let warning_ids: Vec<&str> = result.warnings().iter().map(|f| f.id.as_str()).collect();
         assert!(
             warning_ids.contains(&"ACC-003"),
             "Should report ACC-003 for skipped heading level"
@@ -370,11 +366,7 @@ mod tests {
         let config = default_config();
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
-        let warning_ids: Vec<&str> = result
-            .warnings()
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let warning_ids: Vec<&str> = result.warnings().iter().map(|f| f.id.as_str()).collect();
         assert!(
             warning_ids.contains(&"ACC-004"),
             "Should report ACC-004 for non-descriptive link text"
@@ -398,7 +390,9 @@ mod tests {
         let fixes = analyzer.fix(dir.path(), &config, &findings).unwrap();
 
         assert!(
-            fixes.iter().any(|f| f.contains("WCAG compliance checklist")),
+            fixes
+                .iter()
+                .any(|f| f.contains("WCAG compliance checklist")),
             "Should generate WCAG checklist"
         );
         assert!(

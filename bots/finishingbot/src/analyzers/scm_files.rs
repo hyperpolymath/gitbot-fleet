@@ -29,7 +29,10 @@ impl Analyzer for ScmFilesAnalyzer {
         // Required SCM files for v1.0
         let required_scm_files = [
             ("STATE.scm", "Project state and progress tracking"),
-            ("META.scm", "Meta-level information and architectural decisions"),
+            (
+                "META.scm",
+                "Meta-level information and architectural decisions",
+            ),
             ("ECOSYSTEM.scm", "Project's place in the ecosystem"),
             ("PLAYBOOK.scm", "Operational playbooks and procedures"),
             ("AGENTIC.scm", "Agentic AI integration documentation"),
@@ -65,7 +68,8 @@ impl Analyzer for ScmFilesAnalyzer {
                     )
                     .with_file(root_path)
                     .with_suggestion(&format!(
-                        "Move {} to .machine_readable/{}", filename, filename
+                        "Move {} to .machine_readable/{}",
+                        filename, filename
                     )),
                 );
             } else {
@@ -74,7 +78,10 @@ impl Analyzer for ScmFilesAnalyzer {
                 // AGENTIC, NEUROSYM) are clauses of the repository's
                 // `<name>_chora.deed`, not files, so absence is the canonical
                 // state. Files that DO exist are still validated above.
-                debug!("{} not present (retired: now a clause of the chora deed)", filename);
+                debug!(
+                    "{} not present (retired: now a clause of the chora deed)",
+                    filename
+                );
             }
         }
 
@@ -121,7 +128,11 @@ impl ScmFilesAnalyzer {
                     &format!("SCM-003-{}", filename),
                     &format!("{} appears incomplete", filename),
                     Severity::Warning,
-                    &format!("{} is very short ({}  bytes). May be a placeholder.", filename, content.len()),
+                    &format!(
+                        "{} is very short ({}  bytes). May be a placeholder.",
+                        filename,
+                        content.len()
+                    ),
                 )
                 .with_file(file_path.to_path_buf())
                 .with_suggestion("Ensure file has complete documentation content"),
@@ -141,7 +152,9 @@ impl ScmFilesAnalyzer {
                         "STATE.scm should contain 'metadata' and 'current-position' sections.",
                     )
                     .with_file(file_path.to_path_buf())
-                    .with_suggestion("Add required sections following hyperpolymath STATE.scm format"),
+                    .with_suggestion(
+                        "Add required sections following hyperpolymath STATE.scm format",
+                    ),
                 );
             }
             "META.scm"

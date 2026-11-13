@@ -149,9 +149,7 @@ impl Analyzer for SeoAnalyzer {
 impl SeoAnalyzer {
     fn check_repo_description(&self, path: &Path, result: &mut AnalysisResult) {
         let readme_files = ["README.md", "README.adoc"];
-        let found = readme_files
-            .iter()
-            .find(|name| path.join(name).exists());
+        let found = readme_files.iter().find(|name| path.join(name).exists());
 
         if let Some(readme) = found {
             let readme_path = path.join(readme);
@@ -202,7 +200,9 @@ impl SeoAnalyzer {
                                 "HTML file missing meta description tag.",
                             )
                             .with_file(entry.path().to_path_buf())
-                            .with_suggestion("Add <meta name=\"description\" content=\"...\"> in <head>"),
+                            .with_suggestion(
+                                "Add <meta name=\"description\" content=\"...\"> in <head>",
+                            ),
                         );
                     }
 
@@ -215,7 +215,9 @@ impl SeoAnalyzer {
                                 "HTML file missing meta keywords tag.",
                             )
                             .with_file(entry.path().to_path_buf())
-                            .with_suggestion("Add <meta name=\"keywords\" content=\"...\"> in <head>"),
+                            .with_suggestion(
+                                "Add <meta name=\"keywords\" content=\"...\"> in <head>",
+                            ),
                         );
                     }
                 }
@@ -270,9 +272,7 @@ impl SeoAnalyzer {
 
     fn check_keywords(&self, path: &Path, result: &mut AnalysisResult) {
         let readme_files = ["README.md", "README.adoc"];
-        let found = readme_files
-            .iter()
-            .find(|name| path.join(name).exists());
+        let found = readme_files.iter().find(|name| path.join(name).exists());
 
         if let Some(readme) = found {
             let readme_path = path.join(readme);
@@ -358,11 +358,7 @@ mod tests {
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
         // Should find missing description (SEO-001)
-        let ids: Vec<&str> = result
-            .findings
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let ids: Vec<&str> = result.findings.iter().map(|f| f.id.as_str()).collect();
         assert!(
             ids.contains(&"SEO-001"),
             "Should report SEO-001 for short description"
@@ -381,11 +377,7 @@ mod tests {
         let analyzer = SeoAnalyzer::default();
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
-        let ids: Vec<&str> = result
-            .findings
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let ids: Vec<&str> = result.findings.iter().map(|f| f.id.as_str()).collect();
         assert!(
             ids.contains(&"SEO-002"),
             "Should report SEO-002 for missing meta description"
