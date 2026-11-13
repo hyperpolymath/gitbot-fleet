@@ -511,7 +511,7 @@ static SENSITIVE_PATTERNS: std::sync::LazyLock<Vec<(Regex, &'static str)>> =
                 "Secret Key",
             ),
             (
-                r#"(?i)aws[_-]?secret[_-]?(access[_-]?)?key\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}\b"#,
+                r#"(?i)aws[_-]?secret[_-]?(access[_-]?)?key\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}(?:$|[^A-Za-z0-9/+=])"#,
                 "AWS Secret Access Key",
             ),
             (r#"(?i)password\s*[:=]\s*['"]?[^\s'"]{8,}"#, "Password"),
@@ -574,6 +574,32 @@ mod sensitive_tests {
             sensitive_kind("The aws_secret_access_key is rotated monthly"),
             None
         );
+    }
+
+    #[test]
+    fn aws_secret_ending_in_base64_punctuation_is_key_material() {
+        // The 40th character may be `/`, `+` or `=`: `\b` cannot terminate those.
+        for last in ['/', '+', '=', 'A', '9'] {
+            let key = format!("{}{}", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKE", last);
+            assert_eq!(key.len(), 40);
+            for text in [
+                format!("aws_secret_access_key = \"{key}\""),
+                format!("AWS_SECRET_ACCESS_KEY={key}"),
+                format!("AWS_SECRET_ACCESS_KEY={key}\n"),
+                format!("aws_secret_access_key: {key} # note"),
+            ] {
+                assert_eq!(
+                    sensitive_kind(&text),
+                    Some("AWS Secret Access Key"),
+                    "{text}"
+                );
+            }
+        }
+        // A run longer than 40 key characters is not a 40-character key.
+        let long = format!("AWS_SECRET_ACCESS_KEY={}", "A".repeat(41));
+        assert_eq!(sensitive_kind(&long), None);
+        let long_slash = format!("AWS_SECRET_ACCESS_KEY={}/", "A".repeat(40));
+        assert_eq!(sensitive_kind(&long_slash), None);
     }
 
     #[test]
