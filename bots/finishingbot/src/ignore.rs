@@ -38,6 +38,18 @@ struct Entry {
     fragment: String,
 }
 
+/// Drop a trailing `# reason`: a `#` that starts the line or follows whitespace.
+fn strip_inline_comment(line: &str) -> &str {
+    let mut prev_ws = true;
+    for (i, c) in line.char_indices() {
+        if c == '#' && prev_ws {
+            return &line[..i];
+        }
+        prev_ws = c.is_whitespace();
+    }
+    line
+}
+
 impl IgnoreFile {
     /// Load `<root>/.hypatia-ignore`; an absent or unreadable file exempts nothing.
     pub fn load(root: &Path) -> Self {
@@ -49,12 +61,14 @@ impl IgnoreFile {
     pub fn parse(text: &str) -> Self {
         let mut entries = Vec::new();
         for line in text.lines() {
-            let line = line.trim();
+            let line = strip_inline_comment(line).trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
             let (scope, fragment) = match line.split_once(':') {
-                Some((scope, fragment)) if scope.contains('/') && !scope.contains(char::is_whitespace) => {
+                Some((scope, fragment))
+                    if scope.contains('/') && !scope.contains(char::is_whitespace) =>
+                {
                     (Some(scope), fragment)
                 }
                 _ => (None, line),
@@ -70,10 +84,17 @@ impl IgnoreFile {
                     if module != MODULE {
                         continue; // another module's entry
                     }
-                    if rule == "*" { None } else { Some(rule.to_string()) }
+                    if rule == "*" {
+                        None
+                    } else {
+                        Some(rule.to_string())
+                    }
                 }
             };
-            entries.push(Entry { rule, fragment: fragment.to_string() });
+            entries.push(Entry {
+                rule,
+                fragment: fragment.to_string(),
+            });
         }
         Self { entries }
     }
@@ -84,7 +105,10 @@ impl IgnoreFile {
         self.entries.iter().any(|e| {
             rel.contains(&e.fragment)
                 && e.rule.as_deref().is_none_or(|r| {
-                    rule_id == r || rule_id.strip_prefix(r).is_some_and(|rest| rest.starts_with('-'))
+                    rule_id == r
+                        || rule_id
+                            .strip_prefix(r)
+                            .is_some_and(|rest| rest.starts_with('-'))
                 })
         })
     }
@@ -121,6 +145,15 @@ generated/
         assert!(!f.suppresses("REL-003", "build/just/a.just")); // family is PH only
         assert!(!f.suppresses("SD022", "build/docs-seed/x")); // another module's entry
         assert!(!f.suppresses("PHX-001", "build/just/a.just")); // prefix needs '-' boundary
+    }
+
+    #[test]
+    fn inline_reason_comment_is_not_part_of_the_path() {
+        let f = IgnoreFile::parse("finishing_bot/PH:build/just/  # scanner names tokens\ngenerated/ # reason\nkeep#hash/\n");
+        assert!(f.suppresses("PH-001", "build/just/a.just"));
+        assert!(f.suppresses("CLM-001", "generated/x"));
+        assert!(f.suppresses("CLM-001", "keep#hash/x"));
+        assert!(!f.suppresses("PH-001", "reason"));
     }
 
     #[test]

@@ -57,19 +57,6 @@ impl Analyzer for MachineAnalyzer {
 
         for finding in findings {
             match finding.id.as_str() {
-                "MACH-006" => {
-                    // Create missing .machine_readable/ directory structure
-                    // Directory only: the STATE/META/ECOSYSTEM .scm templates this
-                    // used to generate are retired (clauses of the chora deed now).
-                    let mr_dir = path.join(".machine_readable");
-                    if !mr_dir.exists() {
-                        std::fs::create_dir_all(&mr_dir)?;
-                        fixes.push(format!(
-                            "Created .machine_readable/ directory at {}",
-                            mr_dir.display()
-                        ));
-                    }
-                }
                 "MACH-003" => {
                     // Add structured data (schema.org JSON-LD) template
                     if let Some(ref file) = finding.file {
@@ -102,10 +89,7 @@ impl Analyzer for MachineAnalyzer {
                         let content =
                             "# robots.txt for repository documentation\nUser-agent: *\nAllow: /\n\nSitemap: TODO\n";
                         std::fs::write(&robots_path, content)?;
-                        fixes.push(format!(
-                            "Created robots.txt at {}",
-                            robots_path.display()
-                        ));
+                        fixes.push(format!("Created robots.txt at {}", robots_path.display()));
                     }
                 }
                 _ => {}
@@ -208,7 +192,8 @@ impl MachineAnalyzer {
 
                 if let Ok(content) = std::fs::read_to_string(entry.path()) {
                     let has_json_ld = content.contains("application/ld+json");
-                    let has_microdata = content.contains("itemscope") || content.contains("itemprop");
+                    let has_microdata =
+                        content.contains("itemscope") || content.contains("itemprop");
                     let has_schema_org = content.contains("schema.org");
 
                     if !has_json_ld && !has_microdata && config.machine.require_schema_org {
@@ -220,15 +205,20 @@ impl MachineAnalyzer {
                                 "HTML file has no structured data (JSON-LD or microdata).",
                             )
                             .with_file(entry.path().to_path_buf())
-                            .with_suggestion("Add schema.org structured data for better machine readability"),
+                            .with_suggestion(
+                                "Add schema.org structured data for better machine readability",
+                            ),
                         );
                     }
 
                     if has_json_ld {
                         // Try to validate JSON-LD
-                        if let Some(json_ld_start) = content.find("<script type=\"application/ld+json\">") {
+                        if let Some(json_ld_start) =
+                            content.find("<script type=\"application/ld+json\">")
+                        {
                             if let Some(json_ld_end) = content[json_ld_start..].find("</script>") {
-                                let json_ld = &content[json_ld_start + 36..json_ld_start + json_ld_end];
+                                let json_ld =
+                                    &content[json_ld_start + 36..json_ld_start + json_ld_end];
                                 if serde_json::from_str::<serde_json::Value>(json_ld).is_err() {
                                     result.add(
                                         Finding::new(
@@ -283,8 +273,10 @@ impl MachineAnalyzer {
                     Severity::Warning,
                     "No .machine_readable/ directory found (contractiles and other machine-readable estate metadata live here).",
                 )
-                .fixable()
                 .with_file(mr_dir.clone())
+                // Not auto-fixable: git cannot track an empty directory, and a
+                // placeholder file would be invented content. What belongs here
+                // (contractiles, the chora deed) is owner-authored.
                 .with_suggestion("Create the .machine_readable/ directory"),
             );
             return;
@@ -337,11 +329,18 @@ fn strip_jsonc(src: &str) -> String {
                 i += 1;
             }
         } else if c == '/' && chars.get(i + 1) == Some(&'*') {
+            let start = i;
             i += 2;
             while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
                 i += 1;
             }
-            i = (i + 2).min(chars.len());
+            if i + 1 < chars.len() {
+                i += 2;
+            } else {
+                // Unterminated block comment: keep the text so parsing fails.
+                out.extend(&chars[start..]);
+                i = chars.len();
+            }
         } else {
             out.push(c);
             i += 1;
@@ -433,11 +432,7 @@ mod tests {
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
         assert!(result.has_errors(), "Invalid JSON should produce errors");
-        let error_ids: Vec<&str> = result
-            .errors()
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let error_ids: Vec<&str> = result.errors().iter().map(|f| f.id.as_str()).collect();
         assert!(
             error_ids.contains(&"MACH-001"),
             "Should report MACH-001 for invalid JSON"
@@ -453,11 +448,7 @@ mod tests {
         let config = default_config();
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
-        let ids: Vec<&str> = result
-            .findings
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let ids: Vec<&str> = result.findings.iter().map(|f| f.id.as_str()).collect();
         assert!(
             ids.contains(&"MACH-006"),
             "Should report MACH-006 for missing .machine_readable/"
@@ -465,36 +456,17 @@ mod tests {
     }
 
     #[test]
-    fn test_fix_creates_machine_readable_structure() {
+    fn mach_006_is_not_auto_fixable_and_fix_creates_nothing() {
         let dir = TempDir::new().unwrap();
-
         let analyzer = MachineAnalyzer::default();
         let config = default_config();
-
-        let findings = vec![Finding::new(
-            "MACH-006",
-            "Missing .machine_readable/",
-            Severity::Warning,
-            "No .machine_readable/ directory found",
-        )];
-
+        let result = analyzer.analyze(dir.path(), &config).unwrap();
+        let f = result.findings.iter().find(|f| f.id == "MACH-006").unwrap();
+        assert!(!f.fixable, "an empty dir is untracked by git; not fixable");
+        let findings = vec![f.clone()];
         let fixes = analyzer.fix(dir.path(), &config, &findings).unwrap();
-
-        assert!(
-            fixes.iter().any(|f| f.contains(".machine_readable")),
-            "Should create .machine_readable directory"
-        );
-        assert!(
-            dir.path().join(".machine_readable").exists(),
-            ".machine_readable/ should exist after fix"
-        );
-        // The retired .scm descriptive files are not regenerated.
-        for scm in ["STATE.scm", "META.scm", "ECOSYSTEM.scm"] {
-            assert!(
-                !dir.path().join(".machine_readable").join(scm).exists(),
-                "{scm} is retired and must not be generated"
-            );
-        }
+        assert_eq!(fixes, vec!["No machine-readability fixes applicable".to_string()]);
+        assert!(!dir.path().join(".machine_readable").exists());
     }
 
     fn ids(dir: &Path) -> Vec<String> {
@@ -519,11 +491,16 @@ mod tests {
         assert!(ids(empty.path()).contains(&"MACH-006".to_string()));
     }
 
-    const JSONC: &str = "{\n  // a comment\n  \"url\": \"http://x//y\", /* inline */\n  \"list\": [1, 2,],\n}\n";
+    const JSONC: &str =
+        "{\n  // a comment\n  \"url\": \"http://x//y\", /* inline */\n  \"list\": [1, 2,],\n}\n";
 
     #[test]
     fn devcontainer_and_vscode_json_are_parsed_as_jsonc() {
-        for rel in [".devcontainer/devcontainer.json", ".vscode/settings.json", ".devcontainer/sub/devcontainer.json"] {
+        for rel in [
+            ".devcontainer/devcontainer.json",
+            ".vscode/settings.json",
+            ".devcontainer/sub/devcontainer.json",
+        ] {
             let dir = TempDir::new().unwrap();
             let p = dir.path().join(rel);
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -546,6 +523,17 @@ mod tests {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(&p, "{ \"a\": }").unwrap();
         assert!(ids(dir.path()).contains(&"MACH-001".to_string()));
+    }
+
+    #[test]
+    fn unterminated_block_comment_is_invalid() {
+        let dir = TempDir::new().unwrap();
+        let p = dir.path().join(".vscode/settings.json");
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, "{\"a\": 1} /*").unwrap();
+        assert!(ids(dir.path()).contains(&"MACH-001".to_string()));
+        std::fs::write(&p, "{\"a\": 1} /* ok */").unwrap();
+        assert!(!ids(dir.path()).contains(&"MACH-001".to_string()));
     }
 
     #[test]

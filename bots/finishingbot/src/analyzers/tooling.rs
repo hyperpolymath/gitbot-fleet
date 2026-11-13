@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Tooling and version management analyzer
 
-use super::{first_existing, AnalysisResult, Analyzer, Finding, Severity};
+use super::{AnalysisResult, Analyzer, Finding, Severity};
 use crate::config::Config;
 use crate::error::Result;
 use std::path::Path;
@@ -10,6 +10,19 @@ use tracing::debug;
 
 /// mise manifests that pin tool versions (accepted in place of `.tool-versions`).
 const MISE_MANIFESTS: &[&str] = &["mise.toml", ".mise.toml"];
+
+/// Whether `p` is a parseable mise manifest with at least one entry in `[tools]`.
+fn mise_pins_tools(p: &Path) -> bool {
+    std::fs::read_to_string(p)
+        .ok()
+        .and_then(|s| s.parse::<toml::Table>().ok())
+        .and_then(|t| {
+            t.get("tools")
+                .and_then(|v| v.as_table())
+                .map(|t| !t.is_empty())
+        })
+        .unwrap_or(false)
+}
 
 /// Tooling and version management analyzer
 pub struct ToolingAnalyzer;
@@ -32,7 +45,10 @@ impl Analyzer for ToolingAnalyzer {
         // Check for a tool-version pin: .tool-versions (asdf/mise) or mise.toml
         // (mise's own manifest, which the estate uses). Either satisfies TOOL-001.
         let tool_versions = path.join(".tool-versions");
-        let mise_manifest = first_existing(path, MISE_MANIFESTS);
+        let mise_manifest = MISE_MANIFESTS
+            .iter()
+            .map(|n| path.join(n))
+            .find(|p| mise_pins_tools(p));
         if !tool_versions.exists() && mise_manifest.is_some() {
             debug!("Found mise manifest instead of .tool-versions");
         } else if !tool_versions.exists() {
@@ -41,7 +57,7 @@ impl Analyzer for ToolingAnalyzer {
                     "TOOL-001",
                     "Missing tool-version pin",
                     Severity::Error,
-                    "Neither .tool-versions nor mise.toml found for asdf/mise version management.",
+                    "Neither .tool-versions nor a mise.toml with a non-empty [tools] table found for asdf/mise version management.",
                 )
                 .with_file(path.join("mise.toml"))
                 .with_suggestion("Create mise.toml (or .tool-versions) with required tool versions (rust, just, etc.)"),
@@ -90,7 +106,11 @@ impl Analyzer for ToolingAnalyzer {
             if let Ok(entries) = std::fs::read_dir(&workflows_dir) {
                 let workflow_count = entries
                     .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "yml" || ext == "yaml"))
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .is_some_and(|ext| ext == "yml" || ext == "yaml")
+                    })
                     .count();
 
                 if workflow_count < 10 {
@@ -124,12 +144,7 @@ impl Analyzer for ToolingAnalyzer {
 
 impl ToolingAnalyzer {
     /// Validate .tool-versions content
-    fn validate_tool_versions(
-        &self,
-        content: &str,
-        file_path: &Path,
-        result: &mut AnalysisResult,
-    ) {
+    fn validate_tool_versions(&self, content: &str, file_path: &Path, result: &mut AnalysisResult) {
         let is_rust = file_path
             .parent()
             .map(|p| p.join("Cargo.toml").exists())
@@ -195,6 +210,27 @@ mod tests {
     }
 
     #[test]
+    fn tool_001_requires_mise_manifest_to_pin_tools() {
+        for (body, ok) in [
+            ("", false),
+            ("not [valid toml", false),
+            ("[env]\nA = \"1\"\n", false),
+            ("[tools]\n", false),
+            ("[tools]\nrust = \"1.83\"\n", true),
+        ] {
+            for name in ["mise.toml", ".mise.toml"] {
+                let d = TempDir::new().unwrap();
+                std::fs::write(d.path().join(name), body).unwrap();
+                assert_eq!(
+                    !ids(d.path()).contains(&"TOOL-001".to_string()),
+                    ok,
+                    "{name}: {body:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn tool_001_fires_when_neither_pin_exists_and_names_mise_toml() {
         let d = TempDir::new().unwrap();
         let f = ToolingAnalyzer
@@ -204,7 +240,10 @@ mod tests {
             .into_iter()
             .find(|f| f.id == "TOOL-001")
             .expect("TOOL-001 on a repo with no pin");
-        assert_eq!(f.file.as_deref(), Some(d.path().join("mise.toml").as_path()));
+        assert_eq!(
+            f.file.as_deref(),
+            Some(d.path().join("mise.toml").as_path())
+        );
     }
 
     #[test]

@@ -428,6 +428,28 @@ mod agda_layout_tests {
     }
 }
 
+/// Remove Rust block comments, which nest (`/* a /* b */ c */`).
+fn strip_block_comments(src: &str) -> String {
+    let b = src.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let (mut i, mut depth) = (0, 0usize);
+    while i < b.len() {
+        if b[i] == b'/' && b.get(i + 1) == Some(&b'*') {
+            depth += 1;
+            i += 2;
+        } else if depth > 0 && b[i] == b'*' && b.get(i + 1) == Some(&b'/') {
+            depth -= 1;
+            i += 2;
+        } else {
+            if depth == 0 || b[i] == b'\n' {
+                out.push(b[i]);
+            }
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// Whether the Rust project at `root` has any code yet.
 ///
 /// "No code" is exact: no `.rs` file outside build output (`target/`),
@@ -437,9 +459,6 @@ mod agda_layout_tests {
 /// all "no code"; `fn main() {}` is code. Used to exempt benchmark and stress
 /// requirements from a freshly scaffolded crate.
 pub(crate) fn rust_has_code(root: &Path) -> bool {
-    static BLOCK_COMMENT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"(?s)/\*.*?\*/").expect("block-comment regex is a valid constant pattern")
-    });
     walkdir::WalkDir::new(root)
         .follow_links(false)
         .into_iter()
@@ -448,14 +467,14 @@ pub(crate) fn rust_has_code(root: &Path) -> bool {
                 return true;
             }
             let name = e.file_name().to_string_lossy();
-            !(name.starts_with('.') || matches!(name.as_ref(), "target" | "vendor" | "node_modules"))
+            !(name.starts_with('.')
+                || matches!(name.as_ref(), "target" | "vendor" | "node_modules"))
         })
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|x| x == "rs"))
         .any(|e| {
             std::fs::read_to_string(e.path()).is_ok_and(|src| {
-                BLOCK_COMMENT
-                    .replace_all(&src, "")
+                strip_block_comments(&src)
                     .lines()
                     .map(str::trim)
                     .any(|l| !l.is_empty() && !l.starts_with("//"))
@@ -476,7 +495,11 @@ mod no_code_tests {
 
     fn rust_repo(lib: Option<&str>) -> TempDir {
         let d = TempDir::new().unwrap();
-        write(d.path(), "Cargo.toml", "[package]\nname = \"x\"\nversion = \"0.1.0\"\n");
+        write(
+            d.path(),
+            "Cargo.toml",
+            "[package]\nname = \"x\"\nversion = \"0.1.0\"\n",
+        );
         if let Some(body) = lib {
             write(d.path(), "src/lib.rs", body);
         }
@@ -504,10 +527,22 @@ mod no_code_tests {
             let d = rust_repo(body);
             assert!(!rust_has_code(d.path()), "{body:?}");
         }
-        for body in ["fn main() {}\n", "// c\npub fn f() {}\n", "/* c */ pub struct S;\n"] {
+        for body in [
+            "fn main() {}\n",
+            "// c\npub fn f() {}\n",
+            "/* c */ pub struct S;\n",
+        ] {
             let d = rust_repo(Some(body));
             assert!(rust_has_code(d.path()), "{body:?}");
         }
+    }
+
+    #[test]
+    fn nested_block_comments_are_stripped() {
+        let d = rust_repo(Some("/* a /* b */ c */\n// x\n"));
+        assert!(!rust_has_code(d.path()));
+        let d = rust_repo(Some("/* a /* b */ c */ fn f() {}\n"));
+        assert!(rust_has_code(d.path()));
     }
 
     #[test]

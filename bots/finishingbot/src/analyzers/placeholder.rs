@@ -47,7 +47,8 @@ impl Analyzer for PlaceholderAnalyzer {
         let patterns_with_context: Vec<Regex> = patterns
             .iter()
             .map(|p| Regex::new(p))
-            .collect::<std::result::Result<Vec<Regex>, regex::Error>>()?;
+            .collect::<std::result::Result<Vec<Regex>, regex::Error>>(
+        )?;
 
         // Scan files
         for entry in WalkDir::new(path)
@@ -100,7 +101,10 @@ impl Analyzer for PlaceholderAnalyzer {
                         config.placeholders.max_allowed
                     ),
                 )
-                .with_suggestion(&format!("Remove at least {} placeholders before release", excess)),
+                .with_suggestion(&format!(
+                    "Remove at least {} placeholders before release",
+                    excess
+                )),
             );
         }
 
@@ -131,12 +135,10 @@ impl PlaceholderAnalyzer {
     /// Check if a file is likely binary
     fn is_binary_file(&self, path: &Path) -> bool {
         let binary_extensions = [
-            "exe", "dll", "so", "dylib", "bin", "obj", "o", "a", "lib",
-            "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg",
-            "mp3", "mp4", "wav", "ogg", "flac", "avi", "mkv", "mov",
-            "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-            "wasm", "pyc", "class", "lock",
+            "exe", "dll", "so", "dylib", "bin", "obj", "o", "a", "lib", "png", "jpg", "jpeg",
+            "gif", "bmp", "ico", "webp", "svg", "mp3", "mp4", "wav", "ogg", "flac", "avi", "mkv",
+            "mov", "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "pdf", "doc", "docx", "xls",
+            "xlsx", "ppt", "pptx", "wasm", "pyc", "class", "lock",
         ];
 
         path.extension()
@@ -165,9 +167,12 @@ impl PlaceholderAnalyzer {
             for match_idx in matches {
                 if let Some(pattern) = patterns.get(match_idx) {
                     if let Some(m) = pattern.find(line) {
-                        let pattern_name = pattern_names.get(match_idx).map(|s| s.as_str()).unwrap_or("custom");
+                        let pattern_name = pattern_names
+                            .get(match_idx)
+                            .map(|s| s.as_str())
+                            .unwrap_or("custom");
                         let rule_id = format!("PH-{:03}", match_idx + 1);
-                        let rel = path.strip_prefix(root).unwrap_or(path).to_string_lossy();
+                        let rel = normalise_rel(path.strip_prefix(root).unwrap_or(path));
                         if ignore.suppresses(&rule_id, &rel) {
                             debug!(file = %rel, rule = %rule_id, "Exempted by .hypatia-ignore");
                             continue;
@@ -247,10 +252,8 @@ impl PlaceholderAnalyzer {
             let lines: Vec<&str> = content.lines().collect();
 
             // Get line numbers to remove (1-indexed in findings)
-            let lines_to_remove: std::collections::HashSet<usize> = file_findings
-                .iter()
-                .filter_map(|f| f.line)
-                .collect();
+            let lines_to_remove: std::collections::HashSet<usize> =
+                file_findings.iter().filter_map(|f| f.line).collect();
 
             // Filter out lines with placeholders (convert to 0-indexed)
             let new_lines: Vec<&str> = lines
@@ -334,8 +337,22 @@ impl PlaceholderAnalyzer {
     }
 }
 
+/// Repo-relative path with `/` separators, so `.hypatia-ignore` fragments
+/// (always written with `/`) match on Windows too.
+fn normalise_rel(p: &Path) -> String {
+    p.to_string_lossy().replace('\\', "/")
+}
+
 #[cfg(test)]
 mod ignore_tests {
+    #[test]
+    fn backslash_paths_are_normalised_before_matching() {
+        let rel = normalise_rel(Path::new(r"build\just\scan.just"));
+        assert_eq!(rel, "build/just/scan.just");
+        let f = crate::ignore::IgnoreFile::parse("finishing_bot/PH:build/just/\n");
+        assert!(f.suppresses("PH-001", &rel));
+    }
+
     use super::*;
     use tempfile::TempDir;
 
@@ -386,7 +403,10 @@ mod ignore_tests {
     fn hypatia_ignore_exempts_the_named_path_only() {
         let d = repo(Some("finishing_bot/PH:build/just/\n"));
         let got = files(&d);
-        assert!(!got.contains(&"build/just/scan.just".to_string()), "{got:?}");
+        assert!(
+            !got.contains(&"build/just/scan.just".to_string()),
+            "{got:?}"
+        );
         // A real placeholder elsewhere still counts.
         assert!(got.contains(&"src/main.rs".to_string()), "{got:?}");
     }
@@ -404,11 +424,21 @@ mod ignore_tests {
         let d = TempDir::new().unwrap();
         write(d.path(), "build/just/scan.just", "grep -E 'TODO|FIXME' .\n");
         let over = PlaceholderAnalyzer.analyze(d.path(), &cfg).unwrap();
-        assert!(!over.findings.iter().any(|f| f.id == "PH-100"), "at the limit");
+        assert!(
+            !over.findings.iter().any(|f| f.id == "PH-100"),
+            "at the limit"
+        );
         cfg.placeholders.max_allowed = 1;
         let over = PlaceholderAnalyzer.analyze(d.path(), &cfg).unwrap();
-        assert!(over.findings.iter().any(|f| f.id == "PH-100"), "over the limit");
-        write(d.path(), ".hypatia-ignore", "finishing_bot/PH:build/just/\n");
+        assert!(
+            over.findings.iter().any(|f| f.id == "PH-100"),
+            "over the limit"
+        );
+        write(
+            d.path(),
+            ".hypatia-ignore",
+            "finishing_bot/PH:build/just/\n",
+        );
         let ok = PlaceholderAnalyzer.analyze(d.path(), &cfg).unwrap();
         assert!(ok.findings.is_empty(), "{:?}", ok.findings);
     }

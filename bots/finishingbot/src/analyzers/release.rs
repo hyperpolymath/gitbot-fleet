@@ -120,7 +120,10 @@ impl ReleaseAnalyzer {
                         "REL-001",
                         "Version Inconsistency",
                         Severity::Error,
-                        &format!("Version numbers are inconsistent:\n  {}", version_list.join("\n  ")),
+                        &format!(
+                            "Version numbers are inconsistent:\n  {}",
+                            version_list.join("\n  ")
+                        ),
                     )
                     .with_suggestion("Ensure all version files have the same version number"),
                 );
@@ -148,16 +151,11 @@ impl ReleaseAnalyzer {
             "import pdb",
             "pdb.set_trace",
             "dbg!",
-            "println!",  // In Rust release builds
+            "println!", // In Rust release builds
             "#[cfg(debug_assertions)]",
         ];
 
-        let debug_files = [
-            ".env.local",
-            ".env.development",
-            "debug.log",
-            "*.log",
-        ];
+        let debug_files = [".env.local", ".env.development", "debug.log", "*.log"];
 
         // Check for debug files
         for pattern in &debug_files {
@@ -229,7 +227,10 @@ impl ReleaseAnalyzer {
                                 "REL-003",
                                 "Debug Statement",
                                 Severity::Info,
-                                &format!("Found {} occurrence(s) of '{}' in source", count, pattern),
+                                &format!(
+                                    "Found {} occurrence(s) of '{}' in source",
+                                    count, pattern
+                                ),
                             )
                             .with_file(entry_path.to_path_buf())
                             .with_suggestion("Review and remove debug statements for release"),
@@ -344,7 +345,10 @@ impl ReleaseAnalyzer {
             Err(_) => return,
         };
 
-        let actual_hash = if config.release.hash_algorithms.contains(&"SHA512".to_string())
+        let actual_hash = if config
+            .release
+            .hash_algorithms
+            .contains(&"SHA512".to_string())
             && hash_path.to_string_lossy().contains("512")
         {
             let mut hasher = Sha512::new();
@@ -362,7 +366,10 @@ impl ReleaseAnalyzer {
                     "REL-007",
                     "Hash Mismatch",
                     Severity::Error,
-                    &format!("Hash mismatch for {}: expected {}, got {}", filename, expected_hash, actual_hash),
+                    &format!(
+                        "Hash mismatch for {}: expected {}, got {}",
+                        filename, expected_hash, actual_hash
+                    ),
                 )
                 .with_file(hash_path.to_path_buf())
                 .with_suggestion("Regenerate hash file or investigate file corruption"),
@@ -395,9 +402,29 @@ impl ReleaseAnalyzer {
                 .map(|ext| {
                     matches!(
                         ext,
-                        "rs" | "js" | "ts" | "py" | "rb" | "go" | "java" | "kt" | "swift"
-                            | "c" | "cpp" | "h" | "hpp" | "yml" | "yaml" | "json" | "toml"
-                            | "xml" | "env" | "conf" | "cfg" | "ini" | "sh" | "bash"
+                        "rs" | "js"
+                            | "ts"
+                            | "py"
+                            | "rb"
+                            | "go"
+                            | "java"
+                            | "kt"
+                            | "swift"
+                            | "c"
+                            | "cpp"
+                            | "h"
+                            | "hpp"
+                            | "yml"
+                            | "yaml"
+                            | "json"
+                            | "toml"
+                            | "xml"
+                            | "env"
+                            | "conf"
+                            | "cfg"
+                            | "ini"
+                            | "sh"
+                            | "bash"
                     )
                 })
                 .unwrap_or(false);
@@ -416,7 +443,9 @@ impl ReleaseAnalyzer {
                             &format!("Potential {} found in source file", name),
                         )
                         .with_file(entry_path.to_path_buf())
-                        .with_suggestion("Remove sensitive data and rotate any exposed credentials"),
+                        .with_suggestion(
+                            "Remove sensitive data and rotate any exposed credentials",
+                        ),
                     );
                 }
             }
@@ -438,7 +467,9 @@ impl ReleaseAnalyzer {
                             "No [profile.release] configuration in Cargo.toml",
                         )
                         .with_file(cargo_toml)
-                        .with_suggestion("Consider adding release optimizations (lto, codegen-units)"),
+                        .with_suggestion(
+                            "Consider adding release optimizations (lto, codegen-units)",
+                        ),
                     );
                 }
             }
@@ -455,7 +486,9 @@ impl ReleaseAnalyzer {
                     Severity::Info,
                     "No GitHub release workflow found",
                 )
-                .with_suggestion("Consider adding .github/workflows/release.yml for automated releases"),
+                .with_suggestion(
+                    "Consider adding .github/workflows/release.yml for automated releases",
+                ),
             );
         }
     }
@@ -469,10 +502,23 @@ impl ReleaseAnalyzer {
 static SENSITIVE_PATTERNS: std::sync::LazyLock<Vec<(Regex, &'static str)>> =
     std::sync::LazyLock::new(|| {
         [
-            (r#"(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#, "API Key"),
-            (r#"(?i)secret[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#, "Secret Key"),
+            (
+                r#"(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
+                "API Key",
+            ),
+            (
+                r#"(?i)secret[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
+                "Secret Key",
+            ),
+            (
+                r#"(?i)aws[_-]?secret[_-]?(access[_-]?)?key\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}\b"#,
+                "AWS Secret Access Key",
+            ),
             (r#"(?i)password\s*[:=]\s*['"]?[^\s'"]{8,}"#, "Password"),
-            (r"-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----", "Private Key"),
+            (
+                r"-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----",
+                "Private Key",
+            ),
             (r"\b(AKIA|ASIA)[0-9A-Z]{16}\b", "AWS Access Key ID"),
             (r"ghp_[a-zA-Z0-9]{36}", "GitHub Personal Access Token"),
             (r"gho_[a-zA-Z0-9]{36}", "GitHub OAuth Token"),
@@ -512,8 +558,33 @@ mod sensitive_tests {
     }
 
     #[test]
+    fn aws_secret_access_key_value_is_key_material() {
+        for text in [
+            r#"aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY""#,
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        ] {
+            assert_eq!(
+                sensitive_kind(text),
+                Some("AWS Secret Access Key"),
+                "{text}"
+            );
+        }
+        assert_eq!(sensitive_kind("aws_secret_access_key = \"$SECRET\""), None);
+        assert_eq!(
+            sensitive_kind("The aws_secret_access_key is rotated monthly"),
+            None
+        );
+    }
+
+    #[test]
     fn pem_headers_are_key_material() {
-        for kind in ["RSA PRIVATE KEY", "PRIVATE KEY", "EC PRIVATE KEY", "OPENSSH PRIVATE KEY", "ENCRYPTED PRIVATE KEY"] {
+        for kind in [
+            "RSA PRIVATE KEY",
+            "PRIVATE KEY",
+            "EC PRIVATE KEY",
+            "OPENSSH PRIVATE KEY",
+            "ENCRYPTED PRIVATE KEY",
+        ] {
             let text = format!("{}{}{}\nMIIB\n", "-----BEGIN ", kind, "-----");
             assert_eq!(sensitive_kind(&text), Some("Private Key"), "{kind}");
         }
@@ -527,7 +598,10 @@ mod sensitive_tests {
         assert_eq!(sensitive_kind(&aws), Some("AWS Access Key ID"));
         let ghp = format!("t = {}{}", "ghp_", "a".repeat(36));
         assert_eq!(sensitive_kind(&ghp), Some("GitHub Personal Access Token"));
-        assert_eq!(sensitive_kind("api_key = \"abcdefghij0123456789xyz\""), Some("API Key"));
+        assert_eq!(
+            sensitive_kind("api_key = \"abcdefghij0123456789xyz\""),
+            Some("API Key")
+        );
     }
 
     #[test]
@@ -544,7 +618,10 @@ mod sensitive_tests {
 
         std::fs::write(
             dir.path().join("leak.toml"),
-            format!("k = \"\"\"\n-----BEGIN {} KEY-----\nAAAA\n\"\"\"\n", "PRIVATE"),
+            format!(
+                "k = \"\"\"\n-----BEGIN {} KEY-----\nAAAA\n\"\"\"\n",
+                "PRIVATE"
+            ),
         )
         .unwrap();
         ReleaseAnalyzer.check_sensitive_data(dir.path(), &Config::default(), &mut result);
