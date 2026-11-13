@@ -5,7 +5,7 @@
 mod analyzers;
 mod config;
 mod error;
-mod ignore;
+mod baseline;
 #[cfg(feature = "fleet")]
 mod fleet;
 

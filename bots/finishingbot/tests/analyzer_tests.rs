@@ -824,8 +824,18 @@ mod testing_analyzer {
         .unwrap();
         fs::create_dir_all(path.join("benches")).unwrap();
         fs::write(path.join("benches/bench.rs"), "fn main() {}\n").unwrap();
-        fs::create_dir_all(path.join("fuzz")).unwrap();
-        fs::write(path.join("fuzz/fuzz_target.rs"), "fn main() {}\n").unwrap();
+        // A recognisable cargo-fuzz harness: a placeholder file no longer counts.
+        fs::create_dir_all(path.join("fuzz/fuzz_targets")).unwrap();
+        fs::write(
+            path.join("fuzz/Cargo.toml"),
+            "[package]\nname = \"test-fuzz\"\n\n[[bin]]\nname = \"t\"\npath = \"fuzz_targets/t.rs\"\n",
+        )
+        .unwrap();
+        fs::write(
+            path.join("fuzz/fuzz_targets/t.rs"),
+            "libfuzzer_sys::fuzz_target!(|data: &[u8]| { let _ = data; });\n",
+        )
+        .unwrap();
         fs::create_dir_all(path.join(".github/workflows")).unwrap();
         fs::write(
             path.join(".github/workflows/stress-test.yml"),
