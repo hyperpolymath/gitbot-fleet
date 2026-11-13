@@ -90,6 +90,18 @@ reason), where the grid renders it grey. `severity` is the fleet's own word
 are repository-relative with no `./`, so the grid's change-scope (delta)
 grading can match them against the diff.
 
+*Every finding must carry a path.* The canon grades a finding with no path as
+part of the change (standards `3-practice/fork-governance/SPEC.adoc` §3.0:
+absence of a location is not evidence of absence of a defect, and the
+alternative lets a reporter escape the gate by omitting a field). A
+repository-level rule that omits its path therefore shows on every pull request
+whatever it touches. The path of such a finding is the file the rule is about:
+the expected path for a missing-file rule (`docs/status/ROADMAP.adoc`,
+`.github/SECURITY.md`), the manifest or config that would fix a whole-repo
+property. A pull request that does not touch that file then reports the finding
+as standing, as the canon intends. The driver prints a `WARNING` for any member
+that emits a path-less finding; rhodibot and seambot already comply.
+
 == 4. What each member reports, and how
 
 [cols="1,2,3",options="header"]

@@ -115,7 +115,7 @@ Shells out to the `git-seo` CLI tool for comprehensive forge-based SEO scoring (
 |===
 | Finding ID | Description | Severity
 
-| GS-001 | git-seo not installed | Info
+| GS-001 | _Retired as a finding_: git-seo not being installed is a property of the machine running glambot, not of the repository, so it is logged (`warn`) and the analyzer reports nothing | n/a
 | GS-002 | git-seo analysis failed | Warning
 | GS-003 | No git remote found | Info
 | GS-100 | Overall SEO score | Varies
