@@ -24,8 +24,10 @@
 use crate::translator::PonsFinding;
 use serde_json::Value;
 use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -102,12 +104,15 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
         Ok(b) => b,
         Err(reason) => return Outcome::NotRun(reason),
     };
+    // Own process group: a timeout must take pons' descendants down with it,
+    // not only pons (a survivor can hold the output pipes open indefinitely).
     let mut child = match Command::new(&bin)
         .args(["scan", "--format", "json", "."])
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()
     {
         Ok(c) => c,
@@ -120,48 +125,80 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
         Err(e) => return Outcome::Error(format!("could not start {}: {e}", bin.display())),
     };
     // Drain both pipes on threads so a large report cannot fill a pipe and
-    // wedge the child before the deadline logic sees it.
+    // wedge the child before the deadline logic sees it. Each reader hands its
+    // bytes back over a channel so the join can be bounded by the deadline.
     let (Some(mut out_pipe), Some(mut err_pipe)) = (child.stdout.take(), child.stderr.take())
     else {
-        let _ = child.kill();
-        let _ = child.wait();
+        kill_group(&mut child);
         return Outcome::Error("pons pipes were not captured".to_string());
     };
-    let out_t = thread::spawn(move || {
+    let (out_tx, out_rx) = mpsc::channel();
+    let (err_tx, err_rx) = mpsc::channel();
+    thread::spawn(move || {
         let mut b = Vec::new();
         let _ = out_pipe.read_to_end(&mut b);
-        b
+        let _ = out_tx.send(b);
     });
-    let err_t = thread::spawn(move || {
+    thread::spawn(move || {
         let mut b = Vec::new();
         let _ = err_pipe.read_to_end(&mut b);
-        b
+        let _ = err_tx.send(b);
     });
     let deadline = Instant::now() + timeout;
     let status = loop {
         match child.try_wait() {
             Ok(Some(s)) => break Ok(s),
             Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
+                kill_group(&mut child);
                 break Err(());
             }
             Ok(None) => thread::sleep(Duration::from_millis(20)),
             Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = out_t.join();
-                let _ = err_t.join();
+                kill_group(&mut child);
                 return Outcome::Error(format!("could not wait for pons: {e}"));
             }
         }
     };
-    let stdout = String::from_utf8_lossy(&out_t.join().unwrap_or_default()).into_owned();
-    let stderr = String::from_utf8_lossy(&err_t.join().unwrap_or_default()).into_owned();
-    match status {
-        Err(()) => Outcome::Error(format!("pons did not finish within {}s", timeout.as_secs())),
-        Ok(s) => interpret(s.code(), &stdout, &stderr, expected_commit),
+    let Ok(status) = status else {
+        return Outcome::Error(format!("pons did not finish within {}s", timeout.as_secs()));
+    };
+    // pons has exited, but a descendant may still hold the pipes: bound the
+    // read by the same deadline, then take the whole group down.
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    let (stdout, stderr) = match (
+        out_rx.recv_timeout(remaining),
+        err_rx.recv_timeout(remaining),
+    ) {
+        (Ok(o), Ok(e)) => (
+            String::from_utf8_lossy(&o).into_owned(),
+            String::from_utf8_lossy(&e).into_owned(),
+        ),
+        _ => {
+            kill_pgid(child.id());
+            return Outcome::Error(format!(
+                "pons left output pipes open past the {}s deadline (a descendant process is still running)",
+                timeout.as_secs()
+            ));
+        }
+    };
+    interpret(status.code(), &stdout, &stderr, expected_commit)
+}
+
+/// SIGKILL a whole process group. `pgid` is the pid of a child started with
+/// `process_group(0)`, so it is the group leader's id.
+fn kill_pgid(pgid: u32) {
+    // SAFETY: killpg takes plain integers and has no memory effects; failure
+    // (ESRCH: the group is already gone) is the desired end state.
+    unsafe {
+        libc::killpg(pgid as libc::pid_t, libc::SIGKILL);
     }
+}
+
+/// Kill the child's group, then the child itself, and reap it.
+fn kill_group(child: &mut Child) {
+    kill_pgid(child.id());
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// First nonblank stderr line, at most 240 characters.
