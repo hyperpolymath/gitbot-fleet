@@ -548,7 +548,8 @@ pub struct DynamicReport {
 /// A verdict from `panic-attack adjudicate` (the real 2.5 report shape).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdjudicateVerdict {
-    /// `pass`, `warn` or `fail`.
+    /// `pass`, `warn` or `fail`. Newer panic-attack may write `error`, which
+    /// [`parse_adjudicate_verdict`] turns into an error.
     pub verdict: String,
     /// Reports it understood.
     pub processed_reports: usize,
@@ -577,32 +578,47 @@ pub struct AdjudicatePriority {
 /// Any non-zero exit, a timeout, a missing report file or a report that is not
 /// JSON is an error: a part never reads as clean because it printed nothing.
 fn run_to_report(args: &[&str], scratch: &Scratch, timeout: Duration) -> Result<serde_json::Value> {
+    run_to_report_accepting(args, scratch, timeout, &[0]).map(|(_, v)| v)
+}
+
+/// [`run_to_report`] for a subcommand whose exit code carries a verdict: each
+/// code in `accepted` is a complete run whose report is still read and parsed,
+/// and is returned with it. Any other exit is an error, so a crash or an
+/// incomplete run never reads as a result.
+fn run_to_report_accepting(
+    args: &[&str],
+    scratch: &Scratch,
+    timeout: Duration,
+    accepted: &[i32],
+) -> Result<(i32, serde_json::Value)> {
     let out = scratch.path().join("report.json");
     let out_s = out.display().to_string();
     let mut full: Vec<&str> = args.to_vec();
     full.push("-o");
     full.push(&out_s);
     let run = run_panic_attack_raw_in(&full, timeout, Some(scratch.path()))?;
-    if !run.status.success() {
-        bail!(
+    let code = match run.status.code() {
+        Some(c) if accepted.contains(&c) => c,
+        _ => bail!(
             "panic-attack {} exited with {}: {}",
             args.first().copied().unwrap_or("?"),
             run.status,
             first_diagnostic(&run.stderr)
-        );
-    }
+        ),
+    };
     let raw = std::fs::read_to_string(&out).with_context(|| {
         format!(
-            "panic-attack {} exited 0 without writing its report",
+            "panic-attack {} exited {code} without writing its report",
             args.first().copied().unwrap_or("?")
         )
     })?;
-    serde_json::from_str(extract_json(&raw)).with_context(|| {
+    let value = serde_json::from_str(extract_json(&raw)).with_context(|| {
         format!(
             "panic-attack {} wrote a report that is not JSON",
             args.first().copied().unwrap_or("?")
         )
-    })
+    })?;
+    Ok((code, value))
 }
 
 /// Resolve a path argument to an absolute, symlink-free string.
@@ -682,9 +698,15 @@ pub fn parse_dynamic_report(value: serde_json::Value) -> Result<DynamicReport> {
 /// Run `panic-attack adjudicate` over dynamic-mode reports and return its
 /// verdict.
 ///
-/// panic-attack 2.5.5 prints `pass (processed 0, failed 1)` and exits 0 for a
-/// missing or unrecognised report, so exit status is not evidence of a verdict:
-/// [`parse_adjudicate_verdict`] requires every input to have been processed.
+/// Exit contract (panic-attack #292, not yet released): 0 is a complete run
+/// with verdict pass or warn, 1 a complete run with verdict fail, 2 an
+/// incomplete run (no report processed, or one failed to load) whatever the
+/// verdict. Exit 0 and 1 are valid runs and the report is read; exit 2 is an
+/// error. The pinned panic-attack (410a8f82) predates that contract and exits
+/// 0 for every verdict, `fail` and a bad input (`pass (processed 0, failed 1)`)
+/// included, so exit status alone is never evidence:
+/// [`parse_adjudicate_verdict`] still requires every input to have been
+/// processed, and an exit 1 must agree with a `fail` verdict.
 pub fn run_adjudicate_verdict(reports: &[PathBuf], timeout: Duration) -> Result<AdjudicateVerdict> {
     let scratch = Scratch::new()?;
     let mut args: Vec<String> = vec!["adjudicate".to_string()];
@@ -692,8 +714,15 @@ pub fn run_adjudicate_verdict(reports: &[PathBuf], timeout: Duration) -> Result<
         args.push(absolute(r)?);
     }
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let value = run_to_report(&arg_refs, &scratch, timeout)?;
-    parse_adjudicate_verdict(value, reports.len())
+    let (code, value) = run_to_report_accepting(&arg_refs, &scratch, timeout, &[0, 1])?;
+    let v = parse_adjudicate_verdict(value, reports.len())?;
+    if code == 1 && v.verdict != "fail" {
+        bail!(
+            "panic-attack adjudicate exited 1 but wrote verdict {:?}, not 'fail'",
+            v.verdict
+        );
+    }
+    Ok(v)
 }
 
 /// Validate and parse an `adjudicate` report for `expected` inputs.
@@ -714,6 +743,11 @@ pub fn parse_adjudicate_verdict(
                 .map(|n| format!(": {n}"))
                 .unwrap_or_default(),
             v.verdict
+        );
+    }
+    if v.verdict == "error" {
+        bail!(
+            "panic-attack adjudicate reported verdict 'error' (the run was incomplete or failed)"
         );
     }
     if !matches!(v.verdict.as_str(), "pass" | "warn" | "fail") {

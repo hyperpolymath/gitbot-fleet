@@ -548,3 +548,105 @@ fn text_mode_says_no_issues_for_a_clean_complete_run() {
     );
     assert!(out.contains("No issues found."), "{out}");
 }
+
+/// Run a dynamic scan against a stub whose `adjudicate` writes `report` and
+/// exits `code`; returns the scan output.
+fn scan_with_adjudicate(code: i32, report: &str) -> Output {
+    let bin = TempDir::new().unwrap();
+    let old = r#"echo '{"verdict":"pass","processed_reports":2,"failed_reports":0}' > "$out" ;;"#;
+    let body = recording_stub_body(ASSAY_NONE);
+    assert!(body.contains(old), "recording stub changed");
+    stub(
+        bin.path(),
+        &body.replace(old, &format!("echo '{report}' > \"$out\"; exit {code} ;;")),
+    );
+    let tree = tree_with_timeout(None);
+    let prog = tree.path().join("prog");
+    fs::write(&prog, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::set_permissions(&prog, fs::Permissions::from_mode(0o755)).unwrap();
+    let home = TempDir::new().unwrap();
+    Command::new(env!("CARGO_BIN_EXE_panicbot"))
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.path().display()))
+        .env("HOME", home.path())
+        .env("RUST_LOG", "off")
+        .args(["--format", "json", "scan"])
+        .arg(tree.path())
+        .args(["--target", "prog"])
+        .output()
+        .unwrap()
+}
+
+const VERDICT_FAIL: &str = r#"{"verdict":"fail","processed_reports":2,"failed_reports":0,"priorities":[{"level":"high","message":"crash"}]}"#;
+
+/// A valid adjudicated fail: a finding, and no error part.
+fn assert_valid_fail(o: &Output) {
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "stderr: {err}");
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("a findings array");
+    let rules: Vec<&str> = v
+        .as_array()
+        .expect("an array, so no part errored")
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(rules.contains(&"PB-ADJUDICATE-VERDICT"), "{rules:?}");
+}
+
+/// An error part for adjudicate whose detail contains `why`.
+fn assert_adjudicate_error(o: &Output, why: &str) {
+    assert_eq!(
+        o.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("an object");
+    let part = v["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["command"] == "adjudicate")
+        .expect("an adjudicate part");
+    assert_eq!(part["status"], "error", "{part}");
+    assert!(part["detail"].as_str().unwrap().contains(why), "{part}");
+}
+
+#[test]
+fn adjudicate_exit_1_with_verdict_fail_is_a_valid_fail() {
+    assert_valid_fail(&scan_with_adjudicate(1, VERDICT_FAIL));
+}
+
+#[test]
+fn adjudicate_exit_2_is_an_error_part() {
+    // Incomplete run: error even though the report is otherwise well formed.
+    assert_adjudicate_error(&scan_with_adjudicate(2, VERDICT_FAIL), "exited with");
+}
+
+#[test]
+fn adjudicate_verdict_error_with_exit_0_is_an_error_part() {
+    assert_adjudicate_error(
+        &scan_with_adjudicate(
+            0,
+            r#"{"verdict":"error","processed_reports":2,"failed_reports":0}"#,
+        ),
+        "verdict 'error'",
+    );
+}
+
+#[test]
+fn adjudicate_old_contract_exit_0_with_verdict_fail_is_still_a_valid_fail() {
+    // panic-attack 410a8f82 exits 0 for every verdict.
+    assert_valid_fail(&scan_with_adjudicate(0, VERDICT_FAIL));
+}
+
+#[test]
+fn adjudicate_exit_1_with_a_non_fail_verdict_is_an_error_part() {
+    assert_adjudicate_error(
+        &scan_with_adjudicate(
+            1,
+            r#"{"verdict":"pass","processed_reports":2,"failed_reports":0}"#,
+        ),
+        "not 'fail'",
+    );
+}
