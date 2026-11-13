@@ -41,4 +41,5 @@ pub mod config;
 pub mod directives;
 pub mod fleet;
 pub mod scanner;
+pub mod suite;
 pub mod translator;

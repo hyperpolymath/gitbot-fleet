@@ -558,6 +558,43 @@ exit 0 with an empty object|echo "{}"
 exit 0 with a non-array|echo "{\"weak_points\":[]}"
 CASES
 
+# panicbot suite results (full-suite ruling 2026-11-13): the object form.
+# A part that failed is an error row with its reason; the findings of the
+# parts that ran are carried in the envelope file. A run that analysed nothing
+# is not_run. A findings array is a complete run, and PB- rule ids get their
+# own evidence classes.
+pstub panicbot "$PAN"'
+cat <<J
+{"status":"error","reason":"1 of 10 panic-attack part(s) failed: assay: panic-attack assay exited with exit status: 2","findings":[{"rule_id":"PA005","severity":"warning","file":"src/a.rs","line":4,"message":"unwrap"}],"parts":[]}
+J
+exit 3'
+runp "$TMP/pe" --member panicbot
+check "panicbot suite: a failed part is an error row" error "$(field "$TMP/pe/panicbot.json" .status)"
+check "panicbot suite: the failed part is named in the reason" yes \
+  "$(field "$TMP/pe/panicbot.json" '.reason | contains("assay")' | sed 's/true/yes/;s/false/no/')"
+check "panicbot suite: the findings of the parts that ran are carried" "PA005|src/a.rs" \
+  "$(field "$TMP/pe/panicbot.json" '.findings[0] | "\(.rule_id)|\(.file)"')"
+pstub panicbot "$PAN"'
+cat <<J
+{"status":"not_run","reason":"no part analysed the repository (all denied by its bot directives or not applicable)","findings":[],"parts":[]}
+J
+exit 4'
+runp "$TMP/pn" --member panicbot
+check "panicbot suite: a run that analysed nothing is not_run" not_run "$(field "$TMP/pn/panicbot.json" .status)"
+check "panicbot suite: not_run carries its reason" yes \
+  "$(field "$TMP/pn/panicbot.json" '(.reason | type == "string") and (.reason | length) > 0' | sed 's/true/yes/;s/false/no/')"
+pstub panicbot "$PAN"'
+cat <<J
+[{"rule_id":"PB-ASSAY-SAFE-PATH","severity":"info","file":"src/p.rs","line":7,"message":"m"},
+ {"rule_id":"PB-DYN-CRASH","severity":"error","file":"prog","line":0,"message":"m"},
+ {"rule_id":"PB-ADJUDICATE-VERDICT","severity":"warning","file":"prog","line":0,"message":"m"}]
+J'
+runp "$TMP/pc" --member panicbot
+check "panicbot suite: a findings array is a ran row" ran "$(field "$TMP/pc/panicbot.json" .status)"
+check "panicbot suite: PB- rule ids carry their own evidence classes" \
+  "panic-attack:proven-substitution panic-attack:dynamic-attack panic-attack:dynamic-verdict" \
+  "$(field "$TMP/pc/panicbot.json" '[.findings[].evidence_class] | join(" ")')"
+
 # 11. gating comes from the enrolment, never from the envelope. ───────────────
 GRID="${STANDARDS_DIR:-}/scripts/verdict-grid.sh"
 if [[ -n "${STANDARDS_DIR:-}" ]] && [[ -f "$GRID" ]]; then

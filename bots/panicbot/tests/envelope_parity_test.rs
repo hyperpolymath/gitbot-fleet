@@ -127,11 +127,170 @@ fn exit_0_without_a_valid_report_is_not_a_run() {
     }
 }
 
+/// A panic-attack that answers every subcommand the full suite runs:
+/// `assail` prints REAL, `assay` writes `ASSAY_JSON` to its `-o` path,
+/// `--version` and `diagnostics` answer.
+fn full_stub_body(assay_json: &str) -> String {
+    format!(
+        r#"case "$1" in
+  --version) echo "panic-attack 2.5.5" ;;
+  diagnostics) exit 0 ;;
+  assay)
+    out=""
+    while [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done
+    cat > "$out" <<'J'
+{assay_json}
+J
+    ;;
+  *) cat <<'J'
+{REAL}
+J
+    ;;
+esac
+exit 0"#
+    )
+}
+
+const ASSAY_NONE: &str = r#"{"candidates":[],"catalogue_entries":2,"notes":[]}"#;
+
 #[test]
 fn a_real_report_is_a_run_with_its_findings() {
     let bin = TempDir::new().unwrap();
-    stub(bin.path(), &format!("cat <<'J'\n{REAL}\nJ\nexit 0"));
+    stub(bin.path(), &full_stub_body(ASSAY_NONE));
     let o = scan(bin.path(), tree_with_timeout(None).path());
+    assert!(
+        o.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("a findings array");
     assert!(v.is_array() && v.as_array().unwrap().len() == 1, "{v}");
+}
+
+#[test]
+fn the_full_suite_runs_by_default_and_assay_findings_name_their_file() {
+    let bin = TempDir::new().unwrap();
+    let assay = r#"{"candidates":[{"id":"safe-path","proven_name":"SafePath","proof_backing":"proven: Operations.idr","status":"offered","confidence":0.9,"target_hits":[{"file":"a.rs","line":1,"snippet":"x"}]}],"catalogue_entries":2,"notes":[]}"#;
+    stub(bin.path(), &full_stub_body(assay));
+    let o = scan(bin.path(), tree_with_timeout(None).path());
+    assert!(
+        o.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("a findings array");
+    let rules: Vec<&str> = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(
+        rules.contains(&"PA005") && rules.contains(&"PB-ASSAY-SAFE-PATH"),
+        "{rules:?}"
+    );
+    for f in v.as_array().unwrap() {
+        assert_eq!(f["file"], "a.rs", "{f}");
+    }
+    // The per-part table is on stderr: assail, assay and diagnostics ran; the rest say why not.
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(
+        err.contains("assay") && err.contains("not_applicable"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_part_that_fails_makes_the_run_an_error_object_never_a_findings_array() {
+    // assail works, assay writes no report: the failure is loud and named, and
+    // the findings of the part that ran are carried, not dropped.
+    let bin = TempDir::new().unwrap();
+    stub(
+        bin.path(),
+        &format!("case \"$1\" in --version) echo x ;; diagnostics) exit 0 ;; assay) exit 0 ;; *) cat <<'J'\n{REAL}\nJ\n;; esac"),
+    );
+    let o = scan(bin.path(), tree_with_timeout(None).path());
+    assert_eq!(
+        o.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&o.stderr);
+    let first = stderr.lines().find(|l| !l.trim().is_empty()).unwrap();
+    assert!(
+        first.contains("1 of 10") && first.contains("assay"),
+        "{first}"
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("an object");
+    assert_eq!(v["status"], "error");
+    assert!(v["reason"].as_str().unwrap().contains("assay"), "{v}");
+    assert_eq!(v["findings"].as_array().unwrap().len(), 1);
+    assert!(v["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["command"] == "assay" && p["status"] == "error"));
+}
+
+fn tree_with_directive(content: &str) -> TempDir {
+    let t = TempDir::new().unwrap();
+    fs::write(t.path().join("a.rs"), "fn main() {}\n").unwrap();
+    let d = t.path().join(".machine_readable/bot_directives");
+    fs::create_dir_all(&d).unwrap();
+    fs::write(d.join("panicbot.a2ml"), content).unwrap();
+    t
+}
+
+#[test]
+fn a_directive_that_denies_everything_is_not_run_never_a_clean_run() {
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &full_stub_body(ASSAY_NONE));
+    let o = scan(bin.path(), tree_with_directive("allow = []\n").path());
+    assert_eq!(
+        o.status.code(),
+        Some(4),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("an object");
+    assert_eq!(v["status"], "not_run");
+    assert!(v["reason"].as_str().unwrap().contains("denied"), "{v}");
+}
+
+#[test]
+fn a_directive_file_keeps_its_scope_and_is_not_widened_to_assay() {
+    // The shipped directive shape: static trio allowed. The stub has no assay
+    // answer at all, so any assay call would turn the run into an error.
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &format!("case \"$1\" in --version) echo x ;; diagnostics) exit 0 ;; assay) echo assay was called >&2; exit 9 ;; *) cat <<'J'\n{REAL}\nJ\n;; esac"));
+    let tree = tree_with_directive(
+        "allow = [\"assail\", \"adjudicate\", \"diagnostics\"]\ndeny = [\"attack\", \"assault\", \"ambush\", \"amuck\", \"abduct\", \"axial\"]\n",
+    );
+    let o = scan(bin.path(), tree.path());
+    assert!(
+        o.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(!err.contains("assay was called"), "{err}");
+    assert!(err.contains("denied"), "{err}");
+}
+
+#[test]
+fn a_broken_directive_stops_the_run_and_never_falls_back_to_the_full_suite() {
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &full_stub_body(ASSAY_NONE));
+    let o = scan(
+        bin.path(),
+        tree_with_directive("allow = [ not toml\n").path(),
+    );
+    assert!(!o.status.success());
+    assert!(
+        o.stdout.is_empty(),
+        "stdout: {}",
+        String::from_utf8_lossy(&o.stdout)
+    );
+    assert!(String::from_utf8_lossy(&o.stderr).contains("bot directives unreadable"));
 }

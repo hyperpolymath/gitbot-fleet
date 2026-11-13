@@ -448,6 +448,9 @@ write_envelope() { # member status reason findings_json
            elif .rule_id | startswith("PA7") then "panic-attack:resource-leak"
            elif .rule_id | startswith("PA8") then "panic-attack:unchecked-error"
            elif .rule_id | startswith("PA9") then "panic-attack:path-traversal"
+           elif .rule_id | startswith("PB-ASSAY") then "panic-attack:proven-substitution"
+           elif .rule_id | startswith("PB-DYN") then "panic-attack:dynamic-attack"
+           elif .rule_id | startswith("PB-ADJUDICATE") then "panic-attack:dynamic-verdict"
            else "panic-attack:unknown" end)
         elif $member == "ponsbot" then "pons:unclassified"
         elif $member == "rhodibot" then "rsr:file-presence"
@@ -484,6 +487,27 @@ def rel: if type != "string" then "" else
   (if startswith($repo + "/") then .[($repo | length) + 1:] else . end)
   | (if startswith("./") then .[2:] else . end) end;
 JQ
+}
+
+# panicbot prints either a findings array (every allowed part that applies ran)
+# or, when the suite did not complete, {"status": "error"|"not_run", "reason":
+# "...", "findings": [...]} and exits 3 or 4: a part failed (error; the findings
+# of the parts that ran are carried in the envelope file, though the grid reads
+# only the status and reason) or no part analysed the repository (not_run). Only
+# the object form can reach the grid as a non-ran status from this adapter; an
+# array is a complete run, and anything else falls through to translate_or_error.
+translate_panicbot() { # member
+  local m="$1" st reason findings
+  if [[ "$ADAPTER_RC" -ne 124 ]] \
+     && jq -e 'type == "object" and (.status | IN("error", "not_run")) and (.reason | type == "string" and length > 0)' "$ADAPTER_OUT" >/dev/null 2>&1; then
+    st=$(jq -r .status "$ADAPTER_OUT"); reason=$(jq -r '.reason[0:240]' "$ADAPTER_OUT")
+    findings=$(jq -c --arg repo "$repo" "$(relativize_filter) [ (.findings // [])[] | $FINDING ]" "$ADAPTER_OUT" 2> /dev/null) || findings='[]'
+    [ -n "$findings" ] || findings='[]'
+    write_envelope "$m" "$st" "$reason" "$findings"
+    cleanup_adapter
+    return
+  fi
+  translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]"
 }
 
 # Run an adapter, capturing stdout/stderr separately. Non-zero exit with valid
@@ -619,11 +643,14 @@ run_member() {
               message: ("\(.name): \(.severity)" + (if (.details // []) | length > 0 then " — " + ((.details // []) | join("; ")) else "" end)) }
           | .file |= rel ]' ;;
     panicbot)
-      # `scan` translates panic-attack output into fleet Findings and writes
-      # nothing. (`fleet` mode would write a .panicbot/*.a2ml debt register
-      # into the scanned tree; A2ML is retired, so it is not used.)
+      # `scan` runs the allowed panic-attack suite (full by default; the repo's
+      # bot directives narrow it) and translates it into fleet Findings, writing
+      # nothing. A part that failed or a run that analysed nothing arrives as
+      # an error/not_run object, see translate_panicbot. (`fleet` mode would write
+      # a .panicbot/*.a2ml debt register into the scanned tree; A2ML is retired,
+      # so it is not used.)
       run_adapter "$bin" --format json scan "$repo"
-      translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]" ;;
+      translate_panicbot "$m" ;;
     ponsbot)
       # `scan` runs pons at the pinned commit (bots/ponsbot/canon/pin.toml) and
       # writes nothing into the tree. Gating is NOT decided here: the grid reads

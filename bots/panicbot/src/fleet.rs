@@ -4,8 +4,9 @@
 //! Registers as `BotId::Panicbot` in gitbot-shared-context. Provides the
 //! standard fleet entry point (`run_fleet_scan`) that:
 //! 1. Reads per-repo directives (`.machine_readable/bot_directives/panicbot.scm`)
-//! 2. Invokes `panic-attack assail` via the scanner module
-//! 3. Translates WeakPoints into Finding structs
+//! 2. Runs the allowed panic-attack suite (full suite by default, see `suite`)
+//! 3. Translates each part's results into Finding structs (assail WeakPoints,
+//!    assay candidates, dynamic-mode results when a target is given)
 //! 4. Classifies fixable vs unfixable
 //! 5. Writes unfixable to `.panicbot/PANICBOT-FINDINGS.a2ml`
 //! 6. Returns FindingSet for the fleet pipeline
@@ -13,6 +14,7 @@
 use crate::a2ml_writer;
 use crate::directives;
 use crate::scanner;
+use crate::suite::{self, SuiteOptions, SuiteRun};
 use crate::translator;
 use gitbot_shared_context::bot::{BotExecution, BotId, BotInfo};
 use gitbot_shared_context::finding::FindingSet;
@@ -28,11 +30,12 @@ pub fn bot_info() -> BotInfo {
 /// Controls scan depth and whether findings can block PRs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BotMode {
-    /// Report findings, don't block. Runs `assail` only.
+    /// Report findings, don't block. Runs the allowed suite.
     Advisor,
-    /// Full suite: `assail` + `adjudicate` + `diagnostics`.
+    /// Report findings, don't block. Same scope as Advisor since the full-suite
+    /// ruling (2026-11-13); the name is kept for callers.
     Auditor,
-    /// Block PRs on critical findings. Runs `assail` + strict thresholds.
+    /// Block PRs on critical findings. Runs the allowed suite + strict thresholds.
     Guardian,
 }
 
@@ -57,50 +60,54 @@ impl BotMode {
 ///
 /// Performs the complete scan pipeline:
 /// 1. Load per-repo directives
-/// 2. Run panic-attack assail
-/// 3. Translate findings
-/// 4. Classify fixable/unfixable
-/// 5. Write A2ML debt register
-/// 6. Return FindingSet + BotExecution
+/// 2. Run the allowed panic-attack suite (see [`crate::suite`])
+/// 3. Classify fixable/unfixable
+/// 4. Write A2ML debt register
+/// 5. Return FindingSet + BotExecution
 pub fn run_fleet_scan(dir: &Path, mode: BotMode) -> (FindingSet, BotExecution) {
+    let (set, execution, _) = run_fleet_suite(dir, mode, &SuiteOptions::from_env(None));
+    (set, execution)
+}
+
+/// [`run_fleet_scan`] that also returns the per-part results and takes the
+/// suite options (target for the dynamic modes).
+pub fn run_fleet_suite(
+    dir: &Path,
+    mode: BotMode,
+    opts: &SuiteOptions,
+) -> (FindingSet, BotExecution, Option<SuiteRun>) {
     let mut execution = BotExecution::new(BotId::Panicbot);
     execution.start();
 
-    // Step 1: Load per-repo directives
+    // Step 1: Load per-repo directives. A directive file that exists but does
+    // not parse is a failure, never the (full-suite) default: failing open
+    // would widen the scope of a repository whose directive is broken.
     let config = match directives::load_directives(dir) {
         Ok(c) => c,
         Err(e) => {
-            tracing::warn!("Failed to load directives: {}, using defaults", e);
-            crate::config::PanicbotConfig::default()
-        }
-    };
-
-    // Step 2: Run panic-attack assail
-    if !config.allowed_commands.assail {
-        tracing::info!("assail command disabled by directives, skipping scan");
-        execution.skip("assail disabled by bot directives");
-        return (FindingSet::new(), execution);
-    }
-
-    let assail_result = scanner::run_assail(dir, config.timeout);
-    let report = match assail_result {
-        Ok(r) => r,
-        Err(e) => {
-            let msg = format!("panic-attack assail failed: {}", e);
+            let msg = format!("bot directives unreadable, nothing run: {e:#}");
             tracing::error!("{}", msg);
             execution.fail(&msg);
-            return (FindingSet::new(), execution);
+            return (FindingSet::new(), execution, None);
         }
     };
 
-    // Step 3: Translate WeakPoints into Findings
-    let findings = translator::translate_all(&report.weak_points, &config);
-    let findings_count = findings.len();
+    // Step 2: Run the allowed suite.
+    let run = suite::run_suite(dir, &config, opts);
+    for line in run.table() {
+        tracing::info!("{}", line);
+    }
+    if !run.analysed() && run.errored().is_empty() {
+        execution.skip("no panic-attack part ran: all denied by bot directives or not applicable");
+        return (FindingSet::new(), execution, Some(run));
+    }
 
-    // Step 4: Classify fixable vs unfixable
+    // Step 3: Classify fixable vs unfixable
+    let findings = run.findings.clone();
+    let findings_count = findings.len();
     let (fixable, unfixable) = translator::classify_fixability(&findings);
 
-    // Step 5: Write A2ML debt register (if there are unfixable findings)
+    // Step 4: Write A2ML debt register (if there are findings)
     let repo_name = dir
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -124,20 +131,26 @@ pub fn run_fleet_scan(dir: &Path, mode: BotMode) -> (FindingSet, BotExecution) {
         }
     }
 
-    // Step 6: Build FindingSet for fleet pipeline
+    // Step 5: Build FindingSet for fleet pipeline
     let mut finding_set = FindingSet::new();
     finding_set.extend(findings);
 
     // Count files from weak point locations
-    let files_analyzed: std::collections::HashSet<_> = report
-        .weak_points
+    let files_analyzed: std::collections::HashSet<_> = run
+        .assail
         .iter()
+        .flat_map(|r| r.weak_points.iter())
         .filter_map(|wp| wp.location.as_ref())
         .filter_map(|loc| loc.split(':').next())
         .collect();
 
     let error_count = finding_set.errors().len();
     execution.complete(findings_count, error_count, files_analyzed.len());
+
+    // A failed part is a failed run, whatever the other parts found.
+    if let Some(summary) = run.error_summary() {
+        execution.fail(&summary);
+    }
 
     // In guardian mode, mark as failed if there are critical findings
     if mode.blocks_on_error() && finding_set.has_errors() {
@@ -147,7 +160,7 @@ pub fn run_fleet_scan(dir: &Path, mode: BotMode) -> (FindingSet, BotExecution) {
         ));
     }
 
-    (finding_set, execution)
+    (finding_set, execution, Some(run))
 }
 
 #[cfg(test)]
