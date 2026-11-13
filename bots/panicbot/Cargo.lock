@@ -590,6 +590,7 @@ dependencies = [
  "chrono",
  "clap",
  "gitbot-shared-context",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",

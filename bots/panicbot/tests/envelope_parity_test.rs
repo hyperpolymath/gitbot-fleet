@@ -429,3 +429,122 @@ fn a_crashed_diagnostics_is_an_error_part() {
             && p["status"] == "error"
             && p["detail"].as_str().unwrap().contains("signal")));
 }
+
+/// On a timeout the whole process group dies. Killing only panic-attack would
+/// leave the backgrounded `sleep` holding the output pipes, so the scan would
+/// block until it ended.
+#[test]
+fn timeout_kills_descendants_and_returns_within_the_timeout() {
+    let bin = TempDir::new().unwrap();
+    let pidfile = bin.path().join("child.pid");
+    stub(
+        bin.path(),
+        &format!("sleep 25 &\necho $! > {}\nwait", pidfile.display()),
+    );
+    let t = std::time::Instant::now();
+    let o = scan(bin.path(), tree_with_timeout(Some(1)).path());
+    assert!(
+        t.elapsed().as_secs() < 12,
+        "a descendant holding the pipes must not outlast the timeout"
+    );
+    assert_not_a_run(&o, "did not finish within 1s");
+    let pid = fs::read_to_string(&pidfile).unwrap().trim().to_string();
+    let mut gone = false;
+    for _ in 0..50 {
+        let stat = fs::read_to_string(format!("/proc/{pid}/stat"));
+        if stat.map(|s| s.contains(") Z ")).unwrap_or(true) {
+            gone = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        gone,
+        "the backgrounded descendant {pid} survived the timeout"
+    );
+}
+
+/// A relative `PATH` entry must be made absolute before `assay` changes the
+/// working directory to its scratch dir.
+#[test]
+fn a_relative_path_entry_is_resolved_before_the_cwd_changes() {
+    let root = TempDir::new().unwrap();
+    let bin = root.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    stub(&bin, &full_stub_body(ASSAY_NONE));
+    let tree = tree_with_timeout(None);
+    let home = TempDir::new().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_panicbot"))
+        .env_clear()
+        .current_dir(root.path())
+        .env("PATH", "bin:/usr/bin:/bin")
+        .env("HOME", home.path())
+        .env("RUST_LOG", "off")
+        .args(["--format", "json", "scan"])
+        .arg(tree.path())
+        .output()
+        .unwrap();
+    assert!(
+        o.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("a findings array");
+    assert!(v.is_array(), "{v}");
+}
+
+fn scan_text(bin_dir: &Path, tree: &Path) -> Output {
+    let home = TempDir::new().unwrap();
+    Command::new(env!("CARGO_BIN_EXE_panicbot"))
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()))
+        .env("HOME", home.path())
+        .env("RUST_LOG", "off")
+        .args(["--format", "text", "scan"])
+        .arg(tree)
+        .output()
+        .unwrap()
+}
+
+/// Text mode must not print "No issues found." for a run that errored or in
+/// which nothing ran.
+#[test]
+fn text_mode_never_says_no_issues_for_an_incomplete_run() {
+    // assail fails: a part error (exit 3).
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), "echo 'panic-attack: boom' >&2\nexit 3");
+    let o = scan_text(bin.path(), tree_with_timeout(None).path());
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert_eq!(o.status.code(), Some(3), "{out}");
+    assert!(!out.contains("No issues found."), "{out}");
+    assert!(out.contains("INCOMPLETE"), "{out}");
+
+    // Nothing allowed to run (exit 4).
+    let tree = tree_with_timeout(None);
+    let d = tree.path().join(".machine_readable/bot_directives");
+    fs::create_dir_all(&d).unwrap();
+    fs::write(d.join("panicbot.a2ml"), "allow = [\"diagnostics\"]\n").unwrap();
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), "exit 0");
+    let o = scan_text(bin.path(), tree.path());
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert_eq!(o.status.code(), Some(4), "{out}");
+    assert!(!out.contains("No issues found."), "{out}");
+    assert!(out.contains("NOT RUN"), "{out}");
+}
+
+/// A clean, complete run still says so.
+#[test]
+fn text_mode_says_no_issues_for_a_clean_complete_run() {
+    let bin = TempDir::new().unwrap();
+    let clean = r#"{"program_path":"/t","language":"rust","statistics":{"total_lines":10},"weak_points":[]}"#;
+    stub(bin.path(), &full_stub_body(ASSAY_NONE).replace(REAL, clean));
+    let o = scan_text(bin.path(), tree_with_timeout(None).path());
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        o.status.success(),
+        "{out} {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(out.contains("No issues found."), "{out}");
+}

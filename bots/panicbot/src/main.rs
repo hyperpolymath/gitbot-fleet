@@ -96,8 +96,23 @@ fn cmd_scan(
 
     match format {
         OutputFormat::Text => {
+            // "No issues found." only for a run that really analysed the repo.
+            // A part error or an empty run is stated as such (and exits 3/4).
+            if let Some(summary) = &part_error {
+                println!("Scan INCOMPLETE: {summary}");
+                if !findings.is_empty() {
+                    println!(
+                        "({} finding(s) from the parts that ran follow)\n",
+                        findings.len()
+                    );
+                }
+            } else if !run.analysed() {
+                println!("Scan NOT RUN: {NOTHING_RAN}");
+            }
             if findings.is_empty() {
-                println!("No issues found.");
+                if part_error.is_none() && run.analysed() {
+                    println!("No issues found.");
+                }
             } else {
                 println!("Found {} issue(s):\n", findings.len());
                 for finding in &findings {
