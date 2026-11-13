@@ -2,10 +2,11 @@
 = Scanner cutover: pons-asinorum and panic-attack → ponsbot and panicbot
 :toc: left
 :toclevels: 2
-:revdate: 2026-11-12
+:revdate: 2026-11-13
 
-Status: **DESIGN, with the owner's rulings of 2026-11-12 recorded (§8). Phase 0
-(the adapters) is the only phase started.** Nothing has been cut over: no
+Status: **DESIGN, with the owner's rulings of 2026-11-12 and 2026-11-13
+recorded (§8). Phase 0 (the adapters) is the only phase started.** Nothing
+has been cut over: no
 workflow, enrolment manifest, grid row or direct lane has changed. Each later
 phase lands as its own pull request.
 
@@ -213,7 +214,7 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
 | Grid shows panicbot and ponsbot rows only; callers that passed `panic-ref`/`pons-ref` are updated in the same wave (§7)
 
 | 3 (deep gate)
-| Point `deep-recon-reusable.yml` at the adapters; keep pons' `error` hard gate and SARIF upload; panic-attack's must-run check is open (D6)
+| Point `deep-recon-reusable.yml` at the adapters; keep pons' `error` hard gate and SARIF upload; keep panic-attack's must-run check (D6, decided 2026-11-13)
 | standards
 | A deliberately broken fixture still fails the gate; an empty scan still fails
 
@@ -223,7 +224,7 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
 | No `panic-attack` invocation remains outside `bots/panicbot/`
 
 | 5 (Hypatia)
-| Per the D4 ruling: either move estate-rescan to `panicbot` with a store-shaped output, or record it as a sanctioned direct use
+| Per the D4 ruling (2026-11-13): record estate-rescan and the bridge gate as sanctioned direct uses, reading panicbot's pin
 | hypatia
 | Ruling recorded; the verisim-data shape is unchanged either way
 |===
@@ -268,7 +269,31 @@ G2. **Decided 2026-11-12.** panic-attack does not gate: panicbot is advisory.
     block-on-critical behaviour on panicbot's row. (Label G2 is this
     document's own.)
 
-=== 8.2 Open
+=== 8.2 Decided (owner rulings, 2026-11-13)
+
+D4. **Decided 2026-11-13.** Hypatia's estate rescan (verisim-data feed) and
+    the bridge gate (`panic-attack bridge triage`) are **sanctioned direct
+    uses**, consistent with D0: bridge triage is the CVE-mitigation
+    lifecycle, not lane scanning. Both stay outside panicbot, and both read
+    panic-attack from panicbot's single pin (D7).
+
+D5. **Decided 2026-11-13.** `hyperpolymath/panic-attacker.git` in
+    `panicbot-sweep.yml` is a stale name from before the 2026-02-08 rename.
+    The sweep moves to `hyperpolymath/panic-attack`, read through panicbot's
+    single pin, never unpinned.
+
+D6. **Decided 2026-11-13.** The deep-recon must-run check **stays** through
+    phase 3. Advisory status (G2) governs findings, not a scanner that did not
+    run: a panic-attack crash or empty report still fails the job (fail
+    loudly, no silent green).
+
+D7. **Decided 2026-11-13.** Converge on the Hypatia lane's pins: panic-attack
+    `410a8f82`, pons `bca1ea28`, the values phase 0 already records in
+    `bots/panicbot/canon/pin.toml` `[build]` and `bots/ponsbot/canon/pin.toml`.
+    `fleet-report-back-reusable.yml` (`b689a74d`) and deep-recon (`b5530834`,
+    `51b8920f`) move to them in phase 1. Later bumps change those files only.
+
+=== 8.3 Open
 
 D2. Shadow-period length for phase 1 (number of PRs or days) and the
     acceptable difference between the direct and adapter rows.
@@ -276,25 +301,3 @@ D2. Shadow-period length for phase 1 (number of PRs or days) and the
 D3. Does `hooks/pre-push-gate.sh`'s default (`panic-attack hypatia`) become
     `panicbot ponsbot hypatia`, or does pons stay out of the local pre-push
     gate because of its build cost?
-
-D4. Hypatia's estate rescan (verisim-data feed) and bridge gate
-    (`panic-attack bridge triage`): in scope for this cutover, or sanctioned
-    direct uses? panicbot has no `bridge` subcommand today.
-
-D5. `panicbot-sweep.yml` installs from `hyperpolymath/panic-attacker.git`.
-    Is that a stale name for `panic-attack`, or a separate repository?
-
-D6. The deep-recon lane fails the job when panic-attack crashes or writes an
-    empty report (a tool-failure check, not a findings gate). With panicbot
-    advisory (§8 G2), does that must-run check survive phase 3, or does a
-    panic-attack failure become an advisory `error` row only?
-
-D7. Pins disagree today. panic-attack: standards' Hypatia lane and
-    `fork-governance.yml` run `410a8f82`, gitbot-fleet's
-    `fleet-report-back-reusable.yml` builds `b689a74d` (its comment says it
-    equals the Hypatia pin; it does not) and deep-recon defaults `b5530834`.
-    pons: the Hypatia lane runs `bca1ea28`, deep-recon defaults the older
-    `51b8920f`. Phase 0 records `410a8f82` and `bca1ea28` (the Hypatia lane's
-    values) in `bots/panicbot/canon/pin.toml` `[build]` and
-    `bots/ponsbot/canon/pin.toml`. Confirm those are the pins to converge on
-    before phase 1 makes the workflows read the files.
