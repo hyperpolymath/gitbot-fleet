@@ -885,8 +885,8 @@ fn run_panic_attack_cmd(
     // hands its bytes back over a channel so the join can be bounded.
     let (Some(mut out_pipe), Some(mut err_pipe)) = (child.stdout.take(), child.stderr.take())
     else {
-        kill_group(&mut child);
-        anyhow::bail!("panic-attack stdout/stderr pipes were not captured");
+        let k = kill_note(kill_group(&mut child));
+        anyhow::bail!("panic-attack stdout/stderr pipes were not captured{k}");
     };
     let (out_tx, out_rx) = std::sync::mpsc::channel();
     let (err_tx, err_rx) = std::sync::mpsc::channel();
@@ -906,16 +906,16 @@ fn run_panic_attack_cmd(
         match child.try_wait() {
             Ok(Some(s)) => break s,
             Ok(None) if std::time::Instant::now() >= deadline => {
-                kill_group(&mut child);
+                let k = kill_note(kill_group(&mut child));
                 bail!(
-                    "panic-attack did not finish within {}s (timed out and killed)",
+                    "panic-attack did not finish within {}s (timed out and killed){k}",
                     timeout.as_secs()
                 );
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
             Err(e) => {
-                kill_group(&mut child);
-                return Err(e).context("Failed to wait for panic-attack subprocess");
+                let k = kill_note(kill_group(&mut child));
+                return Err(e).context(format!("Failed to wait for panic-attack subprocess{k}"));
             }
         }
     };
@@ -932,10 +932,10 @@ fn run_panic_attack_cmd(
             String::from_utf8_lossy(&e).to_string(),
         ),
         _ => {
-            kill_pgid(child.id());
+            let k = kill_note(kill_pgid(child.id()));
             bail!(
                 "panic-attack left output pipes open past the {}s deadline \
-                 (a descendant process is still running; killed)",
+                 (a descendant process is still running; killed){k}",
                 timeout.as_secs()
             );
         }
@@ -951,20 +951,32 @@ fn run_panic_attack_cmd(
 }
 
 /// SIGKILL a whole process group. `pgid` is the pid of a child started with
-/// `process_group(0)`, so it is the group leader's id.
-fn kill_pgid(pgid: u32) {
-    // SAFETY: killpg takes plain integers and has no memory effects; failure
-    // (ESRCH: the group is already gone) is the desired end state.
-    unsafe {
-        libc::killpg(pgid as libc::pid_t, libc::SIGKILL);
+/// `process_group(0)`, so it is the group leader's id. A pid that cannot name
+/// a group is an error; ESRCH (the group is already gone) is the desired end
+/// state, not an error.
+fn kill_pgid(pgid: u32) -> std::result::Result<(), String> {
+    let pid = i32::try_from(pgid)
+        .ok()
+        .and_then(rustix::process::Pid::from_raw)
+        .ok_or_else(|| format!("invalid process-group id {pgid}"))?;
+    match rustix::process::kill_process_group(pid, rustix::process::Signal::KILL) {
+        Ok(()) | Err(rustix::io::Errno::SRCH) => Ok(()),
+        Err(e) => Err(format!("could not kill process group {pgid}: {e}")),
     }
 }
 
-/// Kill the child's group, then the child itself, and reap it.
-fn kill_group(child: &mut std::process::Child) {
-    kill_pgid(child.id());
+/// Kill the child's group, then the child itself, and reap it. Returns the
+/// group-kill failure, if any, after the child has been killed and reaped.
+fn kill_group(child: &mut std::process::Child) -> std::result::Result<(), String> {
+    let group = kill_pgid(child.id());
     let _ = child.kill();
     let _ = child.wait();
+    group
+}
+
+/// Suffix for an error message when the group kill itself failed.
+fn kill_note(r: std::result::Result<(), String>) -> String {
+    r.err().map(|e| format!(" ({e})")).unwrap_or_default()
 }
 
 /// Invoke `panic-attack` for the subcommands other than `assail`.

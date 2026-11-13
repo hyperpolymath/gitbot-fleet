@@ -212,7 +212,7 @@ name = "ponsbot"
 version = "0.1.0"
 dependencies = [
  "clap",
- "libc",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

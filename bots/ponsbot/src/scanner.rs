@@ -129,8 +129,8 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
     // bytes back over a channel so the join can be bounded by the deadline.
     let (Some(mut out_pipe), Some(mut err_pipe)) = (child.stdout.take(), child.stderr.take())
     else {
-        kill_group(&mut child);
-        return Outcome::Error("pons pipes were not captured".to_string());
+        let k = kill_note(kill_group(&mut child));
+        return Outcome::Error(format!("pons pipes were not captured{k}"));
     };
     let (out_tx, out_rx) = mpsc::channel();
     let (err_tx, err_rx) = mpsc::channel();
@@ -149,18 +149,23 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
         match child.try_wait() {
             Ok(Some(s)) => break Ok(s),
             Ok(None) if Instant::now() >= deadline => {
-                kill_group(&mut child);
-                break Err(());
+                break Err(kill_note(kill_group(&mut child)));
             }
             Ok(None) => thread::sleep(Duration::from_millis(20)),
             Err(e) => {
-                kill_group(&mut child);
-                return Outcome::Error(format!("could not wait for pons: {e}"));
+                let k = kill_note(kill_group(&mut child));
+                return Outcome::Error(format!("could not wait for pons: {e}{k}"));
             }
         }
     };
-    let Ok(status) = status else {
-        return Outcome::Error(format!("pons did not finish within {}s", timeout.as_secs()));
+    let status = match status {
+        Ok(s) => s,
+        Err(k) => {
+            return Outcome::Error(format!(
+                "pons did not finish within {}s{k}",
+                timeout.as_secs()
+            ))
+        }
     };
     // pons has exited, but a descendant may still hold the pipes: bound the
     // read by the same deadline, then take the whole group down.
@@ -174,9 +179,9 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
             String::from_utf8_lossy(&e).into_owned(),
         ),
         _ => {
-            kill_pgid(child.id());
+            let k = kill_note(kill_pgid(child.id()));
             return Outcome::Error(format!(
-                "pons left output pipes open past the {}s deadline (a descendant process is still running)",
+                "pons left output pipes open past the {}s deadline (a descendant process is still running){k}",
                 timeout.as_secs()
             ));
         }
@@ -185,20 +190,32 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
 }
 
 /// SIGKILL a whole process group. `pgid` is the pid of a child started with
-/// `process_group(0)`, so it is the group leader's id.
-fn kill_pgid(pgid: u32) {
-    // SAFETY: killpg takes plain integers and has no memory effects; failure
-    // (ESRCH: the group is already gone) is the desired end state.
-    unsafe {
-        libc::killpg(pgid as libc::pid_t, libc::SIGKILL);
+/// `process_group(0)`, so it is the group leader's id. A pid that cannot name
+/// a group is an error; ESRCH (the group is already gone) is the desired end
+/// state, not an error.
+fn kill_pgid(pgid: u32) -> Result<(), String> {
+    let pid = i32::try_from(pgid)
+        .ok()
+        .and_then(rustix::process::Pid::from_raw)
+        .ok_or_else(|| format!("invalid process-group id {pgid}"))?;
+    match rustix::process::kill_process_group(pid, rustix::process::Signal::KILL) {
+        Ok(()) | Err(rustix::io::Errno::SRCH) => Ok(()),
+        Err(e) => Err(format!("could not kill process group {pgid}: {e}")),
     }
 }
 
-/// Kill the child's group, then the child itself, and reap it.
-fn kill_group(child: &mut Child) {
-    kill_pgid(child.id());
+/// Kill the child's group, then the child itself, and reap it. Returns the
+/// group-kill failure, if any, after the child has been killed and reaped.
+fn kill_group(child: &mut Child) -> Result<(), String> {
+    let group = kill_pgid(child.id());
     let _ = child.kill();
     let _ = child.wait();
+    group
+}
+
+/// Suffix for an error message when the group kill itself failed.
+fn kill_note(r: Result<(), String>) -> String {
+    r.err().map(|e| format!(" ({e})")).unwrap_or_default()
 }
 
 /// First nonblank stderr line, at most 240 characters.
