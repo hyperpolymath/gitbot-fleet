@@ -560,7 +560,7 @@ CASES
 
 # 11. gating comes from the enrolment, never from the envelope. ───────────────
 GRID="${STANDARDS_DIR:-}/scripts/verdict-grid.sh"
-if [ -n "${STANDARDS_DIR:-}" ] && [ -f "$GRID" ]; then
+if [[ -n "${STANDARDS_DIR:-}" ]] && [[ -f "$GRID" ]]; then
   pstub ponsbot "$ARGS_OK"'
 cat <<J
 [{"rule_id":"div-by-literal-zero","severity":"error","pons_severity":"ERROR","tier":"T1","evidence_class":"DATAFLOW","file":"src/a.jl","line":4,"message":"division by zero (T1, DATAFLOW)","blocking":true}]
