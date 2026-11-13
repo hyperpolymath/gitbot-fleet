@@ -618,6 +618,14 @@ fi
 for m in "${members[@]+"${members[@]}"}"; do
   run_member "$m"
   echo "fleet-report-back: $m -> $(jq -r '.status + (if .status == "ran" then " (\(.findings | length) finding(s))" else ": " + (.reason // "") end)' "$out/$m.json")"
+  # A path-less finding is graded as part of EVERY change (standards
+  # fork-governance SPEC section 3.0: absence of a location is not evidence of
+  # absence of a defect), so a repository-level rule that omits its path makes
+  # the row identical on every pull request. Say so, loudly, at the source.
+  unpathed=$(jq -r '[.findings[] | select((.file // "") == "")] | length' "$out/$m.json")
+  if [ "$unpathed" -gt 0 ]; then
+    echo "fleet-report-back: WARNING: $m reported $unpathed finding(s) with no path; the grid grades those as part of every change. The adapter must name the file each rule is about (the expected path, for a missing-file rule)." >&2
+  fi
 done
 
 # ── summary ──────────────────────────────────────────────────────────────────

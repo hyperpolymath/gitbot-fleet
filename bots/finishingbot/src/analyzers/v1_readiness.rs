@@ -69,6 +69,7 @@ impl V1ReadinessAnalyzer {
                         Severity::Error,
                         &format!("Required file {} not found ({}).", filename, description),
                     )
+                    .with_file(file_path.clone())
                     .with_suggestion(&format!("Create {} file", filename)),
                 );
             } else {
@@ -88,6 +89,7 @@ impl V1ReadinessAnalyzer {
                     Severity::Warning,
                     "SECURITY.md not found for responsible disclosure.",
                 )
+                .with_file(security_file.clone())
                 .with_suggestion("Add SECURITY.md with security policy and contact information"),
             );
         } else {
@@ -173,6 +175,7 @@ impl V1ReadinessAnalyzer {
                         Severity::Warning,
                         &format!("{} file not found ({}).", filename, description),
                     )
+                    .with_file(file_path.clone())
                     .with_suggestion(&format!("Add {} for community health", filename)),
                 );
             } else {
