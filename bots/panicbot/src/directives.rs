@@ -4,7 +4,7 @@
 //! ## Where directives come from (owner rulings 2026-11-13)
 //!
 //! 1. **The repo deed**, `<repo>_chora.deed` at the scanned directory's root:
-//!    the `(bot panicbot ...)` entry inside `(bot-directives ...)`. Canonical.
+//!    the `(bot :name panicbot ...)` entry inside `(bot-directives ...)`. Canonical.
 //! 2. **The legacy file** `.machine_readable/bot_directives/panicbot.a2ml`
 //!    (TOML-shaped), READ ONLY, used only when the deed has no panicbot entry.
 //!    A2ML is retired: this module never writes or extends one.
@@ -20,15 +20,15 @@
 //!
 //! ```text
 //! (bot-directives
-//!   (bot panicbot
+//!   (bot :name panicbot
 //!     :allow (assail assay diagnostics)   ; optional; absent = full suite
 //!     :deny (assault ambush)              ; optional; deny wins over allow
 //!     (target :build "cargo build --release" :program "target/release/foo")
 //!     (config :min-severity low :timeout-seconds 300)))
 //! ```
 //!
-//! `(bot :name panicbot ...)` reads the same (the standards fixture spells it
-//! so). Every part is optional except that a `target` needs `:program`.
+//! The bot is named with `:name`, the one spelling (standards #1502); the bare
+//! form `(bot panicbot ...)` is an error that says so. Every part is optional except that a `target` needs `:program`.
 //! Unknown fields, unknown subcommand names, a wrong value type, a duplicate
 //! entry and an ambiguous deed (more than one `*_chora.deed` at the root) are
 //! errors: the deed reader is strict where the legacy file only notes.
@@ -83,17 +83,20 @@ pub fn load_directives(repo_path: &Path) -> Result<PanicbotConfig> {
             .with_context(|| format!("Failed to read {}", deed_path.display()))?;
         let root = deed::parse(&text)
             .with_context(|| format!("Failed to parse {}", deed_path.display()))?;
-        if let Some(mut config) = from_deed(&root)
-            .with_context(|| format!("Invalid (bot panicbot) clause in {}", deed_path.display()))?
-        {
+        if let Some(mut config) = from_deed(&root).with_context(|| {
+            format!(
+                "Invalid (bot :name panicbot) clause in {}",
+                deed_path.display()
+            )
+        })? {
             if legacy_present {
                 config.notes.push(format!(
-                    "{DIRECTIVE_PATH} exists but is ignored: the deed's (bot panicbot) clause wins"
+                    "{DIRECTIVE_PATH} exists but is ignored: the deed's (bot :name panicbot) clause wins"
                 ));
             }
             return Ok(config);
         }
-        tracing::debug!("{} has no (bot panicbot) entry", deed_path.display());
+        tracing::debug!("{} has no (bot :name panicbot) entry", deed_path.display());
     }
 
     if !legacy_present {
@@ -148,7 +151,7 @@ fn shape(line: usize, message: impl Into<String>) -> anyhow::Error {
     })
 }
 
-/// Read the `(bot panicbot ...)` entry of a parsed deed. `None`: the deed has
+/// Read the `(bot :name panicbot ...)` entry of a parsed deed. `None`: the deed has
 /// no such entry (not an error). Anything wrong inside an entry is an error.
 fn from_deed(root: &Clause) -> Result<Option<PanicbotConfig>> {
     let mut sections = root.clauses("bot-directives");
@@ -166,7 +169,7 @@ fn from_deed(root: &Clause) -> Result<Option<PanicbotConfig>> {
                 return Err(shape(
                     bot.line,
                     format!(
-                        "(bot panicbot) appears twice (first at line {})",
+                        "(bot :name panicbot) appears twice (first at line {})",
                         first.line
                     ),
                 ));
@@ -187,7 +190,6 @@ fn from_deed(root: &Clause) -> Result<Option<PanicbotConfig>> {
 
     for item in &bot.items {
         match item {
-            Item::Atom { .. } => {} // the name, checked by bot_name
             Item::Field { key, value, line } => {
                 if seen.contains(&key.as_str()) {
                     return Err(shape(*line, format!("duplicate :{key}")));
@@ -201,7 +203,7 @@ fn from_deed(root: &Clause) -> Result<Option<PanicbotConfig>> {
                     other => {
                         return Err(shape(
                             *line,
-                            format!("unknown field :{other} in (bot panicbot)"),
+                            format!("unknown field :{other} in (bot :name panicbot)"),
                         ))
                     }
                 }
@@ -223,7 +225,7 @@ fn from_deed(root: &Clause) -> Result<Option<PanicbotConfig>> {
                 other => {
                     return Err(shape(
                         c.line,
-                        format!("unknown clause ({other} ...) in (bot panicbot)"),
+                        format!("unknown clause ({other} ...) in (bot :name panicbot)"),
                     ))
                 }
             },
@@ -253,12 +255,11 @@ fn from_deed(root: &Clause) -> Result<Option<PanicbotConfig>> {
     Ok(Some(config))
 }
 
-/// The bot's name: `:name SYM` or a single bare symbol.
+/// The bot's name: its `:name SYM` field.
 fn bot_name(bot: &Clause) -> Result<&str> {
     let mut name: Option<&str> = None;
     for item in &bot.items {
         let (n, line) = match item {
-            Item::Atom { name, line } => (name.as_str(), *line),
             Item::Field {
                 key,
                 value: deed::Value::Sym(s),
@@ -271,7 +272,12 @@ fn bot_name(bot: &Clause) -> Result<&str> {
         }
         name = Some(n);
     }
-    name.ok_or_else(|| shape(bot.line, "a (bot) clause needs a name: (bot NAME ...)"))
+    name.ok_or_else(|| {
+        shape(
+            bot.line,
+            "a (bot) clause needs a name: (bot :name NAME ...)",
+        )
+    })
 }
 
 fn subcommands(what: &str, value: &deed::Value, line: usize) -> Result<Vec<Subcommand>> {
@@ -328,7 +334,6 @@ fn read_target(c: &Clause) -> Result<TargetDecl> {
                     format!("unexpected clause ({}) in (target)", n.head),
                 ))
             }
-            Item::Atom { line, .. } => return Err(shape(*line, "unexpected symbol in (target)")),
         }
     }
     let program =
@@ -709,7 +714,7 @@ mod deed_tests {
     #[test]
     fn deny_only_in_the_deed_is_the_full_suite_minus_the_deny() {
         let d = repo(
-            Some(&deed_for("(bot panicbot :deny (assault ambush))")),
+            Some(&deed_for("(bot :name panicbot :deny (assault ambush))")),
             None,
         );
         let c = load_directives(d.path()).unwrap();
@@ -726,7 +731,7 @@ mod deed_tests {
     fn an_explicit_allow_narrows_and_deny_wins_over_it() {
         let d = repo(
             Some(&deed_for(
-                "(bot panicbot :allow (assail assay diagnostics) :deny (assay))",
+                "(bot :name panicbot :allow (assail assay diagnostics) :deny (assay))",
             )),
             None,
         );
@@ -759,7 +764,9 @@ mod deed_tests {
     #[test]
     fn a_target_without_a_build_is_allowed() {
         let d = repo(
-            Some(&deed_for("(bot panicbot (target :program \"bin/x\"))")),
+            Some(&deed_for(
+                "(bot :name panicbot (target :program \"bin/x\"))",
+            )),
             None,
         );
         let c = load_directives(d.path()).unwrap();
@@ -769,7 +776,7 @@ mod deed_tests {
     #[test]
     fn the_deed_clause_wins_over_the_legacy_file() {
         let d = repo(
-            Some(&deed_for("(bot panicbot :deny (assay))")),
+            Some(&deed_for("(bot :name panicbot :deny (assay))")),
             Some("allow = [\"assail\"]\n"),
         );
         let c = load_directives(d.path()).unwrap();
@@ -786,8 +793,8 @@ mod deed_tests {
     fn the_legacy_file_is_the_fallback_when_the_deed_has_no_panicbot_entry() {
         for deed in [
             "(repo-deed :schema-version \"1.0.0\")\n".to_string(),
-            deed_for("(bot hypatia :deny (assay))"),
-            deed_for("(bot rhodibot)"),
+            deed_for("(bot :name hypatia :deny (assay))"),
+            deed_for("(bot :name rhodibot)"),
         ] {
             let d = repo(Some(&deed), Some("allow = [\"assail\"]\n"));
             let c = load_directives(d.path()).unwrap();
@@ -819,60 +826,60 @@ mod deed_tests {
             ),
             (
                 "unknown subcommand",
-                deed_for("(bot panicbot :deny (asault))"),
+                deed_for("(bot :name panicbot :deny (asault))"),
             ),
-            ("allow not a list", deed_for("(bot panicbot :allow assail)")),
+            ("allow not a list", deed_for("(bot :name panicbot :allow assail)")),
             (
                 "allow of strings",
-                deed_for("(bot panicbot :allow (\"assail\"))"),
+                deed_for("(bot :name panicbot :allow (\"assail\"))"),
             ),
-            ("unknown field", deed_for("(bot panicbot :dney (assault))")),
+            ("unknown field", deed_for("(bot :name panicbot :dney (assault))")),
             (
                 "unknown clause",
-                deed_for("(bot panicbot (targt :program \"x\"))"),
+                deed_for("(bot :name panicbot (targt :program \"x\"))"),
             ),
             (
                 "target without program",
-                deed_for("(bot panicbot (target :build \"make\"))"),
+                deed_for("(bot :name panicbot (target :build \"make\"))"),
             ),
             (
                 "build not a string",
-                deed_for("(bot panicbot (target :build make :program \"x\"))"),
+                deed_for("(bot :name panicbot (target :build make :program \"x\"))"),
             ),
             (
                 "empty build",
-                deed_for("(bot panicbot (target :build \"\" :program \"x\"))"),
+                deed_for("(bot :name panicbot (target :build \"\" :program \"x\"))"),
             ),
             (
                 "two targets",
-                deed_for("(bot panicbot (target :program \"a\") (target :program \"b\"))"),
+                deed_for("(bot :name panicbot (target :program \"a\") (target :program \"b\"))"),
             ),
             (
                 "bad severity",
-                deed_for("(bot panicbot (config :min-severity severe))"),
+                deed_for("(bot :name panicbot (config :min-severity severe))"),
             ),
             (
                 "bad timeout",
-                deed_for("(bot panicbot (config :timeout-seconds 0))"),
+                deed_for("(bot :name panicbot (config :timeout-seconds 0))"),
             ),
             (
                 "string timeout",
-                deed_for("(bot panicbot (config :timeout-seconds \"5\"))"),
+                deed_for("(bot :name panicbot (config :timeout-seconds \"5\"))"),
             ),
             (
                 "duplicate deny",
-                deed_for("(bot panicbot :deny (assay) :deny (assault))"),
+                deed_for("(bot :name panicbot :deny (assay) :deny (assault))"),
             ),
             (
                 "two panicbot entries",
-                deed_for("(bot panicbot) (bot panicbot)"),
+                deed_for("(bot :name panicbot) (bot :name panicbot)"),
             ),
             ("nameless bot", deed_for("(bot :deny (assay))")),
             (
                 "two bot-directives",
                 format!(
                     "{}{}",
-                    "(repo-deed (bot-directives (bot panicbot)) (bot-directives (bot panicbot)))",
+                    "(repo-deed (bot-directives (bot :name panicbot)) (bot-directives (bot :name panicbot)))",
                     "\n"
                 ),
             ),
@@ -887,9 +894,25 @@ mod deed_tests {
     }
 
     #[test]
+    fn the_bare_bot_form_is_an_error_naming_the_canonical_spelling() {
+        for clause in ["(bot panicbot)", "(bot panicbot :deny (assay))"] {
+            let d = repo(Some(&deed_for(clause)), Some("allow = [\"assail\"]\n"));
+            let e = format!("{:#}", load_directives(d.path()).unwrap_err());
+            assert!(e.contains("(bot :name panicbot ...)"), "{clause}: {e}");
+        }
+        // Another bot written the bare way breaks the deed too: one spelling.
+        let d = repo(Some(&deed_for("(bot hypatia)")), None);
+        assert!(load_directives(d.path()).is_err());
+    }
+
+    #[test]
     fn two_deeds_at_the_root_are_an_error() {
-        let d = repo(Some(&deed_for("(bot panicbot)")), None);
-        std::fs::write(d.path().join("y_chora.deed"), deed_for("(bot panicbot)")).unwrap();
+        let d = repo(Some(&deed_for("(bot :name panicbot)")), None);
+        std::fs::write(
+            d.path().join("y_chora.deed"),
+            deed_for("(bot :name panicbot)"),
+        )
+        .unwrap();
         let e = load_directives(d.path()).unwrap_err();
         assert!(format!("{e:#}").contains("more than one"), "{e:#}");
     }

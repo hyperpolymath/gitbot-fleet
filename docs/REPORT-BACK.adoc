@@ -120,12 +120,12 @@ that emits a path-less finding; rhodibot and seambot already comply.
 | Runs the **full panic-attack suite** unless the repository's bot directives
   say otherwise (owner rulings 2026-11-13): `assail`, `assay`, and the dynamic
   modes (`assault`, `ambush`, then `adjudicate`) when the repo deed declares a
-  target, `(bot-directives (bot panicbot (target :build "..." :program "...")))`,
+  target, `(bot-directives (bot :name panicbot (target :build "..." :program "...")))`,
   or a built `--target` is given. A declared `:build` is run first with `sh -c`
   in the scanned repo under the suite budget; a failed build is an `error` part.
   Under `pull_request_target` / `workflow_run` nothing is built or run. With no
   target the dynamic parts report `not_applicable` with "no target declared in
-  the deed (bot-directives (bot panicbot (target …)))". The inventory of every
+  the deed (bot-directives (bot :name panicbot (target …)))". The inventory of every
   panic-attack subcommand and why each is in or out is in `bots/panicbot/src/suite.rs`.
   panicbot's own translator maps critical → error, high → warning. The grid already carries a direct panic-attack row from the
   Hypatia lane, so a repository that enrols panicbot sees the same tool twice,
@@ -141,7 +141,7 @@ that emits a path-less finding; rhodibot and seambot already comply.
   the parts that ran are carried in the envelope file, but the grid reads only the
   status), and a run where no part analysed anything (everything denied or not
   applicable) prints `status: not_run` and exits 4. Directives are read from the repo deed
-  `<repo>_chora.deed` first (`(bot panicbot :allow ... :deny ... (target ...)
+  `<repo>_chora.deed` first (`(bot :name panicbot :allow ... :deny ... (target ...)
   (config ...))`), then from the legacy `.machine_readable/bot_directives/panicbot.a2ml`
   (read only, no target), else the full suite. A `deny` with no `allow` means the
   full suite minus the deny; an explicit `allow` narrows; deny wins. A deed or

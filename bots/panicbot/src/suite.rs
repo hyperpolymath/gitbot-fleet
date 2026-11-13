@@ -50,7 +50,7 @@
 //! ## Dynamic modes: where the target comes from
 //!
 //! `assault` and `ambush` execute a program. The repository declares it in its
-//! deed: `(bot-directives (bot panicbot (target :build "..." :program "...")))`
+//! deed: `(bot-directives (bot :name panicbot (target :build "..." :program "...")))`
 //! (see [`crate::directives`]). If a `:build` is declared it is run first, once,
 //! with `sh -c` in the scanned directory, under a timeout drawn from the suite
 //! budget; a failed or timed-out build is an `error` on each dynamic part and
@@ -59,7 +59,7 @@
 //! `--target PATH` on the command line replaces the declared target (the build
 //! included: the operator is then responsible for the program existing).
 //! With no target from either, the dynamic parts report `not_applicable` with
-//! "no target declared in the deed (bot-directives (bot panicbot (target …)))".
+//! "no target declared in the deed (bot-directives (bot :name panicbot (target …)))".
 //!
 //! The security gate (checked 2026-11-13 over gitbot-fleet
 //! `fleet-report-back-reusable.yml` and standards `fork-governance.yml`): both
@@ -753,7 +753,7 @@ fn budget_msg(config: &PanicbotConfig) -> String {
 }
 
 fn no_target_msg() -> String {
-    "no target declared in the deed (bot-directives (bot panicbot (target …)))".into()
+    "no target declared in the deed (bot-directives (bot :name panicbot (target …)))".into()
 }
 
 #[cfg(test)]
@@ -1000,7 +1000,7 @@ mod tests {
         for cmd in [Subcommand::Assault, Subcommand::Ambush] {
             assert_eq!(status_of(&run, cmd), PartStatus::NotApplicable);
             assert!(detail_of(&run, cmd).contains(
-                "no target declared in the deed (bot-directives (bot panicbot (target …)))"
+                "no target declared in the deed (bot-directives (bot :name panicbot (target …)))"
             ));
         }
         for cmd in [

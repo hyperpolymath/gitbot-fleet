@@ -14,10 +14,9 @@
 //!   literals, `'quoted` symbols and lists, and `( lists )`;
 //! - the whole input must be consumed.
 //!
-//! One deliberate leniency: inside a `bot` clause a bare symbol is accepted as
-//! an item, so both `(bot panicbot ...)` and `(bot :name panicbot ...)` read
-//! (the standards fixture spells it the second way). Anywhere else a bare
-//! symbol is an error.
+//! There is one spelling of a bot entry: `(bot :name panicbot ...)`. A bare
+//! symbol is not a field or a clause, so the grammar rejects `(bot panicbot ...)`
+//! and so does this reader, with an error naming the canonical spelling.
 //!
 //! This is a reader, not the validator: `deed_lint` in standards stays the
 //! conformance gate (header, `:schema-version`, line length, UUID shape). The
@@ -31,7 +30,7 @@ use std::fmt;
 pub struct Clause {
     /// The symbol after `(`.
     pub head: String,
-    /// Fields, nested clauses and (in `bot` only) bare symbols, in order.
+    /// Fields and nested clauses, in order.
     pub items: Vec<Item>,
     /// 1-based line of the `(`.
     pub line: usize,
@@ -48,8 +47,6 @@ pub enum Item {
     },
     /// A nested clause.
     Clause(Clause),
-    /// A bare symbol (only inside a `bot` clause).
-    Atom { name: String, line: usize },
 }
 
 /// A field value.
@@ -274,9 +271,10 @@ impl Parser {
                     items.push(Item::Field { key, value, line });
                 }
                 Some(c) if head == "bot" && is_sym_start(c) => {
-                    let line = self.line;
                     let name = self.symbol()?;
-                    items.push(Item::Atom { name, line });
+                    return Err(self.err(&format!(
+                        "bare symbol '{name}' in a (bot) clause: the canonical spelling is (bot :name {name} ...)"
+                    )));
                 }
                 Some(c) => {
                     return Err(self.err(&format!(
@@ -433,8 +431,10 @@ mod tests {
     }
 
     #[test]
-    fn bare_symbols_are_only_allowed_in_a_bot_clause() {
-        assert!(parse("(x (bot panicbot :a b))").is_ok());
+    fn a_bare_symbol_is_an_error_everywhere_and_a_bot_clause_names_the_canonical_form() {
+        assert!(parse("(x (bot :name panicbot :a b))").is_ok());
+        let e = parse("(x (bot panicbot :a b))").unwrap_err();
+        assert!(e.message.contains("(bot :name panicbot ...)"), "{e}");
         assert!(parse("(x (other panicbot))").is_err());
     }
 

@@ -447,7 +447,7 @@ fn tree_with_deed(clause: &str) -> TempDir {
 fn a_deed_deny_only_runs_the_rest_and_no_target_says_so_in_the_deed_terms() {
     let bin = TempDir::new().unwrap();
     stub(bin.path(), &full_stub_body(ASSAY_NONE));
-    let tree = tree_with_deed("(bot panicbot :deny (assay))");
+    let tree = tree_with_deed("(bot :name panicbot :deny (assay))");
     let o = scan(bin.path(), tree.path());
     assert!(
         o.status.success(),
@@ -458,7 +458,7 @@ fn a_deed_deny_only_runs_the_rest_and_no_target_says_so_in_the_deed_terms() {
     assert!(v.is_array(), "{v}");
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(
-        err.contains("no target declared in the deed (bot-directives (bot panicbot (target"),
+        err.contains("no target declared in the deed (bot-directives (bot :name panicbot (target"),
         "{err}"
     );
 }
@@ -468,7 +468,7 @@ fn a_deed_target_whose_build_fails_is_an_error_not_a_pass() {
     let bin = TempDir::new().unwrap();
     stub(bin.path(), &full_stub_body(ASSAY_NONE));
     let tree = tree_with_deed(
-        "(bot panicbot (target :build \"echo nope >&2; exit 1\" :program \"bin/x\"))",
+        "(bot :name panicbot (target :build \"echo nope >&2; exit 1\" :program \"bin/x\"))",
     );
     let o = scan(bin.path(), tree.path());
     assert_eq!(
@@ -486,9 +486,21 @@ fn a_deed_target_whose_build_fails_is_an_error_not_a_pass() {
 fn a_malformed_deed_clause_stops_the_run() {
     let bin = TempDir::new().unwrap();
     stub(bin.path(), &full_stub_body(ASSAY_NONE));
-    let tree = tree_with_deed("(bot panicbot :deny (assalt))");
+    let tree = tree_with_deed("(bot :name panicbot :deny (assalt))");
     let o = scan(bin.path(), tree.path());
     assert!(!o.status.success());
     assert!(o.stdout.is_empty());
     assert!(String::from_utf8_lossy(&o.stderr).contains("bot directives unreadable"));
+}
+
+#[test]
+fn the_bare_bot_spelling_stops_the_run_and_names_the_canonical_one() {
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &full_stub_body(ASSAY_NONE));
+    let tree = tree_with_deed("(bot panicbot :deny (assay))");
+    let o = scan(bin.path(), tree.path());
+    assert!(!o.status.success());
+    assert!(o.stdout.is_empty());
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("(bot :name panicbot ...)"), "{err}");
 }

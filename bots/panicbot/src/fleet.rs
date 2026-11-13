@@ -3,7 +3,7 @@
 //!
 //! Registers as `BotId::Panicbot` in gitbot-shared-context. Provides the
 //! standard fleet entry point (`run_fleet_scan`) that:
-//! 1. Reads per-repo directives (the repo deed's `(bot panicbot ...)` clause, else the legacy `.machine_readable/bot_directives/panicbot.a2ml`)
+//! 1. Reads per-repo directives (the repo deed's `(bot :name panicbot ...)` clause, else the legacy `.machine_readable/bot_directives/panicbot.a2ml`)
 //! 2. Runs the allowed panic-attack suite (full suite by default, see `suite`)
 //! 3. Translates each part's results into Finding structs (assail WeakPoints,
 //!    assay candidates, dynamic-mode results when a target is given)
