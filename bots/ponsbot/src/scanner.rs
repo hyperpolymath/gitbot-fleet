@@ -169,11 +169,9 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
     };
     // pons has exited, but a descendant may still hold the pipes: bound the
     // read by the same deadline, then take the whole group down.
-    let remaining = deadline.saturating_duration_since(Instant::now());
-    let (stdout, stderr) = match (
-        out_rx.recv_timeout(remaining),
-        err_rx.recv_timeout(remaining),
-    ) {
+    let left = || deadline.saturating_duration_since(Instant::now());
+    // Recompute for each read: the first may use up most of the allowance.
+    let (stdout, stderr) = match (out_rx.recv_timeout(left()), err_rx.recv_timeout(left())) {
         (Ok(o), Ok(e)) => (
             String::from_utf8_lossy(&o).into_owned(),
             String::from_utf8_lossy(&e).into_owned(),

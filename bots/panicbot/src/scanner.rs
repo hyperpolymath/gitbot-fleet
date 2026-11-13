@@ -922,11 +922,9 @@ fn run_panic_attack_cmd(
 
     // panic-attack has exited, but a descendant may still hold the pipes:
     // bound the read by the same deadline, then take the whole group down.
-    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-    let (stdout, stderr) = match (
-        out_rx.recv_timeout(remaining),
-        err_rx.recv_timeout(remaining),
-    ) {
+    let left = || deadline.saturating_duration_since(std::time::Instant::now());
+    // Recompute for each read: the first may use up most of the allowance.
+    let (stdout, stderr) = match (out_rx.recv_timeout(left()), err_rx.recv_timeout(left())) {
         (Ok(o), Ok(e)) => (
             String::from_utf8_lossy(&o).to_string(),
             String::from_utf8_lossy(&e).to_string(),

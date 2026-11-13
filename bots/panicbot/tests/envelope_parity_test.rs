@@ -725,3 +725,28 @@ fn the_bare_bot_spelling_stops_the_run_and_names_the_canonical_one() {
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("(bot :name panicbot ...)"), "{err}");
 }
+
+/// Two descendants hold the pipes for staggered times: stdout until just
+/// before the deadline, stderr far past it. Both reads share one deadline, so
+/// the second read gets only what the first left, not a fresh allowance.
+#[test]
+fn staggered_pipe_holders_share_one_deadline() {
+    let bin = TempDir::new().unwrap();
+    // Only assail holds the pipes; every other command answers normally.
+    stub(
+        bin.path(),
+        &full_stub_body(ASSAY_NONE).replacen(
+            "case \"$1\" in\n",
+            "case \"$1\" in\n  assail) sleep 3.5 2>/dev/null &\n    sleep 25 >/dev/null &\n    exit 0 ;;\n",
+            1,
+        ),
+    );
+    let t = std::time::Instant::now();
+    let o = scan(bin.path(), tree_with_timeout(Some(4)).path());
+    let took = t.elapsed();
+    assert!(
+        took < std::time::Duration::from_millis(6500),
+        "two staggered reads must finish within one deadline, took {took:?}"
+    );
+    assert!(!o.status.success());
+}

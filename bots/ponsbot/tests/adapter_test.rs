@@ -408,3 +408,23 @@ fn a_descendant_holding_the_pipes_after_exit_is_an_error_not_a_hang() {
     assert!(t.elapsed().as_secs() < 10, "the pipe read must be bounded");
     assert_eq!(o.status.code(), Some(2));
 }
+
+/// Two descendants hold the pipes for staggered times: stdout until just
+/// before the deadline, stderr far past it. Both reads share one deadline, so
+/// the second read gets only what the first left, not a fresh allowance.
+#[test]
+fn staggered_pipe_holders_share_one_deadline() {
+    let (bin, scan) = (TempDir::new().unwrap(), tree());
+    let pons = stub(
+        bin.path(),
+        "sleep 3.5 2>/dev/null &\nsleep 25 >/dev/null &\nexit 0",
+    );
+    let t = std::time::Instant::now();
+    let o = ponsbot(&pons, scan.path(), &["--timeout", "4"]);
+    let took = t.elapsed();
+    assert!(
+        took < std::time::Duration::from_millis(6500),
+        "two staggered reads must finish within one deadline, took {took:?}"
+    );
+    assert_eq!(o.status.code(), Some(2));
+}
