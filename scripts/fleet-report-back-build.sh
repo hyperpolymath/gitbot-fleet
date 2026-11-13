@@ -29,7 +29,7 @@
 #                    default: read `fleet-report-back.sh --plan` output on stdin
 #   --panic-attack   also install panic-attack at this commit into --bin-dir
 #   --pons           also install pons (pons-cli) at this commit into --bin-dir,
-#                    for ponsbot; the commit is bots/ponsbot/canon/pin.toml
+#                    for ponsbot; it must equal bots/ponsbot/canon/pin.toml, else skipped
 #   --build-timeout  seconds per cargo invocation (default 900)
 #   --build-budget   seconds for every build together (default 2400). A crate
 #                    whose turn comes after the budget is spent is not built
@@ -120,6 +120,10 @@ fi
 if [[ -n "$pons_sha" ]]; then
   if ! [[ "$pons_sha" =~ ^[0-9a-f]{40}$ ]]; then
     warn "pons not installed" "$(printf '%q' "$pons_sha") is not a 40-hex commit; ponsbot will read not_run"
+  elif pin_commit=$(sed -n 's/^commit[[:space:]]*=[[:space:]]*"\([0-9a-f]\{40\}\)"[[:space:]]*$/\1/p' "$fleet/bots/ponsbot/canon/pin.toml" 2>/dev/null | head -n 1 || true); [[ -z "$pin_commit" ]]; then
+    warn "pons not installed" "cannot read the pinned commit from bots/ponsbot/canon/pin.toml; ponsbot will read not_run"
+  elif [[ "$pons_sha" != "$pin_commit" ]]; then
+    warn "pons not installed" "$pons_sha differs from the commit ponsbot pins ($pin_commit); a binary at another commit would only be refused, so none is built; ponsbot will read not_run"
   else
     root="$HOME/.pons"; bin="$root/bin/pons"
     group "pons at $pons_sha"

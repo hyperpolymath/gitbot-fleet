@@ -224,6 +224,8 @@ check "invalid crate tokens count as failures while the valid build completes" y
 
 # --- pons for ponsbot: pinned install, cached by commit, never fatal -----------
 PSHA=bca1ea289a4f8a86bac6212731e6f8ec15c67ad4
+mkdir -p "$FLEET/bots/ponsbot/canon"
+printf '[source]\nrepo = "hyperpolymath/pons-asinorum"\ncommit = "%s"\n' "$PSHA" > "$FLEET/bots/ponsbot/canon/pin.toml"
 PH="$TMP/pons-home"; mkdir -p "$PH" "$TMP/pons-tools"
 cat > "$TMP/pons-tools/cargo" <<'STUB'
 #!/usr/bin/env bash
@@ -262,6 +264,14 @@ check "pons: ...and leaves no binary and no cache behind" "no no" \
 run_pons_build pons-badsha --pons 'not-a-commit; rm -rf /'
 check "pons: a non-commit value never reaches cargo" 0 "$(grep -c . "$FLEET_PONS_CALLS" || true)"
 check "pons: ...and is warned about" yes "$(grep -q 'not a 40-hex commit' "$TMP/pons-badsha.log" && echo yes || echo no)"
+run_pons_build pons-otherpin --pons 0123456789abcdef0123456789abcdef01234567
+check "pons: a commit that differs from bots/ponsbot/canon/pin.toml never reaches cargo" 0 "$(grep -c . "$FLEET_PONS_CALLS" || true)"
+check "pons: ...is warned about, naming the pinned commit" yes "$(grep -q "differs from the commit ponsbot pins ($PSHA)" "$TMP/pons-otherpin.log" && echo yes || echo no)"
+check "pons: ...and leaves no binary" "" "$(files "$TMP/pons-otherpin")"
+mkdir -p "$TMP/nopin/bots"
+run_pons_build pons-nopin --pons "$PSHA" --fleet "$TMP/nopin"
+check "pons: an unreadable pin installs nothing and says so" "0 yes" \
+  "$(grep -c . "$FLEET_PONS_CALLS" || true) $(grep -q 'cannot read the pinned commit' "$TMP/pons-nopin.log" && echo yes || echo no)"
 run_pons_build pons-budget --pons "$PSHA" --build-budget 0
 check "pons: a spent build budget skips the install with a warning" "0 yes" \
   "$(grep -c . "$FLEET_PONS_CALLS" || true) $(grep -q 'spent before its turn' "$TMP/pons-budget.log" && echo yes || echo no)"

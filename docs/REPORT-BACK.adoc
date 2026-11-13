@@ -37,7 +37,9 @@ adopts it.
 
 | `scripts/fleet-report-back-build.sh`
 | Builds the enrolled adapter crates (`cargo build --release --locked`) into one
-  directory and installs panic-attack at the pinned commit for panicbot and, with `--pons`, pons at the commit in `bots/ponsbot/canon/pin.toml` for ponsbot. One
+  directory and installs panic-attack at the pinned commit for panicbot and, with `--pons`, pons for ponsbot. `--pons` must equal the commit in
+  `bots/ponsbot/canon/pin.toml`: any other commit (or an unreadable pin) installs
+  nothing, with a warning, and ponsbot reads `not_run`. One
   recipe for the reusable workflow and for inline callers; a crate that fails to
   build is a warning here and an `error` row later, never a dead run.
 
