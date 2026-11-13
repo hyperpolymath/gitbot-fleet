@@ -565,12 +565,13 @@ pub(crate) fn rust_has_code(root: &Path) -> bool {
 }
 
 /// True when `dir` (a `fuzz/` or `tests/fuzz/` directory) holds a recognisable
-/// harness: a `Cargo.toml` declaring `[[bin]]` targets (cargo-fuzz layout), or a
-/// `fuzz_targets/*.rs` file that invokes `fuzz_target!`. An empty directory or a
-/// placeholder file is not fuzzing infrastructure.
+/// harness: a `Cargo.toml` with a real `[[bin]]` table whose target file exists
+/// (cargo-fuzz layout), or a `fuzz_targets/*.rs` file that invokes
+/// `fuzz_target!` outside comments. An empty directory, a placeholder file or a
+/// commented-out declaration is not fuzzing infrastructure.
 fn has_fuzz_harness(dir: &Path) -> bool {
     if let Ok(manifest) = std::fs::read_to_string(dir.join("Cargo.toml")) {
-        if manifest.contains("[[bin]]") {
+        if manifest_has_existing_bin(dir, &manifest) {
             return true;
         }
     }
@@ -580,7 +581,59 @@ fn has_fuzz_harness(dir: &Path) -> bool {
     entries.filter_map(|e| e.ok()).any(|e| {
         let p = e.path();
         p.extension().is_some_and(|x| x == "rs")
-            && std::fs::read_to_string(&p).is_ok_and(|s| s.contains("fuzz_target!"))
+            && std::fs::read_to_string(&p).is_ok_and(|s| invokes_fuzz_target(&s))
+    })
+}
+
+/// True when `src` invokes the `fuzz_target!` macro in code: not in a `//` or
+/// `/* */` comment, and followed (after optional whitespace) by `(`, `{` or `|`.
+fn invokes_fuzz_target(src: &str) -> bool {
+    const NAME: &str = "fuzz_target!";
+    strip_block_comments(src).lines().any(|line| {
+        let code = line.split("//").next().unwrap_or("");
+        code.match_indices(NAME).any(|(at, _)| {
+            code[at + NAME.len()..]
+                .trim_start()
+                .starts_with(['(', '{', '|'])
+        })
+    })
+}
+
+/// True when the manifest has a `[[bin]]` table header on a non-comment line
+/// whose target file exists under `dir`: its `path` if given, else the cargo
+/// default for the named target (`src/bin/<name>.rs`, `src/bin/<name>/main.rs`,
+/// or `src/main.rs`).
+fn manifest_has_existing_bin(dir: &Path, manifest: &str) -> bool {
+    let mut tables: Vec<(Option<String>, Option<String>)> = Vec::new();
+    let mut in_bin = false;
+    for raw in manifest.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        if line.starts_with('[') {
+            in_bin = line == "[[bin]]";
+            if in_bin {
+                tables.push((None, None));
+            }
+        } else if in_bin {
+            if let Some((key, value)) = line.split_once('=') {
+                let value = value.trim().trim_matches(['"', '\'']).to_string();
+                if let Some(t) = tables.last_mut() {
+                    match key.trim() {
+                        "path" => t.0 = Some(value),
+                        "name" => t.1 = Some(value),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    tables.iter().any(|(path, name)| match (path, name) {
+        (Some(p), _) => dir.join(p).is_file(),
+        (None, Some(n)) => {
+            dir.join(format!("src/bin/{n}.rs")).is_file()
+                || dir.join(format!("src/bin/{n}/main.rs")).is_file()
+                || dir.join("src/main.rs").is_file()
+        }
+        (None, None) => dir.join("src/main.rs").is_file(),
     })
 }
 
@@ -733,6 +786,57 @@ mod no_code_tests {
             d.path(),
             "fuzz/Cargo.toml",
             "[package]\nname = \"x-fuzz\"\n\n[[bin]]\nname = \"t\"\npath = \"fuzz_targets/t.rs\"\n",
+        );
+        write(d.path(), "fuzz/fuzz_targets/t.rs", "fn main() {}\n");
+        assert!(!ids(d.path()).contains(&"TEST-RU-003".to_string()));
+    }
+
+    #[test]
+    fn comment_only_fuzz_target_mention_is_not_a_harness() {
+        let d = rust_repo(Some("pub fn f() {}\n"));
+        for body in [
+            "// TODO: add fuzz_target!\n",
+            "/* fuzz_target!(|d: &[u8]| {}); */\n",
+            "// fuzz_target!(|d: &[u8]| {});\nfn main() {}\n",
+            "fn main() {} // fuzz_target!(|d: &[u8]| {})\n",
+            "fn fuzz_target_name() {}\n",
+        ] {
+            write(d.path(), "fuzz/fuzz_targets/t.rs", body);
+            assert!(
+                ids(d.path()).contains(&"TEST-RU-003".to_string()),
+                "{body:?}"
+            );
+        }
+        for body in [
+            "fuzz_target!(|d: &[u8]| {});\n",
+            "libfuzzer_sys::fuzz_target! { |d: &[u8]| { let _ = d; } }\n",
+            "/* c */ fuzz_target! (|d: &[u8]| {});\n",
+        ] {
+            write(d.path(), "fuzz/fuzz_targets/t.rs", body);
+            assert!(
+                !ids(d.path()).contains(&"TEST-RU-003".to_string()),
+                "{body:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn commented_or_dangling_bin_table_is_not_a_harness() {
+        let d = rust_repo(Some("pub fn f() {}\n"));
+        write(d.path(), "fuzz/fuzz_targets/t.rs", "// nothing\n");
+        for manifest in [
+            "[package]\nname = \"x\"\n# [[bin]]\n# name = \"t\"\n",
+            "[package]\nname = \"x\"\n\n[[bin]] # real header, missing file\nname = \"t\"\npath = \"fuzz_targets/missing.rs\"\n",
+            "[package]\nname = \"x\"\n\n[[bin]]\nname = \"t\"\n",
+        ] {
+            write(d.path(), "fuzz/Cargo.toml", manifest);
+            assert!(ids(d.path()).contains(&"TEST-RU-003".to_string()), "{manifest:?}");
+        }
+        write(d.path(), "fuzz/src/bin/t.rs", "fn main() {}\n");
+        write(
+            d.path(),
+            "fuzz/Cargo.toml",
+            "[package]\nname = \"x\"\n\n[[bin]]\nname = \"t\"\n",
         );
         assert!(!ids(d.path()).contains(&"TEST-RU-003".to_string()));
     }
