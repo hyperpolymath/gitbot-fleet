@@ -188,13 +188,16 @@ impl TestingAnalyzer {
         let tests_fuzz_dir = path.join("tests/fuzz");
         let clusterfuzz_dir = path.join(".clusterfuzzlite");
 
-        if !fuzz_dir.exists() && !tests_fuzz_dir.exists() && !clusterfuzz_dir.exists() {
+        if !has_fuzz_harness(&fuzz_dir)
+            && !has_fuzz_harness(&tests_fuzz_dir)
+            && !clusterfuzz_dir.exists()
+        {
             result.add(
                 Finding::new(
                     "TEST-RU-003",
                     "Missing fuzzing infrastructure",
                     Severity::Error,
-                    "Rust project missing fuzz/, tests/fuzz/ or .clusterfuzzlite/ for fuzzing.",
+                    "Rust project has no fuzz harness: expected fuzz/ or tests/fuzz/ with a Cargo.toml declaring [[bin]] targets or fuzz_targets/*.rs using fuzz_target!, or .clusterfuzzlite/.",
                 )
                 .with_suggestion("Add ClusterFuzzLite configuration for automated fuzzing"),
             );
@@ -561,6 +564,26 @@ pub(crate) fn rust_has_code(root: &Path) -> bool {
         })
 }
 
+/// True when `dir` (a `fuzz/` or `tests/fuzz/` directory) holds a recognisable
+/// harness: a `Cargo.toml` declaring `[[bin]]` targets (cargo-fuzz layout), or a
+/// `fuzz_targets/*.rs` file that invokes `fuzz_target!`. An empty directory or a
+/// placeholder file is not fuzzing infrastructure.
+fn has_fuzz_harness(dir: &Path) -> bool {
+    if let Ok(manifest) = std::fs::read_to_string(dir.join("Cargo.toml")) {
+        if manifest.contains("[[bin]]") {
+            return true;
+        }
+    }
+    let Ok(entries) = std::fs::read_dir(dir.join("fuzz_targets")) else {
+        return false;
+    };
+    entries.filter_map(|e| e.ok()).any(|e| {
+        let p = e.path();
+        p.extension().is_some_and(|x| x == "rs")
+            && std::fs::read_to_string(&p).is_ok_and(|s| s.contains("fuzz_target!"))
+    })
+}
+
 #[cfg(test)]
 mod no_code_tests {
     use super::*;
@@ -683,7 +706,34 @@ mod no_code_tests {
     fn fuzz_under_tests_satisfies_ru_003() {
         let d = rust_repo(Some("pub fn f() {}\n"));
         assert!(ids(d.path()).contains(&"TEST-RU-003".to_string()));
+        // A placeholder is not a harness.
+        write(d.path(), "tests/fuzz/README", "todo\n");
         write(d.path(), "tests/fuzz/fuzz_targets/t.rs", "// target\n");
+        assert!(ids(d.path()).contains(&"TEST-RU-003".to_string()));
+        write(
+            d.path(),
+            "tests/fuzz/fuzz_targets/t.rs",
+            "#![no_main]\nlibfuzzer_sys::fuzz_target!(|data: &[u8]| { let _ = data; });\n",
+        );
+        assert!(!ids(d.path()).contains(&"TEST-RU-003".to_string()));
+    }
+
+    #[test]
+    fn fuzz_cargo_manifest_with_bin_targets_satisfies_ru_003() {
+        let d = rust_repo(Some("pub fn f() {}\n"));
+        write(d.path(), "fuzz/.gitkeep", "");
+        assert!(ids(d.path()).contains(&"TEST-RU-003".to_string()));
+        write(
+            d.path(),
+            "fuzz/Cargo.toml",
+            "[package]\nname = \"x-fuzz\"\n",
+        );
+        assert!(ids(d.path()).contains(&"TEST-RU-003".to_string()));
+        write(
+            d.path(),
+            "fuzz/Cargo.toml",
+            "[package]\nname = \"x-fuzz\"\n\n[[bin]]\nname = \"t\"\npath = \"fuzz_targets/t.rs\"\n",
+        );
         assert!(!ids(d.path()).contains(&"TEST-RU-003".to_string()));
     }
 }
