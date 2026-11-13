@@ -544,7 +544,14 @@ translate_or_error() { # member jq-program
     write_envelope "$m" error "adapter exceeded the ${timeout_s}s timeout" '[]'
   elif findings=$(jq -c --arg repo "$repo" "$(relativize_filter) $prog" "$ADAPTER_OUT" 2> "$ADAPTER_ERR.jq") \
        && [ -n "$findings" ] && jq -e 'type == "array"' <<<"$findings" >/dev/null 2>&1; then
-    write_envelope "$m" ran "" "$findings"
+    if [[ "$ADAPTER_RC" -ne 0 && "$ADAPTER_RC" -ne 1 ]]; then
+      # An adapter reports findings with exit 0 or 1. Any other status (a crash,
+      # a signal, a usage error) is not a run, even when stdout happens to hold
+      # a well-formed findings array.
+      write_envelope "$m" error "adapter exited with status $ADAPTER_RC: $(first_err_line)" '[]'
+    else
+      write_envelope "$m" ran "" "$findings"
+    fi
   elif grep -q 'unexpected output shape' "$ADAPTER_ERR.jq" 2>/dev/null; then
     # The shape guard fired: valid JSON, but not what this adapter documents.
     write_envelope "$m" error "adapter output had an $(grep -o 'unexpected output shape: [^(]*' "$ADAPTER_ERR.jq" | head -n1 | sed 's/ *$//')" '[]'

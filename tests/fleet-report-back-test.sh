@@ -18,7 +18,7 @@
 #   2. every adapter's output translates to {rule_id, severity, file, line,
 #      message} with repository-relative paths (absolute and "./" stripped).
 #   3. missing binary, crash without JSON, and timeout are `error` WITH a
-#      reason; non-zero exit WITH valid JSON is still `ran`.
+#      reason; exit 1 WITH valid JSON is still `ran`, any other non-zero status is `error`.
 #   4. echidnabot and sustainabot are `not_run` with a reason; an unknown
 #      member is `error`; the driver never writes `not_applicable`.
 #   5. the envelope is key-sorted compact JSON with one final LF, carrying
@@ -324,10 +324,18 @@ run "$TMP/timeout-json" --enrolment "" --member cipherbot
 check "a timeout cannot become a clean scan even with valid JSON" \
   'error|adapter exceeded the 300s timeout|0' \
   "$(field "$TMP/timeout-json/cipherbot.json" '"\(.status)|\(.reason)|\(.findings | length)"')"
-stub cipherbot 'echo "[]"; exit 2'
+stub cipherbot 'echo "[]"; exit 1'
 run "$TMP/nonzero-json" --enrolment "" --member cipherbot
-check "valid empty JSON with a nonzero exit is still a completed scan" 'ran|0|null' \
+check "valid empty JSON with exit 1 (findings) is still a completed scan" 'ran|0|null' \
   "$(field "$TMP/nonzero-json/cipherbot.json" '"\(.status)|\(.findings | length)|\(.reason)"')"
+for rc in 2 3 9 137; do
+  stub cipherbot "echo '[{\"rule_id\":\"X\",\"severity\":\"info\",\"message\":\"m\"}]'; exit $rc"
+  run "$TMP/rc-$rc" --enrolment "" --member cipherbot
+  check "a valid findings array with exit $rc is an error, not a run" \
+    "error|0" "$(field "$TMP/rc-$rc/cipherbot.json" '"\(.status)|\(.findings | length)"')"
+  check "...and the reason names exit $rc" yes \
+    "$(field "$TMP/rc-$rc/cipherbot.json" .reason | grep -q "^adapter exited with status $rc" && echo yes || echo no)"
+done
 
 ECHIDNA_URL=https://engine.invalid run "$TMP/engine" --enrolment "" --member echidnabot
 check "a configured engine still reports the unsupported dispatch honestly" 'not_run|0' \
