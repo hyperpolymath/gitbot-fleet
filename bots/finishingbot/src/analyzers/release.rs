@@ -566,7 +566,7 @@ mod sensitive_tests {
 
     #[test]
     fn aws_secret_access_key_value_is_key_material() {
-        let key = concat!("wJalrXUtnF", "EMI/K7MDEN", "G/bPxRfiCY", "EXAMPLEKEY");
+        let key = concat!("wJalrXUt", "nFEMI/K7", "MDENG/bP", "xRfiCYEX", "AMPLEKEY");
         for text in [
             format!("aws_secret_access_key = \"{key}\""),
             format!("AWS_SECRET_ACCESS_KEY={key}"),
@@ -593,7 +593,7 @@ mod sensitive_tests {
         for last in ['/', '+', '=', 'A', '9'] {
             let key = format!(
                 "{}{}",
-                concat!("wJalrXUtnF", "EMI/K7MDEN", "G/bPxRfiCY", "EXAMPLEKE"),
+                concat!("wJalrXUt", "nFEMI/K7", "MDENG/bP", "xRfiCYEX", "AMPLEKE"),
                 last
             );
             assert_eq!(key.len(), 40);
@@ -636,7 +636,7 @@ mod sensitive_tests {
     #[test]
     fn unarmored_private_key_values_are_key_material() {
         let hex = "0123456789abcdef".repeat(4);
-        let b64 = concat!("QUJDREVGR0", "hJSktMTU5P", "UFFSU1RVVl", "dYWVowMTIz", "NDU2Nzg5");
+        let b64 = concat!("QUJDREVG", "R0hJSktM", "TU5PUFFS", "U1RVVldY", "WVowMTIz", "NDU2Nzg5");
         for text in [
             format!("private_key = \"{hex}\""),
             format!("PRIVATE-KEY: {hex}"),
