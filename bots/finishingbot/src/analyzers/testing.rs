@@ -429,25 +429,104 @@ mod agda_layout_tests {
 }
 
 /// Remove Rust block comments, which nest (`/* a /* b */ c */`).
+///
+/// `/*` only opens a comment in code: not inside a `//` line comment (to the
+/// end of the line), a string literal (`"..."` with escapes, `r#"..."#`) or a
+/// char literal. Line comments and strings are kept verbatim; inside a block
+/// comment only newlines are kept, so line numbers survive.
 fn strip_block_comments(src: &str) -> String {
     let b = src.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let (mut i, mut depth) = (0, 0usize);
     while i < b.len() {
-        if b[i] == b'/' && b.get(i + 1) == Some(&b'*') {
-            depth += 1;
-            i += 2;
-        } else if depth > 0 && b[i] == b'*' && b.get(i + 1) == Some(&b'/') {
-            depth -= 1;
-            i += 2;
-        } else {
-            if depth == 0 || b[i] == b'\n' {
-                out.push(b[i]);
+        if depth > 0 {
+            if b[i] == b'/' && b.get(i + 1) == Some(&b'*') {
+                depth += 1;
+                i += 2;
+            } else if b[i] == b'*' && b.get(i + 1) == Some(&b'/') {
+                depth -= 1;
+                i += 2;
+            } else {
+                if b[i] == b'\n' {
+                    out.push(b'\n');
+                }
+                i += 1;
             }
-            i += 1;
+            continue;
+        }
+        match b[i] {
+            b'/' if b.get(i + 1) == Some(&b'*') => {
+                depth = 1;
+                i += 2;
+            }
+            b'/' if b.get(i + 1) == Some(&b'/') => {
+                // Line comment: copy to (not including) the newline.
+                while i < b.len() && b[i] != b'\n' {
+                    out.push(b[i]);
+                    i += 1;
+                }
+            }
+            b'r' if raw_string_hashes(b, i).is_some() => {
+                let hashes = raw_string_hashes(b, i).unwrap_or(0);
+                // r, hashes, opening quote.
+                let open = 1 + hashes + 1;
+                out.extend_from_slice(&b[i..i + open]);
+                i += open;
+                while i < b.len() {
+                    let closes = b[i] == b'"' && (1..=hashes).all(|k| b.get(i + k) == Some(&b'#'));
+                    out.push(b[i]);
+                    i += 1;
+                    if closes {
+                        out.extend_from_slice(&b[i..i + hashes]);
+                        i += hashes;
+                        break;
+                    }
+                }
+            }
+            b'"' => {
+                out.push(b'"');
+                i += 1;
+                while i < b.len() {
+                    let c = b[i];
+                    out.push(c);
+                    i += 1;
+                    if c == b'\\' && i < b.len() {
+                        out.push(b[i]);
+                        i += 1;
+                    } else if c == b'"' {
+                        break;
+                    }
+                }
+            }
+            b'\'' => {
+                // A char literal ('x', '\n', '"'); a lifetime ('a) has no
+                // closing quote two or three bytes on and is left alone.
+                let end = match (b.get(i + 1), b.get(i + 2), b.get(i + 3)) {
+                    (Some(b'\\'), _, Some(b'\'')) => Some(i + 4),
+                    (Some(c), Some(b'\''), _) if *c != b'\\' => Some(i + 3),
+                    _ => None,
+                };
+                let end = end.unwrap_or(i + 1);
+                out.extend_from_slice(&b[i..end]);
+                i = end;
+            }
+            c => {
+                out.push(c);
+                i += 1;
+            }
         }
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+/// If a raw string literal (`r"`, `r#"`, ...) starts at `b[i]` (an `r` that is
+/// not the tail of an identifier), the number of `#`s in its delimiter.
+fn raw_string_hashes(b: &[u8], i: usize) -> Option<usize> {
+    if i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_') {
+        return None;
+    }
+    let hashes = b[i + 1..].iter().take_while(|&&c| c == b'#').count();
+    (b.get(i + 1 + hashes) == Some(&b'"')).then_some(hashes)
 }
 
 /// Whether the Rust project at `root` has any code yet.
@@ -535,6 +614,36 @@ mod no_code_tests {
             let d = rust_repo(Some(body));
             assert!(rust_has_code(d.path()), "{body:?}");
         }
+    }
+
+    #[test]
+    fn a_block_comment_opener_inside_a_line_comment_or_string_is_not_a_comment() {
+        // `/*` after `//` is line-comment text, not the start of block mode.
+        for body in [
+            "// block comments start with /*\npub fn f() {}\n",
+            "/// docs mention /* here\npub fn f() {}\n",
+            "pub fn f() {} // trailing /* note\n",
+            "const S: &str = \"/*\";\n",
+            "const R: &str = r#\"/* \"#;\n",
+            "const C: char = '\"';\nconst S: &str = \"/*\";\n",
+        ] {
+            let d = rust_repo(Some(body));
+            assert!(rust_has_code(d.path()), "{body:?}");
+        }
+        // Real block comments still hide their contents, including a `//`
+        // inside them, and `//` inside a string does not hide a real opener.
+        for body in [
+            "/* // not a line comment */\n// c\n",
+            "/* a\n// b\nc */\n",
+            "// only /* a comment\n// and another\n",
+        ] {
+            let d = rust_repo(Some(body));
+            assert!(!rust_has_code(d.path()), "{body:?}");
+        }
+        let d = rust_repo(Some("let u = \"http://x\"; /* real\ncomment */\n"));
+        assert!(rust_has_code(d.path()), "code before the opener");
+        let d = rust_repo(Some("/* c */ // x /* y\n"));
+        assert!(!rust_has_code(d.path()));
     }
 
     #[test]
