@@ -590,6 +590,7 @@ dependencies = [
  "chrono",
  "clap",
  "gitbot-shared-context",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

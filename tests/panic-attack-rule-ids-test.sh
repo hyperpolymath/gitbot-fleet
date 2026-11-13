@@ -59,7 +59,7 @@ done < <(grep -nE '\bPA[0-9]{3}b?\b' "$SCRIPTS"/fix-*.sh || true)
 echo "checked $checked PA reference(s) in $(basename "$SCRIPTS")/fix-*.sh"
 
 if [[ "${1:-}" == "--upstream" ]]; then
-    repo=$(sed -n 's/^repo = "\(.*\)"$/\1/p' "$CANON/pin.toml")
+    repo=$(sed -n 's/^repo = "\(.*\)"$/\1/p' "$CANON/pin.toml" | head -n1)
     path=$(sed -n 's/^path = "\(.*\)"$/\1/p' "$CANON/pin.toml")
     upstream=$(curl --proto '=https' --proto-redir '=https' -sSfL --max-time 30 "https://raw.githubusercontent.com/$repo/main/$path" | sha256sum | cut -d' ' -f1)
     [[ "$upstream" == "$pinned" ]] || err "panic-attack main's table hashes $upstream; re-pin (see pin.toml)"

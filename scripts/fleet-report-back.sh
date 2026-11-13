@@ -91,6 +91,7 @@ crate_dir_of() {
   case "$1" in
     rhodibot)         echo rhodibot ;;
     panicbot)         echo panicbot ;;
+    ponsbot)          echo ponsbot ;;
     seambot)          echo seambot ;;
     finishingbot|finishbot|finishing-bot) echo finishingbot ;;
     glambot)          echo glambot ;;
@@ -174,9 +175,10 @@ EOF
 # Print the adapter executable name for a member, or an empty line if unknown
 # or unsupported locally. The finishingbot aliases all use finishing-bot.
 binary_of() {
-  case "$1" in
+  local member="$1"
+  case "$member" in
     finishingbot|finishbot|finishing-bot) echo finishing-bot ;;
-    rhodibot|panicbot|seambot|glambot|accessibilitybot|cipherbot) echo "$1" ;;
+    rhodibot|panicbot|ponsbot|seambot|glambot|accessibilitybot|cipherbot) echo "$member" ;;
     *) echo "" ;;
   esac
 }
@@ -185,6 +187,7 @@ default_title_of() {
   case "$1" in
     rhodibot)         echo "rhodibot (RSR compliance)" ;;
     panicbot)         echo "panicbot (panic recovery, error handling)" ;;
+    ponsbot)          echo "ponsbot (pons asinorum static analysis)" ;;
     echidnabot)       echo "echidnabot (formal verification)" ;;
     seambot)          echo "seambot (integration health)" ;;
     finishingbot)     echo "finishingbot (release readiness)" ;;
@@ -384,6 +387,11 @@ tool_version_of() {
       fi
       echo "panic-attack:unknown"
       ;;
+    ponsbot)
+      # ponsbot wraps pons asinorum; the commit is the adapter's own pin.
+      version=$(grep -m1 '^commit = ' "$FLEET_DIR/bots/ponsbot/canon/pin.toml" 2>/dev/null | sed -E 's/.*"([0-9a-f]+)".*/\1/' | cut -c1-12)
+      echo "pons:${version:-unknown}"
+      ;;
     echidnabot)
       # echidnabot uses ECHIDNA engine
       if [ -n "${ECHIDNA_URL:-}" ]; then
@@ -440,7 +448,11 @@ write_envelope() { # member status reason findings_json
            elif .rule_id | startswith("PA7") then "panic-attack:resource-leak"
            elif .rule_id | startswith("PA8") then "panic-attack:unchecked-error"
            elif .rule_id | startswith("PA9") then "panic-attack:path-traversal"
+           elif .rule_id | startswith("PB-ASSAY") then "panic-attack:proven-substitution"
+           elif .rule_id | startswith("PB-DYN") then "panic-attack:dynamic-attack"
+           elif .rule_id | startswith("PB-ADJUDICATE") then "panic-attack:dynamic-verdict"
            else "panic-attack:unknown" end)
+        elif $member == "ponsbot" then "pons:unclassified"
         elif $member == "rhodibot" then "rsr:file-presence"
         elif $member == "cipherbot" then "cipherbot:crypto-hygiene"
         elif $member == "glambot" or $member == "accessibilitybot" then "wcag:accessibility"
@@ -477,6 +489,27 @@ def rel: if type != "string" then "" else
 JQ
 }
 
+# panicbot prints either a findings array (every allowed part that applies ran)
+# or, when the suite did not complete, {"status": "error"|"not_run", "reason":
+# "...", "findings": [...]} and exits 3 or 4: a part failed (error; the findings
+# of the parts that ran are carried in the envelope file, though the grid reads
+# only the status and reason) or no part analysed the repository (not_run). Only
+# the object form can reach the grid as a non-ran status from this adapter; an
+# array is a complete run, and anything else falls through to translate_or_error.
+translate_panicbot() { # member
+  local m="$1" st reason findings
+  if [[ "$ADAPTER_RC" -ne 124 ]] \
+     && jq -e 'type == "object" and (.status | IN("error", "not_run")) and (.reason | type == "string" and length > 0)' "$ADAPTER_OUT" >/dev/null 2>&1; then
+    st=$(jq -r .status "$ADAPTER_OUT"); reason=$(jq -r '.reason[0:240]' "$ADAPTER_OUT")
+    findings=$(jq -c --arg repo "$repo" "$(relativize_filter) [ (.findings // [])[] | $FINDING ]" "$ADAPTER_OUT" 2> /dev/null) || findings='[]'
+    [ -n "$findings" ] || findings='[]'
+    write_envelope "$m" "$st" "$reason" "$findings"
+    cleanup_adapter
+    return
+  fi
+  translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]"
+}
+
 # Run an adapter, capturing stdout/stderr separately. Non-zero exit with valid
 # JSON on stdout is still a run: several adapters exit 1 when their findings
 # would block a release, and that is a finding, not a failure.
@@ -511,12 +544,19 @@ translate_or_error() { # member jq-program [ran-note-jq-program]
     write_envelope "$m" error "adapter exceeded the ${timeout_s}s timeout" '[]'
   elif findings=$(jq -c --arg repo "$repo" "$(relativize_filter) $prog" "$ADAPTER_OUT" 2> "$ADAPTER_ERR.jq") \
        && [ -n "$findings" ] && jq -e 'type == "array"' <<<"$findings" >/dev/null 2>&1; then
-    # An analyzer that did not run has no findings, which is not a clean scan:
-    # the optional program reads the adapter output for such skips and the note
-    # becomes the envelope reason (ran + reason = ran, with caveats).
-    if [ -n "${3:-}" ]; then note=$(jq -r "$3" "$ADAPTER_OUT" 2>/dev/null) || note=""; fi
-    [ -z "$note" ] || echo "fleet-report-back: $m: $note" >&2
-    write_envelope "$m" ran "$note" "$findings"
+    if [[ "$ADAPTER_RC" -ne 0 && "$ADAPTER_RC" -ne 1 ]]; then
+      # An adapter reports findings with exit 0 or 1. Any other status (a crash,
+      # a signal, a usage error) is not a run, even when stdout happens to hold
+      # a well-formed findings array.
+      write_envelope "$m" error "adapter exited with status $ADAPTER_RC: $(first_err_line)" '[]'
+    else
+      # An analyzer that did not run has no findings, which is not a clean scan:
+      # the optional program reads the adapter output for such skips and the note
+      # becomes the envelope reason (ran + reason = ran, with caveats).
+      if [ -n "${3:-}" ]; then note=$(jq -r "$3" "$ADAPTER_OUT" 2>/dev/null) || note=""; fi
+      [ -z "$note" ] || echo "fleet-report-back: $m: $note" >&2
+      write_envelope "$m" ran "$note" "$findings"
+    fi
   elif grep -q 'unexpected output shape' "$ADAPTER_ERR.jq" 2>/dev/null; then
     # The shape guard fired: valid JSON, but not what this adapter documents.
     write_envelope "$m" error "adapter output had an $(grep -o 'unexpected output shape: [^(]*' "$ADAPTER_ERR.jq" | head -n1 | sed 's/ *$//')" '[]'
@@ -540,6 +580,32 @@ SHAPE_ANALYZERS='if (type == "object" or type == "array") and length > 0 and all
 FINDING='{rule_id: (.rule_id // .id // "?" | tostring), severity: (.severity // "unknown" | tostring),
           file: ((.file // .location // "") | rel), line: ((.line // 0) | if type == "number" then . else 0 end),
           message: (.message // "" | tostring)}'
+
+# ponsbot prints either a findings array (the scan ran) or, when it did not,
+# {"status": "error"|"not_run", "reason": "..."} (pons failed, timed out, was
+# at another commit, or is not installed). The object form is the ONLY way a
+# non-ran status reaches the grid from this adapter; anything else that is not
+# an array falls through to translate_or_error and becomes an error. Nothing
+# maps to a pass: a status the adapter did not state is never invented here.
+# Each finding keeps pons' tier and evidence class (D1: SPECULATIVE findings are
+# carried, capped at severity `info` by ponsbot, so the grid never grades them
+# as blocking); the grid reads only severity, so the extra fields are provenance.
+translate_ponsbot() { # member
+  local m="$1" st reason
+  if [[ "$ADAPTER_RC" -ne 124 ]] \
+     && jq -e 'type == "object" and (.status | IN("error", "not_run")) and (.reason | type == "string" and length > 0)' "$ADAPTER_OUT" >/dev/null 2>&1; then
+    st=$(jq -r .status "$ADAPTER_OUT"); reason=$(jq -r '.reason[0:240]' "$ADAPTER_OUT")
+    write_envelope "$m" "$st" "$reason" '[]'
+    cleanup_adapter
+    return
+  fi
+  translate_or_error "$m" "$SHAPE_ARRAY"'
+    [ .[] | {rule_id: (.rule_id // "?" | tostring), severity: (.severity // "unknown" | tostring),
+             file: ((.file // "") | rel), line: ((.line // 0) | if type == "number" then . else 0 end),
+             message: (.message // "" | tostring),
+             tier: (.tier // "unknown" | tostring), evidence_class: (.evidence_class // "unknown" | tostring),
+             pons_severity: (.pons_severity // "unknown" | tostring)} ]'
+}
 
 # Run one member against repo and write its translated report-back envelope.
 # echidnabot and sustainabot yield not_run, even with ECHIDNA_URL configured;
@@ -589,11 +655,22 @@ run_member() {
               message: ("\(.name): \(.severity)" + (if (.details // []) | length > 0 then " — " + ((.details // []) | join("; ")) else "" end)) }
           | .file |= rel ]' ;;
     panicbot)
-      # `scan` translates panic-attack output into fleet Findings and writes
-      # nothing. (`fleet` mode would write a .panicbot/*.a2ml debt register
-      # into the scanned tree; A2ML is retired, so it is not used.)
+      # `scan` runs the allowed panic-attack suite (full by default; the repo's
+      # bot directives narrow it) and translates it into fleet Findings, writing
+      # nothing. A part that failed or a run that analysed nothing arrives as
+      # an error/not_run object, see translate_panicbot. (`fleet` mode would write
+      # a .panicbot/*.a2ml debt register into the scanned tree; A2ML is retired,
+      # so it is not used.)
       run_adapter "$bin" --format json scan "$repo"
-      translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]" ;;
+      translate_panicbot "$m" ;;
+    ponsbot)
+      # `scan` runs pons at the pinned commit (bots/ponsbot/canon/pin.toml) and
+      # writes nothing into the tree. Gating is NOT decided here: the grid reads
+      # it from the enrolment's per-reporter `gating` boolean, which must be
+      # true for ponsbot (owner ruling 2026-11-12) and is left unset for
+      # panicbot, which is advisory.
+      run_adapter "$bin" --format json scan "$repo"
+      translate_ponsbot "$m" ;;
     cipherbot)
       run_adapter "$bin" --format json scan "$repo"
       translate_or_error "$m" "$SHAPE_ARRAY [ .[] | $FINDING ]" ;;
@@ -628,6 +705,14 @@ fi
 for m in "${members[@]+"${members[@]}"}"; do
   run_member "$m"
   echo "fleet-report-back: $m -> $(jq -r '.status + (if .status == "ran" then " (\(.findings | length) finding(s))" + (if .reason then " [" + .reason + "]" else "" end) else ": " + (.reason // "") end)' "$out/$m.json")"
+  # A path-less finding is graded as part of EVERY change (standards
+  # fork-governance SPEC section 3.0: absence of a location is not evidence of
+  # absence of a defect), so a repository-level rule that omits its path makes
+  # the row identical on every pull request. Say so, loudly, at the source.
+  unpathed=$(jq -r '[.findings[] | select((.file // "") == "")] | length' "$out/$m.json")
+  if [ "$unpathed" -gt 0 ]; then
+    echo "fleet-report-back: WARNING: $m reported $unpathed finding(s) with no path; the grid grades those as part of every change. The adapter must name the file each rule is about (the expected path, for a missing-file rule)." >&2
+  fi
 done
 
 # ── summary ──────────────────────────────────────────────────────────────────

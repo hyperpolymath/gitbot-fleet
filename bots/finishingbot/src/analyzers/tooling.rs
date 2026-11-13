@@ -98,6 +98,7 @@ impl Analyzer for ToolingAnalyzer {
                     Severity::Warning,
                     ".editorconfig not found for consistent code formatting.",
                 )
+                .with_file(editorconfig.clone())
                 .with_suggestion("Add .editorconfig for consistent editor settings"),
             );
         } else {
@@ -114,6 +115,7 @@ impl Analyzer for ToolingAnalyzer {
                     Severity::Error,
                     ".github/workflows/ directory not found.",
                 )
+                .with_file(workflows_dir.clone())
                 .with_suggestion("Add CI/CD workflows for automated testing and quality checks"),
             );
         } else {

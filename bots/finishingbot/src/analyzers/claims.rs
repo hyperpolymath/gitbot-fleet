@@ -107,6 +107,7 @@ impl ClaimsAnalyzer {
                         Severity::Error,
                         "No README file found in repository root",
                     )
+                    .with_file(path.join("README.adoc"))
                     .with_suggestion("Create a README.md or README.adoc describing the project"),
                 );
             }
@@ -193,6 +194,7 @@ impl ClaimsAnalyzer {
                     Severity::Warning,
                     "No CHANGELOG file found for release tracking",
                 )
+                .with_file(path.join("CHANGELOG.adoc"))
                 .with_suggestion("Create a CHANGELOG.md following Keep a Changelog format"),
             );
         }
@@ -418,6 +420,7 @@ impl ClaimsAnalyzer {
                     Severity::Warning,
                     "No test files or test directories found in repository",
                 )
+                .with_file(path.join("tests"))
                 .with_suggestion("Add tests to verify code functionality"),
             );
         } else {
@@ -448,6 +451,7 @@ impl ClaimsAnalyzer {
                     Severity::Info,
                     "No continuous integration configuration found",
                 )
+                .with_file(path.join(".github/workflows"))
                 .with_suggestion("Add CI/CD configuration to automatically run tests"),
             );
         }

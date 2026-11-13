@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# The ONE pons asinorum commit ponsbot accepts. ponsbot compares it with the
+# `tool.source_commit` pons prints in its own report and refuses to report
+# (status error) when they differ or when pons does not say, so a drifted or
+# unstamped binary can never produce a row.
+#
+# Provenance: the commit is `pons-ref`'s default in metadatastician/standards
+# `.github/workflows/hypatia-scan-reusable.yml` (standards main f0b3cd4,
+# 2026-11-12), the pin behind the grid's permanent pons row that ponsbot
+# replaces. Not invented here. Known drift, not resolved in this file:
+# `.github/workflows/deep-recon-reusable.yml` defaults `pons-rev` to the older
+# 51b8920f541782ceb9465ea3f0d33c96104fc1fb (an ancestor of this commit).
+#
+# To re-pin: change `commit` and `pinned`, build pons there, run
+# `cargo test` in bots/ponsbot. The workflows that build pons read this file
+# once the cutover reaches them (docs/migrations/scanner-cutover-ponsbot-panicbot.adoc).
+#
+# pons publishes no rule-table digest, so none is pinned here (design 4).
+
+[source]
+repo = "hyperpolymath/pons-asinorum"
+commit = "bca1ea289a4f8a86bac6212731e6f8ec15c67ad4"
+pinned = "2026-11-12"

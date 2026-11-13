@@ -125,6 +125,7 @@ impl ReleaseAnalyzer {
                             version_list.join("\n  ")
                         ),
                     )
+                    .with_file(path.join(&inconsistent[0].0))
                     .with_suggestion("Ensure all version files have the same version number"),
                 );
             }
@@ -183,6 +184,7 @@ impl ReleaseAnalyzer {
                         Severity::Warning,
                         &format!("Debug file found: {}", pattern),
                     )
+                    .with_file(path.join(pattern))
                     .with_suggestion("Remove debug files before release"),
                 );
             }
@@ -299,6 +301,7 @@ impl ReleaseAnalyzer {
                         Severity::Warning,
                         &format!("No hash files found in {}", dir),
                     )
+                    .with_file(release_path.clone())
                     .with_suggestion("Generate SHA256/SHA512 hashes for release artifacts"),
                 );
             }
@@ -486,6 +489,7 @@ impl ReleaseAnalyzer {
                     Severity::Info,
                     "No GitHub release workflow found",
                 )
+                .with_file(release_workflow.clone())
                 .with_suggestion(
                     "Consider adding .github/workflows/release.yml for automated releases",
                 ),

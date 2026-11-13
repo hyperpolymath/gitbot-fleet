@@ -254,6 +254,7 @@ impl MachineAnalyzer {
                     Severity::Info,
                     "No robots.txt found. Consider adding one for crawler control.",
                 )
+                .with_file(path.join("robots.txt"))
                 .with_suggestion("Add robots.txt to repository root if hosting documentation"),
             );
         } else {

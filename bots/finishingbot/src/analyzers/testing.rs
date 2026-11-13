@@ -117,7 +117,7 @@ impl TestingAnalyzer {
             result.add(Finding::new(
                 "TEST-AG-001", "Missing Agda source", Severity::Error,
                 "The proof layout contains no nonempty .agda source files.",
-            ).with_suggestion("Provide actual proof sources; an empty directory is not verification infrastructure"));
+            ).with_file(path.join("verification/proofs")).with_suggestion("Provide actual proof sources; an empty directory is not verification infrastructure"));
         }
         let has_entrypoint = [
             ".github/workflows/agda.yml",
@@ -142,7 +142,7 @@ impl TestingAnalyzer {
             result.add(Finding::new(
                 "TEST-AG-002", "Agda runner not statically identified", Severity::Warning,
                 "No direct single-line Agda source check was identified in the known workflow or recipe locations. Dynamic runners need separate review; no proof was executed.",
-            ).with_suggestion("Provide or document the real Agda check entrypoint instead of adding Rust or Deno scaffolding"));
+            ).with_file(path.join(".github/workflows/agda.yml")).with_suggestion("Provide or document the real Agda check entrypoint instead of adding Rust or Deno scaffolding"));
         }
     }
 
@@ -158,6 +158,7 @@ impl TestingAnalyzer {
                     Severity::Error,
                     "Rust project missing benches/ directory for criterion benchmarks.",
                 )
+                .with_file(benches_dir.clone())
                 .with_suggestion("Create benches/ directory with criterion benchmark files"),
             );
         } else {
@@ -177,6 +178,7 @@ impl TestingAnalyzer {
                             Severity::Warning,
                             "benches/ directory exists but contains no .rs files.",
                         )
+                        .with_file(benches_dir.clone())
                         .with_suggestion("Add benchmark files to benches/ directory"),
                     );
                 }
@@ -199,6 +201,7 @@ impl TestingAnalyzer {
                     Severity::Error,
                     "Rust project has no fuzz harness: expected fuzz/ or tests/fuzz/ with a Cargo.toml declaring [[bin]] targets or fuzz_targets/*.rs using fuzz_target!, or .clusterfuzzlite/.",
                 )
+                .with_file(fuzz_dir.clone())
                 .with_suggestion("Add ClusterFuzzLite configuration for automated fuzzing"),
             );
         } else {
@@ -237,6 +240,7 @@ impl TestingAnalyzer {
                     Severity::Error,
                     "No .github/workflows/stress-test.yml found.",
                 )
+                .with_file(stress_workflow.clone())
                 .with_suggestion("Add stress test workflow to test under high load"),
             );
         } else {
@@ -274,6 +278,7 @@ impl TestingAnalyzer {
                     Severity::Error,
                     "Deno project missing bench/ directory or bench.ts file.",
                 )
+                .with_file(bench_dir.clone())
                 .with_suggestion("Create bench/ directory with Deno.bench() benchmarks"),
             );
         } else {
@@ -290,6 +295,7 @@ impl TestingAnalyzer {
                     Severity::Error,
                     "No .github/workflows/stress-test.yml found.",
                 )
+                .with_file(stress_workflow.clone())
                 .with_suggestion("Add stress test workflow for load testing"),
             );
         } else {
@@ -318,6 +324,7 @@ impl TestingAnalyzer {
                     Severity::Warning,
                     "No tests/ directory or *_test.ts files found.",
                 )
+                .with_file(tests_dir.clone())
                 .with_suggestion("Add test files following Deno conventions (*_test.ts)"),
             );
         }

@@ -37,12 +37,14 @@ adopts it.
 
 | `scripts/fleet-report-back-build.sh`
 | Builds the enrolled adapter crates (`cargo build --release --locked`) into one
-  directory and installs panic-attack at the pinned commit for panicbot. One
+  directory and installs panic-attack at the pinned commit for panicbot and, with `--pons`, pons for ponsbot. `--pons` must equal the commit in
+  `bots/ponsbot/canon/pin.toml`: any other commit (or an unreadable pin) installs
+  nothing, with a warning, and ponsbot reads `not_run`. One
   recipe for the reusable workflow and for inline callers; a crate that fails to
   build is a warning here and an `error` row later, never a dead run.
 
 | `tests/fleet-report-back-test.sh`
-| 48 checks over stubbed adapters whose JSON shapes were taken from live runs:
+| Checks over stubbed adapters whose JSON shapes were taken from live runs (ponsbot's shape from a real pons at its pinned commit):
   enrolment rules, every adapter's translation, path relativisation, the
   failure modes, envelope shape, `--plan`, the summary, and (with
   `STANDARDS_DIR` set) the real renderer turning the rows non-orange.
@@ -90,6 +92,18 @@ reason), where the grid renders it grey. `severity` is the fleet's own word
 are repository-relative with no `./`, so the grid's change-scope (delta)
 grading can match them against the diff.
 
+*Every finding must carry a path.* The canon grades a finding with no path as
+part of the change (standards `3-practice/fork-governance/SPEC.adoc` §3.0:
+absence of a location is not evidence of absence of a defect, and the
+alternative lets a reporter escape the gate by omitting a field). A
+repository-level rule that omits its path therefore shows on every pull request
+whatever it touches. The path of such a finding is the file the rule is about:
+the expected path for a missing-file rule (`docs/status/ROADMAP.adoc`,
+`.github/SECURITY.md`), the manifest or config that would fix a whole-repo
+property. A pull request that does not touch that file then reports the finding
+as standing, as the canon intends. The driver prints a `WARNING` for any member
+that emits a path-less finding; rhodibot and seambot already comply.
+
 == 4. What each member reports, and how
 
 [cols="1,2,3",options="header"]
@@ -105,11 +119,40 @@ grading can match them against the diff.
 
 | panicbot
 | `panicbot --format json scan <repo>`
-| Wraps `panic-attack assail`; panicbot's own translator maps critical → error,
-  high → warning. The grid already carries a direct panic-attack row from the
+| Runs the **full panic-attack suite** unless the repository's bot directives
+  say otherwise (owner rulings 2026-11-13): `assail`, `assay`, and the dynamic
+  modes (`assault`, `ambush`, then `adjudicate`) when the repo deed declares a
+  target, `(bot-directives (bot :name panicbot (target :build "..." :program "...")))`,
+  or a built `--target` is given. A declared `:build` is run first with `sh -c`
+  in the scanned repo under the suite budget; a failed build is an `error` part.
+  Under `pull_request_target` / `workflow_run` nothing is built or run. With no
+  target the dynamic parts report `not_applicable` with "no target declared in
+  the deed (bot-directives (bot :name panicbot (target …)))". The inventory of every
+  panic-attack subcommand and why each is in or out is in `bots/panicbot/src/suite.rs`.
+  panicbot's own translator maps critical → error, high → warning. The grid already carries a direct panic-attack row from the
   Hypatia lane, so a repository that enrols panicbot sees the same tool twice,
   once through the bot's categorisation. `fleet` mode is *not* used: it writes a
   `.panicbot/*.a2ml` debt register into the scanned tree, and A2ML is retired.
+  Advisory (owner ruling 2026-11-12): enrolments leave `gating` unset for it. A
+  scan that did not really run (panic-attack not installed, timed out, exited
+  non-zero, or exited 0 without a report that has `weak_points` and a positive
+  `statistics.total_lines`) exits non-zero with no findings array, which the
+  driver writes as `error` with the reason, never as an empty `ran`. A suite
+  where one part failed prints `{"status": "error", "reason": ..., "findings":
+  [...]}` and exits 3 (the failed part is named in the reason; the findings of
+  the parts that ran are carried in the envelope file, but the grid reads only the
+  status), and a run where no part analysed anything (everything denied or not
+  applicable) prints `status: not_run` and exits 4. Directives are read from the repo deed
+  `<repo>_chora.deed` first (`(bot :name panicbot :allow ... :deny ... (target ...)
+  (config ...))`), then from the legacy `.machine_readable/bot_directives/panicbot.a2ml`
+  (read only, no target), else the full suite. A `deny` with no `allow` means the
+  full suite minus the deny; an explicit `allow` narrows; deny wins. A deed or
+  legacy file that exists but cannot be parsed (or a malformed clause) stops the
+  run (error), never a fallback to the full suite.
+
+| ponsbot
+| `ponsbot --format json scan <repo>`
+| Wraps pons asinorum, run as a subprocess at the commit pinned in `bots/ponsbot/canon/pin.toml` (design: `docs/migrations/scanner-cutover-ponsbot-panicbot.adoc`). Prints a findings array only when pons really ran; otherwise `{"status": "error" or "not_run", "reason": ...}`, which the driver writes as that status. pons exit 2 is `error` with pons' message, a missing pons is `not_run`, a timeout, a bad report or a pons at another commit is `error`; nothing maps to a pass. Each finding keeps its `tier`, `evidence_class` and `pons_severity`; pons `ERROR` is `error`, `WARN` is `warning`, and a SPECULATIVE finding is carried at `info` so the grid never grades it as blocking. **Gating is the enrolment's, not the envelope's**: the grid reads a row's `gating` from `reporters.<member>.gating` in `.gitbot-fleet/enrolment.json`, so an enrolment must set `"gating": true` for ponsbot (pons gates, owner ruling 2026-11-12) and leave panicbot without it (advisory). Not yet enrolled anywhere, and the reusable workflow does not yet install pons, so until phase 1 an enrolled ponsbot reads `not_run: pons is not installed`.
 
 | seambot
 | `seambot --path <repo> --format json check`

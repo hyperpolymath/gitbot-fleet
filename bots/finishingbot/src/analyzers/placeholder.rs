@@ -102,6 +102,7 @@ impl Analyzer for PlaceholderAnalyzer {
                         config.placeholders.max_allowed
                     ),
                 )
+                .with_file(Path::new(".finishing-bot/config.yml").to_path_buf())
                 .with_suggestion(&format!(
                     "Remove at least {} placeholders before release",
                     excess

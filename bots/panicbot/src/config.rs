@@ -12,7 +12,7 @@ use std::time::Duration;
 /// Top-level panicbot configuration.
 ///
 /// Controls which `panic-attack` subcommands run, severity thresholds,
-/// and subprocess timeout behaviour.
+/// and subprocess timeout and budget behaviour.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PanicbotConfig {
     /// Which panic-attack subcommands are allowed to execute.
@@ -25,25 +25,213 @@ pub struct PanicbotConfig {
     /// Maximum wall-clock time for a single `panic-attack` invocation.
     pub timeout: Duration,
 
+    /// Wall-clock budget for the WHOLE suite. Each invocation runs for at most
+    /// the smaller of `timeout` and what is left of the budget; a part that
+    /// cannot start inside the budget reports `error`, never a silent skip.
+    /// Kept under the report-back driver's 300 s per-adapter limit.
+    pub budget: Duration,
+
+    /// Things the directive loader wants the operator to see (unknown command
+    /// names, a deny that overrides an allow). Printed by the CLI.
+    #[serde(default)]
+    pub notes: Vec<String>,
+
+    /// The dynamic-mode target the repository declares in its deed
+    /// (`(target :build ... :program ...)`). None: the dynamic parts are
+    /// `not_applicable` unless the CLI gives `--target`.
+    #[serde(default)]
+    pub target: Option<TargetDecl>,
+
     /// Per-category confidence overrides.
     /// If absent, `translator::default_confidence()` is used.
     pub confidence_overrides: Vec<ConfidenceOverride>,
 }
 
+/// A dynamic-mode target declared by the repository: an optional build command
+/// and the program it produces. Both come from the deed and both EXECUTE
+/// repository code; see [`crate::suite`] for the checks around them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TargetDecl {
+    /// Shell command (`sh -c`, run in the scanned directory) that builds the program.
+    pub build: Option<String>,
+    /// The built executable, relative to the scanned directory.
+    pub program: String,
+}
+
+/// A panic-attack subcommand panicbot can run (class (a) of the inventory in
+/// [`crate::suite`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Subcommand {
+    /// Static analysis of a directory (weak points).
+    Assail,
+    /// Proven-library substitution survey of a directory.
+    Assay,
+    /// Tool preflight: binary present, version, health.
+    Diagnostics,
+    /// Verdict over dynamic-mode reports.
+    Adjudicate,
+    /// Single-axis attack on a built program (covered by `assault`).
+    Attack,
+    /// Assail plus multi-axis attack on a built program.
+    Assault,
+    /// Program run under ambient stressors.
+    Ambush,
+    /// File mutation with an execution check.
+    Amuck,
+    /// File isolation with an execution check.
+    Abduct,
+    /// Reaction observation from an execution or reports.
+    Axial,
+}
+
+impl Subcommand {
+    /// Every class (a) subcommand, in the order the suite runs them.
+    pub const ALL: [Subcommand; 10] = [
+        Subcommand::Assail,
+        Subcommand::Assay,
+        Subcommand::Assault,
+        Subcommand::Ambush,
+        Subcommand::Attack,
+        Subcommand::Amuck,
+        Subcommand::Abduct,
+        Subcommand::Axial,
+        Subcommand::Adjudicate,
+        Subcommand::Diagnostics,
+    ];
+
+    /// The subcommand as panic-attack and the directive files spell it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Subcommand::Assail => "assail",
+            Subcommand::Assay => "assay",
+            Subcommand::Diagnostics => "diagnostics",
+            Subcommand::Adjudicate => "adjudicate",
+            Subcommand::Attack => "attack",
+            Subcommand::Assault => "assault",
+            Subcommand::Ambush => "ambush",
+            Subcommand::Amuck => "amuck",
+            Subcommand::Abduct => "abduct",
+            Subcommand::Axial => "axial",
+        }
+    }
+
+    /// Parse a directive spelling. Unknown names are `None`, never a guess.
+    pub fn parse(s: &str) -> Option<Subcommand> {
+        Subcommand::ALL.into_iter().find(|c| c.name() == s)
+    }
+
+    /// Whether the subcommand executes code from the scanned repository
+    /// (or a program built from it). Dynamic modes need an explicit target
+    /// and are refused under privileged CI triggers (see [`crate::suite`]).
+    pub fn is_dynamic(self) -> bool {
+        matches!(
+            self,
+            Subcommand::Attack
+                | Subcommand::Assault
+                | Subcommand::Ambush
+                | Subcommand::Amuck
+                | Subcommand::Abduct
+                | Subcommand::Axial
+        )
+    }
+}
+
 /// Which panic-attack subcommands panicbot is allowed to invoke.
 ///
-/// Dynamic attack modes (`attack`, `assault`, `ambush`, `amuck`, `abduct`,
-/// `axial`) are **denied by default** — they execute the target binary and
-/// can cause side effects. Static analysis (`assail`, `adjudicate`,
-/// `diagnostics`) is safe and enabled by default.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The default is the FULL SUITE: every class (a) subcommand (owner ruling
+/// 2026-11-13). A repository narrows it with its directive file, which can
+/// deny any of them or replace the set with an explicit allow list (see
+/// [`crate::directives`]). Allowed is not the same as run: a dynamic mode
+/// that is allowed but has no target reports `not_applicable` with its reason.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AllowedCommands {
-    /// `panic-attack assail` — core static analysis (safe, default: true).
+    /// `panic-attack assail` — core static analysis.
     pub assail: bool,
-    /// `panic-attack adjudicate` — multi-report verdict (safe, default: true).
+    /// `panic-attack assay` — proven-library substitution survey.
+    pub assay: bool,
+    /// `panic-attack adjudicate` — verdict over dynamic-mode reports.
     pub adjudicate: bool,
-    /// `panic-attack diagnostics` — preflight health check (safe, default: true).
+    /// `panic-attack diagnostics` — preflight health check.
     pub diagnostics: bool,
+    /// `panic-attack attack` — single-axis attack (covered by `assault`).
+    pub attack: bool,
+    /// `panic-attack assault` — assail plus multi-axis attack on a program.
+    pub assault: bool,
+    /// `panic-attack ambush` — program under ambient stressors.
+    pub ambush: bool,
+    /// `panic-attack amuck` — file mutation with an execution check.
+    pub amuck: bool,
+    /// `panic-attack abduct` — file isolation with an execution check.
+    pub abduct: bool,
+    /// `panic-attack axial` — reaction observation.
+    pub axial: bool,
+}
+
+impl AllowedCommands {
+    /// Every class (a) subcommand allowed: the default.
+    pub fn all() -> Self {
+        Self {
+            assail: true,
+            assay: true,
+            adjudicate: true,
+            diagnostics: true,
+            attack: true,
+            assault: true,
+            ambush: true,
+            amuck: true,
+            abduct: true,
+            axial: true,
+        }
+    }
+
+    /// Nothing allowed.
+    pub fn none() -> Self {
+        Self {
+            assail: false,
+            assay: false,
+            adjudicate: false,
+            diagnostics: false,
+            attack: false,
+            assault: false,
+            ambush: false,
+            amuck: false,
+            abduct: false,
+            axial: false,
+        }
+    }
+
+    /// Whether `cmd` is allowed.
+    pub fn allows(&self, cmd: Subcommand) -> bool {
+        match cmd {
+            Subcommand::Assail => self.assail,
+            Subcommand::Assay => self.assay,
+            Subcommand::Diagnostics => self.diagnostics,
+            Subcommand::Adjudicate => self.adjudicate,
+            Subcommand::Attack => self.attack,
+            Subcommand::Assault => self.assault,
+            Subcommand::Ambush => self.ambush,
+            Subcommand::Amuck => self.amuck,
+            Subcommand::Abduct => self.abduct,
+            Subcommand::Axial => self.axial,
+        }
+    }
+
+    /// Allow or deny one subcommand.
+    pub fn set(&mut self, cmd: Subcommand, allowed: bool) {
+        match cmd {
+            Subcommand::Assail => self.assail = allowed,
+            Subcommand::Assay => self.assay = allowed,
+            Subcommand::Diagnostics => self.diagnostics = allowed,
+            Subcommand::Adjudicate => self.adjudicate = allowed,
+            Subcommand::Attack => self.attack = allowed,
+            Subcommand::Assault => self.assault = allowed,
+            Subcommand::Ambush => self.ambush = allowed,
+            Subcommand::Amuck => self.amuck = allowed,
+            Subcommand::Abduct => self.abduct = allowed,
+            Subcommand::Axial => self.axial = allowed,
+        }
+    }
 }
 
 /// Minimum severity filter for reported findings.
@@ -73,23 +261,25 @@ pub struct ConfidenceOverride {
     pub confidence: f64,
 }
 
+impl Default for AllowedCommands {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
+/// Default wall-clock budget for the whole suite (see [`PanicbotConfig::budget`]).
+pub const DEFAULT_BUDGET: Duration = Duration::from_secs(240);
+
 impl Default for PanicbotConfig {
     fn default() -> Self {
         Self {
             allowed_commands: AllowedCommands::default(),
             min_severity: MinSeverity::Low,
             timeout: Duration::from_secs(300),
+            budget: DEFAULT_BUDGET,
+            notes: Vec::new(),
+            target: None,
             confidence_overrides: Vec::new(),
-        }
-    }
-}
-
-impl Default for AllowedCommands {
-    fn default() -> Self {
-        Self {
-            assail: true,
-            adjudicate: true,
-            diagnostics: true,
         }
     }
 }
@@ -145,6 +335,11 @@ mod tests {
         assert!(config.allowed_commands.diagnostics);
         assert_eq!(config.min_severity, MinSeverity::Low);
         assert_eq!(config.timeout, Duration::from_secs(300));
+        assert_eq!(config.budget, DEFAULT_BUDGET);
+        assert!(
+            config.budget < Duration::from_secs(300),
+            "must stay under the driver's 300 s adapter limit"
+        );
         assert!(config.confidence_overrides.is_empty());
     }
 
@@ -174,5 +369,52 @@ mod tests {
         };
         assert_eq!(config.confidence_for("UnsafeCode"), Some(0.60));
         assert_eq!(config.confidence_for("PanicPath"), None);
+    }
+}
+
+#[cfg(test)]
+mod suite_tests {
+    use super::*;
+
+    #[test]
+    fn default_is_the_full_suite() {
+        let allowed = PanicbotConfig::default().allowed_commands;
+        for cmd in Subcommand::ALL {
+            assert!(
+                allowed.allows(cmd),
+                "{} must be allowed by default",
+                cmd.name()
+            );
+        }
+        assert_eq!(allowed, AllowedCommands::all());
+    }
+
+    #[test]
+    fn all_lists_each_subcommand_once_and_names_round_trip() {
+        let mut seen = std::collections::HashSet::new();
+        for cmd in Subcommand::ALL {
+            assert!(seen.insert(cmd), "{} listed twice", cmd.name());
+            assert_eq!(Subcommand::parse(cmd.name()), Some(cmd));
+        }
+        assert_eq!(Subcommand::parse("tui"), None);
+        assert_eq!(Subcommand::parse("Assail"), None);
+    }
+
+    #[test]
+    fn set_and_allows_agree_for_every_subcommand() {
+        for cmd in Subcommand::ALL {
+            let mut a = AllowedCommands::none();
+            assert!(!a.allows(cmd));
+            a.set(cmd, true);
+            assert!(a.allows(cmd));
+            for other in Subcommand::ALL.into_iter().filter(|o| *o != cmd) {
+                assert!(
+                    !a.allows(other),
+                    "{} leaked into {}",
+                    cmd.name(),
+                    other.name()
+                );
+            }
+        }
     }
 }

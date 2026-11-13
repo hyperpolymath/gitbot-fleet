@@ -222,3 +222,44 @@ impl AuditResult {
         all
     }
 }
+
+#[cfg(test)]
+mod scope_tests {
+    //! A finding with no path is graded as part of the change by the
+    //! fork-governance verdict grid (SPEC §3.0), so repository-level rules
+    //! must name the file that would fix them.
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn empty_repo_findings_all_carry_a_path() {
+        let dir = TempDir::new().unwrap();
+        let cfg = Config::default();
+        let mut findings = Vec::new();
+        let analyzers: Vec<Box<dyn Analyzer>> = vec![
+            Box::new(visual::VisualAnalyzer::default()),
+            Box::new(accessibility::AccessibilityAnalyzer::default()),
+            Box::new(seo::SeoAnalyzer::default()),
+            Box::new(machine::MachineAnalyzer::default()),
+        ];
+        for a in &analyzers {
+            findings.extend(a.analyze(dir.path(), &cfg).unwrap().findings);
+        }
+        // Negative control: the empty repo really does produce repo-level findings.
+        assert!(
+            findings.len() >= 3,
+            "got {:?}",
+            findings.iter().map(|f| &f.id).collect::<Vec<_>>()
+        );
+        let unpathed: Vec<&str> = findings
+            .iter()
+            .filter(|f| f.file.is_none())
+            .map(|f| f.id.as_str())
+            .collect();
+        assert!(
+            unpathed.is_empty(),
+            "findings without a path: {:?}",
+            unpathed
+        );
+    }
+}

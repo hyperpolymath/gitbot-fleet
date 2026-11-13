@@ -49,6 +49,10 @@ jobs:
           # in CI, so its private PA numbering went unnoticed until 2026-11-04.
           - module: panicbot
             dir: bots/panicbot
+          # ponsbot: the pons adapter (cutover design phase 0); tested here with
+          # a stub pons, the real-binary test runs when PONSBOT_REAL_PONS is set.
+          - module: ponsbot
+            dir: bots/ponsbot
           - module: idris-dependents
             dir: idris-dependents
     defaults:

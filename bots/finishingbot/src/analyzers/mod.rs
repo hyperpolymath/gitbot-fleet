@@ -280,3 +280,89 @@ impl AuditResult {
         all
     }
 }
+
+#[cfg(test)]
+mod scope_tests {
+    //! Every finding must carry a path. The fork-governance verdict grid grades
+    //! a finding with no path as part of the change (SPEC §3.0), so a
+    //! repository-level rule with no `file` would show on every pull request
+    //! whatever it touches. A repo-level rule names the file that would fix it.
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Findings that genuinely have no file to name. Anything else lacking a
+    /// path is a regression.
+    const NO_MEANINGFUL_FILE: &[&str] = &["TEST-001"];
+
+    fn all_findings(dir: &Path) -> Vec<Finding> {
+        let cfg = Config::default();
+        let mut out = Vec::new();
+        let analyzers: Vec<Box<dyn Analyzer>> = vec![
+            Box::new(license::LicenseAnalyzer),
+            Box::new(placeholder::PlaceholderAnalyzer),
+            Box::new(claims::ClaimsAnalyzer),
+            Box::new(release::ReleaseAnalyzer),
+            Box::new(scm_files::ScmFilesAnalyzer),
+            Box::new(testing::TestingAnalyzer),
+            Box::new(tooling::ToolingAnalyzer),
+            Box::new(v1_readiness::V1ReadinessAnalyzer),
+        ];
+        for a in &analyzers {
+            out.extend(a.analyze(dir, &cfg).unwrap().findings);
+        }
+        out
+    }
+
+    fn assert_all_pathed(dir: &Path) -> usize {
+        let findings = all_findings(dir);
+        let unpathed: Vec<&str> = findings
+            .iter()
+            .filter(|f| f.file.is_none() && !NO_MEANINGFUL_FILE.contains(&f.id.as_str()))
+            .map(|f| f.id.as_str())
+            .collect();
+        assert!(
+            unpathed.is_empty(),
+            "findings without a path: {:?}",
+            unpathed
+        );
+        findings.len()
+    }
+
+    #[test]
+    fn empty_repo_findings_all_carry_a_path() {
+        let dir = TempDir::new().unwrap();
+        // Negative control: the empty repo really does produce repo-level findings.
+        assert!(assert_all_pathed(dir.path()) > 5);
+    }
+
+    #[test]
+    fn rust_repo_findings_all_carry_a_path() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("Cargo.toml"),
+            "[package]\nname = \"x\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        assert!(assert_all_pathed(dir.path()) > 5);
+    }
+
+    #[test]
+    fn deno_repo_findings_all_carry_a_path() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("deno.json"), "{}").unwrap();
+        assert!(assert_all_pathed(dir.path()) > 5);
+    }
+
+    #[test]
+    fn missing_file_rule_names_the_expected_path() {
+        let dir = TempDir::new().unwrap();
+        let f = all_findings(dir.path())
+            .into_iter()
+            .find(|f| f.id == "LIC-001")
+            .expect("LIC-001 on an empty repo");
+        assert_eq!(
+            f.file.as_deref(),
+            Some(dir.path().join("LICENSE").as_path())
+        );
+    }
+}
