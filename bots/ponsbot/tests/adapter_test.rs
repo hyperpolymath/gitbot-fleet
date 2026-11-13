@@ -299,3 +299,59 @@ fn real_pons_end_to_end_when_available() {
     assert_eq!(o.status.code(), Some(2));
     assert_eq!(out_json(&o)["status"], "error");
 }
+
+/// pons is spawned with the scanned directory as its cwd, so a relative
+/// `PONS_BIN`, or a relative `PATH` entry, must be made absolute first.
+fn relative_run(env: &[(&str, &str)], cwd: &Path, scan: &str) -> Output {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ponsbot"));
+    c.env_clear().env("PATH", "/usr/bin:/bin");
+    for (k, v) in env {
+        c.env(k, v);
+    }
+    c.current_dir(cwd)
+        .args(["--format", "json", "scan", scan])
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn a_relative_pons_bin_is_resolved_before_the_cwd_changes() {
+    let root = TempDir::new().unwrap();
+    fs::create_dir(root.path().join("bin")).unwrap();
+    fs::create_dir(root.path().join("tree")).unwrap();
+    fs::write(root.path().join("tree/a.js"), "if (true) {}\n").unwrap();
+    stub(
+        &root.path().join("bin"),
+        &emit(&report(&format!("[{WARN}]")), 0),
+    );
+    let o = relative_run(&[("PONS_BIN", "bin/pons")], root.path(), "tree");
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "stdout: {} stderr: {}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert_eq!(out_json(&o)[0]["rule_id"], "constant-condition");
+}
+
+#[test]
+fn a_relative_path_entry_is_resolved_before_the_cwd_changes() {
+    let root = TempDir::new().unwrap();
+    fs::create_dir(root.path().join("bin")).unwrap();
+    fs::create_dir(root.path().join("tree")).unwrap();
+    fs::write(root.path().join("tree/a.js"), "if (true) {}\n").unwrap();
+    stub(
+        &root.path().join("bin"),
+        &emit(&report(&format!("[{WARN}]")), 0),
+    );
+    let o = relative_run(&[("PATH", "bin:/usr/bin:/bin")], root.path(), "tree");
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "stdout: {} stderr: {}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert_eq!(out_json(&o)[0]["rule_id"], "constant-condition");
+}

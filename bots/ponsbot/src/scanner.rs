@@ -46,7 +46,7 @@ pub fn find_pons() -> Result<PathBuf, String> {
     if let Some(p) = std::env::var_os(PONS_BIN_ENV).filter(|p| !p.is_empty()) {
         let p = PathBuf::from(p);
         return if is_executable(&p) {
-            Ok(p)
+            absolute(p)
         } else {
             Err(format!(
                 "{PONS_BIN_ENV} is set to {} but that is not an executable file",
@@ -58,7 +58,7 @@ pub fn find_pons() -> Result<PathBuf, String> {
         for dir in std::env::split_paths(&path) {
             let cand = dir.join("pons");
             if is_executable(&cand) {
-                return Ok(cand);
+                return absolute(cand);
             }
         }
     }
@@ -66,11 +66,24 @@ pub fn find_pons() -> Result<PathBuf, String> {
         for rel in [".pons/bin/pons", ".cargo/bin/pons"] {
             let cand = Path::new(&home).join(rel);
             if is_executable(&cand) {
-                return Ok(cand);
+                return absolute(cand);
             }
         }
     }
     Err("pons is not installed (not on PATH, not at ~/.pons/bin/pons or ~/.cargo/bin/pons, PONS_BIN unset)".into())
+}
+
+/// Resolve the located executable to an absolute path NOW. pons is spawned with
+/// the scanned directory as its working directory, so a relative `PONS_BIN` or
+/// a relative `PATH` entry would otherwise be looked up against the scanned
+/// tree (not found, or worse, a binary the tree itself supplies).
+fn absolute(p: PathBuf) -> Result<PathBuf, String> {
+    std::fs::canonicalize(&p).map_err(|e| {
+        format!(
+            "cannot resolve the pons executable {} to an absolute path: {e}",
+            p.display()
+        )
+    })
 }
 
 fn is_executable(p: &Path) -> bool {
