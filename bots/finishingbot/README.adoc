@@ -49,7 +49,7 @@ the gitbot-fleet shared context layer and makes the final release-readiness dete
 |No
 
 |**SCM Files**
-|All 6 `.machine_readable/` files (STATE.scm, META.scm, ECOSYSTEM.scm, PLAYBOOK.scm, AGENTIC.scm, NEUROSYM.scm), SPDX headers, required sections, content completeness
+|Legacy `.machine_readable/` SCM files (STATE.scm, META.scm, ECOSYSTEM.scm, PLAYBOOK.scm, AGENTIC.scm, NEUROSYM.scm) are validated only if present (SPDX headers, required sections, content completeness); their absence is canonical, since those descriptiles are now clauses of `<name>_chora.deed`
 |No
 
 |**Testing**

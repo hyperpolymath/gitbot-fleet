@@ -90,7 +90,7 @@ Evaluates repository discoverability through README descriptions, HTML meta tags
 
 === Machine-Readability (`MachineAnalyzer`)
 
-Validates JSON/YAML file syntax, structured data presence, robots.txt, and `.machine_readable/` directory with SCM files.
+Validates JSON/YAML file syntax, structured data presence, robots.txt, and the `.machine_readable/` directory. Legacy SCM files there are validated only if present; their absence is canonical (the descriptiles are clauses of `<name>_chora.deed`).
 
 [cols="1,2,1"]
 |===
