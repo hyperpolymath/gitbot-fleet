@@ -23,15 +23,15 @@ fn local_file(root: &Path, candidate: &Path) -> Option<PathBuf> {
     (resolved.starts_with(root) && resolved.is_file()).then_some(resolved)
 }
 
-/// `Some(file name)` when `path` is a bare `*.yml`/`*.yaml` name or
-/// `workflows/<name>`, the two spellings prose uses for a GitHub workflow.
-fn workflow_file_name(path: &Path) -> Option<&std::ffi::OsStr> {
+/// `Some(file name)` when `path` is a `workflows/<name>.yml` reference, or a
+/// bare `*.yml`/`*.yaml` name written in workflow prose (`in_workflow_context`).
+/// A bare YAML name with no workflow context gets no `.github/workflows/`
+/// fallback: it could be any config file, and must resolve normally.
+fn workflow_file_name(path: &Path, in_workflow_context: bool) -> Option<&std::ffi::OsStr> {
     let name = path.file_name()?;
-    let is_yaml = path
-        .extension()
-        .is_some_and(|e| e == "yml" || e == "yaml");
+    let is_yaml = path.extension().is_some_and(|e| e == "yml" || e == "yaml");
     let parts: Vec<_> = path.components().collect();
-    let qualified_ok = parts.len() == 1
+    let qualified_ok = (parts.len() == 1 && in_workflow_context)
         || (parts.len() == 2 && parts[0].as_os_str() == "workflows");
     (is_yaml && qualified_ok).then_some(name)
 }
@@ -39,10 +39,14 @@ fn workflow_file_name(path: &Path) -> Option<&std::ffi::OsStr> {
 /// Prose can name a document-relative path, a repository-relative path, or an
 /// unanchored module basename. The last form is accepted only when unique.
 /// This resolves a file's identity; it does not verify its contents or claims.
+///
+/// `context` is the prose line the reference sits on; it only decides whether a
+/// bare YAML name is a workflow reference.
 pub(super) fn resolve_local_reference(
     repo: &Path,
     document: &Path,
     reference: &str,
+    context: &str,
 ) -> Option<PathBuf> {
     let root = repo.canonicalize().ok()?;
     let path = Path::new(reference);
@@ -61,7 +65,8 @@ pub(super) fn resolve_local_reference(
     // `workflows/estate-rules.yml`) but lives under .github/workflows/. Look
     // there first, so the reference resolves even when the same basename also
     // exists elsewhere (which would make the basename search ambiguous).
-    if let Some(name) = workflow_file_name(path) {
+    let workflow_prose = context.to_ascii_lowercase().contains("workflow");
+    if let Some(name) = workflow_file_name(path, workflow_prose) {
         if let Some(found) = local_file(&root, &root.join(".github/workflows").join(name)) {
             return Some(found);
         }
@@ -72,6 +77,10 @@ pub(super) fn resolve_local_reference(
         return None;
     }
     let name = path.file_name()?;
+    // A bare YAML name that is not workflow prose is not a workflow reference,
+    // so the basename search must not be satisfied by a workflow file either.
+    let skip_workflows = workflow_file_name(path, true).is_some() && !workflow_prose;
+    let workflows_dir = root.join(".github/workflows");
     let mut pending = vec![root.clone()];
     let mut found = None;
     while let Some(directory) = pending.pop() {
@@ -82,6 +91,7 @@ pub(super) fn resolve_local_reference(
                 if !GENERATED_DIRS
                     .iter()
                     .any(|excluded| entry.file_name() == *excluded)
+                    && !(skip_workflows && entry.path() == workflows_dir)
                 {
                     pending.push(entry.path());
                 }
@@ -121,7 +131,10 @@ mod tests {
             path
         }
         fn resolves(&self, document: &str, reference: &str) -> bool {
-            resolve_local_reference(&self.0, &self.0.join(document), reference).is_some()
+            self.resolves_in(document, reference, "")
+        }
+        fn resolves_in(&self, document: &str, reference: &str, context: &str) -> bool {
+            resolve_local_reference(&self.0, &self.0.join(document), reference, context).is_some()
         }
     }
     impl Drop for Scratch {
@@ -153,12 +166,30 @@ mod tests {
     fn workflow_names_resolve_under_dot_github_workflows() {
         let s = Scratch::new();
         s.file(".github/workflows/estate-rules.yml");
-        assert!(s.resolves("docs/note.adoc", "estate-rules.yml"));
+        let ctx = "the estate-rules.yml workflow runs the gate";
+        assert!(s.resolves_in("docs/note.adoc", "estate-rules.yml", ctx));
         assert!(s.resolves("docs/note.adoc", "workflows/estate-rules.yml"));
         assert!(s.resolves("docs/note.adoc", ".github/workflows/estate-rules.yml"));
         // Ambiguous basenames elsewhere do not defeat the workflow directory.
         s.file("tools/estate-rules.yml");
-        assert!(s.resolves("docs/note.adoc", "estate-rules.yml"));
+        assert!(s.resolves_in("docs/note.adoc", "estate-rules.yml", ctx));
+    }
+
+    #[test]
+    fn a_bare_yml_name_without_workflow_context_does_not_fall_back_to_workflows() {
+        let s = Scratch::new();
+        s.file(".github/workflows/config.yml");
+        // Not a workflow reference: a missing config file is not satisfied by an
+        // unrelated workflow of the same name.
+        assert!(!s.resolves("docs/note.adoc", "config.yml"));
+        assert!(!s.resolves_in(
+            "docs/note.adoc",
+            "config.yml",
+            "see config.yml for settings"
+        ));
+        // Normal resolution still works for a real, unique file.
+        s.file("conf/real.yml");
+        assert!(s.resolves("docs/note.adoc", "real.yml"));
     }
 
     #[test]

@@ -23,6 +23,13 @@ static PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Cargo workspace member-path regex is a valid constant pattern")
 });
 
+/// The line of `content` containing byte offset `at` (prose context for a reference).
+fn line_of(content: &str, at: usize) -> &str {
+    let start = content[..at].rfind('\n').map_or(0, |i| i + 1);
+    let end = content[at..].find('\n').map_or(content.len(), |i| at + i);
+    &content[start..end]
+}
+
 /// Claim verification analyzer
 pub struct ClaimsAnalyzer;
 
@@ -295,7 +302,14 @@ impl ClaimsAnalyzer {
         for pattern in &file_ref_patterns {
             for caps in pattern.captures_iter(content) {
                 let file_ref = &caps[1];
-                if resolve_local_reference(repo_root, doc_path, file_ref).is_none() {
+                if resolve_local_reference(
+                    repo_root,
+                    doc_path,
+                    file_ref,
+                    line_of(content, caps.get(0).map_or(0, |m| m.start())),
+                )
+                .is_none()
+                {
                     debug!(doc = %doc_path.display(), reference = file_ref, "Broken file reference");
                     result.add(
                         Finding::new(
