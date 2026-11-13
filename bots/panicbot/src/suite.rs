@@ -49,18 +49,26 @@
 //!
 //! ## Dynamic modes: where the target comes from
 //!
-//! `assault` and `ambush` execute a program. Panicbot does not build the
-//! scanned repository, so there is no program unless the operator gives one:
-//! `--target PATH` (a built executable inside the scanned directory). Without
-//! it the dynamic parts report `not_applicable` with that reason. None of the
-//! CI callers passes a target, so in CI the dynamic parts are `not_applicable`.
+//! `assault` and `ambush` execute a program. The repository declares it in its
+//! deed: `(bot-directives (bot :name panicbot (target :build "..." :program "...")))`
+//! (see [`crate::directives`]). If a `:build` is declared it is run first, once,
+//! with `sh -c` in the scanned directory, under a timeout drawn from the suite
+//! budget; a failed or timed-out build is an `error` on each dynamic part and
+//! nothing is attacked. `:program` is then the target, subject to the checks
+//! below: canonicalised inside the scanned directory, an executable file.
+//! `--target PATH` on the command line replaces the declared target (the build
+//! included: the operator is then responsible for the program existing).
+//! With no target from either, the dynamic parts report `not_applicable` with
+//! "no target declared in the deed (bot-directives (bot :name panicbot (target …)))".
 //!
 //! The security gate (checked 2026-11-13 over gitbot-fleet
 //! `fleet-report-back-reusable.yml` and standards `fork-governance.yml`): both
 //! run on plain `pull_request` with `contents: read` and no secrets, which is
 //! unprivileged. A reusable workflow cannot know its caller's trigger, though,
 //! so [`dynamic_refusal`] makes panicbot refuse to execute repository code when
-//! `GITHUB_EVENT_NAME` is `pull_request_target` or `workflow_run`.
+//! `GITHUB_EVENT_NAME` is `pull_request_target` or `workflow_run`. That covers
+//! the `:build` too: a refused run never builds, so no repository code runs at
+//! all (the parts report the refusal as an `error`).
 //!
 //! ## Rule ids
 //!
@@ -237,6 +245,8 @@ pub trait Engine {
     fn adjudicate(&self, reports: &[PathBuf], timeout: Duration) -> Result<AdjudicateVerdict>;
     /// The tool's health.
     fn diagnostics(&self, timeout: Duration) -> Result<DiagnosticsReport>;
+    /// The deed-declared `:build` command, run with `sh -c` in `dir`.
+    fn build(&self, command: &str, dir: &Path, timeout: Duration) -> Result<()>;
 }
 
 /// The real panic-attack binary.
@@ -264,6 +274,9 @@ impl Engine for PanicAttack {
     }
     fn diagnostics(&self, timeout: Duration) -> Result<DiagnosticsReport> {
         scanner::run_diagnostics(timeout)
+    }
+    fn build(&self, command: &str, dir: &Path, timeout: Duration) -> Result<()> {
+        crate::build::run_build(command, dir, timeout)
     }
 }
 
@@ -490,6 +503,15 @@ pub fn run_suite_with(
     let mut dynamic_reports: Vec<PathBuf> = Vec::new();
     let mut target_rel: Option<PathBuf> = None;
     let mut scratch: Option<Scratch> = None;
+    // The CLI --target replaces the deed target, build included; otherwise the
+    // deed's declaration supplies both. The build runs at most once.
+    let (program_spec, build_cmd): (Option<PathBuf>, Option<&str>) =
+        match (&opts.target, &config.target) {
+            (Some(t), _) => (Some(t.clone()), None),
+            (None, Some(d)) => (Some(PathBuf::from(&d.program)), d.build.as_deref()),
+            (None, None) => (None, None),
+        };
+    let mut build_state: Option<std::result::Result<(), String>> = None;
     let min = config.min_severity.threshold();
 
     // The part's timeout: the per-command timeout, capped by what is left.
@@ -574,13 +596,30 @@ pub fn run_suite_with(
                 }
             }
             Subcommand::Assault | Subcommand::Ambush => {
-                let Some(target) = &opts.target else {
+                let Some(target) = &program_spec else {
                     push(PartStatus::NotApplicable, no_target_msg(), 0);
                     continue;
                 };
                 if let Some(why) = dynamic_refusal(opts) {
                     push(PartStatus::Error, why, 0);
                     continue;
+                }
+                if let Some(cmdline) = build_cmd {
+                    if build_state.is_none() {
+                        let Some(timeout) = slot(&start) else {
+                            push(PartStatus::Error, budget_msg(config), 0);
+                            continue;
+                        };
+                        build_state = Some(
+                            engine
+                                .build(cmdline, dir, timeout)
+                                .map_err(|e| format!("{e:#}")),
+                        );
+                    }
+                    if let Some(Err(why)) = &build_state {
+                        push(PartStatus::Error, why.clone(), 0);
+                        continue;
+                    }
                 }
                 let program = match resolve_target(dir, target) {
                     Ok(p) => p,
@@ -714,9 +753,7 @@ fn budget_msg(config: &PanicbotConfig) -> String {
 }
 
 fn no_target_msg() -> String {
-    "no target program: panicbot does not build the scanned repository and none was \
-     given (--target PATH)"
-        .into()
+    "no target declared in the deed (bot-directives (bot :name panicbot (target …)))".into()
 }
 
 #[cfg(test)]
@@ -732,6 +769,7 @@ mod tests {
         timeouts: RefCell<Vec<Duration>>,
         keeps: RefCell<Vec<PathBuf>>,
         adjudicated: RefCell<Vec<PathBuf>>,
+        built: RefCell<Vec<(String, PathBuf)>>,
         fail: Vec<&'static str>,
         healthy: bool,
         crash: bool,
@@ -746,6 +784,7 @@ mod tests {
                 timeouts: RefCell::new(Vec::new()),
                 keeps: RefCell::new(Vec::new()),
                 adjudicated: RefCell::new(Vec::new()),
+                built: RefCell::new(Vec::new()),
                 fail: Vec::new(),
                 healthy: true,
                 crash: true,
@@ -889,6 +928,12 @@ mod tests {
                 }],
             })
         }
+        fn build(&self, command: &str, dir: &Path, timeout: Duration) -> Result<()> {
+            self.built
+                .borrow_mut()
+                .push((command.to_string(), dir.to_path_buf()));
+            self.note("build", timeout)
+        }
         fn diagnostics(&self, timeout: Duration) -> Result<DiagnosticsReport> {
             self.note("diagnostics", timeout)?;
             Ok(DiagnosticsReport {
@@ -954,7 +999,9 @@ mod tests {
         // With no target the dynamic parts say so: never a silent skip, never a pass.
         for cmd in [Subcommand::Assault, Subcommand::Ambush] {
             assert_eq!(status_of(&run, cmd), PartStatus::NotApplicable);
-            assert!(detail_of(&run, cmd).contains("no target program"));
+            assert!(detail_of(&run, cmd).contains(
+                "no target declared in the deed (bot-directives (bot :name panicbot (target …)))"
+            ));
         }
         for cmd in [
             Subcommand::Attack,

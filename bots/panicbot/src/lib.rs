@@ -36,8 +36,10 @@
 //! - **Guardian**: Block PRs on critical findings.
 
 pub mod a2ml_writer;
+pub mod build;
 pub mod cli;
 pub mod config;
+pub mod deed;
 pub mod directives;
 pub mod fleet;
 pub mod scanner;
