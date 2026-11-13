@@ -14,6 +14,7 @@
 
 #![forbid(unsafe_code)]
 pub mod analyzers;
+pub mod baseline;
 pub mod config;
 pub mod error;
 
@@ -190,7 +191,10 @@ pub fn print_summary(result: &AuditResult) {
 }
 
 fn print_findings_section(category: &str, findings: &[Finding]) {
-    println!("┌─ {} ─────────────────────────────────────────────────────", category);
+    println!(
+        "┌─ {} ─────────────────────────────────────────────────────",
+        category
+    );
 
     for finding in findings {
         let severity_icon = match finding.severity {
@@ -201,10 +205,7 @@ fn print_findings_section(category: &str, findings: &[Finding]) {
         };
 
         println!("│");
-        println!(
-            "│ {} [{}] {}",
-            severity_icon, finding.id, finding.name
-        );
+        println!("│ {} [{}] {}", severity_icon, finding.id, finding.name);
         println!("│    {}", finding.message);
 
         if let Some(ref file) = finding.file {

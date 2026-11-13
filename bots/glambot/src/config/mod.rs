@@ -109,8 +109,8 @@ impl Default for SeoConfig {
             require_opengraph: false,
             check_titles: true,
             check_descriptions: true,
-            enable_git_seo: Some(true),  // Enable by default
-            enable_auto_apply: Some(false),  // Safety: manual by default
+            enable_git_seo: Some(true),     // Enable by default
+            enable_auto_apply: Some(false), // Safety: manual by default
         }
     }
 }

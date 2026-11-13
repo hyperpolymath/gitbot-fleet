@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Analyzers for presentation quality validation
 
-pub mod visual;
 pub mod accessibility;
-pub mod seo;
-pub mod machine;
 pub mod git_seo_integration;
+pub mod machine;
+pub mod seo;
+pub mod visual;
 
 use crate::config::Config;
 use crate::error::Result;
@@ -107,6 +107,11 @@ pub struct AnalysisResult {
     pub files_checked: usize,
     /// Duration in milliseconds
     pub duration_ms: u64,
+    /// Why the analyzer did not run (tool missing or failed). `None` means it ran.
+    /// A skipped analyzer has no findings, which is NOT a clean scan: consumers
+    /// (scripts/fleet-report-back.sh) must read this before trusting an empty list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<String>,
 }
 
 impl AnalysisResult {
@@ -241,12 +246,20 @@ mod scope_tests {
             findings.extend(a.analyze(dir.path(), &cfg).unwrap().findings);
         }
         // Negative control: the empty repo really does produce repo-level findings.
-        assert!(findings.len() >= 3, "got {:?}", findings.iter().map(|f| &f.id).collect::<Vec<_>>());
+        assert!(
+            findings.len() >= 3,
+            "got {:?}",
+            findings.iter().map(|f| &f.id).collect::<Vec<_>>()
+        );
         let unpathed: Vec<&str> = findings
             .iter()
             .filter(|f| f.file.is_none())
             .map(|f| f.id.as_str())
             .collect();
-        assert!(unpathed.is_empty(), "findings without a path: {:?}", unpathed);
+        assert!(
+            unpathed.is_empty(),
+            "findings without a path: {:?}",
+            unpathed
+        );
     }
 }

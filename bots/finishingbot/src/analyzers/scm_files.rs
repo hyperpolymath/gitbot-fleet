@@ -29,7 +29,10 @@ impl Analyzer for ScmFilesAnalyzer {
         // Required SCM files for v1.0
         let required_scm_files = [
             ("STATE.scm", "Project state and progress tracking"),
-            ("META.scm", "Meta-level information and architectural decisions"),
+            (
+                "META.scm",
+                "Meta-level information and architectural decisions",
+            ),
             ("ECOSYSTEM.scm", "Project's place in the ecosystem"),
             ("PLAYBOOK.scm", "Operational playbooks and procedures"),
             ("AGENTIC.scm", "Agentic AI integration documentation"),
@@ -38,7 +41,7 @@ impl Analyzer for ScmFilesAnalyzer {
 
         let machine_readable_dir = path.join(".machine_readable");
 
-        for (filename, description) in &required_scm_files {
+        for (filename, _description) in &required_scm_files {
             let correct_path = machine_readable_dir.join(filename);
             let root_path = path.join(filename);
 
@@ -65,22 +68,19 @@ impl Analyzer for ScmFilesAnalyzer {
                     )
                     .with_file(root_path)
                     .with_suggestion(&format!(
-                        "Move {} to .machine_readable/{}", filename, filename
+                        "Move {} to .machine_readable/{}",
+                        filename, filename
                     )),
                 );
             } else {
-                result.add(
-                    Finding::new(
-                        &format!("SCM-001-{}", filename),
-                        &format!("Missing {}", filename),
-                        Severity::Error,
-                        &format!("Required SCM file {} not found ({}).", filename, description),
-                    )
-                    .with_file(correct_path.clone())
-                    .with_suggestion(&format!(
-                        "Create .machine_readable/{} with proper metadata and content. See hyperpolymath SCM file specs.",
-                        filename
-                    )),
+                // SCM-001 (a required .scm file is missing) is retired. The six
+                // descriptive documents (STATE, META, ECOSYSTEM, PLAYBOOK,
+                // AGENTIC, NEUROSYM) are clauses of the repository's
+                // `<name>_chora.deed`, not files, so absence is the canonical
+                // state. Files that DO exist are still validated above.
+                debug!(
+                    "{} not present (retired: now a clause of the chora deed)",
+                    filename
                 );
             }
         }
@@ -128,7 +128,11 @@ impl ScmFilesAnalyzer {
                     &format!("SCM-003-{}", filename),
                     &format!("{} appears incomplete", filename),
                     Severity::Warning,
-                    &format!("{} is very short ({}  bytes). May be a placeholder.", filename, content.len()),
+                    &format!(
+                        "{} is very short ({}  bytes). May be a placeholder.",
+                        filename,
+                        content.len()
+                    ),
                 )
                 .with_file(file_path.to_path_buf())
                 .with_suggestion("Ensure file has complete documentation content"),
@@ -148,7 +152,9 @@ impl ScmFilesAnalyzer {
                         "STATE.scm should contain 'metadata' and 'current-position' sections.",
                     )
                     .with_file(file_path.to_path_buf())
-                    .with_suggestion("Add required sections following hyperpolymath STATE.scm format"),
+                    .with_suggestion(
+                        "Add required sections following hyperpolymath STATE.scm format",
+                    ),
                 );
             }
             "META.scm"
@@ -183,5 +189,43 @@ impl ScmFilesAnalyzer {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn ids(dir: &Path) -> Vec<String> {
+        ScmFilesAnalyzer
+            .analyze(dir, &Config::default())
+            .unwrap()
+            .findings
+            .into_iter()
+            .map(|f| f.id)
+            .collect()
+    }
+
+    #[test]
+    fn absent_scm_files_are_not_a_finding() {
+        // The six descriptive documents are clauses of <name>_chora.deed now.
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("x_chora.deed"), "(deed)").unwrap();
+        let got = ids(d.path());
+        assert!(
+            got.iter().all(|i| !i.starts_with("SCM-001")),
+            "SCM-001 is retired, got {:?}",
+            got
+        );
+        assert!(got.is_empty(), "got {:?}", got);
+    }
+
+    #[test]
+    fn a_misplaced_scm_file_is_still_reported() {
+        // Negative control: the analyzer still runs for files that exist.
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("STATE.scm"), ";; x\n").unwrap();
+        assert!(ids(d.path()).contains(&"SCM-005-STATE.scm".to_string()));
     }
 }

@@ -2,13 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
 //! Release readiness analyzer
 
-use super::{AnalysisResult, Analyzer, Finding, Severity};
+use super::{first_existing, AnalysisResult, Analyzer, Finding, Severity, SECURITY_POLICY};
 use crate::config::Config;
 use crate::error::Result;
 use regex::Regex;
 use sha2::{Digest, Sha256, Sha512};
 use std::path::Path;
-use tracing::debug;
 use walkdir::WalkDir;
 
 /// Release readiness analyzer
@@ -121,7 +120,10 @@ impl ReleaseAnalyzer {
                         "REL-001",
                         "Version Inconsistency",
                         Severity::Error,
-                        &format!("Version numbers are inconsistent:\n  {}", version_list.join("\n  ")),
+                        &format!(
+                            "Version numbers are inconsistent:\n  {}",
+                            version_list.join("\n  ")
+                        ),
                     )
                     .with_file(path.join(&inconsistent[0].0))
                     .with_suggestion("Ensure all version files have the same version number"),
@@ -150,16 +152,11 @@ impl ReleaseAnalyzer {
             "import pdb",
             "pdb.set_trace",
             "dbg!",
-            "println!",  // In Rust release builds
+            "println!", // In Rust release builds
             "#[cfg(debug_assertions)]",
         ];
 
-        let debug_files = [
-            ".env.local",
-            ".env.development",
-            "debug.log",
-            "*.log",
-        ];
+        let debug_files = [".env.local", ".env.development", "debug.log", "*.log"];
 
         // Check for debug files
         for pattern in &debug_files {
@@ -232,7 +229,10 @@ impl ReleaseAnalyzer {
                                 "REL-003",
                                 "Debug Statement",
                                 Severity::Info,
-                                &format!("Found {} occurrence(s) of '{}' in source", count, pattern),
+                                &format!(
+                                    "Found {} occurrence(s) of '{}' in source",
+                                    count, pattern
+                                ),
                             )
                             .with_file(entry_path.to_path_buf())
                             .with_suggestion("Review and remove debug statements for release"),
@@ -246,32 +246,18 @@ impl ReleaseAnalyzer {
 
     /// Check for required security files
     fn check_security_files(&self, path: &Path, result: &mut AnalysisResult) {
-        let security_files = [
-            ("SECURITY.md", "Security policy", Severity::Warning),
-            ("SECURITY.adoc", "Security policy", Severity::Warning),
-        ];
-
-        let has_security = security_files
-            .iter()
-            .any(|(name, _, _)| path.join(name).exists());
-
-        if !has_security {
+        // SECURITY.md or .adoc, at the root or in .github/ (GitHub reads both).
+        if first_existing(path, SECURITY_POLICY).is_none() {
             result.add(
                 Finding::new(
                     "REL-004",
                     "Missing Security Policy",
                     Severity::Warning,
-                    "No SECURITY.md file found",
+                    "No SECURITY.md found (checked the root and .github/)",
                 )
-                .with_file(path.join("SECURITY.md"))
+                .with_file(path.join(SECURITY_POLICY[0]))
                 .with_suggestion("Add a SECURITY.md describing how to report vulnerabilities"),
             );
-        }
-
-        // Check for .github/SECURITY.md
-        let github_security = path.join(".github/SECURITY.md");
-        if !github_security.exists() && !has_security {
-            debug!("No security policy found in .github either");
         }
     }
 
@@ -362,7 +348,10 @@ impl ReleaseAnalyzer {
             Err(_) => return,
         };
 
-        let actual_hash = if config.release.hash_algorithms.contains(&"SHA512".to_string())
+        let actual_hash = if config
+            .release
+            .hash_algorithms
+            .contains(&"SHA512".to_string())
             && hash_path.to_string_lossy().contains("512")
         {
             let mut hasher = Sha512::new();
@@ -380,7 +369,10 @@ impl ReleaseAnalyzer {
                     "REL-007",
                     "Hash Mismatch",
                     Severity::Error,
-                    &format!("Hash mismatch for {}: expected {}, got {}", filename, expected_hash, actual_hash),
+                    &format!(
+                        "Hash mismatch for {}: expected {}, got {}",
+                        filename, expected_hash, actual_hash
+                    ),
                 )
                 .with_file(hash_path.to_path_buf())
                 .with_suggestion("Regenerate hash file or investigate file corruption"),
@@ -390,23 +382,6 @@ impl ReleaseAnalyzer {
 
     /// Check for sensitive data that shouldn't be released
     fn check_sensitive_data(&self, path: &Path, config: &Config, result: &mut AnalysisResult) {
-        let sensitive_patterns = [
-            (r#"(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#, "API Key"),
-            (r#"(?i)secret[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#, "Secret Key"),
-            (r#"(?i)password\s*[:=]\s*['"]?[^\s'"]{8,}"#, "Password"),
-            (r"(?i)private[_-]?key", "Private Key Reference"),
-            (r"-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----", "Private Key"),
-            (r"(?i)aws[_-]?access[_-]?key", "AWS Access Key"),
-            (r"(?i)aws[_-]?secret", "AWS Secret"),
-            (r"ghp_[a-zA-Z0-9]{36}", "GitHub Personal Access Token"),
-            (r"gho_[a-zA-Z0-9]{36}", "GitHub OAuth Token"),
-        ];
-
-        let compiled: Vec<(Regex, &str)> = sensitive_patterns
-            .iter()
-            .filter_map(|(p, name)| Regex::new(p).ok().map(|r| (r, *name)))
-            .collect();
-
         for entry in WalkDir::new(path)
             .follow_links(false)
             .max_depth(5)
@@ -430,9 +405,29 @@ impl ReleaseAnalyzer {
                 .map(|ext| {
                     matches!(
                         ext,
-                        "rs" | "js" | "ts" | "py" | "rb" | "go" | "java" | "kt" | "swift"
-                            | "c" | "cpp" | "h" | "hpp" | "yml" | "yaml" | "json" | "toml"
-                            | "xml" | "env" | "conf" | "cfg" | "ini" | "sh" | "bash"
+                        "rs" | "js"
+                            | "ts"
+                            | "py"
+                            | "rb"
+                            | "go"
+                            | "java"
+                            | "kt"
+                            | "swift"
+                            | "c"
+                            | "cpp"
+                            | "h"
+                            | "hpp"
+                            | "yml"
+                            | "yaml"
+                            | "json"
+                            | "toml"
+                            | "xml"
+                            | "env"
+                            | "conf"
+                            | "cfg"
+                            | "ini"
+                            | "sh"
+                            | "bash"
                     )
                 })
                 .unwrap_or(false);
@@ -442,20 +437,19 @@ impl ReleaseAnalyzer {
             }
 
             if let Ok(content) = std::fs::read_to_string(entry_path) {
-                for (pattern, name) in &compiled {
-                    if pattern.is_match(&content) {
-                        result.add(
-                            Finding::new(
-                                "REL-008",
-                                "Sensitive Data",
-                                Severity::Error,
-                                &format!("Potential {} found in source file", name),
-                            )
-                            .with_file(entry_path.to_path_buf())
-                            .with_suggestion("Remove sensitive data and rotate any exposed credentials"),
-                        );
-                        break; // One warning per file
-                    }
+                if let Some(name) = sensitive_kind(&content) {
+                    result.add(
+                        Finding::new(
+                            "REL-008",
+                            "Sensitive Data",
+                            Severity::Error,
+                            &format!("Potential {} found in source file", name),
+                        )
+                        .with_file(entry_path.to_path_buf())
+                        .with_suggestion(
+                            "Remove sensitive data and rotate any exposed credentials",
+                        ),
+                    );
                 }
             }
         }
@@ -476,7 +470,9 @@ impl ReleaseAnalyzer {
                             "No [profile.release] configuration in Cargo.toml",
                         )
                         .with_file(cargo_toml)
-                        .with_suggestion("Consider adding release optimizations (lto, codegen-units)"),
+                        .with_suggestion(
+                            "Consider adding release optimizations (lto, codegen-units)",
+                        ),
                     );
                 }
             }
@@ -494,8 +490,254 @@ impl ReleaseAnalyzer {
                     "No GitHub release workflow found",
                 )
                 .with_file(release_workflow.clone())
-                .with_suggestion("Consider adding .github/workflows/release.yml for automated releases"),
+                .with_suggestion(
+                    "Consider adding .github/workflows/release.yml for automated releases",
+                ),
             );
         }
+    }
+}
+
+/// Key material patterns for REL-008. These match credentials themselves
+/// (PEM headers, assignments of a long literal, vendor token shapes), never
+/// the WORDS "private key" or "aws secret": a config label such as
+/// `trust.no-private-keys = "probe-deferred"` or a document describing key
+/// hygiene is not a leaked key.
+static SENSITIVE_PATTERNS: std::sync::LazyLock<Vec<(Regex, &'static str)>> =
+    std::sync::LazyLock::new(|| {
+        [
+            (
+                r#"(?i)api[_-]?key["']?\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
+                "API Key",
+            ),
+            (
+                r#"(?i)secret[_-]?key["']?\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
+                "Secret Key",
+            ),
+            (
+                r#"(?i)aws[_-]?secret[_-]?(access[_-]?)?key["']?\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}(?:$|[^A-Za-z0-9/+=])"#,
+                "AWS Secret Access Key",
+            ),
+            (r#"(?i)password["']?\s*[:=]\s*['"]?[^\s'"]{8,}"#, "Password"),
+            (
+                r"-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----",
+                "Private Key",
+            ),
+            // Unarmored key material: the key NAME, then a long hex or base64 value.
+            // `private_key_path = "/etc/..."` and prose never match: the name must be
+            // followed directly by the separator, and the value must start alphanumeric.
+            (
+                r#"(?im)private[_-]?key["']?\s*[:=]\s*['"]?(?:[0-9a-f]{64,}|[a-z0-9][a-z0-9+/]{42,}={0,2})(?:["'\s,;}\]]|$)"#,
+                "Private Key",
+            ),
+            (r"\b(AKIA|ASIA)[0-9A-Z]{16}\b", "AWS Access Key ID"),
+            (r"ghp_[a-zA-Z0-9]{36}", "GitHub Personal Access Token"),
+            (r"gho_[a-zA-Z0-9]{36}", "GitHub OAuth Token"),
+        ]
+        .iter()
+        .map(|(p, name)| {
+            (
+                Regex::new(p).expect("REL-008 sensitive pattern is a valid constant regex"),
+                *name,
+            )
+        })
+        .collect()
+    });
+
+/// The kind of key material `content` contains, if any (first match wins).
+fn sensitive_kind(content: &str) -> Option<&'static str> {
+    SENSITIVE_PATTERNS
+        .iter()
+        .find(|(re, _)| re.is_match(content))
+        .map(|(_, name)| *name)
+}
+
+#[cfg(test)]
+mod sensitive_tests {
+    use super::*;
+
+    #[test]
+    fn words_about_keys_are_not_key_material() {
+        for text in [
+            r#"trust.no-private-keys = "probe-deferred""#,
+            "Never commit a private key or an AWS secret.",
+            "aws_access_key and aws-secret are documented here",
+            "private_key_path = \"/etc/ssl/key\"",
+        ] {
+            assert_eq!(sensitive_kind(text), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn aws_secret_access_key_value_is_key_material() {
+        let key = concat!("wJalrXUt", "nFEMI/K7", "MDENG/bP", "xRfiCYEX", "AMPLEKEY");
+        for text in [
+            format!("aws_secret_access_key = \"{key}\""),
+            format!("AWS_SECRET_ACCESS_KEY={key}"),
+            // JSON: a closing quote sits between the name and the separator.
+            format!("{{\"aws_secret_access_key\": \"{key}\"}}"),
+            format!("\"AWS_SECRET_ACCESS_KEY\":\"{key}\""),
+        ] {
+            assert_eq!(
+                sensitive_kind(&text),
+                Some("AWS Secret Access Key"),
+                "{text}"
+            );
+        }
+        assert_eq!(sensitive_kind("aws_secret_access_key = \"$SECRET\""), None);
+        assert_eq!(
+            sensitive_kind("The aws_secret_access_key is rotated monthly"),
+            None
+        );
+    }
+
+    #[test]
+    fn aws_secret_ending_in_base64_punctuation_is_key_material() {
+        // The 40th character may be `/`, `+` or `=`: `\b` cannot terminate those.
+        for last in ['/', '+', '=', 'A', '9'] {
+            let key = format!(
+                "{}{}",
+                concat!("wJalrXUt", "nFEMI/K7", "MDENG/bP", "xRfiCYEX", "AMPLEKE"),
+                last
+            );
+            assert_eq!(key.len(), 40);
+            for text in [
+                format!("aws_secret_access_key = \"{key}\""),
+                format!("AWS_SECRET_ACCESS_KEY={key}"),
+                format!("AWS_SECRET_ACCESS_KEY={key}\n"),
+                format!("aws_secret_access_key: {key} # note"),
+            ] {
+                assert_eq!(
+                    sensitive_kind(&text),
+                    Some("AWS Secret Access Key"),
+                    "{text}"
+                );
+            }
+        }
+        // A run longer than 40 key characters is not a 40-character key.
+        let long = format!("AWS_SECRET_ACCESS_KEY={}", "A".repeat(41));
+        assert_eq!(sensitive_kind(&long), None);
+        let long_slash = format!("AWS_SECRET_ACCESS_KEY={}/", "A".repeat(40));
+        assert_eq!(sensitive_kind(&long_slash), None);
+    }
+
+    #[test]
+    fn json_quoted_names_are_key_material() {
+        assert_eq!(
+            sensitive_kind(concat!("{\"api_key\": \"abcdefghij", "0123456789xyz\"}")),
+            Some("API Key")
+        );
+        assert_eq!(
+            sensitive_kind(concat!("{\"secret_key\": \"abcdefghij", "0123456789xyz\"}")),
+            Some("Secret Key")
+        );
+        assert_eq!(
+            sensitive_kind(concat!("{\"password\": \"hunter", "2hunter2\"}")),
+            Some("Password")
+        );
+    }
+
+    #[test]
+    fn unarmored_private_key_values_are_key_material() {
+        let hex = "0123456789abcdef".repeat(4);
+        let b64 = concat!("QUJDREVG", "R0hJSktM", "TU5PUFFS", "U1RVVldY", "WVowMTIz", "NDU2Nzg5");
+        for text in [
+            format!("private_key = \"{hex}\""),
+            format!("PRIVATE-KEY: {hex}"),
+            format!("{{\"private_key\": \"{hex}\"}}"),
+            format!("private_key = \"{b64}=\""),
+            format!("privateKey: {b64}"),
+        ] {
+            assert_eq!(sensitive_kind(&text), Some("Private Key"), "{text}");
+        }
+    }
+
+    #[test]
+    fn private_key_paths_prose_and_short_values_are_not_key_material() {
+        let hex = "0123456789abcdef".repeat(4);
+        for text in [
+            "private_key_path = \"/etc/ssl/private/server.key\"".to_string(),
+            format!("private_key_file = \"{hex}\""),
+            "the private key is stored in the vault, never in the repo".to_string(),
+            "private_key = \"/etc/ssl/private/a/very/long/path/to/the/server/key\"".to_string(),
+            "private_key = \"deadbeef\"".to_string(),
+            "private_key = \"$PRIVATE_KEY\"".to_string(),
+        ] {
+            assert_eq!(sensitive_kind(&text), None, "{text}");
+        }
+    }
+
+    /// REL-008 must not flag its own source: fixtures are built from fragments.
+    #[test]
+    fn this_file_is_not_itself_key_material() {
+        assert_eq!(sensitive_kind(include_str!("release.rs")), None);
+    }
+
+    #[test]
+    fn pem_headers_are_key_material() {
+        for kind in [
+            "RSA PRIVATE KEY",
+            "PRIVATE KEY",
+            "EC PRIVATE KEY",
+            "OPENSSH PRIVATE KEY",
+            "ENCRYPTED PRIVATE KEY",
+        ] {
+            let text = format!("{}{}{}\nMIIB\n", "-----BEGIN ", kind, "-----");
+            assert_eq!(sensitive_kind(&text), Some("Private Key"), "{kind}");
+        }
+        let pgp = format!("{}{}{}", "-----BEGIN ", "PGP PRIVATE KEY BLOCK", "-----");
+        assert_eq!(sensitive_kind(&pgp), Some("Private Key"));
+    }
+
+    #[test]
+    fn key_literals_are_key_material() {
+        let aws = format!("id = {}{}", "AKIA", "IOSFODNN7EXAMPLE");
+        assert_eq!(sensitive_kind(&aws), Some("AWS Access Key ID"));
+        let ghp = format!("t = {}{}", "ghp_", "a".repeat(36));
+        assert_eq!(sensitive_kind(&ghp), Some("GitHub Personal Access Token"));
+        assert_eq!(
+            sensitive_kind(concat!("api_key = \"abcdefghij", "0123456789xyz\"")),
+            Some("API Key")
+        );
+    }
+
+    #[test]
+    fn rel_008_ignores_a_label_but_reports_a_key_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("trust.toml"),
+            "trust.no-private-keys = \"probe-deferred\"\n",
+        )
+        .unwrap();
+        let mut result = AnalysisResult::new();
+        ReleaseAnalyzer.check_sensitive_data(dir.path(), &Config::default(), &mut result);
+        assert!(result.findings.is_empty(), "{:?}", result.findings);
+
+        std::fs::write(
+            dir.path().join("leak.toml"),
+            format!(
+                "k = \"\"\"\n-----BEGIN {} KEY-----\nAAAA\n\"\"\"\n",
+                "PRIVATE"
+            ),
+        )
+        .unwrap();
+        ReleaseAnalyzer.check_sensitive_data(dir.path(), &Config::default(), &mut result);
+        assert_eq!(result.findings.len(), 1);
+        assert_eq!(result.findings[0].id, "REL-008");
+    }
+
+    #[test]
+    fn security_policy_is_found_in_dot_github() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mut result = AnalysisResult::new();
+        ReleaseAnalyzer.check_security_files(dir.path(), &mut result);
+        assert_eq!(result.findings.len(), 1);
+        assert_eq!(result.findings[0].id, "REL-004");
+
+        std::fs::create_dir_all(dir.path().join(".github")).unwrap();
+        std::fs::write(dir.path().join(".github/SECURITY.md"), "x").unwrap();
+        let mut again = AnalysisResult::new();
+        ReleaseAnalyzer.check_security_files(dir.path(), &mut again);
+        assert!(again.findings.is_empty());
     }
 }

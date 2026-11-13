@@ -137,10 +137,7 @@ mod license_analyzer {
             .iter()
             .filter(|f| f.id.starts_with("LIC-002"))
             .collect();
-        assert!(
-            !spdx_findings.is_empty(),
-            "Should find missing SPDX header"
-        );
+        assert!(!spdx_findings.is_empty(), "Should find missing SPDX header");
         assert_eq!(
             spdx_findings[0].severity,
             Severity::Warning,
@@ -228,11 +225,7 @@ mod placeholder_analyzer {
         let file_findings: Vec<_> = result
             .findings
             .iter()
-            .filter(|f| {
-                f.file
-                    .as_ref()
-                    .is_some_and(|p| p.ends_with("clean.rs"))
-            })
+            .filter(|f| f.file.as_ref().is_some_and(|p| p.ends_with("clean.rs")))
             .collect();
         assert!(
             file_findings.is_empty(),
@@ -255,21 +248,18 @@ mod placeholder_analyzer {
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
-        let rs_findings = result.findings.iter().filter(|f| {
-            f.file
-                .as_ref()
-                .is_some_and(|p| p.ends_with("code.rs"))
-        });
-        let md_findings = result.findings.iter().filter(|f| {
-            f.file
-                .as_ref()
-                .is_some_and(|p| p.ends_with("notes.md"))
-        });
-        let toml_findings = result.findings.iter().filter(|f| {
-            f.file
-                .as_ref()
-                .is_some_and(|p| p.ends_with("Cargo.toml"))
-        });
+        let rs_findings = result
+            .findings
+            .iter()
+            .filter(|f| f.file.as_ref().is_some_and(|p| p.ends_with("code.rs")));
+        let md_findings = result
+            .findings
+            .iter()
+            .filter(|f| f.file.as_ref().is_some_and(|p| p.ends_with("notes.md")));
+        let toml_findings = result
+            .findings
+            .iter()
+            .filter(|f| f.file.as_ref().is_some_and(|p| p.ends_with("Cargo.toml")));
 
         assert!(rs_findings.count() > 0, "Should detect in .rs files");
         assert!(md_findings.count() > 0, "Should detect in .md files");
@@ -302,7 +292,11 @@ mod placeholder_analyzer {
     #[test]
     fn test_max_allowed_placeholders_no_error() {
         let (_temp, path) = setup_test_repo();
-        fs::write(path.join("code.rs"), "// TODO: one\n// TODO: two\nfn main() {}\n").unwrap();
+        fs::write(
+            path.join("code.rs"),
+            "// TODO: one\n// TODO: two\nfn main() {}\n",
+        )
+        .unwrap();
 
         let mut config = default_config();
         config.placeholders.max_allowed = 5;
@@ -456,7 +450,11 @@ mod claims_analyzer {
         )
         .unwrap();
         fs::create_dir_all(path.join("tests")).unwrap();
-        fs::write(path.join("tests/test_main.rs"), "#[test]\nfn it_works() { assert!(true); }\n").unwrap();
+        fs::write(
+            path.join("tests/test_main.rs"),
+            "#[test]\nfn it_works() { assert!(true); }\n",
+        )
+        .unwrap();
 
         let mut config = default_config();
         config.claims.require_readme = true;
@@ -629,24 +627,19 @@ mod scm_files_analyzer {
     use super::*;
 
     #[test]
-    fn test_missing_state_scm_error() {
+    fn test_missing_state_scm_is_retired() {
         let (_temp, path) = setup_test_repo();
-        // No .machine_readable/ directory at all
+        // No .machine_readable/ directory at all: the descriptive documents are
+        // clauses of the chora deed now, so absence is not a finding.
 
         let analyzer = ScmFilesAnalyzer;
         let config = default_config();
         let result = analyzer.analyze(&path, &config).unwrap();
 
         assert!(
-            result.findings.iter().any(|f| f.id == "SCM-001-STATE.scm"),
-            "Should report missing STATE.scm"
-        );
-        assert!(
-            result
-                .findings
-                .iter()
-                .any(|f| f.id == "SCM-001-STATE.scm" && f.severity == Severity::Error),
-            "Missing STATE.scm should be Error severity"
+            result.findings.iter().all(|f| !f.id.starts_with("SCM-001")),
+            "SCM-001 is retired; got {:?}",
+            result.findings.iter().map(|f| &f.id).collect::<Vec<_>>()
         );
     }
 
@@ -669,10 +662,7 @@ mod scm_files_analyzer {
         let result = analyzer.analyze(&path, &config).unwrap();
 
         assert!(
-            result
-                .findings
-                .iter()
-                .any(|f| f.id == "SCM-005-STATE.scm"),
+            result.findings.iter().any(|f| f.id == "SCM-005-STATE.scm"),
             "Should warn about STATE.scm in root instead of .machine_readable/"
         );
         assert!(
@@ -747,10 +737,7 @@ mod scm_files_analyzer {
         let result = analyzer.analyze(&path, &config).unwrap();
 
         assert!(
-            result
-                .findings
-                .iter()
-                .any(|f| f.id == "SCM-002-STATE.scm"),
+            result.findings.iter().any(|f| f.id == "SCM-002-STATE.scm"),
             "Should warn about missing SPDX header in STATE.scm"
         );
     }
@@ -829,8 +816,18 @@ mod testing_analyzer {
         .unwrap();
         fs::create_dir_all(path.join("benches")).unwrap();
         fs::write(path.join("benches/bench.rs"), "fn main() {}\n").unwrap();
-        fs::create_dir_all(path.join("fuzz")).unwrap();
-        fs::write(path.join("fuzz/fuzz_target.rs"), "fn main() {}\n").unwrap();
+        // A recognisable cargo-fuzz harness: a placeholder file no longer counts.
+        fs::create_dir_all(path.join("fuzz/fuzz_targets")).unwrap();
+        fs::write(
+            path.join("fuzz/Cargo.toml"),
+            "[package]\nname = \"test-fuzz\"\n\n[[bin]]\nname = \"t\"\npath = \"fuzz_targets/t.rs\"\n",
+        )
+        .unwrap();
+        fs::write(
+            path.join("fuzz/fuzz_targets/t.rs"),
+            "libfuzzer_sys::fuzz_target!(|data: &[u8]| { let _ = data; });\n",
+        )
+        .unwrap();
         fs::create_dir_all(path.join(".github/workflows")).unwrap();
         fs::write(
             path.join(".github/workflows/stress-test.yml"),
@@ -848,18 +845,13 @@ mod testing_analyzer {
             .iter()
             .filter(|f| {
                 f.severity == Severity::Error
-                    && (f.id == "TEST-RU-001"
-                        || f.id == "TEST-RU-003"
-                        || f.id == "TEST-RU-005")
+                    && (f.id == "TEST-RU-001" || f.id == "TEST-RU-003" || f.id == "TEST-RU-005")
             })
             .collect();
         assert!(
             testing_errors.is_empty(),
             "Well-tested repo should have no testing infrastructure errors, got: {:?}",
-            testing_errors
-                .iter()
-                .map(|f| &f.id)
-                .collect::<Vec<_>>()
+            testing_errors.iter().map(|f| &f.id).collect::<Vec<_>>()
         );
     }
 }
@@ -1097,11 +1089,7 @@ mod integration {
         let (_temp, path) = setup_test_repo();
 
         // Create a fairly complete repo
-        fs::write(
-            path.join("LICENSE"),
-            "Palimpsest License\nMPL-2.0\n",
-        )
-        .unwrap();
+        fs::write(path.join("LICENSE"), "Palimpsest License\nMPL-2.0\n").unwrap();
         let readme = "# My Project\n\n\
             Description of the project with enough words.\n\n\
             ## Installation\n\nRun the install command.\n\n\
@@ -1127,18 +1115,10 @@ mod integration {
 
         let config = default_config();
 
-        let license = LicenseAnalyzer
-            .analyze(&path, &config)
-            .unwrap();
-        let placeholder = PlaceholderAnalyzer
-            .analyze(&path, &config)
-            .unwrap();
-        let claims = ClaimsAnalyzer
-            .analyze(&path, &config)
-            .unwrap();
-        let release = ReleaseAnalyzer
-            .analyze(&path, &config)
-            .unwrap();
+        let license = LicenseAnalyzer.analyze(&path, &config).unwrap();
+        let placeholder = PlaceholderAnalyzer.analyze(&path, &config).unwrap();
+        let claims = ClaimsAnalyzer.analyze(&path, &config).unwrap();
+        let release = ReleaseAnalyzer.analyze(&path, &config).unwrap();
 
         let result = AuditResult {
             license,
@@ -1169,10 +1149,7 @@ mod integration {
         // Verify Finding serializes to JSON correctly
         let json = serde_json::to_string(&finding).expect("Finding should serialize to JSON");
         assert!(json.contains("LIC-001"), "JSON should contain finding ID");
-        assert!(
-            json.contains("error"),
-            "JSON should contain severity level"
-        );
+        assert!(json.contains("error"), "JSON should contain severity level");
 
         // Verify round-trip
         let deserialized: finishing_bot::Finding =
@@ -1192,12 +1169,15 @@ mod integration {
             Severity::Error,
             "No LICENSE file found",
         ));
-        result.placeholder.findings.push(finishing_bot::Finding::new(
-            "PH-001",
-            "Placeholder: TODO",
-            Severity::Warning,
-            "Found TODO placeholder",
-        ));
+        result
+            .placeholder
+            .findings
+            .push(finishing_bot::Finding::new(
+                "PH-001",
+                "Placeholder: TODO",
+                Severity::Warning,
+                "Found TODO placeholder",
+            ));
 
         assert_eq!(result.total_findings(), 2);
         assert_eq!(result.total_errors(), 1);

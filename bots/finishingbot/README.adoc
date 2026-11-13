@@ -49,7 +49,7 @@ the gitbot-fleet shared context layer and makes the final release-readiness dete
 |No
 
 |**SCM Files**
-|All 6 `.machine_readable/` files (STATE.scm, META.scm, ECOSYSTEM.scm, PLAYBOOK.scm, AGENTIC.scm, NEUROSYM.scm), SPDX headers, required sections, content completeness
+|Legacy `.machine_readable/` SCM files (STATE.scm, META.scm, ECOSYSTEM.scm, PLAYBOOK.scm, AGENTIC.scm, NEUROSYM.scm) are validated only if present (SPDX headers, required sections, content completeness); their absence is canonical, since those descriptiles are now clauses of `<name>_chora.deed`
 |No
 
 |**Testing**
@@ -170,6 +170,19 @@ finishing-bot release
 # Security analysis (requires panic-attacker)
 finishing-bot security --panic-attacker-path /path/to/panic-attacker
 ----
+
+=== Estate canon and exemptions
+
+The analyzers accept the estate's canonical locations, not only one spelling:
+
+* `ROADMAP.adoc` at `docs/status/ROADMAP.adoc` (or the root); `SECURITY`, `CONTRIBUTING` and `CODE_OF_CONDUCT` as `.md` or `.adoc`, at the root or in `.github/` (V1-DOC, V1-SEC-001, V1-COM, REL-004).
+* `mise.toml` in place of `.tool-versions` (TOOL-001).
+* `tests/fuzz/` as well as `fuzz/` and `.clusterfuzzlite/` (TEST-RU-003); a crate with no code yet (no `.rs` line that is not blank or a comment) is exempt from TEST-RU-005 and TEST-RU-006.
+* A workflow named by file name in prose resolves under `.github/workflows/` (CLM-006).
+* SCM-001 is retired: STATE, META, ECOSYSTEM, PLAYBOOK, AGENTIC and NEUROSYM are clauses of `<name>_chora.deed`, not files.
+* REL-008 matches key material (PEM headers, AWS key ids, vendor token shapes, long key literals), not the words "private key".
+
+A repository can acknowledge a finding in its `.hypatia-baseline.json`, the estate's documented exemption mechanism (`docs/upstream-proposals/standards--hypatia-baseline-consumer/docs/EXEMPTION-MECHANISMS.adoc`, "Layer 2"). `.hypatia-ignore` is not read: that document rejects it. An entry uses this bot's `rule_module`, `finishing_bot`, and the finding id as `type`, with the estate severity word (error = `high`, warning = `medium`, info = `info`, suggestion = `low`) and exactly one of `file` or `file_pattern`: `{"severity": "medium", "rule_module": "finishing_bot", "type": "PH-001", "file_pattern": "build/just/**", "note": "scanner names the tokens"}`. Matching is exact on severity, module and type, so a rule family needs one entry per id. Entries past `expires_at`, or carrying `severity_override` (this bot does not downgrade), acknowledge nothing; other modules' entries (`cicd_rules`, ...) are Hypatia's and are not read. Currently only the placeholder analyzer (PH-nnn, hence PH-100) honours it. See `src/baseline.rs`.
 
 === Security Analysis
 

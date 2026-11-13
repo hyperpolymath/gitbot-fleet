@@ -538,8 +538,8 @@ cleanup_adapter() { rm -f "$ADAPTER_OUT" "$ADAPTER_ERR"; }
 # status 124 always produces a timeout error; invalid output produces an error
 # with a stderr diagnostic. Bind $repo for relativize_filter, write the member's
 # envelope, and remove the capture files. Envelope I/O failures are not caught.
-translate_or_error() { # member jq-program
-  local m="$1" prog="$2" findings
+translate_or_error() { # member jq-program [ran-note-jq-program]
+  local m="$1" prog="$2" findings note=""
   if [ "$ADAPTER_RC" -eq 124 ]; then
     write_envelope "$m" error "adapter exceeded the ${timeout_s}s timeout" '[]'
   elif findings=$(jq -c --arg repo "$repo" "$(relativize_filter) $prog" "$ADAPTER_OUT" 2> "$ADAPTER_ERR.jq") \
@@ -550,7 +550,12 @@ translate_or_error() { # member jq-program
       # a well-formed findings array.
       write_envelope "$m" error "adapter exited with status $ADAPTER_RC: $(first_err_line)" '[]'
     else
-      write_envelope "$m" ran "" "$findings"
+      # An analyzer that did not run has no findings, which is not a clean scan:
+      # the optional program reads the adapter output for such skips and the note
+      # becomes the envelope reason (ran + reason = ran, with caveats).
+      if [ -n "${3:-}" ]; then note=$(jq -r "$3" "$ADAPTER_OUT" 2>/dev/null) || note=""; fi
+      [ -z "$note" ] || echo "fleet-report-back: $m: $note" >&2
+      write_envelope "$m" ran "$note" "$findings"
     fi
   elif grep -q 'unexpected output shape' "$ADAPTER_ERR.jq" 2>/dev/null; then
     # The shape guard fired: valid JSON, but not what this adapter documents.
@@ -680,7 +685,12 @@ run_member() {
       translate_or_error "$m" "$SHAPE_ANALYZERS [ .[] | .findings[] | $FINDING ]" ;;
     glambot)
       run_adapter "$bin" --path "$repo" --format json audit
-      translate_or_error "$m" "$SHAPE_ANALYZERS [ .[] | .findings[] | $FINDING ]" ;;
+      # An analyzer that could not run (git-seo missing) reports `skipped`; say so
+      # in the envelope reason rather than leaving an empty list that reads clean.
+      translate_or_error "$m" "$SHAPE_ANALYZERS [ .[] | .findings[] | $FINDING ]" \
+        '[ (if type == "object" then to_entries[] else {key: "analyzer", value: .[]} end)
+            | select((.value.skipped // null) | type == "string")
+            | "\(.key) analyzer skipped: \(.value.skipped); its empty result is not a clean scan" ] | join("; ")' ;;
     accessibilitybot)
       run_adapter "$bin" fleet "$repo"
       translate_or_error "$m" "$SHAPE_OBJ_FINDINGS [ .findings[] | $FINDING ]" ;;
@@ -694,7 +704,7 @@ if [ "${#members[@]}" -eq 0 ]; then
 fi
 for m in "${members[@]+"${members[@]}"}"; do
   run_member "$m"
-  echo "fleet-report-back: $m -> $(jq -r '.status + (if .status == "ran" then " (\(.findings | length) finding(s))" else ": " + (.reason // "") end)' "$out/$m.json")"
+  echo "fleet-report-back: $m -> $(jq -r '.status + (if .status == "ran" then " (\(.findings | length) finding(s))" + (if .reason then " [" + .reason + "]" else "" end) else ": " + (.reason // "") end)' "$out/$m.json")"
   # A path-less finding is graded as part of EVERY change (standards
   # fork-governance SPEC section 3.0: absence of a location is not evidence of
   # absence of a defect), so a repository-level rule that omits its path makes

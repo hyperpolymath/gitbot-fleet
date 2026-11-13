@@ -38,6 +38,7 @@ impl GitSeoAnalyzer {
         // logged loudly instead; install hint: https://github.com/hyperpolymath/git-seo
         if !git_seo_installed {
             warn!("git-seo is not installed; the Git-SEO analyzer did not run (no findings reported, not a clean result)");
+            result.skipped = Some("git-seo is not installed".to_string());
             result.duration_ms = start.elapsed().as_millis() as u64;
             return Ok(result);
         }
@@ -142,10 +143,7 @@ impl Analyzer for GitSeoAnalyzer {
         if !funding_path.exists() {
             let content = "# SPDX-License-Identifier: MPL-2.0\n# Funding information\n# github: hyperpolymath\n";
             std::fs::write(&funding_path, content)?;
-            fixes.push(format!(
-                "Created FUNDING.yml at {}",
-                funding_path.display()
-            ));
+            fixes.push(format!("Created FUNDING.yml at {}", funding_path.display()));
         }
 
         // If git-seo is installed, also run the tool
@@ -245,12 +243,8 @@ fn run_git_seo_apply(repo_url: &str) -> Result<String> {
 /// Process git-seo JSON report into glambot findings
 fn process_seo_report(report: &serde_json::Value, result: &mut AnalysisResult) {
     // Extract overall score
-    let score = report["scores"]["total"]
-        .as_f64()
-        .unwrap_or(0.0);
-    let percentage = report["scores"]["percentage"]
-        .as_f64()
-        .unwrap_or(0.0);
+    let score = report["scores"]["total"].as_f64().unwrap_or(0.0);
+    let percentage = report["scores"]["percentage"].as_f64().unwrap_or(0.0);
 
     // Create finding based on score
     let severity = if percentage >= 80.0 {
@@ -346,7 +340,11 @@ mod tests {
         let result = GitSeoAnalyzer::default()
             .analyze_with(dir.path(), &default_config(), true)
             .unwrap();
-        let gs003: Vec<_> = result.findings.iter().filter(|f| f.id == "GS-003").collect();
+        let gs003: Vec<_> = result
+            .findings
+            .iter()
+            .filter(|f| f.id == "GS-003")
+            .collect();
         assert_eq!(gs003.len(), 1, "a repo with no remote reports GS-003");
         assert_eq!(
             gs003[0].file.as_deref(),
@@ -364,8 +362,32 @@ mod tests {
         assert!(
             result.findings.is_empty(),
             "tool-availability advice is not a repo finding, got: {:?}",
-            result.findings.iter().map(|f| f.id.as_str()).collect::<Vec<_>>()
+            result
+                .findings
+                .iter()
+                .map(|f| f.id.as_str())
+                .collect::<Vec<_>>()
         );
+        assert_eq!(
+            result.skipped.as_deref(),
+            Some("git-seo is not installed"),
+            "an unavailable git-seo is reported as skipped, not as a clean scan"
+        );
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["skipped"], "git-seo is not installed");
+    }
+
+    #[test]
+    fn a_run_is_not_a_skip() {
+        let dir = git_repo_without_remote();
+        let result = GitSeoAnalyzer
+            .analyze_with(dir.path(), &default_config(), true)
+            .unwrap();
+        assert!(result.skipped.is_none());
+        assert!(serde_json::to_value(&result)
+            .unwrap()
+            .get("skipped")
+            .is_none());
     }
 
     #[test]
@@ -383,10 +405,7 @@ mod tests {
         process_seo_report(&report, &mut result);
 
         // High score should produce Info severity, not Error
-        assert!(
-            !result.has_errors(),
-            "High score should not produce errors"
-        );
+        assert!(!result.has_errors(), "High score should not produce errors");
         let finding = &result.findings[0];
         assert_eq!(finding.severity, Severity::Info);
     }

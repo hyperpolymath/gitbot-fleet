@@ -7,13 +7,15 @@ use crate::config::Config;
 use crate::error::Result;
 use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
 use tracing::debug;
 use walkdir::WalkDir;
-use std::sync::LazyLock;
 
 // Compiled once. These were rebuilt on every call (hypatia expect_in_hot_path).
-static SPDX_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)SPDX-License-Identifier:\s*[A-Za-z0-9.-]+").expect("SPDX header regex is a valid constant pattern"));
+static SPDX_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)SPDX-License-Identifier:\s*[A-Za-z0-9.-]+")
+        .expect("SPDX header regex is a valid constant pattern")
+});
 
 /// Repositories that deliberately use AGPL-3.0-or-later instead of PMPL.
 /// These are co-developed projects with the user's son and use AGPL by deliberate choice.
@@ -100,9 +102,7 @@ impl LicenseAnalyzer {
             "COPYING.md",
         ];
 
-        let found_license = license_files
-            .iter()
-            .find(|name| path.join(name).exists());
+        let found_license = license_files.iter().find(|name| path.join(name).exists());
 
         match found_license {
             None => {
@@ -207,7 +207,9 @@ impl LicenseAnalyzer {
             return Some("GPL-3.0-or-later".to_string());
         }
 
-        if content_lower.contains("mit license") || content_lower.contains("permission is hereby granted, free of charge") {
+        if content_lower.contains("mit license")
+            || content_lower.contains("permission is hereby granted, free of charge")
+        {
             return Some("MIT".to_string());
         }
 
@@ -215,7 +217,9 @@ impl LicenseAnalyzer {
             return Some("Apache-2.0".to_string());
         }
 
-        if content_lower.contains("bsd 3-clause") || content_lower.contains("redistribution and use in source and binary forms") {
+        if content_lower.contains("bsd 3-clause")
+            || content_lower.contains("redistribution and use in source and binary forms")
+        {
             return Some("BSD-3-Clause".to_string());
         }
 
@@ -331,7 +335,12 @@ impl LicenseAnalyzer {
         let new_content = if content.starts_with("#!") {
             let mut lines = content.lines();
             let shebang = lines.next().unwrap_or("");
-            format!("{}\n{}{}", shebang, header, lines.collect::<Vec<_>>().join("\n"))
+            format!(
+                "{}\n{}{}",
+                shebang,
+                header,
+                lines.collect::<Vec<_>>().join("\n")
+            )
         } else {
             format!("{}{}", header, content)
         };

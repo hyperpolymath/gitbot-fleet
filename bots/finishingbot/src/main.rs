@@ -3,6 +3,7 @@
 //! finishing-bot CLI - Release Readiness Validator
 
 mod analyzers;
+mod baseline;
 mod config;
 mod error;
 #[cfg(feature = "fleet")]
@@ -12,8 +13,8 @@ use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::{fmt, EnvFilter};
 
 /// finishing-bot: Release Readiness Validator
 ///
@@ -145,39 +146,21 @@ fn main() -> ExitCode {
 
     // Handle commands
     match cli.command {
-        Some(Command::Init { format }) => {
-            handle_init(&config_path, &format)
-        }
-        Some(Command::Show) => {
-            handle_show(&config)
-        }
-        Some(Command::Audit { strict }) => {
-            handle_audit(&cli.path, &config, strict, &cli.format)
-        }
-        Some(Command::Fix { only }) => {
-            handle_fix(&cli.path, &config, only.as_deref())
-        }
-        Some(Command::License { list_allowed }) => {
-            handle_license(&cli.path, &config, list_allowed)
-        }
-        Some(Command::Placeholders { action }) => {
-            handle_placeholders(&cli.path, &config, &action)
-        }
-        Some(Command::Claims) => {
-            handle_claims(&cli.path, &config)
-        }
-        Some(Command::Release) => {
-            handle_release(&cli.path, &config)
-        }
+        Some(Command::Init { format }) => handle_init(&config_path, &format),
+        Some(Command::Show) => handle_show(&config),
+        Some(Command::Audit { strict }) => handle_audit(&cli.path, &config, strict, &cli.format),
+        Some(Command::Fix { only }) => handle_fix(&cli.path, &config, only.as_deref()),
+        Some(Command::License { list_allowed }) => handle_license(&cli.path, &config, list_allowed),
+        Some(Command::Placeholders { action }) => handle_placeholders(&cli.path, &config, &action),
+        Some(Command::Claims) => handle_claims(&cli.path, &config),
+        Some(Command::Release) => handle_release(&cli.path, &config),
         #[cfg(feature = "fleet")]
         Some(Command::Fleet {
             repo,
             context,
             session,
             output,
-        }) => {
-            handle_fleet_mode(repo, context, session, output, config)
-        }
+        }) => handle_fleet_mode(repo, context, session, output, config),
         None => {
             // Default to audit
             handle_audit(&cli.path, &config, false, &cli.format)
@@ -301,7 +284,10 @@ fn handle_show(config: &config::Config) -> ExitCode {
     println!("Licenses:");
     println!("  Allowed: {}", config.licenses.allowed.join(", "));
     println!("  Strict: {}", config.licenses.strict);
-    println!("  Require SPDX headers: {}", config.licenses.require_spdx_headers);
+    println!(
+        "  Require SPDX headers: {}",
+        config.licenses.require_spdx_headers
+    );
     println!();
 
     println!("Placeholders:");
@@ -319,7 +305,10 @@ fn handle_show(config: &config::Config) -> ExitCode {
 
     println!("Release:");
     println!("  Require hashes: {}", config.release.require_hashes);
-    println!("  Require signatures: {}", config.release.require_signatures);
+    println!(
+        "  Require signatures: {}",
+        config.release.require_signatures
+    );
     println!();
 
     println!("General:");
@@ -434,9 +423,7 @@ fn handle_audit(path: &Path, config: &config::Config, strict: bool, format: &str
 }
 
 fn handle_fix(path: &Path, config: &config::Config, only: Option<&str>) -> ExitCode {
-    use crate::analyzers::{
-        license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer, Analyzer,
-    };
+    use crate::analyzers::{license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer, Analyzer};
 
     if only.is_none() || only == Some("license") {
         let license = LicenseAnalyzer;

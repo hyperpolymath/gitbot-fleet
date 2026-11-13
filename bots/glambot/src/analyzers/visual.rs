@@ -67,7 +67,10 @@ impl Analyzer for VisualAnalyzer {
                             repo_name
                         );
                         std::fs::write(&readme_path, template)?;
-                        fixes.push(format!("Created README.adoc template at {}", readme_path.display()));
+                        fixes.push(format!(
+                            "Created README.adoc template at {}",
+                            readme_path.display()
+                        ));
                     }
                 }
                 "VIS-004" => {
@@ -85,12 +88,20 @@ impl Analyzer for VisualAnalyzer {
                                     };
                                     // Insert badges after the first heading
                                     let updated = if let Some(pos) = content.find('\n') {
-                                        format!("{}{}{}", &content[..pos + 1], badge_section, &content[pos + 1..])
+                                        format!(
+                                            "{}{}{}",
+                                            &content[..pos + 1],
+                                            badge_section,
+                                            &content[pos + 1..]
+                                        )
                                     } else {
                                         format!("{}{}", content, badge_section)
                                     };
                                     std::fs::write(&readme_path, updated)?;
-                                    fixes.push(format!("Added badges section to {}", readme_path.display()));
+                                    fixes.push(format!(
+                                        "Added badges section to {}",
+                                        readme_path.display()
+                                    ));
                                 }
                             }
                             break;
@@ -107,7 +118,10 @@ impl Analyzer for VisualAnalyzer {
                     if !placeholder_path.exists() {
                         let content = "# Screenshots\n\nTODO: Add screenshots or visual documentation here.\n\n## UI Preview\n\n<!-- Add screenshot: ![Description](screenshot.png) -->\n";
                         std::fs::write(&placeholder_path, content)?;
-                        fixes.push(format!("Created screenshot placeholder at {}", placeholder_path.display()));
+                        fixes.push(format!(
+                            "Created screenshot placeholder at {}",
+                            placeholder_path.display()
+                        ));
                     }
                 }
                 _ => {}
@@ -125,9 +139,7 @@ impl Analyzer for VisualAnalyzer {
 impl VisualAnalyzer {
     fn check_readme(&self, path: &Path, _config: &Config, result: &mut AnalysisResult) {
         let readme_files = ["README.md", "README.adoc", "README.rst", "README.txt"];
-        let found = readme_files
-            .iter()
-            .find(|name| path.join(name).exists());
+        let found = readme_files.iter().find(|name| path.join(name).exists());
 
         match found {
             None => {
@@ -155,17 +167,22 @@ impl VisualAnalyzer {
                                 "VIS-002",
                                 "README too short",
                                 Severity::Warning,
-                                &format!("README is only {} characters. Should be more descriptive.", content.len()),
+                                &format!(
+                                    "README is only {} characters. Should be more descriptive.",
+                                    content.len()
+                                ),
                             )
                             .with_file(readme_path.clone())
-                            .with_suggestion("Expand README with project description, usage, installation"),
+                            .with_suggestion(
+                                "Expand README with project description, usage, installation",
+                            ),
                         );
                     }
 
                     // Check for title/heading
-                    let has_title = content.lines().any(|line| {
-                        line.starts_with("# ") || line.starts_with("= ")
-                    });
+                    let has_title = content
+                        .lines()
+                        .any(|line| line.starts_with("# ") || line.starts_with("= "));
 
                     if !has_title {
                         result.add(
@@ -186,9 +203,7 @@ impl VisualAnalyzer {
 
     fn check_badges(&self, path: &Path, result: &mut AnalysisResult) {
         let readme_files = ["README.md", "README.adoc"];
-        let found = readme_files
-            .iter()
-            .find(|name| path.join(name).exists());
+        let found = readme_files.iter().find(|name| path.join(name).exists());
 
         if let Some(readme) = found {
             let readme_path = path.join(readme);
@@ -204,7 +219,9 @@ impl VisualAnalyzer {
                             "README does not contain any badges (build status, coverage, etc.).",
                         )
                         .with_file(readme_path)
-                        .with_suggestion("Add badges for build status, test coverage, license, etc."),
+                        .with_suggestion(
+                            "Add badges for build status, test coverage, license, etc.",
+                        ),
                     );
                 }
             }
@@ -325,11 +342,7 @@ mod tests {
 
         // Should find missing README (VIS-001) which is an error
         assert!(result.has_errors(), "Bare repo should have errors");
-        let error_ids: Vec<&str> = result
-            .errors()
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let error_ids: Vec<&str> = result.errors().iter().map(|f| f.id.as_str()).collect();
         assert!(
             error_ids.contains(&"VIS-001"),
             "Should report missing README"
@@ -346,11 +359,7 @@ mod tests {
         let config = default_config();
         let result = analyzer.analyze(dir.path(), &config).unwrap();
 
-        let warning_ids: Vec<&str> = result
-            .warnings()
-            .iter()
-            .map(|f| f.id.as_str())
-            .collect();
+        let warning_ids: Vec<&str> = result.warnings().iter().map(|f| f.id.as_str()).collect();
         assert!(
             warning_ids.contains(&"VIS-002"),
             "Short README should trigger VIS-002 warning"

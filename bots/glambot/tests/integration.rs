@@ -139,9 +139,8 @@ fn test_all_analyzers_deficient_repo() {
     );
 
     // Verify correct total count
-    let total = visual_result.findings.len()
-        + acc_result.findings.len()
-        + machine_result.findings.len();
+    let total =
+        visual_result.findings.len() + acc_result.findings.len() + machine_result.findings.len();
     assert!(
         total >= 4,
         "Should have at least 4 total findings across analyzers, got {}",
@@ -191,11 +190,7 @@ fn test_finding_severity_levels() {
     let result = machine.analyze(dir.path(), &config).unwrap();
 
     // Verify we get different severity levels
-    let severities: Vec<Severity> = result
-        .findings
-        .iter()
-        .map(|f| f.severity)
-        .collect();
+    let severities: Vec<Severity> = result.findings.iter().map(|f| f.severity).collect();
 
     // Invalid JSON should be Error
     assert!(
@@ -237,7 +232,7 @@ fn json_audit_stdout_is_only_the_report() {
         .output()
         .unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
-    let parsed: serde_json::Value =
-        serde_json::from_str(&text).unwrap_or_else(|e| panic!("stdout is not pure JSON ({e}): {text}"));
+    let parsed: serde_json::Value = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("stdout is not pure JSON ({e}): {text}"));
     assert!(parsed.is_object());
 }

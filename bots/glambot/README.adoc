@@ -90,22 +90,22 @@ Evaluates repository discoverability through README descriptions, HTML meta tags
 
 === Machine-Readability (`MachineAnalyzer`)
 
-Validates JSON/YAML file syntax, structured data presence, robots.txt, and `.machine_readable/` directory with SCM files.
+Validates JSON/YAML file syntax, structured data presence, robots.txt, and the `.machine_readable/` directory. Legacy SCM files there are validated only if present; their absence is canonical (the descriptiles are clauses of `<name>_chora.deed`).
 
 [cols="1,2,1"]
 |===
 | Finding ID | Description | Severity
 
-| MACH-001 | Invalid JSON | Error
+| MACH-001 | Invalid JSON | Error (`.devcontainer/*.json` and `.vscode/*.json` are tool-demanded JSONC and are parsed as JSONC)
 | MACH-002 | Invalid YAML | Error
 | MACH-003 | Missing structured data (HTML) | Warning
 | MACH-004 | Invalid JSON-LD | Error
 | MACH-005 | Missing robots.txt | Info
 | MACH-006 | Missing .machine_readable/ directory | Warning
-| MACH-007 | Missing SCM file (STATE/META/ECOSYSTEM) | Info
+| MACH-007 | _Retired_: the STATE/META/ECOSYSTEM `.scm` files are clauses of the repository's `<name>_chora.deed`, so their absence is not reported | n/a
 |===
 
-**Auto-fixes:** Creates `.machine_readable/` directory with STATE.scm, META.scm, ECOSYSTEM.scm templates (MACH-006), adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).
+**Auto-fixes:** Adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).
 
 === Git-SEO Integration (`GitSeoAnalyzer`)
 
