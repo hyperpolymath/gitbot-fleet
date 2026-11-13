@@ -102,6 +102,9 @@ for c in $crates; do
 done
 
 if [ -n "$pa_sha" ]; then
+  # A reused --bin-dir may hold a panic-attack from an earlier run. Only this
+  # run's install or cache restore may put one there.
+  rm -f "$bindir/panic-attack"
   root="$HOME/.panic-attack"; bin="$root/bin/panic-attack"
   group "panic-attack at $pa_sha"
   if [ -x "$bin" ] && grep -qF "#$pa_sha" "$root/.crates.toml" 2>/dev/null; then
@@ -118,6 +121,10 @@ if [ -n "$pa_sha" ]; then
 fi
 
 if [[ -n "$pons_sha" ]]; then
+  # A reused --bin-dir may hold a pons from an earlier run, which ponsbot would
+  # find on PATH. Remove it before deciding, so a refused, failed or skipped
+  # install leaves no pons at all and ponsbot reads not_run.
+  rm -f "$bindir/pons"
   if ! [[ "$pons_sha" =~ ^[0-9a-f]{40}$ ]]; then
     warn "pons not installed" "$(printf '%q' "$pons_sha") is not a 40-hex commit; ponsbot will read not_run"
   elif pin_commit=$(sed -n 's/^commit[[:space:]]*=[[:space:]]*"\([0-9a-f]\{40\}\)"[[:space:]]*$/\1/p' "$fleet/bots/ponsbot/canon/pin.toml" 2>/dev/null | head -n 1 || true); [[ -z "$pin_commit" ]]; then

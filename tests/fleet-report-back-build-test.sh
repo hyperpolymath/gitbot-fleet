@@ -275,6 +275,16 @@ check "pons: an unreadable pin installs nothing and says so" "0 yes" \
 run_pons_build pons-budget --pons "$PSHA" --build-budget 0
 check "pons: a spent build budget skips the install with a warning" "0 yes" \
   "$(grep -c . "$FLEET_PONS_CALLS" || true) $(grep -q 'spent before its turn' "$TMP/pons-budget.log" && echo yes || echo no)"
+# A reused --bin-dir: a pons left by an earlier run must not survive a refusal.
+mkdir -p "$TMP/pons-stale"; printf "#!/usr/bin/env bash\necho stale\n" > "$TMP/pons-stale/pons"; chmod +x "$TMP/pons-stale/pons"
+run_pons_build pons-stale --pons 0123456789abcdef0123456789abcdef01234567
+check "pons: a refused pin removes a stale pons from a reused bin dir" "" "$(files "$TMP/pons-stale")"
+mkdir -p "$TMP/pons-stale-ok"; printf "#!/usr/bin/env bash\necho stale\n" > "$TMP/pons-stale-ok/pons"; chmod +x "$TMP/pons-stale-ok/pons"
+run_pons_build pons-stale-ok --pons "$PSHA"
+check "pons: ...and an accepted pin replaces it with this run's build" pons "$("$TMP/pons-stale-ok/pons")"
+mkdir -p "$TMP/pa-stale"; printf "#!/usr/bin/env bash\necho stale\n" > "$TMP/pa-stale/panic-attack"; chmod +x "$TMP/pa-stale/panic-attack"
+run_build pa-stale --crates "" --panic-attack 0123456789abcdef0123456789abcdef01234567 --build-budget 0
+check "panic-attack: a skipped install removes a stale binary from a reused bin dir" "" "$(files "$TMP/pa-stale")"
 echo
 echo "fleet-report-back-build-test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
