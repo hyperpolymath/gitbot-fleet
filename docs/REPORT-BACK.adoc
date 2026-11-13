@@ -126,7 +126,11 @@ grading can match them against the diff.
 | glambot
 | `glambot --path <repo> --format json audit`
 | Visual, accessibility, SEO, machine-readability and git-SEO analyzers,
-  flattened.
+  flattened. An analyzer that could not run (git-seo not installed)
+  reports a `skipped` reason in its own object; the driver keeps `status` `ran`
+  but copies the reason into the envelope `reason`, so an empty result is not
+  mistaken for a clean scan. A first-class `skipped` field in the envelope
+  would need a change to the verdict-grid spec in standards.
 
 | accessibilitybot
 | `accessibilitybot fleet <repo>`

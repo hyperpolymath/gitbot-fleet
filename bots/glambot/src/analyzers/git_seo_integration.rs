@@ -38,6 +38,7 @@ impl GitSeoAnalyzer {
         // logged loudly instead; install hint: https://github.com/hyperpolymath/git-seo
         if !git_seo_installed {
             warn!("git-seo is not installed; the Git-SEO analyzer did not run (no findings reported, not a clean result)");
+            result.skipped = Some("git-seo is not installed".to_string());
             result.duration_ms = start.elapsed().as_millis() as u64;
             return Ok(result);
         }
@@ -366,6 +367,23 @@ mod tests {
             "tool-availability advice is not a repo finding, got: {:?}",
             result.findings.iter().map(|f| f.id.as_str()).collect::<Vec<_>>()
         );
+        assert_eq!(
+            result.skipped.as_deref(),
+            Some("git-seo is not installed"),
+            "an unavailable git-seo is reported as skipped, not as a clean scan"
+        );
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["skipped"], "git-seo is not installed");
+    }
+
+    #[test]
+    fn a_run_is_not_a_skip() {
+        let dir = git_repo_without_remote();
+        let result = GitSeoAnalyzer
+            .analyze_with(dir.path(), &default_config(), true)
+            .unwrap();
+        assert!(result.skipped.is_none());
+        assert!(serde_json::to_value(&result).unwrap().get("skipped").is_none());
     }
 
     #[test]

@@ -247,8 +247,12 @@ fn handle_audit(path: &PathBuf, config: &config::Config, strict: bool, format: &
             Ok(r) => r,
             Err(e) => {
                 eprintln!("Git-SEO analysis error: {}", e);
-                // Don't fail if git-seo is unavailable, just skip
-                Default::default()
+                // Don't fail the audit, but say it was skipped: an empty result
+                // here must not read as a clean scan.
+                analyzers::AnalysisResult {
+                    skipped: Some(format!("git-seo analysis error: {e}")),
+                    ..Default::default()
+                }
             }
         };
     }

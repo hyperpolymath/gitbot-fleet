@@ -107,6 +107,11 @@ pub struct AnalysisResult {
     pub files_checked: usize,
     /// Duration in milliseconds
     pub duration_ms: u64,
+    /// Why the analyzer did not run (tool missing or failed). `None` means it ran.
+    /// A skipped analyzer has no findings, which is NOT a clean scan: consumers
+    /// (scripts/fleet-report-back.sh) must read this before trusting an empty list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<String>,
 }
 
 impl AnalysisResult {

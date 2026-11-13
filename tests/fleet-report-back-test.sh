@@ -169,6 +169,27 @@ check "a missing binary is error" error "$(field "$TMP/o4/glambot.json" .status)
 check "...naming the binary and the crate" yes \
   "$(field "$TMP/o4/glambot.json" .reason | grep -q "glambot.*bots/glambot" && echo yes || echo no)"
 
+
+# A skipped analyzer (git-seo not installed) has no findings, which is not a
+# clean scan: the envelope still says `ran`, but its reason says what did not.
+stub glambot '[ "$1 $3 $4 $5" = "--path --format json audit" ] || { echo "bad args: $*" >&2; exit 9; }
+cat <<J
+{"visual":{"findings":[]},"git_seo":{"findings":[],"files_checked":0,"duration_ms":0,"skipped":"git-seo is not installed"}}
+J'
+run "$TMP/o4b" --member glambot
+check "glambot: a skipped analyzer is still ran" ran "$(field "$TMP/o4b/glambot.json" .status)"
+check "glambot: ...but the reason names the skipped analyzer" yes \
+  "$(field "$TMP/o4b/glambot.json" .reason | grep -q 'git_seo analyzer skipped: git-seo is not installed' && echo yes || echo no)"
+stub glambot '[ "$1 $3 $4 $5" = "--path --format json audit" ] || { echo "bad args: $*" >&2; exit 9; }
+cat <<J
+{"visual":{"findings":[]},"git_seo":{"findings":[],"files_checked":1,"duration_ms":3}}
+J'
+run "$TMP/o4c" --member glambot
+check "glambot: a clean run has no reason" null "$(field "$TMP/o4c/glambot.json" .reason)"
+stub glambot '[ "$1 $3 $4 $5" = "--path --format json audit" ] || { echo "bad args: $*" >&2; exit 9; }
+cat <<J
+{"visual":{"findings":[{"id":"VIS-005","name":"Line too long","severity":"info","message":"Line 88 characters exceeds max length of 80.","file":"./SECURITY.md","line":7,"column":null,"suggestion":"s","fixable":false}]},"seo":{"findings":[]}}
+J'
 stub seambot 'sleep 5; echo "{}"'
 run "$TMP/o5" --member seambot --timeout 1
 check "a timeout is error" error "$(field "$TMP/o5/seambot.json" .status)"
