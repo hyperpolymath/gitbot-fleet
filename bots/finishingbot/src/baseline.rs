@@ -76,6 +76,32 @@ fn text_of<'a>(entry: &'a Value, key: &str) -> Option<&'a str> {
     entry.get(key).and_then(Value::as_str)
 }
 
+/// Rewrite a gitignore-style `file_pattern` into an anchored glob over
+/// repo-relative paths: a leading `/` anchors to the root (and is dropped); a
+/// pattern with no `/` other than a trailing one matches at any depth
+/// (`*.rs` -> `**/*.rs`); a trailing `/` names a directory, so everything
+/// beneath it matches. Any other pattern containing `/` stays anchored.
+fn gitignore_glob(pattern: &str) -> String {
+    let (rooted, rest) = match pattern.strip_prefix('/') {
+        Some(r) => (true, r),
+        None => (false, pattern),
+    };
+    let (dir_only, body) = match rest.strip_suffix('/') {
+        Some(b) => (true, b),
+        None => (false, rest),
+    };
+    let anchored = rooted || body.contains('/');
+    let mut out = String::new();
+    if !anchored && !body.starts_with("**/") {
+        out.push_str("**/");
+    }
+    out.push_str(body);
+    if dir_only {
+        out.push_str("/**");
+    }
+    out
+}
+
 impl Baseline {
     /// Load `<root>/.hypatia-baseline.json`; an absent or unreadable file
     /// acknowledges nothing.
@@ -128,7 +154,7 @@ impl Baseline {
             };
             let target = match (text_of(entry, "file"), text_of(entry, "file_pattern")) {
                 (Some(file), None) => Target::File(file.to_string()),
-                (None, Some(pattern)) => match glob::Pattern::new(pattern) {
+                (None, Some(pattern)) => match glob::Pattern::new(&gitignore_glob(pattern)) {
                     Ok(p) => Target::Pattern(p),
                     Err(e) => {
                         warn!("{FILE_NAME}: bad file_pattern {pattern:?} ({e}); not applied");
@@ -207,6 +233,33 @@ mod tests {
         assert!(!b.acknowledges("REL-003", Severity::Error, "scripts/sub/check-x.sh")); // * stops at /
         assert!(!b.acknowledges("banned_language_file", Severity::Error, "a.py"));
         // Hypatia's entry
+    }
+
+    #[test]
+    fn file_pattern_follows_gitignore_anchoring() {
+        let text = r#"[
+          {"severity":"high","rule_module":"finishing_bot","type":"PH-001","file_pattern":"*.rs"},
+          {"severity":"high","rule_module":"finishing_bot","type":"PH-002","file_pattern":"/*.rs"},
+          {"severity":"high","rule_module":"finishing_bot","type":"PH-003","file_pattern":"build/"},
+          {"severity":"high","rule_module":"finishing_bot","type":"PH-004","file_pattern":"src/*.rs"}
+        ]"#;
+        let b = Baseline::parse(text, day("2026-11-13"));
+        let e = Severity::Error;
+        // no slash: any depth, including the root
+        assert!(b.acknowledges("PH-001", e, "main.rs"));
+        assert!(b.acknowledges("PH-001", e, "src/main.rs"));
+        assert!(b.acknowledges("PH-001", e, "a/b/c/x.rs"));
+        assert!(!b.acknowledges("PH-001", e, "src/main.py"));
+        // leading slash: root only
+        assert!(b.acknowledges("PH-002", e, "main.rs"));
+        assert!(!b.acknowledges("PH-002", e, "src/main.rs"));
+        // trailing slash: a directory at any depth, everything beneath it
+        assert!(b.acknowledges("PH-003", e, "build/x"));
+        assert!(b.acknowledges("PH-003", e, "a/build/x/y"));
+        assert!(!b.acknowledges("PH-003", e, "rebuild/x"));
+        // a slash inside the pattern keeps it anchored
+        assert!(b.acknowledges("PH-004", e, "src/main.rs"));
+        assert!(!b.acknowledges("PH-004", e, "x/src/main.rs"));
     }
 
     #[test]
