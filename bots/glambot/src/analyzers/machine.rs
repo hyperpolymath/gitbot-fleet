@@ -495,6 +495,17 @@ mod tests {
         assert!(ids(empty.path()).contains(&"MACH-006".to_string()));
     }
 
+    #[test]
+    fn mach_006_is_not_auto_fixable() {
+        // The README documents the auto-fix list; MACH-006 must stay off it.
+        let dir = TempDir::new().unwrap();
+        let a = MachineAnalyzer::default();
+        let findings = a.analyze(dir.path(), &default_config()).unwrap().findings;
+        assert!(findings.iter().any(|f| f.id == "MACH-006"));
+        a.fix(dir.path(), &default_config(), &findings).unwrap();
+        assert!(!dir.path().join(".machine_readable").exists());
+    }
+
     const JSONC: &str =
         "{\n  // a comment\n  \"url\": \"http://x//y\", /* inline */\n  \"list\": [1, 2,],\n}\n";
 

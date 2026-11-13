@@ -105,7 +105,7 @@ Validates JSON/YAML file syntax, structured data presence, robots.txt, and `.mac
 | MACH-007 | _Retired_: the STATE/META/ECOSYSTEM `.scm` files are clauses of the repository's `<name>_chora.deed`, so their absence is not reported | n/a
 |===
 
-**Auto-fixes:** Creates the `.machine_readable/` directory (MACH-006), adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).
+**Auto-fixes:** Adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).
 
 === Git-SEO Integration (`GitSeoAnalyzer`)
 
