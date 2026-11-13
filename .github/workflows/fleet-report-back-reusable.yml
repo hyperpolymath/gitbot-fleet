@@ -111,7 +111,7 @@ jobs:
       # panic-attack, built from source at this commit for panicbot. Kept in
       # step with the standards Hypatia lane's PANIC_ATTACK_SHA so the two
       # panic-attack-derived rows on one grid describe the same tool.
-      PANIC_ATTACK_SHA: b689a74d2762a1c19839ae3fbd59b7fe5ef920ea
+      PANIC_ATTACK_SHA: 410a8f821ea8297833162565b50a298f787815da
     steps:
       - name: Checkout the repository to report on
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
