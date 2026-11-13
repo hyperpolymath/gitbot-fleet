@@ -503,20 +503,27 @@ static SENSITIVE_PATTERNS: std::sync::LazyLock<Vec<(Regex, &'static str)>> =
     std::sync::LazyLock::new(|| {
         [
             (
-                r#"(?i)api[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
+                r#"(?i)api[_-]?key["']?\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
                 "API Key",
             ),
             (
-                r#"(?i)secret[_-]?key\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
+                r#"(?i)secret[_-]?key["']?\s*[:=]\s*['"]?[a-zA-Z0-9]{20,}"#,
                 "Secret Key",
             ),
             (
-                r#"(?i)aws[_-]?secret[_-]?(access[_-]?)?key\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}(?:$|[^A-Za-z0-9/+=])"#,
+                r#"(?i)aws[_-]?secret[_-]?(access[_-]?)?key["']?\s*[:=]\s*['"]?[A-Za-z0-9/+=]{40}(?:$|[^A-Za-z0-9/+=])"#,
                 "AWS Secret Access Key",
             ),
-            (r#"(?i)password\s*[:=]\s*['"]?[^\s'"]{8,}"#, "Password"),
+            (r#"(?i)password["']?\s*[:=]\s*['"]?[^\s'"]{8,}"#, "Password"),
             (
                 r"-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----",
+                "Private Key",
+            ),
+            // Unarmored key material: the key NAME, then a long hex or base64 value.
+            // `private_key_path = "/etc/..."` and prose never match: the name must be
+            // followed directly by the separator, and the value must start alphanumeric.
+            (
+                r#"(?im)private[_-]?key["']?\s*[:=]\s*['"]?(?:[0-9a-f]{64,}|[a-z0-9][a-z0-9+/]{42,}={0,2})(?:["'\s,;}\]]|$)"#,
                 "Private Key",
             ),
             (r"\b(AKIA|ASIA)[0-9A-Z]{16}\b", "AWS Access Key ID"),
@@ -559,12 +566,16 @@ mod sensitive_tests {
 
     #[test]
     fn aws_secret_access_key_value_is_key_material() {
+        let key = concat!("wJalrXUtnF", "EMI/K7MDEN", "G/bPxRfiCY", "EXAMPLEKEY");
         for text in [
-            r#"aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY""#,
-            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            format!("aws_secret_access_key = \"{key}\""),
+            format!("AWS_SECRET_ACCESS_KEY={key}"),
+            // JSON: a closing quote sits between the name and the separator.
+            format!("{{\"aws_secret_access_key\": \"{key}\"}}"),
+            format!("\"AWS_SECRET_ACCESS_KEY\":\"{key}\""),
         ] {
             assert_eq!(
-                sensitive_kind(text),
+                sensitive_kind(&text),
                 Some("AWS Secret Access Key"),
                 "{text}"
             );
@@ -580,7 +591,11 @@ mod sensitive_tests {
     fn aws_secret_ending_in_base64_punctuation_is_key_material() {
         // The 40th character may be `/`, `+` or `=`: `\b` cannot terminate those.
         for last in ['/', '+', '=', 'A', '9'] {
-            let key = format!("{}{}", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKE", last);
+            let key = format!(
+                "{}{}",
+                concat!("wJalrXUtnF", "EMI/K7MDEN", "G/bPxRfiCY", "EXAMPLEKE"),
+                last
+            );
             assert_eq!(key.len(), 40);
             for text in [
                 format!("aws_secret_access_key = \"{key}\""),
@@ -600,6 +615,58 @@ mod sensitive_tests {
         assert_eq!(sensitive_kind(&long), None);
         let long_slash = format!("AWS_SECRET_ACCESS_KEY={}/", "A".repeat(40));
         assert_eq!(sensitive_kind(&long_slash), None);
+    }
+
+    #[test]
+    fn json_quoted_names_are_key_material() {
+        assert_eq!(
+            sensitive_kind(concat!("{\"api_key\": \"abcdefghij", "0123456789xyz\"}")),
+            Some("API Key")
+        );
+        assert_eq!(
+            sensitive_kind(concat!("{\"secret_key\": \"abcdefghij", "0123456789xyz\"}")),
+            Some("Secret Key")
+        );
+        assert_eq!(
+            sensitive_kind(concat!("{\"password\": \"hunter", "2hunter2\"}")),
+            Some("Password")
+        );
+    }
+
+    #[test]
+    fn unarmored_private_key_values_are_key_material() {
+        let hex = "0123456789abcdef".repeat(4);
+        let b64 = concat!("QUJDREVGR0", "hJSktMTU5P", "UFFSU1RVVl", "dYWVowMTIz", "NDU2Nzg5");
+        for text in [
+            format!("private_key = \"{hex}\""),
+            format!("PRIVATE-KEY: {hex}"),
+            format!("{{\"private_key\": \"{hex}\"}}"),
+            format!("private_key = \"{b64}=\""),
+            format!("privateKey: {b64}"),
+        ] {
+            assert_eq!(sensitive_kind(&text), Some("Private Key"), "{text}");
+        }
+    }
+
+    #[test]
+    fn private_key_paths_prose_and_short_values_are_not_key_material() {
+        let hex = "0123456789abcdef".repeat(4);
+        for text in [
+            "private_key_path = \"/etc/ssl/private/server.key\"".to_string(),
+            format!("private_key_file = \"{hex}\""),
+            "the private key is stored in the vault, never in the repo".to_string(),
+            "private_key = \"/etc/ssl/private/a/very/long/path/to/the/server/key\"".to_string(),
+            "private_key = \"deadbeef\"".to_string(),
+            "private_key = \"$PRIVATE_KEY\"".to_string(),
+        ] {
+            assert_eq!(sensitive_kind(&text), None, "{text}");
+        }
+    }
+
+    /// REL-008 must not flag its own source: fixtures are built from fragments.
+    #[test]
+    fn this_file_is_not_itself_key_material() {
+        assert_eq!(sensitive_kind(include_str!("release.rs")), None);
     }
 
     #[test]
@@ -625,7 +692,7 @@ mod sensitive_tests {
         let ghp = format!("t = {}{}", "ghp_", "a".repeat(36));
         assert_eq!(sensitive_kind(&ghp), Some("GitHub Personal Access Token"));
         assert_eq!(
-            sensitive_kind("api_key = \"abcdefghij0123456789xyz\""),
+            sensitive_kind(concat!("api_key = \"abcdefghij", "0123456789xyz\"")),
             Some("API Key")
         );
     }
