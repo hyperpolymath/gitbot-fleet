@@ -36,9 +36,26 @@ pub struct PanicbotConfig {
     #[serde(default)]
     pub notes: Vec<String>,
 
+    /// The dynamic-mode target the repository declares in its deed
+    /// (`(target :build ... :program ...)`). None: the dynamic parts are
+    /// `not_applicable` unless the CLI gives `--target`.
+    #[serde(default)]
+    pub target: Option<TargetDecl>,
+
     /// Per-category confidence overrides.
     /// If absent, `translator::default_confidence()` is used.
     pub confidence_overrides: Vec<ConfidenceOverride>,
+}
+
+/// A dynamic-mode target declared by the repository: an optional build command
+/// and the program it produces. Both come from the deed and both EXECUTE
+/// repository code; see [`crate::suite`] for the checks around them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TargetDecl {
+    /// Shell command (`sh -c`, run in the scanned directory) that builds the program.
+    pub build: Option<String>,
+    /// The built executable, relative to the scanned directory.
+    pub program: String,
 }
 
 /// A panic-attack subcommand panicbot can run (class (a) of the inventory in
@@ -184,17 +201,6 @@ impl AllowedCommands {
         }
     }
 
-    /// What a directive file granted before the full-suite ruling: the static
-    /// trio. A directive file that says nothing about `allow` keeps exactly
-    /// this, so a repository's scope is never widened behind its back.
-    pub fn legacy_static() -> Self {
-        let mut a = Self::none();
-        a.assail = true;
-        a.adjudicate = true;
-        a.diagnostics = true;
-        a
-    }
-
     /// Whether `cmd` is allowed.
     pub fn allows(&self, cmd: Subcommand) -> bool {
         match cmd {
@@ -272,6 +278,7 @@ impl Default for PanicbotConfig {
             timeout: Duration::from_secs(300),
             budget: DEFAULT_BUDGET,
             notes: Vec::new(),
+            target: None,
             confidence_overrides: Vec::new(),
         }
     }
@@ -409,16 +416,5 @@ mod suite_tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn legacy_static_is_exactly_the_old_default() {
-        let a = AllowedCommands::legacy_static();
-        let on: Vec<&str> = Subcommand::ALL
-            .into_iter()
-            .filter(|c| a.allows(*c))
-            .map(|c| c.name())
-            .collect();
-        assert_eq!(on, ["assail", "adjudicate", "diagnostics"]);
     }
 }

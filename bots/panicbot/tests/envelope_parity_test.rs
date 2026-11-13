@@ -429,3 +429,66 @@ fn a_crashed_diagnostics_is_an_error_part() {
             && p["status"] == "error"
             && p["detail"].as_str().unwrap().contains("signal")));
 }
+
+fn tree_with_deed(clause: &str) -> TempDir {
+    let t = TempDir::new().unwrap();
+    fs::write(t.path().join("a.rs"), "fn main() {}\n").unwrap();
+    fs::write(
+        t.path().join("x_chora.deed"),
+        format!(
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed\n  :schema-version \"1.0.0\"\n  (bot-directives\n    {clause}))\n"
+        ),
+    )
+    .unwrap();
+    t
+}
+
+#[test]
+fn a_deed_deny_only_runs_the_rest_and_no_target_says_so_in_the_deed_terms() {
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &full_stub_body(ASSAY_NONE));
+    let tree = tree_with_deed("(bot panicbot :deny (assay))");
+    let o = scan(bin.path(), tree.path());
+    assert!(
+        o.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert!(v.is_array(), "{v}");
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(
+        err.contains("no target declared in the deed (bot-directives (bot panicbot (target"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_deed_target_whose_build_fails_is_an_error_not_a_pass() {
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &full_stub_body(ASSAY_NONE));
+    let tree = tree_with_deed(
+        "(bot panicbot (target :build \"echo nope >&2; exit 1\" :program \"bin/x\"))",
+    );
+    let o = scan(bin.path(), tree.path());
+    assert_eq!(
+        o.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("an object");
+    assert_eq!(v["status"], "error");
+    assert!(v["reason"].as_str().unwrap().contains("assault"), "{v}");
+}
+
+#[test]
+fn a_malformed_deed_clause_stops_the_run() {
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &full_stub_body(ASSAY_NONE));
+    let tree = tree_with_deed("(bot panicbot :deny (assalt))");
+    let o = scan(bin.path(), tree.path());
+    assert!(!o.status.success());
+    assert!(o.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&o.stderr).contains("bot directives unreadable"));
+}
