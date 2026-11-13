@@ -333,18 +333,28 @@ pub fn run_diagnostics(timeout: Duration) -> Result<DiagnosticsReport> {
         .take(80)
         .collect();
 
-    // If diagnostics subcommand exists, use it
-    match invoke_panic_attack(&["diagnostics"], timeout) {
-        Ok(output) => {
-            if let Ok(report) = serde_json::from_str::<DiagnosticsReport>(&output) {
-                return Ok(report);
-            }
-        }
-        Err(_) => {
-            // diagnostics subcommand may not exist in older versions
-            tracing::debug!("panic-attack diagnostics subcommand not available, using fallback");
-        }
+    // `diagnostics` is run under the same enforced timeout. A hang (timeout) or
+    // a spawn failure is an ERROR: a tool that cannot answer in time is not
+    // healthy, and must never be papered over with a `--version` report. A
+    // process killed by a signal (a crash) is an error for the same reason.
+    //
+    // A normal exit is different. panic-attack 2.5.x `diagnostics` is a
+    // human-readable self-check of its own source tree (plain text, exit 1 in
+    // any other directory), not a machine report, so a clean exit whose output
+    // is not a diagnostics JSON document falls back to the `--version` check.
+    let diag = run_panic_attack_raw(&["diagnostics"], timeout)
+        .context("Failed to execute panic-attack diagnostics")?;
+    if diag.status.code().is_none() {
+        bail!(
+            "panic-attack diagnostics was terminated by a signal ({}): {}",
+            diag.status,
+            first_diagnostic(&diag.stderr)
+        );
     }
+    if let Ok(report) = serde_json::from_str::<DiagnosticsReport>(extract_json(&diag.stdout)) {
+        return Ok(report);
+    }
+    tracing::debug!("panic-attack diagnostics output is not JSON, using the --version fallback");
 
     // Fallback: construct a minimal diagnostics report
     Ok(DiagnosticsReport {
@@ -581,10 +591,23 @@ fn run_to_report(args: &[&str], scratch: &Scratch, timeout: Duration) -> Result<
     })
 }
 
+/// Resolve a path argument to an absolute, symlink-free string.
+///
+/// The child runs with the scratch directory as its working directory, so a
+/// relative path (`panicbot scan .`) would be read against the scratch dir:
+/// an empty tree, reported clean. Every path handed to a child goes through
+/// here, before the working directory changes. A path that cannot be resolved
+/// is an error, never passed on as given.
+fn absolute(p: &Path) -> Result<String> {
+    let c = std::fs::canonicalize(p)
+        .with_context(|| format!("Cannot resolve path {} to an absolute path", p.display()))?;
+    Ok(c.display().to_string())
+}
+
 /// Run `panic-attack assay <target>`: the proven-library substitution survey.
 pub fn run_assay(target: &Path, timeout: Duration) -> Result<AssayReport> {
     let scratch = Scratch::new()?;
-    let t = target.display().to_string();
+    let t = absolute(target)?;
     let value = run_to_report(&["assay", &t], &scratch, timeout)?;
     parse_assay_report(value)
 }
@@ -617,8 +640,8 @@ pub fn run_dynamic(
         bail!("run_dynamic: '{mode}' is not a dynamic mode panicbot runs");
     }
     let scratch = Scratch::new()?;
-    let p = program.display().to_string();
-    let s = source.display().to_string();
+    let p = absolute(program)?;
+    let s = absolute(source)?;
     let d = axis_seconds.to_string();
     let value = run_to_report(
         &[mode, &p, "--source", &s, "-d", &d, "--quiet"],
@@ -651,7 +674,9 @@ pub fn parse_dynamic_report(value: serde_json::Value) -> Result<DynamicReport> {
 pub fn run_adjudicate_verdict(reports: &[PathBuf], timeout: Duration) -> Result<AdjudicateVerdict> {
     let scratch = Scratch::new()?;
     let mut args: Vec<String> = vec!["adjudicate".to_string()];
-    args.extend(reports.iter().map(|r| r.display().to_string()));
+    for r in reports {
+        args.push(absolute(r)?);
+    }
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let value = run_to_report(&arg_refs, &scratch, timeout)?;
     parse_adjudicate_verdict(value, reports.len())

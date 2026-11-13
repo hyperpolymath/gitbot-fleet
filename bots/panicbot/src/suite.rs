@@ -609,6 +609,28 @@ pub fn run_suite_with(
                 let keep = sc.path().join(format!("{}.json", cmd.name()));
                 let trel = rel(dir, &program);
                 match engine.dynamic(cmd.name(), &program, dir, timeout, &keep) {
+                    Ok(report) if report.attack_results.iter().all(|r| r.skipped) => {
+                        // Every axis was skipped: nothing was attacked, so
+                        // this is not a clean run. Not applicable, with why.
+                        let reasons: Vec<&str> = report
+                            .attack_results
+                            .iter()
+                            .filter_map(|r| r.skip_reason.as_deref())
+                            .collect();
+                        let why = if reasons.is_empty() {
+                            "no reason given".to_string()
+                        } else {
+                            reasons.join("; ")
+                        };
+                        push(
+                            PartStatus::NotApplicable,
+                            format!(
+                                "panic-attack skipped all {} axis result(s), nothing was attacked: {why}",
+                                report.attack_results.len()
+                            ),
+                            0,
+                        );
+                    }
                     Ok(report) => {
                         let fs: Vec<Finding> = dynamic_findings(cmd.name(), &trel, &report)
                             .into_iter()
@@ -713,6 +735,7 @@ mod tests {
         fail: Vec<&'static str>,
         healthy: bool,
         crash: bool,
+        all_skipped: bool,
         verdict: &'static str,
     }
 
@@ -726,6 +749,7 @@ mod tests {
                 fail: Vec::new(),
                 healthy: true,
                 crash: true,
+                all_skipped: false,
                 verdict: "fail",
             }
         }
@@ -809,30 +833,42 @@ mod tests {
             self.note(mode, timeout)?;
             self.keeps.borrow_mut().push(keep.to_path_buf());
             Ok(DynamicReport {
-                attack_results: vec![
-                    AxisResult {
+                attack_results: if self.all_skipped {
+                    vec![AxisResult {
                         axis: "cpu".into(),
-                        success: !self.crash,
-                        skipped: false,
-                        skip_reason: None,
-                        exit_code: None,
-                        crashes: if self.crash {
-                            vec![serde_json::json!({})]
-                        } else {
-                            vec![]
-                        },
-                        signatures_detected: vec![],
-                    },
-                    AxisResult {
-                        axis: "time".into(),
                         success: false,
                         skipped: true,
-                        skip_reason: Some("n/a".into()),
+                        skip_reason: Some("no runnable program".into()),
                         exit_code: None,
                         crashes: vec![],
                         signatures_detected: vec![],
-                    },
-                ],
+                    }]
+                } else {
+                    vec![
+                        AxisResult {
+                            axis: "cpu".into(),
+                            success: !self.crash,
+                            skipped: false,
+                            skip_reason: None,
+                            exit_code: None,
+                            crashes: if self.crash {
+                                vec![serde_json::json!({})]
+                            } else {
+                                vec![]
+                            },
+                            signatures_detected: vec![],
+                        },
+                        AxisResult {
+                            axis: "time".into(),
+                            success: false,
+                            skipped: true,
+                            skip_reason: Some("n/a".into()),
+                            exit_code: None,
+                            crashes: vec![],
+                            signatures_detected: vec![],
+                        },
+                    ]
+                },
                 total_crashes: 1,
                 total_signatures: 0,
             })
@@ -1130,6 +1166,36 @@ mod tests {
         assert_eq!(verdict[0].file.as_deref(), Some(Path::new("prog")));
         // A skipped axis is reported in the detail, not turned into a finding.
         assert!(detail_of(&run, Subcommand::Assault).contains("1 axis result(s) skipped"));
+    }
+
+    #[test]
+    fn a_dynamic_report_with_every_axis_skipped_is_not_applicable_never_ran() {
+        let repo = repo_with_program();
+        let fake = Fake {
+            all_skipped: true,
+            ..Fake::new()
+        };
+        let run = run_suite_with(
+            &fake,
+            repo.path(),
+            &PanicbotConfig::default(),
+            &opts(Some("prog"), Some("pull_request")),
+        );
+        for cmd in [Subcommand::Assault, Subcommand::Ambush] {
+            assert_eq!(status_of(&run, cmd), PartStatus::NotApplicable);
+            let d = detail_of(&run, cmd);
+            assert!(
+                d.contains("nothing was attacked") && d.contains("no runnable program"),
+                "{d}"
+            );
+        }
+        // Nothing dynamic ran, so there is nothing to adjudicate.
+        assert_eq!(
+            status_of(&run, Subcommand::Adjudicate),
+            PartStatus::NotApplicable
+        );
+        assert!(!fake.called().contains(&"adjudicate".to_string()));
+        assert!(run.errored().is_empty());
     }
 
     #[test]

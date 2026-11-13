@@ -294,3 +294,138 @@ fn a_broken_directive_stops_the_run_and_never_falls_back_to_the_full_suite() {
     );
     assert!(String::from_utf8_lossy(&o.stderr).contains("bot directives unreadable"));
 }
+
+/// A stub that records the arguments and working directory of every call into
+/// `calls.log` beside itself, and answers like `full_stub_body`.
+fn recording_stub_body(assay_json: &str) -> String {
+    format!(
+        r#"echo "$PWD|$*" >> "$(dirname "$0")/calls.log"
+case "$1" in
+  --version) echo "panic-attack 2.5.5" ;;
+  diagnostics) exit 0 ;;
+  assay|assault|ambush)
+    out=""
+    a=("$@")
+    for ((i=0;i<${{#a[@]}};i++)); do [ "${{a[$i]}}" = "-o" ] && out="${{a[$((i+1))]}}"; done
+    case "$1" in
+      assay) cat > "$out" <<'J'
+{assay_json}
+J
+      ;;
+      *) cat > "$out" <<'J'
+{{"attack_results":[{{"axis":"cpu","success":true,"skipped":false}}],"total_crashes":0,"total_signatures":0}}
+J
+      ;;
+    esac ;;
+  adjudicate)
+    out=""
+    a=("$@")
+    for ((i=0;i<${{#a[@]}};i++)); do [ "${{a[$i]}}" = "-o" ] && out="${{a[$((i+1))]}}"; done
+    echo '{{"verdict":"pass","processed_reports":2,"failed_reports":0}}' > "$out" ;;
+  *) cat <<'J'
+{REAL}
+J
+    ;;
+esac
+exit 0"#
+    )
+}
+
+#[test]
+fn relative_scan_dir_and_target_reach_the_children_as_absolute_paths() {
+    // `panicbot scan .` runs the children in a scratch directory. A relative
+    // path would be read there (an empty tree) and report clean.
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), &recording_stub_body(ASSAY_NONE));
+    let tree = tree_with_timeout(None);
+    let prog = tree.path().join("prog");
+    fs::write(&prog, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::set_permissions(&prog, fs::Permissions::from_mode(0o755)).unwrap();
+    let home = TempDir::new().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_panicbot"))
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.path().display()))
+        .env("HOME", home.path())
+        .env("RUST_LOG", "off")
+        .current_dir(tree.path())
+        .args(["--format", "json", "scan", ".", "--target", "prog"])
+        .output()
+        .unwrap();
+    assert!(
+        o.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let log = fs::read_to_string(bin.path().join("calls.log")).unwrap();
+    let canon = tree.path().canonicalize().unwrap();
+    let canon = canon.display().to_string();
+    let mut seen = 0;
+    for line in log.lines() {
+        let (_, args) = line.split_once('|').unwrap();
+        let words: Vec<&str> = args.split(' ').collect();
+        match words[0] {
+            "assay" => {
+                seen += 1;
+                assert_eq!(words[1], canon, "assay target: {line}");
+            }
+            "assault" | "ambush" => {
+                seen += 1;
+                assert_eq!(words[1], format!("{canon}/prog"), "program: {line}");
+                let i = words.iter().position(|w| *w == "--source").unwrap();
+                assert_eq!(words[i + 1], canon, "source: {line}");
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(seen, 3, "assay, assault, ambush were all called: {log}");
+}
+
+#[test]
+fn a_hung_diagnostics_is_an_error_part_not_a_healthy_report() {
+    let bin = TempDir::new().unwrap();
+    stub(
+        bin.path(),
+        &format!(
+            "case \"$1\" in --version) echo 'panic-attack 2.5.5' ;; diagnostics) exec sleep 30 ;; assay) out=\"\"; while [ $# -gt 0 ]; do [ \"$1\" = -o ] && out=\"$2\"; shift; done; echo '{ASSAY_NONE}' > \"$out\" ;; *) cat <<'J'\n{REAL}\nJ\n;; esac"
+        ),
+    );
+    let t = std::time::Instant::now();
+    let o = scan(bin.path(), tree_with_timeout(Some(2)).path());
+    assert!(t.elapsed().as_secs() < 20, "diagnostics must be timed");
+    assert_eq!(
+        o.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("an object");
+    assert_eq!(v["status"], "error");
+    assert!(v["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["command"] == "diagnostics"
+            && p["status"] == "error"
+            && p["detail"].as_str().unwrap().contains("did not finish")));
+}
+
+#[test]
+fn a_crashed_diagnostics_is_an_error_part() {
+    let bin = TempDir::new().unwrap();
+    stub(
+        bin.path(),
+        &format!(
+            "case \"$1\" in --version) echo 'panic-attack 2.5.5' ;; diagnostics) kill -SEGV $$ ;; assay) out=\"\"; while [ $# -gt 0 ]; do [ \"$1\" = -o ] && out=\"$2\"; shift; done; echo '{ASSAY_NONE}' > \"$out\" ;; *) cat <<'J'\n{REAL}\nJ\n;; esac"
+        ),
+    );
+    let o = scan(bin.path(), tree_with_timeout(None).path());
+    assert_eq!(o.status.code(), Some(3));
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("an object");
+    assert!(v["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|p| p["command"] == "diagnostics"
+            && p["status"] == "error"
+            && p["detail"].as_str().unwrap().contains("signal")));
+}
