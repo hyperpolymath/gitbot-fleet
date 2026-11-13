@@ -121,7 +121,7 @@ impl MachineAnalyzer {
                     // .devcontainer/*.json and .vscode/*.json are JSONC (comments and
                     // trailing commas) because the tools that read them demand it; the
                     // estate JSON policy carves them out. Parse them as JSONC.
-                    let parsed = if is_tool_demanded_jsonc(entry.path()) {
+                    let parsed = if is_tool_demanded_jsonc(path, entry.path()) {
                         serde_json::from_str::<serde_json::Value>(&strip_jsonc(&content))
                     } else {
                         serde_json::from_str::<serde_json::Value>(&content)
@@ -291,9 +291,14 @@ impl MachineAnalyzer {
 }
 
 /// True for JSON files whose consumer demands JSONC: anything under a
-/// `.devcontainer/` or `.vscode/` directory.
-fn is_tool_demanded_jsonc(path: &Path) -> bool {
-    path.parent().is_some_and(|dir| {
+/// `.devcontainer/` or `.vscode/` directory of the repository. Only the
+/// repo-relative components count: a checkout that itself lives under a
+/// `.vscode/` or `.devcontainer/` ancestor does not make every JSON JSONC.
+fn is_tool_demanded_jsonc(root: &Path, path: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
+    rel.parent().is_some_and(|dir| {
         dir.components()
             .any(|c| c.as_os_str() == ".devcontainer" || c.as_os_str() == ".vscode")
     })
@@ -370,7 +375,11 @@ fn strip_jsonc(src: &str) -> String {
             res.push(c);
         } else if c == ',' {
             let next = b[j + 1..].iter().find(|x| !x.is_whitespace());
-            if !matches!(next, Some('}') | Some(']')) {
+            // Only a comma after a completed member or element is trailing;
+            // `{,}`, `[,]` and `,,` stay so the parse fails.
+            let prev = res.chars().rev().find(|x| !x.is_whitespace());
+            let after_value = !matches!(prev, None | Some('{' | '[' | ',' | ':'));
+            if !(after_value && matches!(next, Some('}') | Some(']'))) {
                 res.push(c);
             }
         } else {
@@ -549,6 +558,36 @@ mod tests {
         assert!(ids(dir.path()).contains(&"MACH-001".to_string()));
         std::fs::write(&p, "{\"a\": 1} /* ok */").unwrap();
         assert!(!ids(dir.path()).contains(&"MACH-001".to_string()));
+    }
+
+    #[test]
+    fn empty_containers_with_a_lone_comma_are_invalid() {
+        for body in ["{,}", "[,]", "{ , }", "[1,,]", "{\"a\":1,,}", "{\"a\":,}"] {
+            let dir = TempDir::new().unwrap();
+            let p = dir.path().join(".vscode/settings.json");
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, body).unwrap();
+            assert!(ids(dir.path()).contains(&"MACH-001".to_string()), "{body}");
+        }
+    }
+
+    #[test]
+    fn valid_trailing_commas_still_work() {
+        for body in ["{\"a\":1,}", "[1,2,]", "{\"a\":[1,],}", "{\"a\":1 , \n}", "[\"x\", /* c */ ]"] {
+            let v: std::result::Result<serde_json::Value, _> = serde_json::from_str(&strip_jsonc(body));
+            assert!(v.is_ok(), "{body}");
+        }
+    }
+
+    #[test]
+    fn jsonc_detection_ignores_ancestors_above_the_repo_root() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join(".vscode/checkout");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("config.json"), JSONC).unwrap();
+        assert!(ids(&root).contains(&"MACH-001".to_string()));
+        assert!(!is_tool_demanded_jsonc(&root, &root.join("config.json")));
+        assert!(is_tool_demanded_jsonc(&root, &root.join(".vscode/settings.json")));
     }
 
     #[test]
