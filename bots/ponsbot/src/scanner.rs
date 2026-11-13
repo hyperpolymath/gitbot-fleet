@@ -179,7 +179,7 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
             String::from_utf8_lossy(&e).into_owned(),
         ),
         _ => {
-            let k = kill_note(kill_pgid(child.id()));
+            let k = kill_note(kill_pgid(&child));
             return Outcome::Error(format!(
                 "pons left output pipes open past the {}s deadline (a descendant process is still running){k}",
                 timeout.as_secs()
@@ -189,15 +189,12 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
     interpret(status.code(), &stdout, &stderr, expected_commit)
 }
 
-/// SIGKILL a whole process group. `pgid` is the pid of a child started with
-/// `process_group(0)`, so it is the group leader's id. A pid that cannot name
-/// a group is an error; ESRCH (the group is already gone) is the desired end
-/// state, not an error.
-fn kill_pgid(pgid: u32) -> Result<(), String> {
-    let pid = i32::try_from(pgid)
-        .ok()
-        .and_then(rustix::process::Pid::from_raw)
-        .ok_or_else(|| format!("invalid process-group id {pgid}"))?;
+/// SIGKILL the whole process group led by `child`. The child was started with
+/// `process_group(0)`, so its pid is the group id. ESRCH (the group is already
+/// gone) is the desired end state, not an error.
+fn kill_pgid(child: &Child) -> Result<(), String> {
+    let pid = rustix::process::Pid::from_child(child);
+    let pgid = pid.as_raw_nonzero();
     match rustix::process::kill_process_group(pid, rustix::process::Signal::KILL) {
         Ok(()) | Err(rustix::io::Errno::SRCH) => Ok(()),
         Err(e) => Err(format!("could not kill process group {pgid}: {e}")),
@@ -207,7 +204,7 @@ fn kill_pgid(pgid: u32) -> Result<(), String> {
 /// Kill the child's group, then the child itself, and reap it. Returns the
 /// group-kill failure, if any, after the child has been killed and reaped.
 fn kill_group(child: &mut Child) -> Result<(), String> {
-    let group = kill_pgid(child.id());
+    let group = kill_pgid(child);
     let _ = child.kill();
     let _ = child.wait();
     group
