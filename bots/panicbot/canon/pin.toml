@@ -14,3 +14,22 @@ path = "data/canonical-rule-ids.json"
 commit = "5175a681f9a0c82313f06e3c2cba8089f4ecfb6b"
 pinned = "2026-11-04"
 sha256 = "28ffe510535e0bc6cccc92845411d6496fe9270cce58364f4d3507c5c08337d4"
+
+# The panic-attack BUILD commit (design section 5: this file becomes the single
+# panic-attack pin). Value and provenance, not invented: it is the commit the
+# standards Hypatia lane runs, `panic-ref`'s default in metadatastician/standards
+# `.github/workflows/hypatia-scan-reusable.yml` and `PANIC_ATTACK_SHA` in its
+# `fork-governance.yml` (standards main f0b3cd4, 2026-11-12).
+#
+# NOT YET CONSUMED: the workflows still carry their own copies, and they
+# disagree. Alignment is a later phase, decided by the owner:
+#   - gitbot-fleet `.github/workflows/fleet-report-back-reusable.yml`:
+#     b689a74d2762a1c19839ae3fbd59b7fe5ef920ea (2026-10-08, older; its comment
+#     claims it is kept equal to the Hypatia lane's pin, it is not)
+#   - standards `.github/workflows/deep-recon-reusable.yml` `panic-rev`:
+#     b5530834a839734d1d181bfe6edb0d43d4233cf4 (2026-10-25)
+# The rule-ID table above was taken at 5175a681 and is a separate pin.
+[build]
+repo = "hyperpolymath/panic-attack"
+commit = "410a8f821ea8297833162565b50a298f787815da"
+pinned = "2026-11-12"

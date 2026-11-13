@@ -37,12 +37,12 @@ adopts it.
 
 | `scripts/fleet-report-back-build.sh`
 | Builds the enrolled adapter crates (`cargo build --release --locked`) into one
-  directory and installs panic-attack at the pinned commit for panicbot. One
+  directory and installs panic-attack at the pinned commit for panicbot and, with `--pons`, pons at the commit in `bots/ponsbot/canon/pin.toml` for ponsbot. One
   recipe for the reusable workflow and for inline callers; a crate that fails to
   build is a warning here and an `error` row later, never a dead run.
 
 | `tests/fleet-report-back-test.sh`
-| Checks over stubbed adapters whose JSON shapes were taken from live runs:
+| Checks over stubbed adapters whose JSON shapes were taken from live runs (ponsbot's shape from a real pons at its pinned commit):
   enrolment rules, every adapter's translation, path relativisation, the
   failure modes, envelope shape, `--plan`, the summary, and (with
   `STANDARDS_DIR` set) the real renderer turning the rows non-orange.
@@ -117,11 +117,32 @@ that emits a path-less finding; rhodibot and seambot already comply.
 
 | panicbot
 | `panicbot --format json scan <repo>`
-| Wraps `panic-attack assail`; panicbot's own translator maps critical → error,
-  high → warning. The grid already carries a direct panic-attack row from the
+| Runs the **full panic-attack suite** unless the repository's bot directives
+  say otherwise (owner ruling 2026-11-13): `assail`, `assay`, and the dynamic
+  modes when a built `--target` is given (none of the CI callers gives one, so
+  there they report `not_applicable` with the reason). The inventory of every
+  panic-attack subcommand and why each is in or out is in `bots/panicbot/src/suite.rs`.
+  panicbot's own translator maps critical → error, high → warning. The grid already carries a direct panic-attack row from the
   Hypatia lane, so a repository that enrols panicbot sees the same tool twice,
   once through the bot's categorisation. `fleet` mode is *not* used: it writes a
   `.panicbot/*.a2ml` debt register into the scanned tree, and A2ML is retired.
+  Advisory (owner ruling 2026-11-12): enrolments leave `gating` unset for it. A
+  scan that did not really run (panic-attack not installed, timed out, exited
+  non-zero, or exited 0 without a report that has `weak_points` and a positive
+  `statistics.total_lines`) exits non-zero with no findings array, which the
+  driver writes as `error` with the reason, never as an empty `ran`. A suite
+  where one part failed prints `{"status": "error", "reason": ..., "findings":
+  [...]}` and exits 3 (the failed part is named in the reason; the findings of
+  the parts that ran are carried in the envelope file, but the grid reads only the
+  status), and a run where no part analysed anything (everything denied or not
+  applicable) prints `status: not_run` and exits 4. A directive file that exists
+  but cannot be parsed stops the run (error), never a fallback to the full suite.
+  A repository with a directive file keeps exactly what it allows and denies; one
+  without gets the full suite.
+
+| ponsbot
+| `ponsbot --format json scan <repo>`
+| Wraps pons asinorum, run as a subprocess at the commit pinned in `bots/ponsbot/canon/pin.toml` (design: `docs/migrations/scanner-cutover-ponsbot-panicbot.adoc`). Prints a findings array only when pons really ran; otherwise `{"status": "error" or "not_run", "reason": ...}`, which the driver writes as that status. pons exit 2 is `error` with pons' message, a missing pons is `not_run`, a timeout, a bad report or a pons at another commit is `error`; nothing maps to a pass. Each finding keeps its `tier`, `evidence_class` and `pons_severity`; pons `ERROR` is `error`, `WARN` is `warning`, and a SPECULATIVE finding is carried at `info` so the grid never grades it as blocking. **Gating is the enrolment's, not the envelope's**: the grid reads a row's `gating` from `reporters.<member>.gating` in `.gitbot-fleet/enrolment.json`, so an enrolment must set `"gating": true` for ponsbot (pons gates, owner ruling 2026-11-12) and leave panicbot without it (advisory). Not yet enrolled anywhere, and the reusable workflow does not yet install pons, so until phase 1 an enrolled ponsbot reads `not_run: pons is not installed`.
 
 | seambot
 | `seambot --path <repo> --format json check`

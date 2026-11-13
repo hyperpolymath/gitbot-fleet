@@ -20,7 +20,7 @@
 #
 # Usage:
 #   fleet-report-back-build.sh --fleet DIR --bin-dir DIR [--crates "a b c"]
-#                              [--panic-attack SHA] [--build-timeout SECONDS]
+#                              [--panic-attack SHA] [--pons SHA] [--build-timeout SECONDS]
 #                              [--build-budget SECONDS]
 #
 #   --fleet          a gitbot-fleet checkout (bots/<crate>/Cargo.toml)
@@ -28,6 +28,8 @@
 #   --crates         crate directory names under bots/, space-separated;
 #                    default: read `fleet-report-back.sh --plan` output on stdin
 #   --panic-attack   also install panic-attack at this commit into --bin-dir
+#   --pons           also install pons (pons-cli) at this commit into --bin-dir,
+#                    for ponsbot; the commit is bots/ponsbot/canon/pin.toml
 #   --build-timeout  seconds per cargo invocation (default 900)
 #   --build-budget   seconds for every build together (default 2400). A crate
 #                    whose turn comes after the budget is spent is not built
@@ -38,20 +40,21 @@
 
 set -euo pipefail
 
-fleet="" bindir="" crates="" pa_sha="" build_timeout=900 build_budget=2400
+fleet="" bindir="" crates="" pa_sha="" pons_sha="" build_timeout=900 build_budget=2400
 while [ $# -gt 0 ]; do
   case "$1" in
     --fleet) fleet="$2"; shift 2 ;;
     --bin-dir) bindir="$2"; shift 2 ;;
     --crates) crates="$2"; shift 2 ;;
     --panic-attack) pa_sha="$2"; shift 2 ;;
+    --pons) pons_sha="$2"; shift 2 ;;
     --build-timeout) build_timeout="$2"; shift 2 ;;
     --build-budget) build_budget="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
 if [ -z "$fleet" ] || [ -z "$bindir" ]; then
-  echo "usage: $0 --fleet DIR --bin-dir DIR [--crates \"a b\"] [--panic-attack SHA]" >&2; exit 2
+  echo "usage: $0 --fleet DIR --bin-dir DIR [--crates \"a b\"] [--panic-attack SHA] [--pons SHA]" >&2; exit 2
 fi
 [ -d "$fleet/bots" ] || { echo "not a gitbot-fleet checkout: $fleet" >&2; exit 2; }
 mkdir -p "$bindir"; bindir="$(cd "$bindir" && pwd)"
@@ -112,6 +115,26 @@ if [ -n "$pa_sha" ]; then
   fi
   if [ -x "$bin" ]; then cp "$bin" "$bindir/"; fi
   endgroup
+fi
+
+if [[ -n "$pons_sha" ]]; then
+  if ! [[ "$pons_sha" =~ ^[0-9a-f]{40}$ ]]; then
+    warn "pons not installed" "$(printf '%q' "$pons_sha") is not a 40-hex commit; ponsbot will read not_run"
+  else
+    root="$HOME/.pons"; bin="$root/bin/pons"
+    group "pons at $pons_sha"
+    if [[ -x "$bin" ]] && grep -qF "#$pons_sha" "$root/.crates.toml" 2>/dev/null; then
+      echo "pons restored from cache at $pons_sha"
+    elif [[ "$(remaining)" -eq 0 ]]; then
+      warn "pons not installed" "the ${build_budget}s build budget was spent before its turn; ponsbot will read not_run"
+    elif ! timeout "$(slice 600)" cargo install --git https://github.com/hyperpolymath/pons-asinorum \
+        --rev "$pons_sha" --locked --force --root "$root" pons-cli; then
+      rm -rf "$root"
+      warn "pons not installed" "source build at $pons_sha failed or exceeded 10 minutes; ponsbot will read not_run"
+    fi
+    if [[ -x "$bin" ]]; then cp "$bin" "$bindir/"; fi
+    endgroup
+  fi
 fi
 
 echo "fleet-report-back-build: $built crate(s) built, $failed failed; binaries in $bindir:"

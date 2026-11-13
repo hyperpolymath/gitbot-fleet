@@ -2,20 +2,25 @@
 = Scanner cutover: pons-asinorum and panic-attack → ponsbot and panicbot
 :toc: left
 :toclevels: 2
-:revdate: 2026-11-12
+:revdate: 2026-11-13
 
-Status: **DESIGN ONLY.** Nothing in this document has been cut over. No
-workflow, enrolment manifest, grid row or pin changes until the owner rules on
-§8 and each phase lands as its own pull request.
+Status: **DESIGN, with the owner's rulings of 2026-11-12 and 2026-11-13
+recorded (§8). Phase 0 (the adapters) is the only phase started.** Nothing
+has been cut over: no
+workflow, enrolment manifest, grid row or direct lane has changed. Each later
+phase lands as its own pull request.
 
 == 1. Goal
 
 Retire the estate's *direct* invocations of the two deep scanners,
 `hyperpolymath/pons-asinorum` and `hyperpolymath/panic-attack`, so that each
 one reaches a pull request, a sweep or a gate only through its fleet adapter:
-`panicbot` (exists) and `ponsbot` (does not exist yet).
+`panicbot` (exists) and `ponsbot` (phase 0 adds it).
 
-=== 1.1 What "retire" means here (reading to confirm, §8 D0)
+The bots are estate tooling. External users do their own scanning for now; this
+cutover is not a service offered to them.
+
+=== 1.1 What "retire" means here (decided, §8 D0, 2026-11-12)
 
 The scanners stay as **external engines**. The adapters call them as pinned
 subprocesses, which is how `bots/panicbot/src/scanner.rs` already uses
@@ -24,9 +29,10 @@ link:../../bots/README.adoc[`bots/README.adoc`]: a bot slot must not absorb a
 standalone product. What retires is every *lane* that installs and runs a
 scanner binary itself and renders its own row, envelope or gate.
 
-The other reading is that the scanner repositories themselves retire and their
-analysis moves into the bots. That conflicts with the guardrail, so this design
-does not take it without an explicit ruling.
+The other reading, that the scanner repositories themselves retire and their
+analysis moves into the bots, conflicts with the guardrail and was **not
+taken**: the owner ruled on 2026-11-12 (D0) that pons-asinorum and panic-attack
+stay as external engines and repositories, and only the direct CI lanes retire.
 
 === 1.2 Why
 
@@ -74,7 +80,7 @@ does not take it without an explicit ruling.
 
 | standards `hypatia-scan-reusable.yml` ("Install panic-attack (pinned source build)", "Run panic-attack assail")
 | `assail` on the caller's tree, `panic-attack-findings.json` status envelope, **permanent** grid row
-| ADVISORY by default; with `PA_GATES=true` (block-on-critical) critical findings gate. Scope excludes are counted separately (`counts_excluded`). A report must carry `weak_points` and a positive `statistics.total_lines`.
+| ADVISORY by default; with `PA_GATES=true` (block-on-critical) critical findings gate. Scope excludes are counted separately (`counts_excluded`). (Current behaviour, retired in phase 2: §8 G2.) A report must carry `weak_points` and a positive `statistics.total_lines`.
 
 | standards `deep-recon-reusable.yml`
 | `assail`, REPORT-ONLY for findings
@@ -119,9 +125,13 @@ does not take it without an explicit ruling.
   ponsbot apply, with a reason when not. "Permanent" stops being hard-wired.
 * Each scanner has **one** pin, held by its adapter (`bots/<bot>/canon/pin.toml`)
   and read by every workflow that builds it.
-* Gates that exist today (pons `error` in deep-recon; panic-attack
-  block-on-critical where a caller opts in) keep the same thresholds. They
-  read the adapter's output instead of the scanner's.
+* **pons gates; panic-attack does not** (§8 G1, G2). ponsbot's row is a gating
+  row: pons `error` keeps its blocking meaning, now read from ponsbot's row
+  instead of the scanner's output. panicbot's row is advisory, so
+  panic-attack's findings never block a merge through the fleet. The grid reads
+  a row's gating from the enrolment's per-reporter `gating` boolean (standards
+  `scripts/lib/verdict-grid.jq`), not from the envelope: enrolments set
+  `"gating": true` for ponsbot and leave panicbot without it.
 * Hypatia's estate rescan and bridge gate are decided separately (§8 D4); they
   are not PR lanes.
 
@@ -136,14 +146,20 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
   scanned tree. That is the report-back driver's contract for a new member.
 * `bots/ponsbot/canon/pin.toml`: pons commit and sha256 of pons' published
   rule table, if it has one. Same re-pin procedure as panicbot.
-* **Evidence class is carried, not dropped.** Each finding keeps pons' tier
-  and evidence class. SPECULATIVE findings are omitted, matching the hard
-  gate's `--no-speculative`, or carried with an explicit class that the
-  grid never grades as blocking. Whichever is chosen, a heuristic must never
-  read as a proof (pons ADR-0004).
+* **Evidence class is carried, not dropped** (decided, §8 D1, 2026-11-12). Each
+  finding keeps pons' tier and evidence class. SPECULATIVE findings are
+  carried, never dropped, with an explicit class the grid never grades as
+  blocking: ponsbot does not pass `--no-speculative`, and caps a SPECULATIVE
+  (or unrecognised) class at severity `info` while keeping pons' own severity in
+  `pons_severity`. A heuristic never reads as a proof (pons ADR-0004): its
+  message says so.
 * **Exit codes map to report-back status, never to a pass.** pons exit 1 with
   findings → `ran`. Exit 2 (invalid input, no applicable input, config error)
   → `error` with pons' message as `reason`. A missing binary → `not_run`.
+  The adapter prints a findings array only when pons really ran; otherwise it
+  prints `{"status": "error"|"not_run", "reason": "..."}` and exits 2 or 3. It
+  also refuses a pons binary whose own `tool.source_commit` is not the pin, or is
+  absent, as `error`.
 * `.ponsignore` and `pons.toml` stay pons' business. The adapter passes the
   repository root and adds no exception mechanism of its own.
 * Driver integration: one `case` arm in `scripts/fleet-report-back.sh`, one stub
@@ -158,27 +174,34 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
 
 * Make `bots/panicbot/canon/pin.toml` the single panic-attack pin. Today it pins
   only the rule-ID table; it gains the build commit, and the workflows read it
-  instead of their own `PANIC_ATTACK_SHA` or `PA_SHA`.
+  instead of their own `PANIC_ATTACK_SHA` or `PA_SHA`. *Phase 0:* the `[build]`
+  table is added (value and provenance in the file; workflows do not read it
+  yet, see §8 D7).
 * Parity with the direct lane's envelope. The direct lane distinguishes
   "not installed", "timed out", "exited non-zero" and "exited 0 without a valid
   report", and checks `weak_points` and a positive `statistics.total_lines`.
   panicbot `scan` must surface each of these as `error` or `not_run` with a
-  reason, never as an empty `ran`.
+  reason, never as an empty `ran`. *Phase 0:* tests added in
+  `bots/panicbot/tests/envelope_parity_test.rs` and the driver tests. They found
+  three cases that read as `ran` or hung, now fixed at the source in
+  `bots/panicbot/src/scanner.rs`: the timeout was never enforced (a hung scan
+  hung), a non-zero exit with parseable stdout was accepted, and a report with
+  no `statistics.total_lines` (nothing analysed) was an empty `ran`.
 * Scope excludes: the direct lane counts excluded findings separately
   (`counts_excluded`). Decide whether the adapter reports them or the grid's
   scope filter alone handles them.
 * Fix or retire `panicbot-sweep.yml`'s install line (see §2.2).
 
-== 6. Phases (each is its own PR; none started)
+== 6. Phases (each is its own PR; only phase 0 is started)
 
 [cols="1,3,2,2"]
 |===
 | Phase | Change | Repo | Exit criterion
 
-| 0
+| 0 (landed in the PR that records the §8 rulings)
 | Add the ponsbot adapter and tests; add the build commit to panicbot's pin; add the envelope-parity cases to panicbot
 | gitbot-fleet
-| Adapter tests green; `tests/fleet-report-back-test.sh` covers both members
+| Adapter tests green; `tests/fleet-report-back-test.sh` covers both members. Not done in phase 0: no enrolment, no grid row removed, no workflow change; `BotId::Ponsbot` exists but is not in `all()` (fleet dispatch is phase 4)
 
 | 1 (shadow)
 | Enrol panicbot and ponsbot in standards **alongside** the permanent rows, for a fixed number of PRs; compare counts row by row
@@ -186,12 +209,12 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
 | Same findings, same statuses, for the agreed sample; differences explained
 
 | 2 (grid flip)
-| Remove the panic-attack and pons permanent rows from `verdict-grid.sh` and its jq library and tests; delete the direct install/run steps and `panic-ref`/`pons-ref` inputs from `hypatia-scan-reusable.yml`; keep the `PA_GATES` block-on-critical behaviour, now reading panicbot's row
+| Remove the panic-attack and pons permanent rows from `verdict-grid.sh` and its jq library and tests; delete the direct install/run steps and `panic-ref`/`pons-ref` inputs from `hypatia-scan-reusable.yml`; retire the `PA_GATES` block-on-critical behaviour (panic-attack does not gate, §8 G2; panicbot's row is advisory); ponsbot's row is gating (§8 G1)
 | standards
 | Grid shows panicbot and ponsbot rows only; callers that passed `panic-ref`/`pons-ref` are updated in the same wave (§7)
 
 | 3 (deep gate)
-| Point `deep-recon-reusable.yml` at the adapters; keep pons' `error` hard gate and SARIF upload, and panic-attack's must-run check
+| Point `deep-recon-reusable.yml` at the adapters; keep pons' `error` hard gate and SARIF upload; keep panic-attack's must-run check (D6, decided 2026-11-13)
 | standards
 | A deliberately broken fixture still fails the gate; an empty scan still fails
 
@@ -201,7 +224,7 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
 | No `panic-attack` invocation remains outside `bots/panicbot/`
 
 | 5 (Hypatia)
-| Per the D4 ruling: either move estate-rescan to `panicbot` with a store-shaped output, or record it as a sanctioned direct use
+| Per the D4 ruling (2026-11-13): record estate-rescan and the bridge gate as sanctioned direct uses, reading panicbot's pin
 | hypatia
 | Ruling recorded; the verisim-data shape is unchanged either way
 |===
@@ -215,19 +238,62 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
 * **Silent green.** The main hazard is an adapter that runs nothing and reports
   an empty `ran`. The parity cases in phases 0 and 3 exist to catch this.
 * **Gate drift.** Fleet rows grade by normalised severity
-  (`error` → high, `warning` → medium). Check that pons' `error` and
-  panic-attack's `critical` keep their blocking meaning through that
-  normalisation before phase 2.
+  (`error` → high, `warning` → medium). pons' `error` must keep its blocking
+  meaning through that normalisation and through the enrolment's
+  `"gating": true` (checked by `tests/fleet-report-back-test.sh` against the
+  real renderer when `STANDARDS_DIR` is set; re-check before phase 2).
+* **Callers that opted into block-on-critical.** Under §8 G2 panic-attack no
+  longer blocks, so a caller that set `block-on-critical` loses that block when
+  phase 2 lands. Deprecate the input (accept, warn, ignore) a cycle before
+  removing it, and say so in that phase's PR.
 * **Rollback.** Phases 2 and 3 are reverts of their own PRs. Phase 1 is
   additive. Keep the deleted steps' last commit SHA in each PR body.
 
-== 8. Decisions for the owner (open)
+== 8. Decisions
 
-D0. Confirm the reading in §1.1: scanners remain external engines behind
-    adapters; only the direct lanes retire.
+=== 8.1 Decided (owner rulings, 2026-11-12)
 
-D1. SPECULATIVE pons findings in ponsbot: omit them, as deep-recon does, or
-    carry them with an evidence class the grid never treats as blocking?
+D0. **Decided 2026-11-12.** Scanners remain external engines behind adapters;
+    only the direct CI lanes retire. The adapters call pons-asinorum and
+    panic-attack as pinned subprocesses.
+
+D1. **Decided 2026-11-12.** SPECULATIVE pons findings are carried, with an
+    explicit evidence class that the grid never grades as blocking. They are
+    never dropped and never read as proof.
+
+G1. **Decided 2026-11-12.** pons gates: ponsbot's row is gating, and pons
+    `error` keeps its blocking meaning. (Label G1 is this document's own.)
+
+G2. **Decided 2026-11-12.** panic-attack does not gate: panicbot is advisory.
+    This overrules the earlier phase-2 note that kept the `PA_GATES`
+    block-on-critical behaviour on panicbot's row. (Label G2 is this
+    document's own.)
+
+=== 8.2 Decided (owner rulings, 2026-11-13)
+
+D4. **Decided 2026-11-13.** Hypatia's estate rescan (verisim-data feed) and
+    the bridge gate (`panic-attack bridge triage`) are **sanctioned direct
+    uses**, consistent with D0: bridge triage is the CVE-mitigation
+    lifecycle, not lane scanning. Both stay outside panicbot, and both read
+    panic-attack from panicbot's single pin (D7).
+
+D5. **Decided 2026-11-13.** `hyperpolymath/panic-attacker.git` in
+    `panicbot-sweep.yml` is a stale name from before the 2026-02-08 rename.
+    The sweep moves to `hyperpolymath/panic-attack`, read through panicbot's
+    single pin, never unpinned.
+
+D6. **Decided 2026-11-13.** The deep-recon must-run check **stays** through
+    phase 3. Advisory status (G2) governs findings, not a scanner that did not
+    run: a panic-attack crash or empty report still fails the job (fail
+    loudly, no silent green).
+
+D7. **Decided 2026-11-13.** Converge on the Hypatia lane's pins: panic-attack
+    `410a8f82`, pons `bca1ea28`, the values phase 0 already records in
+    `bots/panicbot/canon/pin.toml` `[build]` and `bots/ponsbot/canon/pin.toml`.
+    `fleet-report-back-reusable.yml` (`b689a74d`) and deep-recon (`b5530834`,
+    `51b8920f`) move to them in phase 1. Later bumps change those files only.
+
+=== 8.3 Open
 
 D2. Shadow-period length for phase 1 (number of PRs or days) and the
     acceptable difference between the direct and adapter rows.
@@ -235,10 +301,3 @@ D2. Shadow-period length for phase 1 (number of PRs or days) and the
 D3. Does `hooks/pre-push-gate.sh`'s default (`panic-attack hypatia`) become
     `panicbot ponsbot hypatia`, or does pons stay out of the local pre-push
     gate because of its build cost?
-
-D4. Hypatia's estate rescan (verisim-data feed) and bridge gate
-    (`panic-attack bridge triage`): in scope for this cutover, or sanctioned
-    direct uses? panicbot has no `bridge` subcommand today.
-
-D5. `panicbot-sweep.yml` installs from `hyperpolymath/panic-attacker.git`.
-    Is that a stale name for `panic-attack`, or a separate repository?
