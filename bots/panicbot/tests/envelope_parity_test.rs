@@ -430,6 +430,227 @@ fn a_crashed_diagnostics_is_an_error_part() {
             && p["detail"].as_str().unwrap().contains("signal")));
 }
 
+/// On a timeout the whole process group dies. Killing only panic-attack would
+/// leave the backgrounded `sleep` holding the output pipes, so the scan would
+/// block until it ended.
+#[test]
+fn timeout_kills_descendants_and_returns_within_the_timeout() {
+    let bin = TempDir::new().unwrap();
+    let pidfile = bin.path().join("child.pid");
+    stub(
+        bin.path(),
+        &format!("sleep 25 &\necho $! > {}\nwait", pidfile.display()),
+    );
+    let t = std::time::Instant::now();
+    let o = scan(bin.path(), tree_with_timeout(Some(1)).path());
+    assert!(
+        t.elapsed().as_secs() < 12,
+        "a descendant holding the pipes must not outlast the timeout"
+    );
+    assert_not_a_run(&o, "did not finish within 1s");
+    let pid = fs::read_to_string(&pidfile).unwrap().trim().to_string();
+    let mut gone = false;
+    for _ in 0..50 {
+        let stat = fs::read_to_string(format!("/proc/{pid}/stat"));
+        if stat.map(|s| s.contains(") Z ")).unwrap_or(true) {
+            gone = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        gone,
+        "the backgrounded descendant {pid} survived the timeout"
+    );
+}
+
+/// A relative `PATH` entry must be made absolute before `assay` changes the
+/// working directory to its scratch dir.
+#[test]
+fn a_relative_path_entry_is_resolved_before_the_cwd_changes() {
+    let root = TempDir::new().unwrap();
+    let bin = root.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    stub(&bin, &full_stub_body(ASSAY_NONE));
+    let tree = tree_with_timeout(None);
+    let home = TempDir::new().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_panicbot"))
+        .env_clear()
+        .current_dir(root.path())
+        .env("PATH", "bin:/usr/bin:/bin")
+        .env("HOME", home.path())
+        .env("RUST_LOG", "off")
+        .args(["--format", "json", "scan"])
+        .arg(tree.path())
+        .output()
+        .unwrap();
+    assert!(
+        o.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("a findings array");
+    assert!(v.is_array(), "{v}");
+}
+
+fn scan_text(bin_dir: &Path, tree: &Path) -> Output {
+    let home = TempDir::new().unwrap();
+    Command::new(env!("CARGO_BIN_EXE_panicbot"))
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()))
+        .env("HOME", home.path())
+        .env("RUST_LOG", "off")
+        .args(["--format", "text", "scan"])
+        .arg(tree)
+        .output()
+        .unwrap()
+}
+
+/// Text mode must not print "No issues found." for a run that errored or in
+/// which nothing ran.
+#[test]
+fn text_mode_never_says_no_issues_for_an_incomplete_run() {
+    // assail fails: a part error (exit 3).
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), "echo 'panic-attack: boom' >&2\nexit 3");
+    let o = scan_text(bin.path(), tree_with_timeout(None).path());
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert_eq!(o.status.code(), Some(3), "{out}");
+    assert!(!out.contains("No issues found."), "{out}");
+    assert!(out.contains("INCOMPLETE"), "{out}");
+
+    // Nothing allowed to run (exit 4).
+    let tree = tree_with_timeout(None);
+    let d = tree.path().join(".machine_readable/bot_directives");
+    fs::create_dir_all(&d).unwrap();
+    fs::write(d.join("panicbot.a2ml"), "allow = [\"diagnostics\"]\n").unwrap();
+    let bin = TempDir::new().unwrap();
+    stub(bin.path(), "exit 0");
+    let o = scan_text(bin.path(), tree.path());
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert_eq!(o.status.code(), Some(4), "{out}");
+    assert!(!out.contains("No issues found."), "{out}");
+    assert!(out.contains("NOT RUN"), "{out}");
+}
+
+/// A clean, complete run still says so.
+#[test]
+fn text_mode_says_no_issues_for_a_clean_complete_run() {
+    let bin = TempDir::new().unwrap();
+    let clean = r#"{"program_path":"/t","language":"rust","statistics":{"total_lines":10},"weak_points":[]}"#;
+    stub(bin.path(), &full_stub_body(ASSAY_NONE).replace(REAL, clean));
+    let o = scan_text(bin.path(), tree_with_timeout(None).path());
+    let out = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        o.status.success(),
+        "{out} {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(out.contains("No issues found."), "{out}");
+}
+
+/// Run a dynamic scan against a stub whose `adjudicate` writes `report` and
+/// exits `code`; returns the scan output.
+fn scan_with_adjudicate(code: i32, report: &str) -> Output {
+    let bin = TempDir::new().unwrap();
+    let old = r#"echo '{"verdict":"pass","processed_reports":2,"failed_reports":0}' > "$out" ;;"#;
+    let body = recording_stub_body(ASSAY_NONE);
+    assert!(body.contains(old), "recording stub changed");
+    stub(
+        bin.path(),
+        &body.replace(old, &format!("echo '{report}' > \"$out\"; exit {code} ;;")),
+    );
+    let tree = tree_with_timeout(None);
+    let prog = tree.path().join("prog");
+    fs::write(&prog, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::set_permissions(&prog, fs::Permissions::from_mode(0o755)).unwrap();
+    let home = TempDir::new().unwrap();
+    Command::new(env!("CARGO_BIN_EXE_panicbot"))
+        .env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.path().display()))
+        .env("HOME", home.path())
+        .env("RUST_LOG", "off")
+        .args(["--format", "json", "scan"])
+        .arg(tree.path())
+        .args(["--target", "prog"])
+        .output()
+        .unwrap()
+}
+
+const VERDICT_FAIL: &str = r#"{"verdict":"fail","processed_reports":2,"failed_reports":0,"priorities":[{"level":"high","message":"crash"}]}"#;
+
+/// A valid adjudicated fail: a finding, and no error part.
+fn assert_valid_fail(o: &Output) {
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "stderr: {err}");
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("a findings array");
+    let rules: Vec<&str> = v
+        .as_array()
+        .expect("an array, so no part errored")
+        .iter()
+        .map(|f| f["rule_id"].as_str().unwrap())
+        .collect();
+    assert!(rules.contains(&"PB-ADJUDICATE-VERDICT"), "{rules:?}");
+}
+
+/// An error part for adjudicate whose detail contains `why`.
+fn assert_adjudicate_error(o: &Output, why: &str) {
+    assert_eq!(
+        o.status.code(),
+        Some(3),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("an object");
+    let part = v["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["command"] == "adjudicate")
+        .expect("an adjudicate part");
+    assert_eq!(part["status"], "error", "{part}");
+    assert!(part["detail"].as_str().unwrap().contains(why), "{part}");
+}
+
+#[test]
+fn adjudicate_exit_1_with_verdict_fail_is_a_valid_fail() {
+    assert_valid_fail(&scan_with_adjudicate(1, VERDICT_FAIL));
+}
+
+#[test]
+fn adjudicate_exit_2_is_an_error_part() {
+    // Incomplete run: error even though the report is otherwise well formed.
+    assert_adjudicate_error(&scan_with_adjudicate(2, VERDICT_FAIL), "exited with");
+}
+
+#[test]
+fn adjudicate_verdict_error_with_exit_0_is_an_error_part() {
+    assert_adjudicate_error(
+        &scan_with_adjudicate(
+            0,
+            r#"{"verdict":"error","processed_reports":2,"failed_reports":0}"#,
+        ),
+        "verdict 'error'",
+    );
+}
+
+#[test]
+fn adjudicate_old_contract_exit_0_with_verdict_fail_is_still_a_valid_fail() {
+    // panic-attack 410a8f82 exits 0 for every verdict.
+    assert_valid_fail(&scan_with_adjudicate(0, VERDICT_FAIL));
+}
+
+#[test]
+fn adjudicate_exit_1_with_a_non_fail_verdict_is_an_error_part() {
+    assert_adjudicate_error(
+        &scan_with_adjudicate(
+            1,
+            r#"{"verdict":"pass","processed_reports":2,"failed_reports":0}"#,
+        ),
+        "not 'fail'",
+    );
+}
+
 fn tree_with_deed(clause: &str) -> TempDir {
     let t = TempDir::new().unwrap();
     fs::write(t.path().join("a.rs"), "fn main() {}\n").unwrap();
@@ -503,4 +724,29 @@ fn the_bare_bot_spelling_stops_the_run_and_names_the_canonical_one() {
     assert!(o.stdout.is_empty());
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("(bot :name panicbot ...)"), "{err}");
+}
+
+/// Two descendants hold the pipes for staggered times: stdout until just
+/// before the deadline, stderr far past it. Both reads share one deadline, so
+/// the second read gets only what the first left, not a fresh allowance.
+#[test]
+fn staggered_pipe_holders_share_one_deadline() {
+    let bin = TempDir::new().unwrap();
+    // Only assail holds the pipes; every other command answers normally.
+    stub(
+        bin.path(),
+        &full_stub_body(ASSAY_NONE).replacen(
+            "case \"$1\" in\n",
+            "case \"$1\" in\n  assail) sleep 3.5 2>/dev/null &\n    sleep 25 >/dev/null &\n    exit 0 ;;\n",
+            1,
+        ),
+    );
+    let t = std::time::Instant::now();
+    let o = scan(bin.path(), tree_with_timeout(Some(4)).path());
+    let took = t.elapsed();
+    assert!(
+        took < std::time::Duration::from_millis(6500),
+        "two staggered reads must finish within one deadline, took {took:?}"
+    );
+    assert!(!o.status.success());
 }

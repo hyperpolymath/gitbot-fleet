@@ -28,6 +28,7 @@ toml = "1.1.2"
 
 # Error handling
 anyhow = "1.0.102"
+rustix = { version = "1.1.4", default-features = false, features = ["process", "std"] }
 
 # Logging
 tracing = "0.1.44"

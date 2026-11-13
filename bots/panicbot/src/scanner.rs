@@ -318,8 +318,22 @@ pub fn run_diagnostics(timeout: Duration) -> Result<DiagnosticsReport> {
     // Fail early, and clearly, when the binary is not there at all.
     find_panic_attack_binary()?;
 
+    // One deadline for the whole preflight: `--version` and `diagnostics` share
+    // `timeout` rather than each getting a full one (which would double it).
+    let deadline = std::time::Instant::now() + timeout;
+    let left = |what: &str| -> Result<Duration> {
+        let d = deadline.saturating_duration_since(std::time::Instant::now());
+        if d.is_zero() {
+            bail!(
+                "panic-attack preflight exhausted its {}s budget before {what}",
+                timeout.as_secs()
+            );
+        }
+        Ok(d)
+    };
+
     // `--version` is the lightweight health check. Timed like every other invocation: a hung binary must not hang the lane.
-    let version_run = run_panic_attack_plain(&["--version"], timeout)
+    let version_run = run_panic_attack_plain(&["--version"], left("--version")?)
         .context("Failed to execute panic-attack --version")?;
 
     // First line only, bounded: this ends up in a part's detail.
@@ -342,7 +356,7 @@ pub fn run_diagnostics(timeout: Duration) -> Result<DiagnosticsReport> {
     // human-readable self-check of its own source tree (plain text, exit 1 in
     // any other directory), not a machine report, so a clean exit whose output
     // is not a diagnostics JSON document falls back to the `--version` check.
-    let diag = run_panic_attack_raw(&["diagnostics"], timeout)
+    let diag = run_panic_attack_raw(&["diagnostics"], left("diagnostics")?)
         .context("Failed to execute panic-attack diagnostics")?;
     if diag.status.code().is_none() {
         bail!(
@@ -534,7 +548,8 @@ pub struct DynamicReport {
 /// A verdict from `panic-attack adjudicate` (the real 2.5 report shape).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdjudicateVerdict {
-    /// `pass`, `warn` or `fail`.
+    /// `pass`, `warn` or `fail`. Newer panic-attack may write `error`, which
+    /// [`parse_adjudicate_verdict`] turns into an error.
     pub verdict: String,
     /// Reports it understood.
     pub processed_reports: usize,
@@ -563,32 +578,47 @@ pub struct AdjudicatePriority {
 /// Any non-zero exit, a timeout, a missing report file or a report that is not
 /// JSON is an error: a part never reads as clean because it printed nothing.
 fn run_to_report(args: &[&str], scratch: &Scratch, timeout: Duration) -> Result<serde_json::Value> {
+    run_to_report_accepting(args, scratch, timeout, &[0]).map(|(_, v)| v)
+}
+
+/// [`run_to_report`] for a subcommand whose exit code carries a verdict: each
+/// code in `accepted` is a complete run whose report is still read and parsed,
+/// and is returned with it. Any other exit is an error, so a crash or an
+/// incomplete run never reads as a result.
+fn run_to_report_accepting(
+    args: &[&str],
+    scratch: &Scratch,
+    timeout: Duration,
+    accepted: &[i32],
+) -> Result<(i32, serde_json::Value)> {
     let out = scratch.path().join("report.json");
     let out_s = out.display().to_string();
     let mut full: Vec<&str> = args.to_vec();
     full.push("-o");
     full.push(&out_s);
     let run = run_panic_attack_raw_in(&full, timeout, Some(scratch.path()))?;
-    if !run.status.success() {
-        bail!(
+    let code = match run.status.code() {
+        Some(c) if accepted.contains(&c) => c,
+        _ => bail!(
             "panic-attack {} exited with {}: {}",
             args.first().copied().unwrap_or("?"),
             run.status,
             first_diagnostic(&run.stderr)
-        );
-    }
+        ),
+    };
     let raw = std::fs::read_to_string(&out).with_context(|| {
         format!(
-            "panic-attack {} exited 0 without writing its report",
+            "panic-attack {} exited {code} without writing its report",
             args.first().copied().unwrap_or("?")
         )
     })?;
-    serde_json::from_str(extract_json(&raw)).with_context(|| {
+    let value = serde_json::from_str(extract_json(&raw)).with_context(|| {
         format!(
             "panic-attack {} wrote a report that is not JSON",
             args.first().copied().unwrap_or("?")
         )
-    })
+    })?;
+    Ok((code, value))
 }
 
 /// Resolve a path argument to an absolute, symlink-free string.
@@ -668,9 +698,15 @@ pub fn parse_dynamic_report(value: serde_json::Value) -> Result<DynamicReport> {
 /// Run `panic-attack adjudicate` over dynamic-mode reports and return its
 /// verdict.
 ///
-/// panic-attack 2.5.5 prints `pass (processed 0, failed 1)` and exits 0 for a
-/// missing or unrecognised report, so exit status is not evidence of a verdict:
-/// [`parse_adjudicate_verdict`] requires every input to have been processed.
+/// Exit contract (panic-attack #292, not yet released): 0 is a complete run
+/// with verdict pass or warn, 1 a complete run with verdict fail, 2 an
+/// incomplete run (no report processed, or one failed to load) whatever the
+/// verdict. Exit 0 and 1 are valid runs and the report is read; exit 2 is an
+/// error. The pinned panic-attack (410a8f82) predates that contract and exits
+/// 0 for every verdict, `fail` and a bad input (`pass (processed 0, failed 1)`)
+/// included, so exit status alone is never evidence:
+/// [`parse_adjudicate_verdict`] still requires every input to have been
+/// processed, and an exit 1 must agree with a `fail` verdict.
 pub fn run_adjudicate_verdict(reports: &[PathBuf], timeout: Duration) -> Result<AdjudicateVerdict> {
     let scratch = Scratch::new()?;
     let mut args: Vec<String> = vec!["adjudicate".to_string()];
@@ -678,8 +714,15 @@ pub fn run_adjudicate_verdict(reports: &[PathBuf], timeout: Duration) -> Result<
         args.push(absolute(r)?);
     }
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let value = run_to_report(&arg_refs, &scratch, timeout)?;
-    parse_adjudicate_verdict(value, reports.len())
+    let (code, value) = run_to_report_accepting(&arg_refs, &scratch, timeout, &[0, 1])?;
+    let v = parse_adjudicate_verdict(value, reports.len())?;
+    if code == 1 && v.verdict != "fail" {
+        bail!(
+            "panic-attack adjudicate exited 1 but wrote verdict {:?}, not 'fail'",
+            v.verdict
+        );
+    }
+    Ok(v)
 }
 
 /// Validate and parse an `adjudicate` report for `expected` inputs.
@@ -702,6 +745,11 @@ pub fn parse_adjudicate_verdict(
             v.verdict
         );
     }
+    if v.verdict == "error" {
+        bail!(
+            "panic-attack adjudicate reported verdict 'error' (the run was incomplete or failed)"
+        );
+    }
     if !matches!(v.verdict.as_str(), "pass" | "warn" | "fail") {
         bail!(
             "panic-attack adjudicate wrote unknown verdict {:?}",
@@ -711,10 +759,24 @@ pub fn parse_adjudicate_verdict(
     Ok(v)
 }
 
-/// Locate the `panic-attack` binary on PATH.
+/// Locate the `panic-attack` binary on PATH and return an ABSOLUTE path.
 ///
-/// Returns the path to the binary, or an error if not found.
+/// The scan spawns panic-attack with a different working directory (the
+/// scratch dir for `assay`/`adjudicate`), so a relative `PATH` entry would
+/// otherwise resolve against the wrong directory (not found, or a binary the
+/// scanned tree supplies). Canonicalised here, before any `current_dir`.
 fn find_panic_attack_binary() -> Result<PathBuf> {
+    let found = locate_panic_attack_binary()?;
+    std::fs::canonicalize(&found).with_context(|| {
+        format!(
+            "cannot resolve the panic-attack executable {} to an absolute path",
+            found.display()
+        )
+    })
+}
+
+/// Search PATH, then the common install locations. May return a relative path.
+fn locate_panic_attack_binary() -> Result<PathBuf> {
     // Check PATH via `which`
     let which_output = Command::new("which")
         .arg("panic-attack")
@@ -786,6 +848,7 @@ fn run_panic_attack_cmd(
     json: bool,
 ) -> Result<RawRun> {
     use std::io::Read;
+    use std::os::unix::process::CommandExt;
 
     let binary = find_panic_attack_binary()?;
 
@@ -808,50 +871,73 @@ fn run_panic_attack_cmd(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
+    // Own process group: on a timeout `Child::kill` reaches only panic-attack,
+    // so a dynamic target and its descendants would survive and could hold the
+    // output pipes open. The group is killed as a whole instead.
+    cmd.process_group(0);
+
     let mut child = cmd
         .spawn()
         .with_context(|| format!("Failed to spawn panic-attack at {}", binary.display()))?;
 
     // Drain both pipes on threads so a large report cannot fill a pipe and
-    // block the child while this thread waits on the deadline.
+    // block the child while this thread waits on the deadline. Each reader
+    // hands its bytes back over a channel so the join can be bounded.
     let (Some(mut out_pipe), Some(mut err_pipe)) = (child.stdout.take(), child.stderr.take())
     else {
-        let _ = child.kill();
-        let _ = child.wait();
-        anyhow::bail!("panic-attack stdout/stderr pipes were not captured");
+        let k = kill_note(kill_group(&mut child));
+        anyhow::bail!("panic-attack stdout/stderr pipes were not captured{k}");
     };
-    let out_t = std::thread::spawn(move || {
+    let (out_tx, out_rx) = std::sync::mpsc::channel();
+    let (err_tx, err_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         let mut b = Vec::new();
         let _ = out_pipe.read_to_end(&mut b);
-        b
+        let _ = out_tx.send(b);
     });
-    let err_t = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         let mut b = Vec::new();
         let _ = err_pipe.read_to_end(&mut b);
-        b
+        let _ = err_tx.send(b);
     });
 
     let deadline = std::time::Instant::now() + timeout;
     let status = loop {
-        match child
-            .try_wait()
-            .context("Failed to wait for panic-attack subprocess")?
-        {
-            Some(s) => break s,
-            None if std::time::Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
+        match child.try_wait() {
+            Ok(Some(s)) => break s,
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                let k = kill_note(kill_group(&mut child));
                 bail!(
-                    "panic-attack did not finish within {}s (timed out and killed)",
+                    "panic-attack did not finish within {}s (timed out and killed){k}",
                     timeout.as_secs()
                 );
             }
-            None => std::thread::sleep(Duration::from_millis(20)),
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(e) => {
+                let k = kill_note(kill_group(&mut child));
+                return Err(e).context(format!("Failed to wait for panic-attack subprocess{k}"));
+            }
         }
     };
 
-    let stdout = String::from_utf8_lossy(&out_t.join().unwrap_or_default()).to_string();
-    let stderr = String::from_utf8_lossy(&err_t.join().unwrap_or_default()).to_string();
+    // panic-attack has exited, but a descendant may still hold the pipes:
+    // bound the read by the same deadline, then take the whole group down.
+    let left = || deadline.saturating_duration_since(std::time::Instant::now());
+    // Recompute for each read: the first may use up most of the allowance.
+    let (stdout, stderr) = match (out_rx.recv_timeout(left()), err_rx.recv_timeout(left())) {
+        (Ok(o), Ok(e)) => (
+            String::from_utf8_lossy(&o).to_string(),
+            String::from_utf8_lossy(&e).to_string(),
+        ),
+        _ => {
+            let k = kill_note(kill_pgid(&child));
+            bail!(
+                "panic-attack left output pipes open past the {}s deadline \
+                 (a descendant process is still running; killed){k}",
+                timeout.as_secs()
+            );
+        }
+    };
     if !stderr.is_empty() {
         tracing::debug!("panic-attack stderr: {}", stderr.trim());
     }
@@ -860,6 +946,32 @@ fn run_panic_attack_cmd(
         stdout,
         stderr,
     })
+}
+
+/// SIGKILL the whole process group led by `child`. The child was started with
+/// `process_group(0)`, so its pid is the group id. ESRCH (the group is already
+/// gone) is the desired end state, not an error.
+fn kill_pgid(child: &std::process::Child) -> std::result::Result<(), String> {
+    let pid = rustix::process::Pid::from_child(child);
+    let pgid = pid.as_raw_nonzero();
+    match rustix::process::kill_process_group(pid, rustix::process::Signal::KILL) {
+        Ok(()) | Err(rustix::io::Errno::SRCH) => Ok(()),
+        Err(e) => Err(format!("could not kill process group {pgid}: {e}")),
+    }
+}
+
+/// Kill the child's group, then the child itself, and reap it. Returns the
+/// group-kill failure, if any, after the child has been killed and reaped.
+fn kill_group(child: &mut std::process::Child) -> std::result::Result<(), String> {
+    let group = kill_pgid(child);
+    let _ = child.kill();
+    let _ = child.wait();
+    group
+}
+
+/// Suffix for an error message when the group kill itself failed.
+fn kill_note(r: std::result::Result<(), String>) -> String {
+    r.err().map(|e| format!(" ({e})")).unwrap_or_default()
 }
 
 /// Invoke `panic-attack` for the subcommands other than `assail`.

@@ -13,7 +13,6 @@
 
 use crate::a2ml_writer;
 use crate::directives;
-use crate::scanner;
 use crate::suite::{self, SuiteOptions, SuiteRun};
 use crate::translator;
 use gitbot_shared_context::bot::{BotExecution, BotId, BotInfo};
@@ -113,10 +112,9 @@ pub fn run_fleet_suite(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
-    // Try to get panic-attack version for A2ML metadata
-    let pa_version = scanner::run_diagnostics(config.timeout)
-        .map(|d| d.version)
-        .unwrap_or_else(|_| "unknown".to_string());
+    // The version for the A2ML metadata comes from the suite's own diagnostics
+    // part: no second, separately-timed diagnostics run.
+    let pa_version = run.diagnostics_version().unwrap_or("unknown").to_string();
 
     if !unfixable.is_empty() || !fixable.is_empty() {
         let a2ml_doc = a2ml_writer::generate_a2ml(

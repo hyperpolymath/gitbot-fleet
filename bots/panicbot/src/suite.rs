@@ -147,6 +147,17 @@ pub struct SuiteRun {
 }
 
 impl SuiteRun {
+    /// The panic-attack version the suite's own `diagnostics` part reported,
+    /// when that part ran. Callers reuse it instead of running a second,
+    /// separately-timed diagnostics.
+    pub fn diagnostics_version(&self) -> Option<&str> {
+        self.parts
+            .iter()
+            .find(|p| p.command == Subcommand::Diagnostics && p.status == PartStatus::Ran)
+            .map(|p| p.detail.as_str())
+            .filter(|v| !v.is_empty())
+    }
+
     /// The parts that ended in `error`.
     pub fn errored(&self) -> Vec<&Part> {
         self.parts

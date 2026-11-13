@@ -24,8 +24,10 @@
 use crate::translator::PonsFinding;
 use serde_json::Value;
 use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -102,12 +104,15 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
         Ok(b) => b,
         Err(reason) => return Outcome::NotRun(reason),
     };
+    // Own process group: a timeout must take pons' descendants down with it,
+    // not only pons (a survivor can hold the output pipes open indefinitely).
     let mut child = match Command::new(&bin)
         .args(["scan", "--format", "json", "."])
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()
     {
         Ok(c) => c,
@@ -120,48 +125,92 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
         Err(e) => return Outcome::Error(format!("could not start {}: {e}", bin.display())),
     };
     // Drain both pipes on threads so a large report cannot fill a pipe and
-    // wedge the child before the deadline logic sees it.
+    // wedge the child before the deadline logic sees it. Each reader hands its
+    // bytes back over a channel so the join can be bounded by the deadline.
     let (Some(mut out_pipe), Some(mut err_pipe)) = (child.stdout.take(), child.stderr.take())
     else {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Outcome::Error("pons pipes were not captured".to_string());
+        let k = kill_note(kill_group(&mut child));
+        return Outcome::Error(format!("pons pipes were not captured{k}"));
     };
-    let out_t = thread::spawn(move || {
+    let (out_tx, out_rx) = mpsc::channel();
+    let (err_tx, err_rx) = mpsc::channel();
+    thread::spawn(move || {
         let mut b = Vec::new();
         let _ = out_pipe.read_to_end(&mut b);
-        b
+        let _ = out_tx.send(b);
     });
-    let err_t = thread::spawn(move || {
+    thread::spawn(move || {
         let mut b = Vec::new();
         let _ = err_pipe.read_to_end(&mut b);
-        b
+        let _ = err_tx.send(b);
     });
     let deadline = Instant::now() + timeout;
     let status = loop {
         match child.try_wait() {
             Ok(Some(s)) => break Ok(s),
             Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break Err(());
+                break Err(kill_note(kill_group(&mut child)));
             }
             Ok(None) => thread::sleep(Duration::from_millis(20)),
             Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = out_t.join();
-                let _ = err_t.join();
-                return Outcome::Error(format!("could not wait for pons: {e}"));
+                let k = kill_note(kill_group(&mut child));
+                return Outcome::Error(format!("could not wait for pons: {e}{k}"));
             }
         }
     };
-    let stdout = String::from_utf8_lossy(&out_t.join().unwrap_or_default()).into_owned();
-    let stderr = String::from_utf8_lossy(&err_t.join().unwrap_or_default()).into_owned();
-    match status {
-        Err(()) => Outcome::Error(format!("pons did not finish within {}s", timeout.as_secs())),
-        Ok(s) => interpret(s.code(), &stdout, &stderr, expected_commit),
+    let status = match status {
+        Ok(s) => s,
+        Err(k) => {
+            return Outcome::Error(format!(
+                "pons did not finish within {}s{k}",
+                timeout.as_secs()
+            ))
+        }
+    };
+    // pons has exited, but a descendant may still hold the pipes: bound the
+    // read by the same deadline, then take the whole group down.
+    let left = || deadline.saturating_duration_since(Instant::now());
+    // Recompute for each read: the first may use up most of the allowance.
+    let (stdout, stderr) = match (out_rx.recv_timeout(left()), err_rx.recv_timeout(left())) {
+        (Ok(o), Ok(e)) => (
+            String::from_utf8_lossy(&o).into_owned(),
+            String::from_utf8_lossy(&e).into_owned(),
+        ),
+        _ => {
+            let k = kill_note(kill_pgid(&child));
+            return Outcome::Error(format!(
+                "pons left output pipes open past the {}s deadline (a descendant process is still running){k}",
+                timeout.as_secs()
+            ));
+        }
+    };
+    interpret(status.code(), &stdout, &stderr, expected_commit)
+}
+
+/// SIGKILL the whole process group led by `child`. The child was started with
+/// `process_group(0)`, so its pid is the group id. ESRCH (the group is already
+/// gone) is the desired end state, not an error.
+fn kill_pgid(child: &Child) -> Result<(), String> {
+    let pid = rustix::process::Pid::from_child(child);
+    let pgid = pid.as_raw_nonzero();
+    match rustix::process::kill_process_group(pid, rustix::process::Signal::KILL) {
+        Ok(()) | Err(rustix::io::Errno::SRCH) => Ok(()),
+        Err(e) => Err(format!("could not kill process group {pgid}: {e}")),
     }
+}
+
+/// Kill the child's group, then the child itself, and reap it. Returns the
+/// group-kill failure, if any, after the child has been killed and reaped.
+fn kill_group(child: &mut Child) -> Result<(), String> {
+    let group = kill_pgid(child);
+    let _ = child.kill();
+    let _ = child.wait();
+    group
+}
+
+/// Suffix for an error message when the group kill itself failed.
+fn kill_note(r: Result<(), String>) -> String {
+    r.err().map(|e| format!(" ({e})")).unwrap_or_default()
 }
 
 /// First nonblank stderr line, at most 240 characters.

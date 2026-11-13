@@ -355,3 +355,76 @@ fn a_relative_path_entry_is_resolved_before_the_cwd_changes() {
     );
     assert_eq!(out_json(&o)[0]["rule_id"], "constant-condition");
 }
+
+/// A pons that backgrounds a long-lived descendant and waits for it. Killing
+/// only pons would leave the `sleep` holding the output pipes, so the scan
+/// would block until it ended; the whole process group must be killed.
+#[test]
+fn timeout_kills_the_descendants_and_returns_promptly() {
+    let (bin, scan) = (TempDir::new().unwrap(), tree());
+    let pidfile = bin.path().join("child.pid");
+    let pons = stub(
+        bin.path(),
+        &format!("sleep 25 &\necho $! > {}\nwait", pidfile.display()),
+    );
+    let t = std::time::Instant::now();
+    let o = ponsbot(&pons, scan.path(), &["--timeout", "1"]);
+    assert!(
+        t.elapsed().as_secs() < 10,
+        "a descendant holding the pipes must not outlast the timeout"
+    );
+    assert_eq!(o.status.code(), Some(2));
+    assert!(out_json(&o)["reason"]
+        .as_str()
+        .unwrap()
+        .contains("did not finish within 1s"));
+    let pid = fs::read_to_string(&pidfile).unwrap().trim().to_string();
+    let mut gone = false;
+    for _ in 0..50 {
+        if !Path::new(&format!("/proc/{pid}")).exists()
+            || fs::read_to_string(format!("/proc/{pid}/stat"))
+                .map(|s| s.contains(") Z "))
+                .unwrap_or(true)
+        {
+            gone = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        gone,
+        "the backgrounded descendant {pid} survived the timeout"
+    );
+}
+
+/// pons exits promptly but leaves a descendant holding its output pipes: the
+/// read is bounded by the deadline and reported as an error, never a hang.
+#[test]
+fn a_descendant_holding_the_pipes_after_exit_is_an_error_not_a_hang() {
+    let (bin, scan) = (TempDir::new().unwrap(), tree());
+    let pons = stub(bin.path(), "sleep 25 &\nexit 0");
+    let t = std::time::Instant::now();
+    let o = ponsbot(&pons, scan.path(), &["--timeout", "2"]);
+    assert!(t.elapsed().as_secs() < 10, "the pipe read must be bounded");
+    assert_eq!(o.status.code(), Some(2));
+}
+
+/// Two descendants hold the pipes for staggered times: stdout until just
+/// before the deadline, stderr far past it. Both reads share one deadline, so
+/// the second read gets only what the first left, not a fresh allowance.
+#[test]
+fn staggered_pipe_holders_share_one_deadline() {
+    let (bin, scan) = (TempDir::new().unwrap(), tree());
+    let pons = stub(
+        bin.path(),
+        "sleep 3.5 2>/dev/null &\nsleep 25 >/dev/null &\nexit 0",
+    );
+    let t = std::time::Instant::now();
+    let o = ponsbot(&pons, scan.path(), &["--timeout", "4"]);
+    let took = t.elapsed();
+    assert!(
+        took < std::time::Duration::from_millis(6500),
+        "two staggered reads must finish within one deadline, took {took:?}"
+    );
+    assert_eq!(o.status.code(), Some(2));
+}
