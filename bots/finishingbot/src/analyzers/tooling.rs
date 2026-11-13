@@ -11,17 +11,24 @@ use tracing::debug;
 /// mise manifests that pin tool versions (accepted in place of `.tool-versions`).
 const MISE_MANIFESTS: &[&str] = &["mise.toml", ".mise.toml"];
 
-/// Whether `p` is a parseable mise manifest with at least one entry in `[tools]`.
-fn mise_pins_tools(p: &Path) -> bool {
-    std::fs::read_to_string(p)
-        .ok()
-        .and_then(|s| s.parse::<toml::Table>().ok())
-        .and_then(|t| {
-            t.get("tools")
-                .and_then(|v| v.as_table())
-                .map(|t| !t.is_empty())
-        })
-        .unwrap_or(false)
+/// The tool names a parseable mise manifest pins in a non-empty `[tools]`
+/// table (`None` if it is unparseable or pins nothing). A backend prefix
+/// (`asdf:just`, `core:rust`) is dropped, so the name is the tool itself.
+fn mise_tool_names(p: &Path) -> Option<Vec<String>> {
+    let table = std::fs::read_to_string(p)
+        .ok()?
+        .parse::<toml::Table>()
+        .ok()?;
+    let tools = table.get("tools")?.as_table()?;
+    if tools.is_empty() {
+        return None;
+    }
+    Some(
+        tools
+            .keys()
+            .map(|k| k.rsplit(':').next().unwrap_or(k).to_string())
+            .collect(),
+    )
 }
 
 /// Tooling and version management analyzer
@@ -48,9 +55,19 @@ impl Analyzer for ToolingAnalyzer {
         let mise_manifest = MISE_MANIFESTS
             .iter()
             .map(|n| path.join(n))
-            .find(|p| mise_pins_tools(p));
+            .find_map(|p| mise_tool_names(&p).map(|names| (p, names)));
         if !tool_versions.exists() && mise_manifest.is_some() {
             debug!("Found mise manifest instead of .tool-versions");
+            // Same project-relevant tools as the .tool-versions branch: a
+            // manifest pinning only unrelated tools is not a clean pass.
+            if let Some((manifest, names)) = &mise_manifest {
+                self.check_project_tools(
+                    |t| names.iter().any(|n| n == t),
+                    manifest,
+                    "the mise manifest",
+                    &mut result,
+                );
+            }
         } else if !tool_versions.exists() {
             result.add(
                 Finding::new(
@@ -145,38 +162,12 @@ impl Analyzer for ToolingAnalyzer {
 impl ToolingAnalyzer {
     /// Validate .tool-versions content
     fn validate_tool_versions(&self, content: &str, file_path: &Path, result: &mut AnalysisResult) {
-        let is_rust = file_path
-            .parent()
-            .map(|p| p.join("Cargo.toml").exists())
-            .unwrap_or(false);
-
-        // Check for rust version if Rust project
-        if is_rust && !content.contains("rust ") {
-            result.add(
-                Finding::new(
-                    "TOOL-005",
-                    "Missing rust version in .tool-versions",
-                    Severity::Warning,
-                    "Rust project should specify rust version in .tool-versions.",
-                )
-                .with_file(file_path.to_path_buf())
-                .with_suggestion("Add 'rust <version>' to .tool-versions"),
-            );
-        }
-
-        // Check for just (task runner)
-        if is_rust && !content.contains("just ") {
-            result.add(
-                Finding::new(
-                    "TOOL-006",
-                    "Missing just version in .tool-versions",
-                    Severity::Info,
-                    "Consider adding 'just' task runner to .tool-versions.",
-                )
-                .with_file(file_path.to_path_buf())
-                .with_suggestion("Add 'just <version>' to .tool-versions if using justfile"),
-            );
-        }
+        self.check_project_tools(
+            |t| content.contains(&format!("{t} ")),
+            file_path,
+            ".tool-versions",
+            result,
+        );
 
         // Check for empty or very short file
         if content.trim().is_empty() {
@@ -189,6 +180,51 @@ impl ToolingAnalyzer {
                 )
                 .with_file(file_path.to_path_buf())
                 .with_suggestion("Add tool versions (e.g., 'rust 1.83.0')"),
+            );
+        }
+    }
+
+    /// The project-relevant tools a pin file (`.tool-versions` or a mise
+    /// manifest) must carry: rust (TOOL-005) and just (TOOL-006) for a Rust
+    /// project. `pins(t)` says whether the pin file pins tool `t`; `label`
+    /// names the pin file in the finding.
+    fn check_project_tools(
+        &self,
+        pins: impl Fn(&str) -> bool,
+        file_path: &Path,
+        label: &str,
+        result: &mut AnalysisResult,
+    ) {
+        let is_rust = file_path
+            .parent()
+            .map(|p| p.join("Cargo.toml").exists())
+            .unwrap_or(false);
+
+        // Check for rust version if Rust project
+        if is_rust && !pins("rust") {
+            result.add(
+                Finding::new(
+                    "TOOL-005",
+                    &format!("Missing rust version in {label}"),
+                    Severity::Warning,
+                    &format!("Rust project should specify rust version in {label}."),
+                )
+                .with_file(file_path.to_path_buf())
+                .with_suggestion(&format!("Add rust to {label}")),
+            );
+        }
+
+        // Check for just (task runner)
+        if is_rust && !pins("just") {
+            result.add(
+                Finding::new(
+                    "TOOL-006",
+                    &format!("Missing just version in {label}"),
+                    Severity::Info,
+                    &format!("Consider adding the 'just' task runner to {label}."),
+                )
+                .with_file(file_path.to_path_buf())
+                .with_suggestion(&format!("Add just to {label} if using justfile")),
             );
         }
     }
@@ -228,6 +264,43 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_mise_manifest_must_pin_the_tools_the_project_needs() {
+        let write = |d: &TempDir, mise: &str| {
+            std::fs::write(d.path().join("Cargo.toml"), "[package]\nname = \"x\"\n").unwrap();
+            std::fs::write(d.path().join("mise.toml"), mise).unwrap();
+        };
+        // Unrelated tools only: a Rust repo gets the same findings as a
+        // `.tool-versions` that lacks rust and just.
+        let d = TempDir::new().unwrap();
+        write(&d, "[tools]\nnode = \"22\"\n");
+        let got = ids(d.path());
+        assert!(got.contains(&"TOOL-005".to_string()), "{got:?}");
+        assert!(got.contains(&"TOOL-006".to_string()), "{got:?}");
+        // rust without just: only the just note.
+        let d = TempDir::new().unwrap();
+        write(&d, "[tools]\nrust = \"1.90\"\n");
+        let got = ids(d.path());
+        assert!(!got.contains(&"TOOL-005".to_string()), "{got:?}");
+        assert!(got.contains(&"TOOL-006".to_string()), "{got:?}");
+        // Both pinned (also behind a backend prefix): clean.
+        let d = TempDir::new().unwrap();
+        write(&d, "[tools]\nrust = \"1.90\"\n\"asdf:just\" = \"1.40\"\n");
+        let got = ids(d.path());
+        assert!(
+            !got.iter().any(|i| i == "TOOL-005" || i == "TOOL-006"),
+            "{got:?}"
+        );
+        // A non-Rust repo is not asked for rust or just.
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("mise.toml"), "[tools]\nnode = \"22\"\n").unwrap();
+        let got = ids(d.path());
+        assert!(
+            !got.iter().any(|i| i == "TOOL-005" || i == "TOOL-006"),
+            "{got:?}"
+        );
     }
 
     #[test]
