@@ -85,6 +85,10 @@ pub struct WeakPoint {
 }
 
 /// Report from `panic-attack adjudicate` — cross-report verdict.
+///
+/// NOTE: this models a report shape panic-attack 2.5.5 does not write (it
+/// writes [`AdjudicateVerdict`]). Kept because it is public; the suite uses
+/// [`run_adjudicate_verdict`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdjudicateReport {
     /// Number of reports adjudicated.
@@ -311,18 +315,23 @@ pub fn run_adjudicate(reports: &[PathBuf], timeout: Duration) -> Result<Adjudica
 /// Used as a preflight check to verify that panic-attack is installed,
 /// functional, and reports its version.
 pub fn run_diagnostics(timeout: Duration) -> Result<DiagnosticsReport> {
-    // First check if the binary exists at all
-    let binary = find_panic_attack_binary()?;
+    // Fail early, and clearly, when the binary is not there at all.
+    find_panic_attack_binary()?;
 
-    // Try `--version` for a lightweight health check
-    let version_output = Command::new(&binary)
-        .arg("--version")
-        .output()
+    // `--version` is the lightweight health check. Timed like every other invocation: a hung binary must not hang the lane.
+    let version_run = run_panic_attack_plain(&["--version"], timeout)
         .context("Failed to execute panic-attack --version")?;
 
-    let version = String::from_utf8_lossy(&version_output.stdout)
+    // First line only, bounded: this ends up in a part's detail.
+    let version: String = version_run
+        .stdout
+        .lines()
+        .next()
+        .unwrap_or("")
         .trim()
-        .to_string();
+        .chars()
+        .take(80)
+        .collect();
 
     // If diagnostics subcommand exists, use it
     match invoke_panic_attack(&["diagnostics"], timeout) {
@@ -344,7 +353,7 @@ pub fn run_diagnostics(timeout: Duration) -> Result<DiagnosticsReport> {
         } else {
             version
         },
-        healthy: version_output.status.success(),
+        healthy: version_run.status.success(),
         supported_languages: Vec::new(),
         messages: vec!["Diagnostics constructed from --version check".to_string()],
     })
@@ -402,6 +411,281 @@ pub fn run_migration_diff(
         .context("Failed to parse panic-attack migration-diff output as JSON")
 }
 
+// ── subcommands beyond `assail` (the full suite) ────────────────────────────
+//
+// These all write their report with `-o` into a private scratch directory and
+// run with that directory as the working directory. panic-attack otherwise
+// drops `reports/`, `runtime/` and similar into the CWD, and the report-back
+// driver's CWD is the scanned repository: a scan must not change the tree.
+
+/// A private scratch directory, removed on drop.
+pub struct Scratch {
+    path: PathBuf,
+}
+
+impl Scratch {
+    /// Create a fresh directory under the system temp dir.
+    pub fn new() -> Result<Self> {
+        let path = std::env::temp_dir().join(format!("panicbot-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("Failed to create scratch dir {}", path.display()))?;
+        Ok(Self { path })
+    }
+
+    /// The directory.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// One proven-library substitution candidate from `panic-attack assay`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssayCandidate {
+    /// Stable candidate id (e.g. `safe-path`).
+    pub id: String,
+    /// Name of the proven replacement.
+    pub proven_name: String,
+    /// The proof artifact backing the replacement.
+    pub proof_backing: String,
+    /// `offered`, `already-applied` or `no-replacement-source`.
+    pub status: String,
+    /// Catalogue confidence (0.0 - 1.0).
+    pub confidence: f64,
+    /// Where the unproven pattern occurs.
+    #[serde(default)]
+    pub target_hits: Vec<AssayHit>,
+}
+
+/// One occurrence of an unproven pattern.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssayHit {
+    /// File (absolute or relative to the target).
+    pub file: PathBuf,
+    /// 1-based line.
+    pub line: u32,
+}
+
+/// Report from `panic-attack assay <dir>`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssayReport {
+    /// Candidates found.
+    pub candidates: Vec<AssayCandidate>,
+    /// How many catalogue entries were checked.
+    #[serde(default)]
+    pub catalogue_entries: usize,
+    /// Free-text notes from the survey.
+    #[serde(default)]
+    pub notes: Vec<String>,
+}
+
+/// One per-axis result of a dynamic run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AxisResult {
+    /// Attack axis (`cpu`, `memory`, ...).
+    pub axis: String,
+    /// Whether the program survived the axis.
+    pub success: bool,
+    /// The axis did not run.
+    #[serde(default)]
+    pub skipped: bool,
+    /// Why it did not run.
+    #[serde(default)]
+    pub skip_reason: Option<String>,
+    /// The program's exit code, if it exited.
+    #[serde(default)]
+    pub exit_code: Option<i32>,
+    /// Crashes observed.
+    #[serde(default)]
+    pub crashes: Vec<serde_json::Value>,
+    /// Bug signatures detected.
+    #[serde(default)]
+    pub signatures_detected: Vec<serde_json::Value>,
+}
+
+/// Report from `panic-attack assault` or `panic-attack ambush`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DynamicReport {
+    /// Per-axis results.
+    pub attack_results: Vec<AxisResult>,
+    /// Total crashes.
+    #[serde(default)]
+    pub total_crashes: usize,
+    /// Total bug signatures.
+    #[serde(default)]
+    pub total_signatures: usize,
+}
+
+/// A verdict from `panic-attack adjudicate` (the real 2.5 report shape).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdjudicateVerdict {
+    /// `pass`, `warn` or `fail`.
+    pub verdict: String,
+    /// Reports it understood.
+    pub processed_reports: usize,
+    /// Reports it could not read or did not recognise.
+    pub failed_reports: usize,
+    /// Per-report problems.
+    #[serde(default)]
+    pub notes: Vec<String>,
+    /// Prioritised conclusions.
+    #[serde(default)]
+    pub priorities: Vec<AdjudicatePriority>,
+}
+
+/// One prioritised conclusion of an adjudication.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdjudicatePriority {
+    /// `high`, `medium`, `info`.
+    pub level: String,
+    /// What it says.
+    pub message: String,
+}
+
+/// Run a report-writing panic-attack subcommand in `scratch` and return the
+/// parsed JSON report it wrote to `-o`.
+///
+/// Any non-zero exit, a timeout, a missing report file or a report that is not
+/// JSON is an error: a part never reads as clean because it printed nothing.
+fn run_to_report(args: &[&str], scratch: &Scratch, timeout: Duration) -> Result<serde_json::Value> {
+    let out = scratch.path().join("report.json");
+    let out_s = out.display().to_string();
+    let mut full: Vec<&str> = args.to_vec();
+    full.push("-o");
+    full.push(&out_s);
+    let run = run_panic_attack_raw_in(&full, timeout, Some(scratch.path()))?;
+    if !run.status.success() {
+        bail!(
+            "panic-attack {} exited with {}: {}",
+            args.first().copied().unwrap_or("?"),
+            run.status,
+            first_diagnostic(&run.stderr)
+        );
+    }
+    let raw = std::fs::read_to_string(&out).with_context(|| {
+        format!(
+            "panic-attack {} exited 0 without writing its report",
+            args.first().copied().unwrap_or("?")
+        )
+    })?;
+    serde_json::from_str(extract_json(&raw)).with_context(|| {
+        format!(
+            "panic-attack {} wrote a report that is not JSON",
+            args.first().copied().unwrap_or("?")
+        )
+    })
+}
+
+/// Run `panic-attack assay <target>`: the proven-library substitution survey.
+pub fn run_assay(target: &Path, timeout: Duration) -> Result<AssayReport> {
+    let scratch = Scratch::new()?;
+    let t = target.display().to_string();
+    let value = run_to_report(&["assay", &t], &scratch, timeout)?;
+    parse_assay_report(value)
+}
+
+/// Validate and parse an `assay` report. A report with no `candidates` array is
+/// not an empty survey, it is a malformed one.
+pub fn parse_assay_report(value: serde_json::Value) -> Result<AssayReport> {
+    if !value.get("candidates").is_some_and(|c| c.is_array()) {
+        bail!("panic-attack assay wrote a report without a candidates array");
+    }
+    serde_json::from_value(value).context("panic-attack assay wrote an unexpected report shape")
+}
+
+/// Run `panic-attack assault` or `panic-attack ambush` against a built program.
+///
+/// EXECUTES `program`. The caller is responsible for the security gate (see
+/// `suite::dynamic_refusal`). `source` is the directory both modes run their
+/// own assail phase over; only the attack results are used here, so the
+/// static findings are not reported twice.
+/// The raw report is copied to `keep` for `adjudicate`.
+pub fn run_dynamic(
+    mode: &str,
+    program: &Path,
+    source: &Path,
+    axis_seconds: u64,
+    timeout: Duration,
+    keep: &Path,
+) -> Result<DynamicReport> {
+    if mode != "assault" && mode != "ambush" {
+        bail!("run_dynamic: '{mode}' is not a dynamic mode panicbot runs");
+    }
+    let scratch = Scratch::new()?;
+    let p = program.display().to_string();
+    let s = source.display().to_string();
+    let d = axis_seconds.to_string();
+    let value = run_to_report(
+        &[mode, &p, "--source", &s, "-d", &d, "--quiet"],
+        &scratch,
+        timeout,
+    )?;
+    // Keep the raw report: `adjudicate` reads it from disk.
+    std::fs::write(keep, serde_json::to_vec(&value)?)
+        .with_context(|| format!("Failed to keep the {mode} report at {}", keep.display()))?;
+    parse_dynamic_report(value)
+}
+
+/// Validate and parse an `assault`/`ambush` report. No per-axis results means
+/// nothing was attacked, which is an error, never a clean run.
+pub fn parse_dynamic_report(value: serde_json::Value) -> Result<DynamicReport> {
+    let report: DynamicReport = serde_json::from_value(value)
+        .context("panic-attack dynamic run wrote an unexpected report shape")?;
+    if report.attack_results.is_empty() {
+        bail!("panic-attack dynamic run produced no per-axis results (nothing was attacked)");
+    }
+    Ok(report)
+}
+
+/// Run `panic-attack adjudicate` over dynamic-mode reports and return its
+/// verdict.
+///
+/// panic-attack 2.5.5 prints `pass (processed 0, failed 1)` and exits 0 for a
+/// missing or unrecognised report, so exit status is not evidence of a verdict:
+/// [`parse_adjudicate_verdict`] requires every input to have been processed.
+pub fn run_adjudicate_verdict(reports: &[PathBuf], timeout: Duration) -> Result<AdjudicateVerdict> {
+    let scratch = Scratch::new()?;
+    let mut args: Vec<String> = vec!["adjudicate".to_string()];
+    args.extend(reports.iter().map(|r| r.display().to_string()));
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let value = run_to_report(&arg_refs, &scratch, timeout)?;
+    parse_adjudicate_verdict(value, reports.len())
+}
+
+/// Validate and parse an `adjudicate` report for `expected` inputs.
+pub fn parse_adjudicate_verdict(
+    value: serde_json::Value,
+    expected: usize,
+) -> Result<AdjudicateVerdict> {
+    let v: AdjudicateVerdict = serde_json::from_value(value)
+        .context("panic-attack adjudicate wrote an unexpected report shape")?;
+    if v.failed_reports > 0 || v.processed_reports < expected {
+        bail!(
+            "panic-attack adjudicate understood {} of {} report(s) ({} failed){}; its '{}' verdict is not evidence",
+            v.processed_reports,
+            expected,
+            v.failed_reports,
+            v.notes
+                .first()
+                .map(|n| format!(": {n}"))
+                .unwrap_or_default(),
+            v.verdict
+        );
+    }
+    if !matches!(v.verdict.as_str(), "pass" | "warn" | "fail") {
+        bail!(
+            "panic-attack adjudicate wrote unknown verdict {:?}",
+            v.verdict
+        );
+    }
+    Ok(v)
+}
+
 /// Locate the `panic-attack` binary on PATH.
 ///
 /// Returns the path to the binary, or an error if not found.
@@ -455,6 +739,27 @@ struct RawRun {
 /// the call fails: a hung scanner must not hang the lane or read as a run).
 /// The exit status is returned for the caller to judge.
 fn run_panic_attack_raw(args: &[&str], timeout: Duration) -> Result<RawRun> {
+    run_panic_attack_raw_in(args, timeout, None)
+}
+
+/// [`run_panic_attack_raw`] with an explicit working directory.
+fn run_panic_attack_raw_in(args: &[&str], timeout: Duration, cwd: Option<&Path>) -> Result<RawRun> {
+    run_panic_attack_cmd(args, timeout, cwd, true)
+}
+
+/// Run `panic-attack <args>` as given (no `--output-format`), with the same
+/// enforced timeout. For `--version`.
+fn run_panic_attack_plain(args: &[&str], timeout: Duration) -> Result<RawRun> {
+    run_panic_attack_cmd(args, timeout, None, false)
+}
+
+/// The one place panic-attack is spawned and its timeout enforced.
+fn run_panic_attack_cmd(
+    args: &[&str],
+    timeout: Duration,
+    cwd: Option<&Path>,
+    json: bool,
+) -> Result<RawRun> {
     use std::io::Read;
 
     let binary = find_panic_attack_binary()?;
@@ -467,8 +772,13 @@ fn run_panic_attack_raw(args: &[&str], timeout: Duration) -> Result<RawRun> {
 
     let mut cmd = Command::new(&binary);
     cmd.args(args);
-    cmd.arg("--output-format");
-    cmd.arg("json");
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    if json {
+        cmd.arg("--output-format");
+        cmd.arg("json");
+    }
     cmd.stdin(std::process::Stdio::null());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
@@ -782,5 +1092,126 @@ mod parity_tests {
         let json = r#"{"program_path":"/t","language":"x","statistics":{"total_lines":5},
             "weak_points":[{"category":"c","severity":"Catastrophic","description":"d"}]}"#;
         assert!(parse_assail_output(json).is_err());
+    }
+}
+
+#[cfg(test)]
+mod suite_parse_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn adjudicate_that_understood_nothing_is_an_error_not_a_pass() {
+        // Real panic-attack 2.5.5 output for a missing/unrecognised report:
+        // exit 0, verdict "pass", processed 0, failed 1.
+        let v = json!({
+            "verdict": "pass", "processed_reports": 0, "failed_reports": 1,
+            "notes": ["assail.json: unsupported report format"], "priorities": []
+        });
+        let err = parse_adjudicate_verdict(v, 1).unwrap_err().to_string();
+        assert!(err.contains("understood 0 of 1"), "{err}");
+        assert!(err.contains("unsupported report format"), "{err}");
+        assert!(err.contains("not evidence"), "{err}");
+    }
+
+    #[test]
+    fn adjudicate_that_understood_only_some_inputs_is_an_error() {
+        let v =
+            json!({"verdict": "fail", "processed_reports": 1, "failed_reports": 1, "notes": []});
+        assert!(parse_adjudicate_verdict(v, 2).is_err());
+    }
+
+    #[test]
+    fn adjudicate_verdict_is_read_when_every_input_was_understood() {
+        let v = json!({
+            "verdict": "fail", "processed_reports": 2, "failed_reports": 0, "notes": [],
+            "priorities": [{"level": "high", "message": "1 crashes detected across assault reports"}],
+            "totals": {"total_crashes": 1}
+        });
+        let ok = parse_adjudicate_verdict(v, 2).unwrap();
+        assert_eq!(ok.verdict, "fail");
+        assert_eq!(ok.priorities[0].level, "high");
+    }
+
+    #[test]
+    fn adjudicate_with_an_unknown_verdict_is_an_error() {
+        let v = json!({"verdict": "shrug", "processed_reports": 1, "failed_reports": 0});
+        assert!(parse_adjudicate_verdict(v, 1).is_err());
+    }
+
+    #[test]
+    fn assay_report_needs_a_candidates_array() {
+        assert!(parse_assay_report(json!({})).is_err());
+        assert!(parse_assay_report(json!({"candidates": "x"})).is_err());
+        // The real "nothing found" report is a valid, empty survey.
+        let ok = parse_assay_report(json!({
+            "candidates": [], "catalogue_entries": 2, "notes": ["no substitution candidates found for this target"]
+        }))
+        .unwrap();
+        assert!(ok.candidates.is_empty());
+    }
+
+    #[test]
+    fn assay_candidate_with_hits_parses_from_the_real_shape() {
+        let ok = parse_assay_report(json!({
+            "candidates": [{
+                "id": "safe-path", "proven_name": "SafePath",
+                "proof_backing": "proven: src/Proven/SafePath/Operations.idr",
+                "dest_rel": "src/safe_path.rs", "port_present": false,
+                "target_hits": [{"file": "src/a.rs", "line": 3, "snippet": "canonicalize(p).unwrap_or_else"}],
+                "equivalence_basis": "x", "perf_note": "y",
+                "substitution_kind": "port-to-rust", "confidence": 0.9, "status": "offered"
+            }]
+        }))
+        .unwrap();
+        assert_eq!(ok.candidates[0].target_hits[0].line, 3);
+        assert_eq!(ok.candidates[0].status, "offered");
+    }
+
+    #[test]
+    fn a_dynamic_report_with_no_axis_results_is_an_error() {
+        assert!(parse_dynamic_report(json!({"attack_results": [], "total_crashes": 0})).is_err());
+        assert!(parse_dynamic_report(json!({})).is_err());
+    }
+
+    #[test]
+    fn a_dynamic_report_parses_from_the_real_shape() {
+        let ok = parse_dynamic_report(json!({
+            "schema_version": "2.5", "total_crashes": 1, "total_signatures": 0,
+            "attack_results": [{
+                "axis": "cpu", "program": "./crash.sh", "success": false, "skipped": false,
+                "exit_code": null, "peak_memory": 0, "duration": {"secs": 0, "nanos": 1},
+                "crashes": [{"signal": null, "stderr": "", "stdout": ""}],
+                "signatures_detected": []
+            }]
+        }))
+        .unwrap();
+        assert_eq!(ok.attack_results[0].crashes.len(), 1);
+        assert!(!ok.attack_results[0].success);
+    }
+
+    #[test]
+    fn only_assault_and_ambush_are_dynamic_modes_panicbot_runs() {
+        let err = run_dynamic(
+            "attack",
+            Path::new("p"),
+            Path::new("."),
+            1,
+            Duration::from_secs(1),
+            Path::new("k"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("not a dynamic mode"), "{err}");
+    }
+
+    #[test]
+    fn scratch_is_removed_on_drop() {
+        let path = {
+            let s = Scratch::new().unwrap();
+            assert!(s.path().is_dir());
+            s.path().to_path_buf()
+        };
+        assert!(!path.exists());
     }
 }

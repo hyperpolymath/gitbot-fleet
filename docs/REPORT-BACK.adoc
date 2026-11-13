@@ -105,8 +105,12 @@ grading can match them against the diff.
 
 | panicbot
 | `panicbot --format json scan <repo>`
-| Wraps `panic-attack assail`; panicbot's own translator maps critical → error,
-  high → warning. The grid already carries a direct panic-attack row from the
+| Runs the **full panic-attack suite** unless the repository's bot directives
+  say otherwise (owner ruling 2026-11-13): `assail`, `assay`, and the dynamic
+  modes when a built `--target` is given (none of the CI callers gives one, so
+  there they report `not_applicable` with the reason). The inventory of every
+  panic-attack subcommand and why each is in or out is in `bots/panicbot/src/suite.rs`.
+  panicbot's own translator maps critical → error, high → warning. The grid already carries a direct panic-attack row from the
   Hypatia lane, so a repository that enrols panicbot sees the same tool twice,
   once through the bot's categorisation. `fleet` mode is *not* used: it writes a
   `.panicbot/*.a2ml` debt register into the scanned tree, and A2ML is retired.
@@ -114,7 +118,15 @@ grading can match them against the diff.
   scan that did not really run (panic-attack not installed, timed out, exited
   non-zero, or exited 0 without a report that has `weak_points` and a positive
   `statistics.total_lines`) exits non-zero with no findings array, which the
-  driver writes as `error` with the reason, never as an empty `ran`.
+  driver writes as `error` with the reason, never as an empty `ran`. A suite
+  where one part failed prints `{"status": "error", "reason": ..., "findings":
+  [...]}` and exits 3 (the failed part is named in the reason; the findings of
+  the parts that ran are carried in the envelope file, but the grid reads only the
+  status), and a run where no part analysed anything (everything denied or not
+  applicable) prints `status: not_run` and exits 4. A directive file that exists
+  but cannot be parsed stops the run (error), never a fallback to the full suite.
+  A repository with a directive file keeps exactly what it allows and denies; one
+  without gets the full suite.
 
 | ponsbot
 | `ponsbot --format json scan <repo>`

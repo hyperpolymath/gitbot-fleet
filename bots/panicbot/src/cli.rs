@@ -2,7 +2,7 @@
 //! CLI Interface — clap-based command-line argument parsing for panicbot.
 //!
 //! Subcommands:
-//! - `scan <dir>` — Run panic-attack assail and translate findings
+//! - `scan <dir>` — Run the allowed panic-attack suite and translate findings
 //! - `fleet <dir>` — Run as a gitbot-fleet member
 //! - `report <dir>` — Generate A2ML debt register
 
@@ -49,11 +49,24 @@ pub enum OutputFormat {
 /// Available subcommands.
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Run panic-attack assail on a directory and translate findings.
+    /// Run the allowed panic-attack suite on a directory and translate findings.
+    ///
+    /// Full suite by default; the repository's bot directives can narrow it.
+    /// Exits 3 if any part failed (findings of the parts that ran are still
+    /// printed) and 4 if no part analysed anything.
     Scan {
         /// Directory or binary to scan.
         #[arg(default_value = ".")]
         dir: PathBuf,
+
+        /// A built executable inside DIR for the dynamic modes (assault, ambush).
+        /// They EXECUTE it. Without it they report not_applicable.
+        #[arg(long)]
+        target: Option<PathBuf>,
+
+        /// Wall-clock budget for the whole suite, in seconds (default 240).
+        #[arg(long)]
+        budget_seconds: Option<u64>,
     },
 
     /// Run as a gitbot-fleet member.
@@ -65,6 +78,10 @@ pub enum Command {
         /// Bot operating mode (advisor, auditor, guardian).
         #[arg(short, long, default_value = "advisor")]
         mode: String,
+
+        /// A built executable inside DIR for the dynamic modes. They EXECUTE it.
+        #[arg(long)]
+        target: Option<PathBuf>,
     },
 
     /// Generate A2ML debt register for a directory.
