@@ -2,10 +2,10 @@
 = Scanner cutover: pons-asinorum and panic-attack → ponsbot and panicbot
 :toc: left
 :toclevels: 2
-:revdate: 2026-11-13
+:revdate: 2026-11-14
 
-Status: **DESIGN, with the owner's rulings of 2026-11-12 and 2026-11-13
-recorded (§8). Phase 0 (the adapters) is the only phase started.** Nothing
+Status: **DESIGN, with the owner's rulings of 2026-11-12, 2026-11-13 and
+2026-11-14 recorded (§8). Phase 0 (the adapters) has landed; phase 1 is next.** Nothing
 has been cut over: no
 workflow, enrolment manifest, grid row or direct lane has changed. Each later
 phase lands as its own pull request.
@@ -132,8 +132,9 @@ stay as external engines and repositories, and only the direct CI lanes retire.
   a row's gating from the enrolment's per-reporter `gating` boolean (standards
   `scripts/lib/verdict-grid.jq`), not from the envelope: enrolments set
   `"gating": true` for ponsbot and leave panicbot without it.
-* Hypatia's estate rescan and bridge gate are decided separately (§8 D4); they
-  are not PR lanes.
+* Hypatia's estate rescan and bridge gate are not PR lanes. Under §8.3 D4
+  (superseded 2026-11-14) they move behind panicbot's optional `bridge` mode
+  in phase 5.
 
 == 4. ponsbot (new adapter)
 
@@ -192,7 +193,7 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
   scope filter alone handles them.
 * Fix or retire `panicbot-sweep.yml`'s install line (see §2.2).
 
-== 6. Phases (each is its own PR; only phase 0 is started)
+== 6. Phases (each is its own PR; phase 0 has landed)
 
 [cols="1,3,2,2"]
 |===
@@ -224,9 +225,9 @@ A thin crate in `bots/ponsbot/`, the same shape as panicbot:
 | No `panic-attack` invocation remains outside `bots/panicbot/`
 
 | 5 (Hypatia)
-| Per the D4 ruling (2026-11-13): record estate-rescan and the bridge gate as sanctioned direct uses, reading panicbot's pin
-| hypatia
-| Ruling recorded; the verisim-data shape is unchanged either way
+| Per the superseding D4 ruling (2026-11-14): add panicbot's optional `bridge` mode (gitbot-fleet), then move estate-rescan and the bridge gate behind it, reading panicbot's pin
+| gitbot-fleet, hypatia
+| Bridge mode tested; the verisim-data shape is unchanged; standard scanning still works without the bridge mode
 |===
 
 == 7. Risks and rollback
@@ -271,7 +272,7 @@ G2. **Decided 2026-11-12.** panic-attack does not gate: panicbot is advisory.
 
 === 8.2 Decided (owner rulings, 2026-11-13)
 
-D4. **Decided 2026-11-13.** Hypatia's estate rescan (verisim-data feed) and
+D4. **Decided 2026-11-13; superseded 2026-11-14 (see §8.3).** Hypatia's estate rescan (verisim-data feed) and
     the bridge gate (`panic-attack bridge triage`) are **sanctioned direct
     uses**, consistent with D0: bridge triage is the CVE-mitigation
     lifecycle, not lane scanning. Both stay outside panicbot, and both read
@@ -291,13 +292,51 @@ D7. **Decided 2026-11-13.** Converge on the Hypatia lane's pins: panic-attack
     `410a8f82`, pons `bca1ea28`, the values phase 0 already records in
     `bots/panicbot/canon/pin.toml` `[build]` and `bots/ponsbot/canon/pin.toml`.
     `fleet-report-back-reusable.yml` (`b689a74d`) and deep-recon (`b5530834`,
-    `51b8920f`) move to them in phase 1. Later bumps change those files only.
+    `51b8920f`) move to them in phase 1. (The fleet reusable already moved to
+    `410a8f82` in #674.) Later bumps change those files only.
 
-=== 8.3 Open
+=== 8.3 Decided (owner rulings, 2026-11-14)
 
-D2. Shadow-period length for phase 1 (number of PRs or days) and the
-    acceptable difference between the direct and adapter rows.
+D2. **Decided 2026-11-14.** The phase 1 shadow period runs **14 days**. A
+    difference in evidence text between the direct and adapter rows is
+    acceptable; a difference in verdict (status or gating outcome) is not, and
+    blocks phase 2.
 
-D3. Does `hooks/pre-push-gate.sh`'s default (`panic-attack hypatia`) become
-    `panicbot ponsbot hypatia`, or does pons stay out of the local pre-push
-    gate because of its build cost?
+D3. **Decided 2026-11-14.** `hooks/pre-push-gate.sh`'s default becomes
+    `panicbot ponsbot hypatia` (the full set), accepting pons' build cost
+    (phase 4).
+
+D4 (superseded). **Superseded 2026-11-14** (D4 of 2026-11-13 stood for one
+    day). The owner's reasoning: panicbot is the harness that lets panic-attack
+    work as a bot inside the Hypatia system. It must still run as a plain
+    scanner without any bridge capability, but when it runs as a bot it should
+    be self-contained as far as it can be. Consequence: panicbot gains an
+    *optional* `bridge` mode (a thin subprocess call to `panic-attack bridge
+    triage`, same pin, same envelope discipline as `scan`). Hypatia's estate
+    rescan and bridge gate move behind panicbot in phase 5 instead of staying
+    direct uses. The standard scan path must not depend on the bridge mode.
+    *Interpretation, to confirm in review:* the owner's answer did not name the
+    bridge mode; this reading is mine.
+
+R14. **Decided 2026-11-13 (relayed).** finishingbot is retired or re-pointed
+    at the deed (D312). The design of that re-point is *not yet written*: it
+    needs the deed's current shape and a decision whether finishingbot's rows
+    are replaced by a deed-conformance row. Tracked as a phase 6 PR once phase
+    2 settles the grid shape; nothing is cut over for it here.
+
+=== 8.4 Authority and ownership (relayed owner rulings, 2026-11-13)
+
+* Pin authority: `bots/*/canon/pin.toml` in gitbot-fleet. Standards reusable
+  pins are owned by `propagate-sha-bump.sh` with the closure audit, and
+  Dependabot handles third-party actions only. The pin change in standards is
+  Tsunami-breaker's (standards#1509).
+* The cutover thread owns the cutover edits to `hypatia-scan-reusable.yml` and
+  `deep-recon-reusable.yml`. The thread that opened phase 0 (#670) is archived,
+  so the cutover thread is the one that wrote this design.
+* One auto-merge actuator (the estate sweep with `merge_ready` gates); the
+  Inbox Steward auto-merge job is dropped and its monitoring kept. CodeRabbit
+  and Codex are advisory.
+
+=== 8.5 Open
+
+None for phases 0 to 4. The bridge mode of 8.3 D4 is open to review.
