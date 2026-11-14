@@ -380,6 +380,7 @@ pub fn translate_weak_point(wp: &WeakPoint, config: &PanicbotConfig) -> Finding 
         "panic_attack_category": wp.category,
         "panic_attack_severity": wp.severity,
         "recommended_attacks": wp.recommended_attack,
+        "test_context": wp.test_context,
     }));
 
     finding
@@ -400,18 +401,17 @@ pub fn translate_all(weak_points: &[WeakPoint], config: &PanicbotConfig) -> Vec<
             // RAII, schema validation) that makes this finding likely a false positive.
             //
             // v2.5.5+ classifications (test_context field):
-            //   * `"test_only"` / `"doc"` → typically also `suppressed: true`
-            //     (set by `apply_v255_context_suppression` in panic-attack
-            //     after the kanren rule pass). Defensive: even if a future
-            //     scanner version preserves `suppressed: false` while
-            //     classifying as TestOnly, drop the finding here so test code
-            //     never reaches the fleet.
+            //   * `"test_only"` / `"doc"` that panic-attack suppressed
+            //     (`suppressed: true`) are dropped with the rest.
+            //   * `"test_only"` / `"doc"` that it did NOT suppress are carried
+            //     at their own severity, with `test_context` in the finding's
+            //     metadata. The direct panic-attack lane keeps them, and
+            //     dropping them made the shadow row read clean where the
+            //     direct row read critical (owner ruling 2026-11-14: carry at
+            //     full severity). Never dropped silently.
             //   * `"production"` → forwarded normally.
             //   * `None` → predates v2.5.5; treat as production.
             if wp.suppressed {
-                return None;
-            }
-            if matches!(wp.test_context.as_deref(), Some("test_only") | Some("doc")) {
                 return None;
             }
 
@@ -698,31 +698,46 @@ mod tests {
     }
 
     #[test]
-    fn translate_all_drops_test_only_findings_even_if_not_suppressed() {
-        // Defensive: even when `suppressed: false`, a `test_context: test_only`
-        // finding should not reach the fleet.
+    fn translate_all_carries_unsuppressed_test_only_findings() {
+        // The direct lane keeps them; so does panicbot, at full severity, with
+        // the test context recorded in the metadata.
         let wps = vec![
             make_wp("UnsafeCode", Some("test_only"), false),
             make_wp("UnsafeCode", Some("production"), false),
         ];
         let config = PanicbotConfig::default();
         let findings = translate_all(&wps, &config);
-        assert_eq!(
-            findings.len(),
-            1,
-            "test_only finding must be dropped regardless of suppressed flag"
-        );
+        assert_eq!(findings.len(), 2, "unsuppressed test_only must be carried");
+        let carried = findings
+            .iter()
+            .find(|f| f.metadata["test_context"] == "test_only")
+            .expect("a finding records test_context test_only");
+        assert_eq!(carried.severity, map_severity("Critical"));
     }
 
     #[test]
-    fn translate_all_drops_doc_findings_even_if_not_suppressed() {
+    fn translate_all_drops_suppressed_test_only_findings() {
+        let wps = vec![
+            make_wp("UnsafeCode", Some("test_only"), true),
+            make_wp("UnsafeCode", Some("production"), false),
+        ];
+        let findings = translate_all(&wps, &PanicbotConfig::default());
+        assert_eq!(findings.len(), 1, "suppressed findings stay dropped");
+    }
+
+    #[test]
+    fn translate_all_carries_unsuppressed_doc_findings() {
         let wps = vec![
             make_wp("PanicPath", Some("doc"), false),
             make_wp("PanicPath", Some("production"), false),
         ];
         let config = PanicbotConfig::default();
         let findings = translate_all(&wps, &config);
-        assert_eq!(findings.len(), 1, "doc finding must be dropped");
+        assert_eq!(
+            findings.len(),
+            2,
+            "unsuppressed doc finding must be carried"
+        );
     }
 
     #[test]
