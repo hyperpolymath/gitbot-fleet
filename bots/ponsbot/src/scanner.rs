@@ -184,7 +184,13 @@ pub fn run_pons(dir: &Path, timeout: Duration, expected_commit: &str) -> Outcome
             ));
         }
     };
-    interpret(status.code(), &stdout, &stderr, expected_commit)
+    interpret_with(
+        status.code(),
+        &stdout,
+        &stderr,
+        expected_commit,
+        require_clean_from_env(),
+    )
 }
 
 /// SIGKILL the whole process group led by `child`. The child was started with
@@ -226,6 +232,26 @@ fn first_line(stderr: &str) -> String {
 /// Map pons' exit status, stdout and stderr to an [`Outcome`]. Pure, so every
 /// failure mode is unit-testable without a pons binary.
 pub fn interpret(code: Option<i32>, stdout: &str, stderr: &str, expected_commit: &str) -> Outcome {
+    interpret_with(code, stdout, stderr, expected_commit, false)
+}
+
+/// Whether a `source_dirty` stamp from pons is fatal. Off by default:
+/// `cargo install --git --rev` (how CI builds the pinned pons) stamps
+/// `source_dirty: "true"` although the checkout is exactly the pinned commit,
+/// and the commit stamp, which is checked, is what identifies the binary. Set
+/// `PONSBOT_REQUIRE_CLEAN=1` to refuse a dirty stamp, e.g. for a local build.
+fn require_clean_from_env() -> bool {
+    std::env::var("PONSBOT_REQUIRE_CLEAN").is_ok_and(|v| v == "1")
+}
+
+/// [`interpret`] with the dirty-stamp policy chosen by the caller.
+pub fn interpret_with(
+    code: Option<i32>,
+    stdout: &str,
+    stderr: &str,
+    expected_commit: &str,
+    require_clean: bool,
+) -> Outcome {
     let code = match code {
         Some(c) => c,
         None => {
@@ -237,7 +263,7 @@ pub fn interpret(code: Option<i32>, stdout: &str, stderr: &str, expected_commit:
     };
     let report: Option<Value> = serde_json::from_str(stdout).ok();
     match code {
-        0 | 1 => match validate(report.as_ref(), expected_commit) {
+        0 | 1 => match validate(report.as_ref(), expected_commit, require_clean) {
             Ok(findings) => Outcome::Ran(findings),
             Err(why) => Outcome::Error(format!("pons exited {code} without a valid report: {why}")),
         },
@@ -256,7 +282,11 @@ pub fn interpret(code: Option<i32>, stdout: &str, stderr: &str, expected_commit:
 
 /// Validate a pons scan report and extract its findings. A report that is not
 /// exactly what pons documents is an error, never an empty finding list.
-fn validate(report: Option<&Value>, expected_commit: &str) -> Result<Vec<PonsFinding>, String> {
+fn validate(
+    report: Option<&Value>,
+    expected_commit: &str,
+    require_clean: bool,
+) -> Result<Vec<PonsFinding>, String> {
     let r = report.ok_or("stdout is not JSON")?;
     let tool = r
         .get("tool")
@@ -271,7 +301,7 @@ fn validate(report: Option<&Value>, expected_commit: &str) -> Result<Vec<PonsFin
             return Err(format!("pons does not report its source commit, so the pin {expected_commit} cannot be verified"))
         }
     }
-    if tool.get("source_dirty").and_then(Value::as_str) == Some("true") {
+    if require_clean && tool.get("source_dirty").and_then(Value::as_str) == Some("true") {
         return Err("pons was built from a dirty tree, so it is not the pinned commit".into());
     }
     let arr = r
@@ -415,9 +445,24 @@ mod tests {
         assert!(
             matches!(interpret(Some(0), none, "", PIN), Outcome::Error(r) if r.contains("cannot be verified"))
         );
+    }
+
+    #[test]
+    fn dirty_stamp_is_accepted_by_default_and_refused_on_request() {
+        // `cargo install --git --rev` stamps source_dirty "true" on the exact
+        // pinned commit; the real pons does this in CI. The commit check stays.
         let dirty = report("[]").replace("\"false\"", "\"true\"");
+        assert!(matches!(
+            interpret(Some(0), &dirty, "", PIN),
+            Outcome::Ran(_)
+        ));
         assert!(
-            matches!(interpret(Some(0), &dirty, "", PIN), Outcome::Error(r) if r.contains("dirty"))
+            matches!(interpret_with(Some(0), &dirty, "", PIN, true), Outcome::Error(r) if r.contains("dirty"))
+        );
+        // A dirty stamp never rescues a wrong commit.
+        let wrong = dirty.replace(PIN, "0000000000000000000000000000000000000000");
+        assert!(
+            matches!(interpret(Some(0), &wrong, "", PIN), Outcome::Error(r) if r.contains("refusing"))
         );
     }
 
