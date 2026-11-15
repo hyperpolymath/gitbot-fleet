@@ -246,7 +246,7 @@ impl GitHubClient {
     /// Read a file, treating "not found" as `None` rather than an error.
     ///
     /// The distinction matters for optional files: an absent
-    /// `.machine_readable/rsr-profile.a2ml` means a repository declares no
+    /// `.machine_readable/optional-fixture.txt` means a repository declares no
     /// capabilities, which is an answer. Only a 404 is absence; anything else
     /// is a real failure and is reported as one.
     pub async fn get_file_content_if_present(
@@ -659,7 +659,7 @@ mod tests {
                     { "path": "src", "type": "tree" },
                     { "path": "src/main.rs", "type": "blob" },
                     { "path": "README.adoc", "type": "blob" },
-                    { "path": ".machine_readable/descriptiles/STATE.a2ml", "type": "blob" }
+                    { "path": ".machine_readable/descriptiles/STATE.deed", "type": "blob" }
                 ]
             })))
             .mount(&server)
@@ -676,7 +676,7 @@ mod tests {
             vec![
                 "src/main.rs",
                 "README.adoc",
-                ".machine_readable/descriptiles/STATE.a2ml"
+                ".machine_readable/descriptiles/STATE.deed"
             ],
             "directories are not files: counting `src` would not tell a check anything, and a \
              criterion naming a directory is satisfied by what is inside it"
@@ -715,7 +715,7 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path(
-                "/repos/acme/widgets/contents/.machine_readable/rsr-profile.a2ml",
+                "/repos/acme/widgets/contents/.machine_readable/optional-fixture.txt",
             ))
             .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
                 "message": "Not Found"
@@ -725,7 +725,7 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path(
-                "/repos/acme/widgets/contents/.machine_readable/STATE.a2ml",
+                "/repos/acme/widgets/contents/.machine_readable/STATE.deed",
             ))
             .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
             .mount(&server)
@@ -738,7 +738,7 @@ mod tests {
                 .get_file_content_if_present(
                     "acme",
                     "widgets",
-                    ".machine_readable/rsr-profile.a2ml"
+                    ".machine_readable/optional-fixture.txt"
                 )
                 .await
                 .expect("a 404 is an answer, not a failure"),
@@ -747,7 +747,7 @@ mod tests {
         );
 
         let error = client
-            .get_file_content_if_present("acme", "widgets", ".machine_readable/STATE.a2ml")
+            .get_file_content_if_present("acme", "widgets", ".machine_readable/STATE.deed")
             .await
             .expect_err("a server error must not read as \"the file is absent\"");
         assert!(format!("{error:#}").contains("500"), "{error:#}");

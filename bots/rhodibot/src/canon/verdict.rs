@@ -282,6 +282,69 @@ impl Verdict {
         })
     }
 
+    /// Classify a criterion against an overlay's requirement instead of the
+    /// one its description gives (see [`super::overlay`]).
+    ///
+    /// When the replacement allows it and a group is absent in the new form,
+    /// the criterion's own original requirement is consulted as a **read
+    /// fallback**: a legacy file that is present makes the group `Elsewhere`
+    /// -- present, but not in the form the report names -- which reads as
+    /// "migrate", never as "missing". The expected form reported is always the
+    /// replacement's; the legacy name only ever appears as a fact found.
+    pub fn of_replacement(
+        criterion: &Criterion,
+        replacement: &super::overlay::Replacement,
+        files: &[String],
+        deprecations: &[Deprecation],
+    ) -> Self {
+        let original = replacement
+            .legacy_fallback
+            .then(|| requirement_from(&criterion.desc))
+            .flatten();
+
+        let groups = replacement
+            .requirement
+            .all_of
+            .iter()
+            .enumerate()
+            .map(|(index, alternatives)| {
+                let current =
+                    classify_group(alternatives, files, deprecations, &replacement.template_ref);
+                if !matches!(current, GroupVerdict::Absent { .. }) {
+                    return current;
+                }
+                let Some(legacy_group) = original.as_ref().and_then(|r| r.all_of.get(index)) else {
+                    return current;
+                };
+                match classify_group(legacy_group, files, deprecations, &criterion.template_ref) {
+                    GroupVerdict::AtPath { path, .. } => GroupVerdict::Elsewhere {
+                        expected: alternatives.clone(),
+                        found: vec![path],
+                        deprecated_copies: Vec::new(),
+                    },
+                    GroupVerdict::Elsewhere {
+                        found,
+                        deprecated_copies,
+                        ..
+                    } => GroupVerdict::Elsewhere {
+                        expected: alternatives.clone(),
+                        found,
+                        deprecated_copies,
+                    },
+                    // A copy only under a retired location is already "move
+                    // it"; the new form is still what to move it to.
+                    deprecated @ GroupVerdict::Deprecated { .. } => deprecated,
+                    GroupVerdict::Absent { .. } => current,
+                }
+            })
+            .collect();
+
+        Self {
+            groups,
+            template_ref: replacement.template_ref.clone(),
+        }
+    }
+
     /// How much the canon objects, taking the worst group.
     pub fn severity(&self) -> Severity {
         if self
@@ -448,6 +511,11 @@ fn near_misses_for(alternatives: &[String], files: &[String]) -> Vec<String> {
     for alternative in alternatives.iter().filter(|path| !path.ends_with('/')) {
         let stem = stem_of(basename(alternative));
         for file in files {
+            // A virtual clause path (`<deed>#<clause>`, see `overlay`) is not a
+            // file anyone could have misnamed.
+            if file.contains('#') || alternative.contains('#') {
+                continue;
+            }
             if alternatives.iter().any(|expected| expected == file) {
                 continue;
             }

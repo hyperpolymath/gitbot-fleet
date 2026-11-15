@@ -72,11 +72,24 @@ Control    (report < 0.85)        →  Human review required
 
 ## Critical Invariants
 
-1. The seven canonical A2ML files (`STATE`, `META`, `ECOSYSTEM`,
-   `AGENTIC`, `NEUROSYM`, `PLAYBOOK`, `ANCHOR`) live under
-   `.machine_readable/descriptiles/`, per the current estate-wide policy.
-   Earlier direct-under-`.machine_readable/`, `6scm/`, and `6a2/` layouts
-   are retired and must not be restored.
+1. **A2ML is retired; repo facts are deeds.** No `.a2ml` file should exist,
+   and no bot, script or doc here may create, extend or recommend one. The
+   facts the seven canonical A2ML files held (`STATE`, `META`, `ECOSYSTEM`,
+   `AGENTIC`, `NEUROSYM`, `PLAYBOOK`, `ANCHOR`), and the manifest, the RSR
+   profile and the bot directives, are clauses of `<repo>_chora.deed` at the
+   repo root (one per repo), or of a descriptile deed such as
+   `.machine_readable/descriptiles/META.deed`, `STATE.deed` or `AGENTIC.deed`
+   as standards' A7 migration moves them out. Conformance is
+   `1-formats/deed/tools/deed_lint.js` in `metadatastician/standards`; bots
+   here only *read* deeds and never hand-convert A2ML (D313).
+   - **The only exception** is a deed-first **read fallback**: a shared reader
+     may still read a legacy `.a2ml` file after a deed source, and only while
+     A7's migration plan (M5–M7) requires it until its callers migrate.
+     Rhodibot's `canon` command does this (`src/canon/overlay.rs`), reporting a
+     legacy file as "migrate", never as "missing", and never naming an `.a2ml`
+     as the form to create.
+   - Earlier direct-under-`.machine_readable/`, `6scm/`, and `6a2/` layouts
+     are retired and must not be restored.
 2. All shell scripts validate untrusted input before use.
 3. No hardcoded secrets — use env vars with `${VAR:-}` defaults.
 4. Fix scripts must be idempotent (safe to run multiple times).
