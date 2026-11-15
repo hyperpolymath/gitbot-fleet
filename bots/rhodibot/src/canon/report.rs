@@ -943,7 +943,7 @@ mod tests {
 
     #[test]
     fn the_deed_profile_declares_capabilities() {
-        let deed = "(repo-deed (rsr-profile :capabilities (governance-tier)))";
+        let deed = "(repo-deed (rsr-profile :capabilities (\"governance-tier\")))";
         let report = report_for(&["widgets_chora.deed"], Some(deed), None);
         assert_eq!(
             report.declared_capabilities,
@@ -953,7 +953,7 @@ mod tests {
 
     #[test]
     fn a_misspelt_deed_capability_is_refused() {
-        let deed = "(repo-deed (rsr-profile :capabilities (governence-tier)))";
+        let deed = "(repo-deed (rsr-profile :capabilities (\"governence-tier\")))";
         assert!(
             CanonReport::build_with(
                 "acme/widgets",
