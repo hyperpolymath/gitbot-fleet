@@ -400,13 +400,19 @@ impl CanonReport {
 impl Finding {
     /// A criterion rhodibot cannot decide from files: visible, not graded.
     fn manual(criterion: &super::Criterion) -> Self {
+        // The path the criterion is about, so a consumer can place the finding:
+        // the first path its description names, else the canon's own template
+        // path. Never empty, or a grid would grade it against every change.
+        let about = super::requirement::requirement_from(&criterion.desc)
+            .and_then(|requirement| requirement.paths().next().cloned())
+            .unwrap_or_else(|| criterion.template_ref.clone());
         Self {
             id: criterion.id.clone(),
             name: criterion.name.clone(),
             tier: criterion.tier.to_string(),
             severity: Severity::Manual,
             canon_keeps_it_at: None,
-            expected: Vec::new(),
+            expected: vec![about],
             found: Vec::new(),
             deprecated_copies: Vec::new(),
             details: vec![format!(
@@ -1093,6 +1099,17 @@ mod manual_tests {
             .expect("still visible");
         assert_eq!(finding.severity, Severity::Manual);
         assert!(finding.details[0].contains("manual check: not verified by rhodibot"));
+        // Every manual finding carries a non-empty path, or a grid would grade
+        // it against every change.
+        for manual in report
+            .findings
+            .iter()
+            .filter(|f| f.severity == Severity::Manual)
+        {
+            let path = manual.expected.first().map(String::as_str).unwrap_or("");
+            assert!(!path.is_empty() && path != "-", "{} has no path", manual.id);
+        }
+        assert_eq!(finding.expected, vec![".well-known/".to_string()]);
         assert!(report.counts.manual >= 1);
         // Never trips a --fail-on threshold, even the lowest.
         assert!(!FailOn::Relocated.breached_by(&report) || report.counts.relocated > 0);
