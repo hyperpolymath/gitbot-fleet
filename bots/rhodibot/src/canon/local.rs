@@ -20,8 +20,10 @@ use std::process::Command;
 
 use anyhow::{Context, Result, ensure};
 
-/// The two paths the canon's baseline allows for a profile, in preference
-/// order: both are acceptable, and the first is the estate's.
+/// Where a **legacy** `rsr-profile.a2ml` may still be, in preference order.
+///
+/// A read fallback only, consulted when the chora deed has no
+/// `(rsr-profile ...)` clause. Never a thing to create or ask for.
 const PROFILE_PATHS: [&str; 2] = [
     ".machine_readable/rsr-profile.a2ml",
     "machine-readable/rsr-profile.a2ml",
@@ -32,8 +34,10 @@ const PROFILE_PATHS: [&str; 2] = [
 pub struct LocalSource {
     /// The repository's tracked files, relative to its root.
     pub files: Vec<String>,
-    /// The text of its profile, when it has one.
+    /// The text of a legacy profile file, when it has one (a read fallback).
     pub profile: Option<String>,
+    /// The text of the root `*_chora.deed`, when it has one.
+    pub chora_deed: Option<String>,
     /// Whether the file list came from git or from a walk.
     from_git: bool,
 }
@@ -49,10 +53,16 @@ impl LocalSource {
 
     /// Kept private so a `LocalSource` can only come from `read`, which is the
     /// only thing that knows whether the list is the tracked set.
-    fn new(files: Vec<String>, profile: Option<String>, from_git: bool) -> Self {
+    fn new(
+        files: Vec<String>,
+        profile: Option<String>,
+        chora_deed: Option<String>,
+        from_git: bool,
+    ) -> Self {
         Self {
             files,
             profile,
+            chora_deed,
             from_git,
         }
     }
@@ -78,7 +88,23 @@ pub fn read(root: &Path) -> Result<LocalSource> {
         }
     };
 
-    Ok(LocalSource::new(files, profile(root)?, from_git))
+    let chora_deed = match super::overlay::find_chora_deed(&files)? {
+        Some(name) => {
+            let path = root.join(&name);
+            Some(
+                std::fs::read_to_string(&path)
+                    .with_context(|| format!("reading {}", path.display()))?,
+            )
+        }
+        None => None,
+    };
+
+    Ok(LocalSource::new(
+        files,
+        profile(root)?,
+        chora_deed,
+        from_git,
+    ))
 }
 
 /// The repository's tracked files, when git can be asked.

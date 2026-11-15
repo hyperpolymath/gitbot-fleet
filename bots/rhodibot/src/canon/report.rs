@@ -15,12 +15,14 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Serialize;
 
 use super::Canon;
+use super::overlay::{Overlay, find_chora_deed};
 use super::profile::{GateTable, Profile};
 use super::verdict::{Deprecation, GroupVerdict, Severity, Verdict};
+use crate::deed::{Deed, DocFormat};
 
 /// What a repository would be told, if it asked.
 #[derive(Debug, Serialize)]
@@ -46,6 +48,8 @@ pub struct CanonReport {
     pub retired_locations: Vec<RetiredLocation>,
     /// Capabilities the repository declared, if it has a profile.
     pub declared_capabilities: Vec<String>,
+    /// Checks rhodibot adds to the canon's (the chora deed), counted in `scored`.
+    pub extra_checks: usize,
 }
 
 #[derive(Debug, Default, Serialize, PartialEq, Eq)]
@@ -54,6 +58,7 @@ pub struct Counts {
     pub relocated: usize,
     pub deprecated: usize,
     pub missing: usize,
+    pub manual: usize,
 }
 
 impl Counts {
@@ -63,6 +68,7 @@ impl Counts {
             Severity::Relocated => self.relocated += 1,
             Severity::Deprecated => self.deprecated += 1,
             Severity::Missing => self.missing += 1,
+            Severity::Manual => self.manual += 1,
         }
     }
 }
@@ -153,12 +159,26 @@ impl FailOn {
     }
 }
 
+/// Everything read from one repository, before any check runs.
+#[derive(Debug, Default)]
+pub struct RepoInput {
+    /// What the repository is called: the root file name its chora deed is
+    /// expected under when it has none.
+    pub name: String,
+    /// The repository's tracked files.
+    pub files: Vec<String>,
+    /// The text of the root `*_chora.deed`, when there is one.
+    pub chora_deed: Option<String>,
+    /// The text of a legacy `rsr-profile.a2ml`. A read fallback, consulted
+    /// only when the chora deed carries no `(rsr-profile ...)` clause.
+    pub legacy_profile: Option<String>,
+}
+
 impl CanonReport {
-    /// Check one repository's file list against the canon.
+    /// Check one repository's file list against the canon, with no chora deed.
     ///
-    /// `profile_source` is the text of the repository's
-    /// `.machine_readable/rsr-profile.a2ml`, or `None` when it has none -- which
-    /// means it declares no capabilities, not that it is non-compliant.
+    /// Kept for callers that only have a file list. `profile_source` is the
+    /// text of a legacy profile, or `None`.
     pub fn build(
         subject: &str,
         canon: &Canon,
@@ -166,11 +186,59 @@ impl CanonReport {
         files: &[String],
         profile_source: Option<&str>,
     ) -> Result<Self> {
-        let profile = match profile_source {
-            Some(source) => Profile::parse(source, gates)?,
-            None => Profile::default(),
+        Self::build_with(
+            subject,
+            canon,
+            gates,
+            &RepoInput {
+                name: subject
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .unwrap_or(subject)
+                    .to_string(),
+                files: files.to_vec(),
+                chora_deed: None,
+                legacy_profile: profile_source.map(str::to_string),
+            },
+        )
+    }
+
+    /// Check one repository against the canon, as overlaid by [`overlay`].
+    ///
+    /// The profile comes from the chora deed's `(rsr-profile ...)` clause; a
+    /// legacy `rsr-profile.a2ml` is read only when the deed has none. No
+    /// profile at all means it declares no capabilities, not that it is
+    /// non-compliant.
+    pub fn build_with(
+        subject: &str,
+        canon: &Canon,
+        gates: &GateTable,
+        input: &RepoInput,
+    ) -> Result<Self> {
+        let deed = input
+            .chora_deed
+            .as_deref()
+            .map(Deed::parse)
+            .transpose()
+            .context("the chora deed does not read as an s-expression")?;
+        let format = DocFormat::from_deed(deed.as_ref())?;
+        let chora_name =
+            find_chora_deed(&input.files)?.unwrap_or_else(|| format!("{}_chora.deed", input.name));
+        let overlay = Overlay::new(&chora_name, deed.as_ref(), format);
+
+        let profile = match deed.as_ref().map(Deed::rsr_profile).transpose()?.flatten() {
+            Some(clause) => Profile::from_clause(clause, gates)?,
+            None => match input.legacy_profile.as_deref() {
+                Some(source) => Profile::parse(source, gates)?,
+                None => Profile::default(),
+            },
         };
         let deprecations = Deprecation::from_canon(canon)?;
+
+        // The files, plus one virtual path per clause of the chora deed.
+        let mut files = input.files.clone();
+        files.extend(overlay.virtual_files());
+        let files = files.as_slice();
 
         let mut report = Self {
             subject: subject.to_string(),
@@ -189,6 +257,7 @@ impl CanonReport {
                 })
                 .collect(),
             declared_capabilities: profile.declared().cloned().collect(),
+            extra_checks: 0,
         };
 
         for criterion in canon.criteria() {
@@ -197,18 +266,37 @@ impl CanonReport {
                 continue;
             }
 
-            let Some(verdict) = Verdict::of(criterion, files, &deprecations) else {
+            if Overlay::is_suspended(&criterion.id) {
                 report.not_file_questions += 1;
                 continue;
+            }
+
+            if Overlay::is_manual_only(&criterion.id) {
+                report.counts.record(Severity::Manual);
+                report.findings.push(Finding::manual(criterion));
+                continue;
+            }
+
+            let verdict = match overlay.replacement(criterion) {
+                Some(replacement) => {
+                    Verdict::of_replacement(criterion, &replacement, files, &deprecations)
+                }
+                None => match Verdict::of(criterion, files, &deprecations) {
+                    Some(verdict) => verdict,
+                    None => {
+                        report.not_file_questions += 1;
+                        continue;
+                    }
+                },
             };
 
-            report.scored += 1;
-            let severity = verdict.severity();
-            report.counts.record(severity);
+            report.record(criterion, &verdict);
+        }
 
-            if severity.is_finding() {
-                report.findings.push(Finding::of(criterion, &verdict));
-            }
+        for (criterion, replacement) in overlay.extra_checks() {
+            let verdict = Verdict::of_replacement(&criterion, &replacement, files, &deprecations);
+            report.extra_checks += 1;
+            report.record(&criterion, &verdict);
         }
 
         // Worst first, and stable, so equal severities stay in canon order --
@@ -218,6 +306,15 @@ impl CanonReport {
             .sort_by_key(|finding| std::cmp::Reverse(finding.severity));
 
         Ok(report)
+    }
+
+    fn record(&mut self, criterion: &super::Criterion, verdict: &Verdict) {
+        self.scored += 1;
+        let severity = verdict.severity();
+        self.counts.record(severity);
+        if severity.is_finding() {
+            self.findings.push(Finding::of(criterion, verdict));
+        }
     }
 
     /// The report as a person reads it.
@@ -238,6 +335,12 @@ impl CanonReport {
              questions, not files)\n",
             self.scored, self.criteria, self.not_applicable, self.not_file_questions
         ));
+        if self.extra_checks > 0 {
+            out.push_str(&format!(
+                "  (scored includes {} rhodibot check beyond the canon: the chora deed)\n",
+                self.extra_checks
+            ));
+        }
         out.push_str(&format!(
             "  at path {}   elsewhere {}   deprecated location {}   absent {}\n",
             self.counts.satisfied,
@@ -295,6 +398,30 @@ impl CanonReport {
 }
 
 impl Finding {
+    /// A criterion rhodibot cannot decide from files: visible, not graded.
+    fn manual(criterion: &super::Criterion) -> Self {
+        // The path the criterion is about, so a consumer can place the finding:
+        // the first path its description names, else the canon's own template
+        // path. Never empty, or a grid would grade it against every change.
+        let about = super::requirement::requirement_from(&criterion.desc)
+            .and_then(|requirement| requirement.paths().next().cloned())
+            .unwrap_or_else(|| criterion.template_ref.clone());
+        Self {
+            id: criterion.id.clone(),
+            name: criterion.name.clone(),
+            tier: criterion.tier.to_string(),
+            severity: Severity::Manual,
+            canon_keeps_it_at: None,
+            expected: vec![about],
+            found: Vec::new(),
+            deprecated_copies: Vec::new(),
+            details: vec![format!(
+                "manual check: not verified by rhodibot ({})",
+                criterion.desc
+            )],
+        }
+    }
+
     fn of(criterion: &super::Criterion, verdict: &Verdict) -> Self {
         let mut expected = Vec::new();
         let mut found = Vec::new();
@@ -319,7 +446,7 @@ impl Finding {
                     found: elsewhere,
                     deprecated_copies,
                 } => {
-                    expected.extend(alternatives.iter().cloned());
+                    expected.extend(alternatives.iter().map(|path| describe(path)));
                     found.extend(elsewhere.iter().cloned());
                     if let Some(note) =
                         super::verdict::canon_location_note(&verdict.template_ref, &elsewhere[0])
@@ -329,7 +456,7 @@ impl Finding {
                     let mut line = format!(
                         "present at {} — not {}",
                         elsewhere.join(", "),
-                        alternatives.join(" or ")
+                        describe_all(alternatives, " or ")
                     );
                     if !deprecated_copies.is_empty() {
                         line.push_str(&format!(
@@ -343,8 +470,9 @@ impl Finding {
                     expected: alternatives,
                     near_misses,
                 } => {
-                    expected.extend(alternatives.iter().cloned());
-                    let mut line = format!("absent — expected {}", alternatives.join(" or "));
+                    expected.extend(alternatives.iter().map(|path| describe(path)));
+                    let mut line =
+                        format!("absent — expected {}", describe_all(alternatives, " or "));
                     if !near_misses.is_empty() {
                         line.push_str(&format!(
                             "; there is a {} where the canon asks for one ending in {}",
@@ -369,6 +497,22 @@ impl Finding {
             details,
         }
     }
+}
+
+/// A path as a person reads it: a virtual `<deed>#<clause>` path is the clause.
+fn describe(path: &str) -> String {
+    match path.split_once('#') {
+        Some((deed, clause)) => format!("the ({clause} ...) clause of {deed}"),
+        None => path.to_string(),
+    }
+}
+
+fn describe_all(paths: &[String], separator: &str) -> String {
+    paths
+        .iter()
+        .map(|path| describe(path))
+        .collect::<Vec<_>>()
+        .join(separator)
 }
 
 /// The extension a criterion asked for, for a line about near misses.
@@ -406,27 +550,38 @@ mod tests {
         "LICENSE",
         "LICENSES/MPL-2.0.txt",
         "SECURITY.md",
-        "CODE_OF_CONDUCT.md",
-        "CONTRIBUTING.md",
+        "CODE_OF_CONDUCT.adoc",
+        "CONTRIBUTING.adoc",
         ".gitignore",
         ".gitattributes",
         ".well-known/security.txt",
-        "0-AI-MANIFEST.a2ml",
-        ".machine_readable/rsr-profile.a2ml",
-        ".machine_readable/descriptiles/STATE.a2ml",
-        ".machine_readable/descriptiles/META.a2ml",
-        ".machine_readable/descriptiles/ECOSYSTEM.a2ml",
-        ".machine_readable/descriptiles/AGENTIC.a2ml",
-        ".machine_readable/descriptiles/NEUROSYM.a2ml",
-        ".machine_readable/descriptiles/PLAYBOOK.a2ml",
-        ".machine_readable/descriptiles/anchors/ANCHOR.a2ml",
+        "widgets_chora.deed",
+        // 3.1.1 asks for the descriptiles directory to exist.
+        ".machine_readable/descriptiles/STATE.deed",
     ];
+
+    /// The chora deed of a repository that carries every fact the canon asks for.
+    const DEED: &str = "(repo-deed :schema-version \"1.0.0\" (manifest :version \"1\") (status :phase active) \
+        (meta :version \"1\") (ecosystem :project \"w\") (agentic :version \"1\") (neurosym :version \"1\") \
+        (playbook :version \"1\") (anchor :id \"a\") (rsr-profile :capabilities ()))";
+
+    fn input(paths: &[&str], deed: Option<&str>, legacy: Option<&str>) -> RepoInput {
+        RepoInput {
+            name: "widgets".to_string(),
+            files: files(paths),
+            chora_deed: deed.map(str::to_string),
+            legacy_profile: legacy.map(str::to_string),
+        }
+    }
+
+    fn compliant() -> RepoInput {
+        input(COMPLIANT, Some(DEED), None)
+    }
 
     #[test]
     fn a_compliant_repository_has_nothing_to_act_on() {
-        let report =
-            CanonReport::build("acme/widgets", &canon(), &gates(), &files(COMPLIANT), None)
-                .expect("the report builds");
+        let report = CanonReport::build_with("acme/widgets", &canon(), &gates(), &compliant())
+            .expect("the report builds");
 
         assert_eq!(report.findings.len(), 0, "{:#?}", report.findings);
         assert_eq!(report.counts.missing, 0);
@@ -436,14 +591,14 @@ mod tests {
 
     #[test]
     fn the_unapplicable_are_counted_and_not_reported() {
-        let report =
-            CanonReport::build("acme/widgets", &canon(), &gates(), &files(COMPLIANT), None)
-                .expect("the report builds");
+        let report = CanonReport::build_with("acme/widgets", &canon(), &gates(), &compliant())
+            .expect("the report builds");
 
         // The vendored canon: 78 criteria, 30 gated on a capability.
         assert_eq!(report.criteria, 78);
         assert_eq!(report.not_applicable, 30);
-        assert_eq!(report.scored, 22);
+        assert_eq!(report.scored, 23, "22 canon criteria and the chora deed");
+        assert_eq!(report.extra_checks, 1);
         assert_eq!(report.not_file_questions, 26);
         assert_eq!(
             report.findings.len() + report.counts.satisfied,
@@ -465,24 +620,25 @@ mod tests {
     fn declaring_a_capability_brings_its_criteria_into_scope() {
         let profile = "[rsr-profile]\nversion = \"1.0.0\"\ncapabilities = [\"governance-tier\"]\n";
 
-        let without =
-            CanonReport::build("acme/widgets", &canon(), &gates(), &files(COMPLIANT), None)
-                .expect("builds");
-        let with = CanonReport::build(
+        let without = CanonReport::build_with("acme/widgets", &canon(), &gates(), &compliant())
+            .expect("builds");
+        // The legacy file is only a fallback: here the deed has no profile clause.
+        let deed_without_profile = DEED.replace(" (rsr-profile :capabilities ())", "");
+        let with = CanonReport::build_with(
             "acme/widgets",
             &canon(),
             &gates(),
-            &files(COMPLIANT),
-            Some(profile),
+            &input(COMPLIANT, Some(&deed_without_profile), Some(profile)),
         )
         .expect("builds");
 
-        // Ten criteria gate on governance-tier; six of them ask about files
-        // and four ask content questions, so declaring the capability moves ten
-        // out of `na` and adds six to `scored`.
+        // Ten criteria gate on governance-tier; five of them ask about files, four
+        // ask content questions, and 3.1.9 (CLADE) is suspended by the overlay
+        // because its deed form has not landed. Declaring the capability moves
+        // ten out of `na` and adds five to `scored`.
         assert_eq!(without.not_applicable - with.not_applicable, 10);
-        assert_eq!(without.scored + 6, with.scored);
-        assert_eq!(without.not_file_questions + 4, with.not_file_questions);
+        assert_eq!(without.scored + 5, with.scored);
+        assert_eq!(without.not_file_questions + 5, with.not_file_questions);
         assert_eq!(
             with.declared_capabilities,
             vec!["governance-tier".to_string()]
@@ -543,28 +699,282 @@ mod tests {
     }
 
     #[test]
-    fn a_near_miss_is_described_by_what_the_canon_asked_for() {
-        let report = CanonReport::build(
+    fn security_follows_the_same_adoc_or_md_toggle() {
+        for file in ["SECURITY.adoc", "SECURITY.md"] {
+            let report =
+                CanonReport::build("acme/widgets", &canon(), &gates(), &files(&[file]), None)
+                    .expect("builds");
+            assert!(
+                report.findings.iter().all(|finding| finding.id != "2.1.3"),
+                "{file} satisfies 2.1.3"
+            );
+        }
+        let missing =
+            CanonReport::build("acme/widgets", &canon(), &gates(), &files(&[]), None).unwrap();
+        let finding = missing.findings.iter().find(|f| f.id == "2.1.3").unwrap();
+        assert_eq!(finding.expected[0], "SECURITY.adoc");
+    }
+
+    fn finding<'a>(report: &'a CanonReport, id: &str) -> Option<&'a Finding> {
+        report.findings.iter().find(|finding| finding.id == id)
+    }
+
+    fn report_for(paths: &[&str], deed: Option<&str>, legacy: Option<&str>) -> CanonReport {
+        CanonReport::build_with(
             "acme/widgets",
             &canon(),
             &gates(),
-            &files(&["CODE_OF_CONDUCT.adoc"]),
-            None,
+            &input(paths, deed, legacy),
         )
-        .expect("builds");
+        .expect("builds")
+    }
 
-        let finding = report
-            .findings
-            .iter()
-            .find(|finding| finding.id == "2.1.4")
-            .expect("2.1.4 asks for CODE_OF_CONDUCT.md");
-
-        assert_eq!(finding.severity, Severity::Missing);
+    #[test]
+    fn adoc_community_documents_are_not_missing() {
+        let report = report_for(&["CODE_OF_CONDUCT.adoc", "CONTRIBUTING.adoc"], None, None);
         assert!(
-            finding.details[0].contains("CODE_OF_CONDUCT.adoc")
-                && finding.details[0].contains(".md"),
-            "{:?}",
-            finding.details
+            finding(&report, "2.1.4").is_none(),
+            "{:#?}",
+            report.findings
+        );
+        assert!(
+            finding(&report, "2.1.5").is_none(),
+            "{:#?}",
+            report.findings
+        );
+    }
+
+    #[test]
+    fn md_community_documents_are_not_missing() {
+        let report = report_for(&["CODE_OF_CONDUCT.md", "CONTRIBUTING.md"], None, None);
+        assert!(
+            finding(&report, "2.1.4").is_none(),
+            "{:#?}",
+            report.findings
+        );
+        assert!(
+            finding(&report, "2.1.5").is_none(),
+            "{:#?}",
+            report.findings
+        );
+    }
+
+    #[test]
+    fn both_forms_present_is_fine_and_neither_is_required_alongside_the_other() {
+        let report = report_for(
+            &[
+                "CODE_OF_CONDUCT.adoc",
+                "CODE_OF_CONDUCT.md",
+                "CONTRIBUTING.adoc",
+                "CONTRIBUTING.md",
+            ],
+            None,
+            None,
+        );
+        assert!(finding(&report, "2.1.4").is_none() && finding(&report, "2.1.5").is_none());
+    }
+
+    #[test]
+    fn a_missing_document_names_adoc_first_by_default() {
+        let report = report_for(&[], None, None);
+        let missing = finding(&report, "2.1.5").expect("CONTRIBUTING is missing");
+        assert_eq!(missing.severity, Severity::Missing);
+        assert_eq!(missing.expected[0], "CONTRIBUTING.adoc");
+        assert!(missing.expected.contains(&"CONTRIBUTING.md".to_string()));
+    }
+
+    #[test]
+    fn the_bot_directive_makes_md_the_named_form_but_adoc_still_satisfies() {
+        let deed = "(repo-deed (bot-directives (bot :name rhodibot \
+                    (config :community-doc-format md))))";
+
+        let missing = report_for(&[], Some(deed), None);
+        let finding_missing = finding(&missing, "2.1.4").expect("CODE_OF_CONDUCT is missing");
+        assert_eq!(finding_missing.expected[0], "CODE_OF_CONDUCT.md");
+
+        // The override changes the wording, never whether the other form counts.
+        let adoc_present = report_for(
+            &["CODE_OF_CONDUCT.adoc", "CONTRIBUTING.adoc"],
+            Some(deed),
+            None,
+        );
+        assert!(finding(&adoc_present, "2.1.4").is_none());
+        assert!(finding(&adoc_present, "2.1.5").is_none());
+
+        let md_present = report_for(&["CODE_OF_CONDUCT.md", "CONTRIBUTING.md"], Some(deed), None);
+        assert!(finding(&md_present, "2.1.4").is_none());
+    }
+
+    #[test]
+    fn a_bad_doc_format_directive_is_an_error_not_a_default() {
+        let deed = "(repo-deed (bot-directives (bot :name rhodibot \
+                    (config :community-doc-format rst))))";
+        assert!(
+            CanonReport::build_with(
+                "acme/widgets",
+                &canon(),
+                &gates(),
+                &input(&[], Some(deed), None)
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn nothing_the_report_expects_is_an_a2ml_file() {
+        // A bare repository is missing everything; none of it is an A2ML file.
+        let report = report_for(&[], None, None);
+        for finding in &report.findings {
+            for expected in &finding.expected {
+                assert!(
+                    !expected.ends_with(".a2ml"),
+                    "{} still expects {expected}",
+                    finding.id
+                );
+            }
+            for detail in &finding.details {
+                assert!(
+                    !detail.contains(".a2ml"),
+                    "{} still mentions an a2ml in {detail:?}",
+                    finding.id
+                );
+            }
+        }
+        let ids: Vec<&str> = report.findings.iter().map(|f| f.id.as_str()).collect();
+        for id in [
+            "2.3.1", "3.1.2", "3.1.3", "3.1.4", "3.1.5", "3.1.6", "3.1.7", "3.1.8", "3.2.2",
+        ] {
+            assert!(
+                ids.contains(&id),
+                "{id} should ask for its deed form: {ids:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_chora_deed_is_required_and_named_after_the_repository() {
+        let report = report_for(&[], None, None);
+        let missing = finding(&report, super::super::overlay::CHORA_DEED_ID)
+            .expect("a repository with no chora deed is told so");
+        assert_eq!(missing.severity, Severity::Missing);
+        assert_eq!(missing.expected, vec!["widgets_chora.deed".to_string()]);
+    }
+
+    #[test]
+    fn a_deed_clause_satisfies_what_an_a2ml_file_used_to() {
+        let report = report_for(&["widgets_chora.deed"], Some(DEED), None);
+        for id in [
+            "2.3.1", "3.1.2", "3.1.3", "3.1.4", "3.1.5", "3.1.6", "3.1.7", "3.1.8", "3.2.2",
+        ] {
+            assert!(
+                finding(&report, id).is_none(),
+                "{id}: {:#?}",
+                report.findings
+            );
+        }
+        assert!(finding(&report, super::super::overlay::CHORA_DEED_ID).is_none());
+    }
+
+    #[test]
+    fn a_descriptile_deed_satisfies_state_meta_ecosystem_and_agentic() {
+        let report = report_for(
+            &[
+                "widgets_chora.deed",
+                ".machine_readable/descriptiles/STATE.deed",
+                ".machine_readable/descriptiles/META.deed",
+                ".machine_readable/descriptiles/ECOSYSTEM.deed",
+                ".machine_readable/descriptiles/AGENTIC.deed",
+            ],
+            Some("(repo-deed)"),
+            None,
+        );
+        for id in ["3.1.2", "3.1.3", "3.1.4", "3.1.5"] {
+            assert!(
+                finding(&report, id).is_none(),
+                "{id}: {:#?}",
+                report.findings
+            );
+        }
+    }
+
+    #[test]
+    fn a_legacy_a2ml_is_read_as_migrate_never_as_missing_and_never_recommended() {
+        let report = report_for(
+            &[
+                "widgets_chora.deed",
+                ".machine_readable/descriptiles/STATE.a2ml",
+            ],
+            Some("(repo-deed)"),
+            None,
+        );
+        let state = finding(&report, "3.1.2").expect("present only in the legacy form");
+        assert_eq!(state.severity, Severity::Relocated, "{state:?}");
+        // The form it is told to move to is the deed.
+        assert!(
+            state.expected.iter().all(|path| !path.ends_with(".a2ml")),
+            "{state:?}"
+        );
+        assert!(
+            state
+                .expected
+                .iter()
+                .any(|path| path.contains("STATE.deed"))
+        );
+        assert!(
+            state.canon_keeps_it_at.is_none(),
+            "the canon's own a2ml location must not be quoted: {state:?}"
+        );
+    }
+
+    #[test]
+    fn a_legacy_profile_is_read_only_when_the_deed_declares_none() {
+        let legacy = "[rsr-profile]\nversion = \"1.0.0\"\ncapabilities = [\"governance-tier\"]\n";
+        // No deed profile: the fallback applies.
+        let fallback = report_for(&["widgets_chora.deed"], Some("(repo-deed)"), Some(legacy));
+        assert_eq!(
+            fallback.declared_capabilities,
+            vec!["governance-tier".to_string()]
+        );
+        // A deed profile wins over the legacy file.
+        let deed = "(repo-deed (rsr-profile :capabilities ()))";
+        let first = report_for(&["widgets_chora.deed"], Some(deed), Some(legacy));
+        assert!(first.declared_capabilities.is_empty());
+    }
+
+    #[test]
+    fn the_deed_profile_declares_capabilities() {
+        let deed = "(repo-deed (rsr-profile :capabilities (governance-tier)))";
+        let report = report_for(&["widgets_chora.deed"], Some(deed), None);
+        assert_eq!(
+            report.declared_capabilities,
+            vec!["governance-tier".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_misspelt_deed_capability_is_refused() {
+        let deed = "(repo-deed (rsr-profile :capabilities (governence-tier)))";
+        assert!(
+            CanonReport::build_with(
+                "acme/widgets",
+                &canon(),
+                &gates(),
+                &input(&["widgets_chora.deed"], Some(deed), None)
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn an_unreadable_deed_is_an_error_not_an_absent_one() {
+        assert!(
+            CanonReport::build_with(
+                "acme/widgets",
+                &canon(),
+                &gates(),
+                &input(&["widgets_chora.deed"], Some("(repo-deed"), None)
+            )
+            .is_err()
         );
     }
 
@@ -587,9 +997,8 @@ mod tests {
         assert!(FailOn::Deprecated.breached_by(&report));
         assert!(FailOn::Missing.breached_by(&report));
 
-        let satisfiable =
-            CanonReport::build("acme/widgets", &canon(), &gates(), &files(COMPLIANT), None)
-                .expect("builds");
+        let satisfiable = CanonReport::build_with("acme/widgets", &canon(), &gates(), &compliant())
+            .expect("builds");
         assert!(!FailOn::Relocated.breached_by(&satisfiable));
         assert!(!FailOn::Missing.breached_by(&satisfiable));
     }
@@ -664,5 +1073,60 @@ mod tests {
         assert_eq!(FailOn::parse("none").expect("known"), FailOn::Nothing);
         let error = FailOn::parse("critical").expect_err("not a severity");
         assert!(format!("{error:#}").contains("critical"), "{error:#}");
+    }
+}
+
+#[cfg(test)]
+mod manual_tests {
+    use super::*;
+
+    #[test]
+    fn a_deployment_question_is_a_visible_manual_info_not_a_missing_file() {
+        let profile = "[rsr-profile]\nversion = \"1.0.0\"\ncapabilities = [\"docs-site\"]\n";
+        let report = CanonReport::build(
+            "acme/widgets",
+            &Canon::vendored().unwrap(),
+            &GateTable::vendored().unwrap(),
+            // The site is served from www/, so .well-known/ is not at the root.
+            &["www/.well-known/security.txt".to_string()],
+            Some(profile),
+        )
+        .unwrap();
+        let finding = report
+            .findings
+            .iter()
+            .find(|f| f.id == "9.1.4")
+            .expect("still visible");
+        assert_eq!(finding.severity, Severity::Manual);
+        assert!(finding.details[0].contains("manual check: not verified by rhodibot"));
+        // Every manual finding carries a non-empty path, or a grid would grade
+        // it against every change.
+        for manual in report
+            .findings
+            .iter()
+            .filter(|f| f.severity == Severity::Manual)
+        {
+            let path = manual.expected.first().map(String::as_str).unwrap_or("");
+            assert!(!path.is_empty() && path != "-", "{} has no path", manual.id);
+        }
+        assert_eq!(finding.expected, vec![".well-known/".to_string()]);
+        assert!(report.counts.manual >= 1);
+        // Never trips a --fail-on threshold, even the lowest.
+        assert!(!FailOn::Relocated.breached_by(&report) || report.counts.relocated > 0);
+    }
+
+    #[test]
+    fn a_manual_detect_file_question_is_still_graded() {
+        // 1.2.4 is detect = manual but names a file: it stays a real finding.
+        let report = CanonReport::build(
+            "acme/widgets",
+            &Canon::vendored().unwrap(),
+            &GateTable::vendored().unwrap(),
+            &[],
+            None,
+        )
+        .unwrap();
+        let tv = report.findings.iter().find(|f| f.id == "1.2.4").unwrap();
+        assert_eq!(tv.severity, Severity::Missing);
     }
 }

@@ -36,6 +36,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result, ensure};
 
 use super::{Canon, Criterion, VENDORED_GATES, split_assignment, strip_comment, unquote};
+use crate::deed::ProfileClause;
 
 /// The canon's gate table: the capabilities that exist, and what each preset
 /// expands to.
@@ -230,6 +231,33 @@ impl Profile {
             "no [rsr-profile] section, capabilities or preset: this is not a profile"
         );
 
+        Self::resolve(preset, declared_direct, add, remove, role, gates)
+    }
+
+    /// The profile declared by the chora deed's `(rsr-profile ...)` clause.
+    ///
+    /// The deed is the current source; [`Profile::parse`] on the legacy file
+    /// is a read-only fallback. Both go through the same resolution, so a
+    /// misspelt capability is refused either way.
+    pub fn from_clause(clause: ProfileClause, gates: &GateTable) -> Result<Self> {
+        Self::resolve(
+            clause.preset,
+            clause.capabilities,
+            clause.add,
+            clause.remove,
+            clause.role,
+            gates,
+        )
+    }
+
+    fn resolve(
+        preset: Option<String>,
+        declared_direct: Option<Vec<String>>,
+        add: Vec<String>,
+        remove: Vec<String>,
+        role: Option<String>,
+        gates: &GateTable,
+    ) -> Result<Self> {
         let mut declared = BTreeSet::new();
 
         if let Some(name) = &preset {

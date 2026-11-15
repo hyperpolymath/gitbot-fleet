@@ -1,0 +1,40 @@
+  (rsr-profile
+    :version "1.0.0"
+    :spec "rsr-criteria-v2"
+    :declares-against "2.1.5"
+    :role "canon"
+    :capabilities (
+      ; scripts/: the gate implementations (check-*.sh)
+      "bash"
+      ; .github/workflows/casket-pages.yml + pages.yml
+      "docs-site"
+      ; 0-canon/constitution/ + docs/{AUDIT,AFFIRMATION}.adoc + GOVERNANCE + MAINTAINERS
+      "governance-tier"
+      ; guix.scm: a real Guix manifest that pins the canon's own tooling
+      "reproducible-build"
+      ; tools/{uuid-v8,js-runtimes,hooks/playbook-to-recipe}, k9-init, the
+      ; inline-annotations extractor and .verisimdb's ingester are cargo crates
+      ; (declared since #1228 fixed the root-anchored src/**/*.rs row)
+      "rust")
+    (notes
+      ; Capabilities deliberately NOT declared, each for want of the artefact:
+      ;   zig idris2 agda haskell gleam elixir julia ocaml affinescript
+      ;               - no source in these; the compiled code is the Rust CI tools
+      ;   cli         - the check-*.sh scripts are CI steps, not a shipped binary
+      ;   library     - consumed as a document and a pin (canon.lock), not a library
+      ;   ffi abi     - no C-ABI seam and no formally specified ABI in this tree
+      ;   api-service - the reusable workflows run on GitHub's runners, not served here
+      ;   container   - no Containerfile and no image
+      ;   published-package - publishes specs (canon.lock + a tag), not packages;
+      ;               the one omission to revisit if criteria go to a registry
+      ;   formal-proofs - docs/proofs/ are proof artefacts OF THE ESTATE, not of
+      ;               this repo's code: a [canon] carrier path in the gate table
+      ;   mobile web-ui - no UI
+      ;   benchmarks  - benches/ holds no suite
+      ;   plugin      - not hosted in a third-party extension host
+      ; Carried but gated by no capability, so named in the gate table's [canon]
+      ; section instead: the criteria (0-canon/rsr/rsr-criteria-v2.a2ml), the
+      ; gate table, the applicability policy, the *-reusable.yml workflows,
+      ; docs/proofs/, and 9-archive/rhodium-standard-repositories/ (the last
+      ; copy; archived 2026-10-09, never to be deleted).
+      :omitted-rationale "The canon defines conformance; it is not an instance of it. Declaring a capability the canon lacks would make the oracle score it against a module it does not carry — the over-scaffolding failure the v2.0 capability model exists to prevent."))

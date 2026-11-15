@@ -4,11 +4,12 @@
 //!
 //! Supports policy packs and opt-in severity levels for flexible compliance.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::config::Config;
+use crate::deed::{Deed, DocFormat};
 use crate::github::GitHubClient;
 
 /// Severity levels for compliance checks
@@ -124,6 +125,53 @@ pub async fn check_path_exists(
     (false, def.name.to_string())
 }
 
+/// Points for the chora deed check, as the manifest it replaced carried.
+const CHORA_DEED_POINTS: u8 = 3;
+
+/// `CONTRIBUTING` or `CODE_OF_CONDUCT` when this check is one of the two
+/// community documents whose spelling (`.adoc` or `.md`) is toggleable.
+fn community_stem(name: &str) -> Option<&str> {
+    name.strip_suffix(".adoc")
+        .filter(|stem| matches!(*stem, "CONTRIBUTING" | "CODE_OF_CONDUCT" | "SECURITY"))
+}
+
+/// The spellings to look for, the first being the one a report names.
+///
+/// Every accepted spelling is always looked for, so a repository is never
+/// reported missing a file it has in the other form. For the two community
+/// documents the repository's own preference (from its bot directive, default
+/// `.adoc`) goes first; it changes the wording of a finding, not whether there
+/// is one.
+pub fn candidates_for(def: &CheckDef, format: DocFormat) -> Vec<String> {
+    let mut all: Vec<String> = std::iter::once(def.name)
+        .chain(def.alternates.iter().copied())
+        .map(str::to_string)
+        .collect();
+    if let Some(stem) = community_stem(def.name) {
+        let preferred = format!("{stem}.{}", format.extension());
+        if let Some(at) = all.iter().position(|name| *name == preferred) {
+            let name = all.remove(at);
+            all.insert(0, name);
+        }
+    }
+    all
+}
+
+/// Whether any of the candidate paths exists, and which one.
+pub async fn check_candidates_exist(
+    client: &GitHubClient,
+    owner: &str,
+    repo: &str,
+    candidates: &[String],
+) -> (bool, String) {
+    for candidate in candidates {
+        if client.file_exists(owner, repo, candidate).await {
+            return (true, candidate.clone());
+        }
+    }
+    (false, candidates[0].clone())
+}
+
 /// Required files for RSR compliance with policy-based severity
 pub const REQUIRED_FILES: &[CheckDef] = &[
     // NOTE ON THE 2026-09-18 REVISION
@@ -223,64 +271,10 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
             Severity::Required,
         ),
     },
-    CheckDef {
-        // The machine-readable manifest the estate actually ships: 261/269.
-        // The .scm state files below reached 1/269 and their .a2ml spelling
-        // 13/269, so neither is a fair Required check on its own.
-        name: "0-AI-MANIFEST.a2ml",
-        alternates: &[
-            ".machine_readable/STATE.a2ml",
-            ".machine_readable/STATE.scm",
-        ],
-        description: "Machine-readable manifest at the repository root",
-        category: CheckCategory::Structure,
-        points: 3,
-        severity: (
-            Severity::Optional,
-            Severity::Recommended,
-            Severity::Required,
-            Severity::Required,
-        ),
-    },
-    CheckDef {
-        name: ".machine_readable/STATE.a2ml",
-        alternates: &[".machine_readable/STATE.scm"],
-        description: "Project state file in canonical machine-readable location",
-        category: CheckCategory::Structure,
-        points: 3,
-        severity: (
-            Severity::Optional,
-            Severity::Optional,
-            Severity::Recommended,
-            Severity::Required,
-        ),
-    },
-    CheckDef {
-        name: ".machine_readable/META.a2ml",
-        alternates: &[".machine_readable/META.scm"],
-        description: "Meta information in canonical machine-readable location",
-        category: CheckCategory::Structure,
-        points: 3,
-        severity: (
-            Severity::Optional,
-            Severity::Optional,
-            Severity::Recommended,
-            Severity::Required,
-        ),
-    },
-    CheckDef {
-        name: ".machine_readable/ECOSYSTEM.a2ml",
-        alternates: &[".machine_readable/ECOSYSTEM.scm"],
-        description: "Ecosystem position in canonical machine-readable location",
-        category: CheckCategory::Structure,
-        points: 3,
-        severity: (
-            Severity::Optional,
-            Severity::Optional,
-            Severity::Recommended,
-            Severity::Required,
-        ),
-    },
+    // The machine-readable repo facts (manifest, state, meta, ecosystem, ...)
+    // are clauses of the chora deed, not files. They are checked by the chora
+    // deed check in `check_compliance_with_policy`; no `.a2ml` or `.scm` file is
+    // demanded here.
     // Additional RSR template files
     CheckDef {
         name: ".editorconfig",
@@ -597,12 +591,79 @@ pub async fn check_compliance_with_policy(
     let mut max_score = 0u8;
     let mut required_passed = true;
 
+    // The chora deed holds the repo facts and the bot directives. A deed that
+    // is present but does not read is an error, not "no directives".
+    let chora_name = format!("{repo}_chora.deed");
+    let chora_text = client
+        .get_file_content_if_present(owner, repo, &chora_name)
+        .await?;
+    let deed = chora_text
+        .as_deref()
+        .map(Deed::parse)
+        .transpose()
+        .with_context(|| format!("{chora_name} does not read as an s-expression"))?;
+    let doc_format = DocFormat::from_deed(deed.as_ref())?;
+
+    // The chora deed is required in place of the retired `.a2ml` files.
+    // Whether it conforms is `deed_lint.js`'s question (standards CI), not
+    // this check's.
+    {
+        let severity = repo_config
+            .severity_overrides
+            .get(&chora_name)
+            .copied()
+            .unwrap_or(match policy {
+                PolicyPack::Minimal => Severity::Optional,
+                PolicyPack::Standard | PolicyPack::Custom => Severity::Recommended,
+                PolicyPack::Strict | PolicyPack::Enterprise => Severity::Required,
+            });
+        let present = deed.is_some();
+        let counted = severity != Severity::Optional && !repo_config.skip.contains(&chora_name);
+        let points = if counted { CHORA_DEED_POINTS } else { 0 };
+        if counted {
+            max_score += points;
+        }
+        let status = match (present, severity) {
+            (true, _) => CheckStatus::Pass,
+            (false, Severity::Required) if counted => {
+                required_passed = false;
+                CheckStatus::Fail
+            }
+            (false, Severity::Recommended) if counted => CheckStatus::Warn,
+            (false, _) => CheckStatus::Skip,
+        };
+        if present && counted {
+            total_score += points;
+        }
+        checks.push(Check {
+            name: chora_name.clone(),
+            category: CheckCategory::Structure,
+            severity,
+            status,
+            points: if present { points } else { 0 },
+            max_points: points,
+            message: if present {
+                format!("Chora deed (repo facts and bot directives) found at {chora_name}")
+            } else {
+                format!(
+                    "Chora deed (repo facts and bot directives) missing - expected at {chora_name}"
+                )
+            },
+        });
+    }
+
     // Check required files
     for check_def in REQUIRED_FILES {
+        // The spellings to look for, the repository's preferred one first.
+        let candidates = candidates_for(check_def, doc_format);
+        let expected_name = candidates[0].clone();
+
         // Skip if explicitly configured to skip
-        if repo_config.skip.contains(&check_def.name.to_string()) {
+        if repo_config.skip.contains(&check_def.name.to_string())
+            || repo_config.skip.contains(&expected_name)
+        {
             checks.push(Check {
-                name: check_def.name.to_string(),
+                name: expected_name.clone(),
                 category: check_def.category,
                 severity: Severity::Optional,
                 status: CheckStatus::Skip,
@@ -617,14 +678,16 @@ pub async fn check_compliance_with_policy(
         let severity = repo_config
             .severity_overrides
             .get(check_def.name)
+            .or_else(|| repo_config.severity_overrides.get(&expected_name))
             .copied()
             .unwrap_or_else(|| check_def.severity_for(policy));
 
         // Skip optional checks in scoring
         if severity == Severity::Optional {
-            let (exists, found_at) = check_path_exists(&client, owner, repo, check_def).await;
+            let (exists, found_at) =
+                check_candidates_exist(&client, owner, repo, &candidates).await;
             checks.push(Check {
-                name: check_def.name.to_string(),
+                name: expected_name.clone(),
                 category: check_def.category,
                 severity,
                 status: if exists {
@@ -644,17 +707,20 @@ pub async fn check_compliance_with_policy(
         }
 
         max_score += check_def.points;
-        let (exists, found_at) = check_path_exists(&client, owner, repo, check_def).await;
-        let accepted = if check_def.alternates.is_empty() {
+        let (exists, found_at) = check_candidates_exist(&client, owner, repo, &candidates).await;
+        let accepted = if candidates.len() < 2 {
             String::new()
+        } else if community_stem(check_def.name).is_some() {
+            // Either spelling satisfies it; neither is required as well.
+            format!(" (or {})", candidates[1..].join(", "))
         } else {
-            format!(" (or, historically: {})", check_def.alternates.join(", "))
+            format!(" (or, historically: {})", candidates[1..].join(", "))
         };
 
         if exists {
             total_score += check_def.points;
             checks.push(Check {
-                name: check_def.name.to_string(),
+                name: expected_name.clone(),
                 category: check_def.category,
                 severity,
                 status: CheckStatus::Pass,
@@ -673,7 +739,7 @@ pub async fn check_compliance_with_policy(
             };
 
             checks.push(Check {
-                name: check_def.name.to_string(),
+                name: expected_name.clone(),
                 category: check_def.category,
                 severity,
                 status,
@@ -681,7 +747,7 @@ pub async fn check_compliance_with_policy(
                 max_points: check_def.points,
                 message: format!(
                     "{} missing - expected at {}{}",
-                    check_def.description, check_def.name, accepted
+                    check_def.description, expected_name, accepted
                 ),
             });
         }

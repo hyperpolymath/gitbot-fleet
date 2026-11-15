@@ -80,6 +80,12 @@ its findings.
 | `fleet.rs`
 | gitbot-fleet integration: converts compliance reports to `Finding` structs, publishes to shared context
 
+| `deed.rs`
+| Read-only reader for the repo's chora deed: which clauses it carries, its `(rsr-profile ...)`, and rhodibot's `(bot-directives ...)` entry
+
+| `canon.rs`, `canon/`
+| The vendored RSR criteria canon and the `rhodibot canon` command; `canon/overlay.rs` re-targets the criteria whose files the estate has retired (see below)
+
 | `lib.rs`
 | Library root, re-exports all modules
 |===
@@ -191,12 +197,10 @@ Options:
 | README.adoc | Documentation | 5
 | LICENSE.txt | Governance | 5
 | SECURITY.md | Security | 5
-| CONTRIBUTING.md | Documentation | 3
-| CODE_OF_CONDUCT.md | Governance | 3
+| CONTRIBUTING.adoc (or .md) | Documentation | 3
+| CODE_OF_CONDUCT.adoc (or .md) | Governance | 3
 | .claude/CLAUDE.md | Structure | 2
-| STATE.scm | Structure | 3
-| META.scm | Structure | 3
-| ECOSYSTEM.scm | Structure | 3
+| `<repo>_chora.deed` | Structure | 3
 | .editorconfig | Structure | 2
 | .gitattributes | Structure | 2
 | .gitignore | Structure | 2
@@ -224,6 +228,38 @@ Options:
 * **Required workflows** -- `hypatia-scan.yml`, `codeql.yml`, `scorecard.yml` (severity varies by policy)
 * **Author attribution** -- flags Cargo.toml using "hyperpolymath" as author
 * **License type** -- validates against approved license list
+
+=== The chora deed, and no A2ML
+
+A2ML is retired. The repo facts that used to be `.a2ml` files (manifest, state,
+meta, ecosystem, agentic, neurosym, playbook, anchor, rsr-profile) are clauses of
+`<repo>_chora.deed`, or of a descriptile deed (`STATE.deed`, `META.deed`,
+`ECOSYSTEM.deed`, `AGENTIC.deed`). Rhodibot requires the chora deed and never
+demands or suggests an `.a2ml` file. A legacy `.a2ml` that is still present is
+read only as a fallback after the deed, and is reported as "migrate", never as
+"missing". Whether a deed *conforms* is `deed_lint.js`'s job in
+`metadatastician/standards`; rhodibot only reads its structure.
+
+The vendored criteria canon is itself still an `.a2ml` file; its deed form is a
+separate piece of work. Until it lands, `canon/overlay.rs` re-targets the
+affected criteria as requirements, and `canon/pin.toml` records the divergence
+under `[overlay]` so the digest of the vendored copy stays honest.
+
+=== CONTRIBUTING and CODE_OF_CONDUCT: `.adoc` or `.md`
+
+Either spelling satisfies the check, and neither is ever required in addition
+to the other. `.adoc` is the default, because the estate almost always uses it;
+it decides which spelling a finding names first. A repository that prefers
+`.md` says so in its chora deed's bot directives:
+
+[source]
+----
+(bot-directives
+  (bot :name rhodibot
+    (config :community-doc-format md)))
+----
+
+A value other than `adoc` or `md` is an error rather than a silent default.
 
 === Scoring
 
