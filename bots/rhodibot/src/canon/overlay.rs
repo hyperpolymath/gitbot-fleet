@@ -53,6 +53,14 @@ pub const RETARGETED: &[&str] = &[
 /// question; it is listed so the intent is recorded rather than accidental.
 pub const SUSPENDED: &[&str] = &["3.1.9", "3.2.1"];
 
+/// Criteria whose description is a deployment or content question that the
+/// reader would otherwise turn into a file check. Reported as a visible
+/// `manual` finding, never graded and never dropped.
+///
+/// Not every `detect = manual` criterion belongs here: 1.2.4 (`.tool-versions`)
+/// is `manual` yet a real file question, so this is a list, not a rule.
+pub const MANUAL_ONLY: &[&str] = &["9.1.4"];
+
 /// The id of the check this overlay adds.
 pub const CHORA_DEED_ID: &str = "rhodibot.chora-deed";
 
@@ -102,6 +110,10 @@ impl Overlay {
             .iter()
             .map(|clause| clause_path(&self.chora_name, clause))
             .collect()
+    }
+
+    pub fn is_manual_only(id: &str) -> bool {
+        MANUAL_ONLY.contains(&id)
     }
 
     pub fn is_suspended(id: &str) -> bool {

@@ -357,6 +357,7 @@ fn the_overlay_is_recorded_in_the_pin_and_matches_the_module() {
 
     assert_eq!(list("retargeted"), RETARGETED);
     assert_eq!(list("suspended"), SUSPENDED);
+    assert_eq!(list("manual"), rhodibot::canon::overlay::MANUAL_ONLY);
     assert_eq!(list("extra_checks"), vec![CHORA_DEED_ID.to_string()]);
 
     // Every id it names is a real criterion of the vendored canon.

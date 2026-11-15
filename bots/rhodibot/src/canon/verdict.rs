@@ -225,6 +225,10 @@ impl GroupVerdict {
 pub enum Severity {
     /// Every group is present where the canon records it.
     Satisfied,
+    /// A manual criterion: rhodibot cannot decide it from files, and says so
+    /// rather than grade it. Below `Relocated`, so no `--fail-on` threshold
+    /// trips on it.
+    Manual,
     /// Present, but somewhere the description does not name.
     Relocated,
     /// Present only under a location the canon has retired.
@@ -237,6 +241,7 @@ impl Severity {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Satisfied => "satisfied",
+            Self::Manual => "manual",
             Self::Relocated => "relocated",
             Self::Deprecated => "deprecated",
             Self::Missing => "missing",
@@ -375,6 +380,7 @@ impl Verdict {
     pub fn as_str(&self) -> &'static str {
         match self.severity() {
             Severity::Satisfied => "at path",
+            Severity::Manual => "manual check",
             Severity::Relocated => "elsewhere",
             Severity::Deprecated => "deprecated location",
             Severity::Missing => "absent",

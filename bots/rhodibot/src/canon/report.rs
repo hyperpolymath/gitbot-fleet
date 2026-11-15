@@ -58,6 +58,7 @@ pub struct Counts {
     pub relocated: usize,
     pub deprecated: usize,
     pub missing: usize,
+    pub manual: usize,
 }
 
 impl Counts {
@@ -67,6 +68,7 @@ impl Counts {
             Severity::Relocated => self.relocated += 1,
             Severity::Deprecated => self.deprecated += 1,
             Severity::Missing => self.missing += 1,
+            Severity::Manual => self.manual += 1,
         }
     }
 }
@@ -269,6 +271,12 @@ impl CanonReport {
                 continue;
             }
 
+            if Overlay::is_manual_only(&criterion.id) {
+                report.counts.record(Severity::Manual);
+                report.findings.push(Finding::manual(criterion));
+                continue;
+            }
+
             let verdict = match overlay.replacement(criterion) {
                 Some(replacement) => {
                     Verdict::of_replacement(criterion, &replacement, files, &deprecations)
@@ -390,6 +398,24 @@ impl CanonReport {
 }
 
 impl Finding {
+    /// A criterion rhodibot cannot decide from files: visible, not graded.
+    fn manual(criterion: &super::Criterion) -> Self {
+        Self {
+            id: criterion.id.clone(),
+            name: criterion.name.clone(),
+            tier: criterion.tier.to_string(),
+            severity: Severity::Manual,
+            canon_keeps_it_at: None,
+            expected: Vec::new(),
+            found: Vec::new(),
+            deprecated_copies: Vec::new(),
+            details: vec![format!(
+                "manual check: not verified by rhodibot ({})",
+                criterion.desc
+            )],
+        }
+    }
+
     fn of(criterion: &super::Criterion, verdict: &Verdict) -> Self {
         let mut expected = Vec::new();
         let mut found = Vec::new();
@@ -1041,5 +1067,49 @@ mod tests {
         assert_eq!(FailOn::parse("none").expect("known"), FailOn::Nothing);
         let error = FailOn::parse("critical").expect_err("not a severity");
         assert!(format!("{error:#}").contains("critical"), "{error:#}");
+    }
+}
+
+#[cfg(test)]
+mod manual_tests {
+    use super::*;
+
+    #[test]
+    fn a_deployment_question_is_a_visible_manual_info_not_a_missing_file() {
+        let profile = "[rsr-profile]\nversion = \"1.0.0\"\ncapabilities = [\"docs-site\"]\n";
+        let report = CanonReport::build(
+            "acme/widgets",
+            &Canon::vendored().unwrap(),
+            &GateTable::vendored().unwrap(),
+            // The site is served from www/, so .well-known/ is not at the root.
+            &["www/.well-known/security.txt".to_string()],
+            Some(profile),
+        )
+        .unwrap();
+        let finding = report
+            .findings
+            .iter()
+            .find(|f| f.id == "9.1.4")
+            .expect("still visible");
+        assert_eq!(finding.severity, Severity::Manual);
+        assert!(finding.details[0].contains("manual check: not verified by rhodibot"));
+        assert!(report.counts.manual >= 1);
+        // Never trips a --fail-on threshold, even the lowest.
+        assert!(!FailOn::Relocated.breached_by(&report) || report.counts.relocated > 0);
+    }
+
+    #[test]
+    fn a_manual_detect_file_question_is_still_graded() {
+        // 1.2.4 is detect = manual but names a file: it stays a real finding.
+        let report = CanonReport::build(
+            "acme/widgets",
+            &Canon::vendored().unwrap(),
+            &GateTable::vendored().unwrap(),
+            &[],
+            None,
+        )
+        .unwrap();
+        let tv = report.findings.iter().find(|f| f.id == "1.2.4").unwrap();
+        assert_eq!(tv.severity, Severity::Missing);
     }
 }
