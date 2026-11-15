@@ -132,7 +132,7 @@ const CHORA_DEED_POINTS: u8 = 3;
 /// community documents whose spelling (`.adoc` or `.md`) is toggleable.
 fn community_stem(name: &str) -> Option<&str> {
     name.strip_suffix(".adoc")
-        .filter(|stem| matches!(*stem, "CONTRIBUTING" | "CODE_OF_CONDUCT"))
+        .filter(|stem| matches!(*stem, "CONTRIBUTING" | "CODE_OF_CONDUCT" | "SECURITY"))
 }
 
 /// The spellings to look for, the first being the one a report names.

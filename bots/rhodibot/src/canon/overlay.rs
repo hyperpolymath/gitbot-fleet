@@ -42,8 +42,8 @@ use crate::deed::{Deed, DocFormat};
 
 /// The criteria the overlay re-targets, for `pin.toml` to agree with.
 pub const RETARGETED: &[&str] = &[
-    "2.1.4", "2.1.5", "2.3.1", "3.1.2", "3.1.3", "3.1.4", "3.1.5", "3.1.6", "3.1.7", "3.1.8",
-    "3.2.2",
+    "2.1.3", "2.1.4", "2.1.5", "2.3.1", "3.1.2", "3.1.3", "3.1.4", "3.1.5", "3.1.6", "3.1.7",
+    "3.1.8", "3.2.2",
 ];
 
 /// Criteria the overlay stops scoring as file questions.
@@ -115,6 +115,7 @@ impl Overlay {
         let doc = |stem: &str| self.doc_alternatives(stem);
 
         let (groups, legacy_fallback): (Vec<Vec<String>>, bool) = match criterion.id.as_str() {
+            "2.1.3" => (vec![doc("SECURITY")], false),
             "2.1.4" => (vec![doc("CODE_OF_CONDUCT")], false),
             "2.1.5" => (vec![doc("CONTRIBUTING")], false),
             "2.3.1" => (vec![vec![clause("manifest")]], true),

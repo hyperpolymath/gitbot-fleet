@@ -667,29 +667,20 @@ mod tests {
     }
 
     #[test]
-    fn a_near_miss_is_described_by_what_the_canon_asked_for() {
-        // 2.1.3 still asks for SECURITY.md; the near miss is named.
-        let report = CanonReport::build(
-            "acme/widgets",
-            &canon(),
-            &gates(),
-            &files(&["SECURITY.adoc"]),
-            None,
-        )
-        .expect("builds");
-
-        let finding = report
-            .findings
-            .iter()
-            .find(|finding| finding.id == "2.1.3")
-            .expect("2.1.3 asks for SECURITY.md");
-
-        assert_eq!(finding.severity, Severity::Missing);
-        assert!(
-            finding.details[0].contains("SECURITY.adoc") && finding.details[0].contains(".md"),
-            "{:?}",
-            finding.details
-        );
+    fn security_follows_the_same_adoc_or_md_toggle() {
+        for file in ["SECURITY.adoc", "SECURITY.md"] {
+            let report =
+                CanonReport::build("acme/widgets", &canon(), &gates(), &files(&[file]), None)
+                    .expect("builds");
+            assert!(
+                report.findings.iter().all(|finding| finding.id != "2.1.3"),
+                "{file} satisfies 2.1.3"
+            );
+        }
+        let missing =
+            CanonReport::build("acme/widgets", &canon(), &gates(), &files(&[]), None).unwrap();
+        let finding = missing.findings.iter().find(|f| f.id == "2.1.3").unwrap();
+        assert_eq!(finding.expected[0], "SECURITY.adoc");
     }
 
     fn finding<'a>(report: &'a CanonReport, id: &str) -> Option<&'a Finding> {

@@ -137,6 +137,8 @@ impl Deed {
             ":role",
             ":spec",
             ":declares-against",
+            ":policy",
+            ":omitted-rationale",
             ":schema-version",
             ":version",
         ];

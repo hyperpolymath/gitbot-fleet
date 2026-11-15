@@ -82,7 +82,8 @@ fn suggestion_for(check_name: &str) -> Option<String> {
     match check_name {
         "README.adoc" => Some("Create a README.adoc file with project documentation".to_string()),
         "LICENSE.txt" | "LICENSE" => Some("Add a LICENSE file with MPL-2.0 (LICENSE is the current spelling)".to_string()),
-        "SECURITY.adoc" | "SECURITY.md" => Some("Add a SECURITY.adoc with vulnerability reporting instructions".to_string()),
+        "SECURITY.adoc" => Some("Add a SECURITY.adoc with vulnerability reporting instructions".to_string()),
+        "SECURITY.md" => Some("Add a SECURITY.md with vulnerability reporting instructions (this repository's bot directive prefers .md)".to_string()),
         "CONTRIBUTING.adoc" => Some("Add a CONTRIBUTING.adoc with contribution guidelines".to_string()),
         "CONTRIBUTING.md" => Some("Add a CONTRIBUTING.md with contribution guidelines (this repository's bot directive prefers .md)".to_string()),
         "CODE_OF_CONDUCT.adoc" => Some("Add a CODE_OF_CONDUCT.adoc (Contributor Covenant recommended)".to_string()),
