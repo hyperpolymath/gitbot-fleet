@@ -529,7 +529,7 @@ mod tests {
     ];
 
     /// The chora deed of a repository that carries every fact the canon asks for.
-    const DEED: &str = "(repo-deed :schema-version \"1.0.0\" (manifest :version \"1\") (state :v 1) \
+    const DEED: &str = "(repo-deed :schema-version \"1.0.0\" (manifest :version \"1\") (status :phase active) \
         (meta :version \"1\") (ecosystem :project \"w\") (agentic :version \"1\") (neurosym :version \"1\") \
         (playbook :version \"1\") (anchor :id \"a\") (rsr-profile :capabilities ()))";
 

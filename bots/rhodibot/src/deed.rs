@@ -122,6 +122,10 @@ impl Deed {
 
     /// What the `(rsr-profile ...)` clause declares, if there is one.
     pub fn rsr_profile(&self) -> Result<Option<ProfileClause>> {
+        ensure!(
+            self.root.children("rsr-profile").count() <= 1,
+            "more than one (rsr-profile ...) clause; a chora deed has exactly one"
+        );
         let Some(clause) = self.clause("rsr-profile") else {
             return Ok(None);
         };
@@ -131,6 +135,8 @@ impl Deed {
             ":add",
             ":remove",
             ":role",
+            ":spec",
+            ":declares-against",
             ":schema-version",
             ":version",
         ];
@@ -161,6 +167,10 @@ impl Deed {
             }
         };
         let word = |key: &str| clause.field(key).and_then(Node::text).map(str::to_string);
+        ensure!(
+            clause.field(":capabilities").is_some() || clause.field(":preset").is_some(),
+            "(rsr-profile ...) needs :capabilities or :preset"
+        );
         Ok(Some(ProfileClause {
             preset: word(":preset"),
             capabilities: clause
@@ -426,5 +436,33 @@ mod tests {
     fn parentheses_inside_strings_and_comments_do_not_count() {
         let deed = Deed::parse("(repo-deed ; ) (\n (meta :note \"a ) b ( c\"))").unwrap();
         assert!(deed.clauses().contains("meta"));
+    }
+}
+
+#[cfg(test)]
+mod profile_shape_tests {
+    use super::*;
+
+    #[test]
+    fn the_real_string_shape_reads() {
+        let deed = Deed::parse(
+            "(repo-deed (rsr-profile :version \"1.0.0\" :spec \"rsr-criteria-v2\" \
+             :declares-against \"2.1.1\" :role \"spine\" :capabilities (\"zig\" \"bash\") \
+             :add (\"rust\") :remove (\"bash\")))",
+        )
+        .unwrap();
+        let p = deed.rsr_profile().unwrap().unwrap();
+        assert_eq!(p.role.as_deref(), Some("spine"));
+        assert_eq!(p.capabilities, Some(vec!["zig".into(), "bash".into()]));
+        assert_eq!(p.add, vec!["rust".to_string()]);
+    }
+
+    #[test]
+    fn two_clauses_or_an_empty_one_is_a_defect() {
+        let two =
+            Deed::parse("(repo-deed (rsr-profile :preset a) (rsr-profile :preset b))").unwrap();
+        assert!(two.rsr_profile().is_err());
+        let empty = Deed::parse("(repo-deed (rsr-profile :role \"x\"))").unwrap();
+        assert!(empty.rsr_profile().is_err());
     }
 }

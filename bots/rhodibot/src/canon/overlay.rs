@@ -20,7 +20,7 @@
 //! |---|---|
 //! | 2.1.4 `coc-md`, 2.1.5 `contributing-md` | `.adoc` **or** `.md`, never both required; the repo's `(bot :name rhodibot (config :community-doc-format ...))` only picks which one a report names first |
 //! | 2.3.1 `ai-manifest` | the chora deed's `(manifest ...)` clause |
-//! | 3.1.2-3.1.5 state, meta, ecosystem, agentic | the descriptile `.deed`, or the chora deed's clause of that name |
+//! | 3.1.2-3.1.5 state, meta, ecosystem, agentic | the descriptile `.deed`, or (fallback) the chora deed's clause of that name; state has no clause of its own: `(status ...)` or `(maturity ...)` |
 //! | 3.1.6-3.1.8 neurosym, playbook, anchor | the chora deed's clause of that name |
 //! | 3.2.2 `rsr-profile` | the chora deed's `(rsr-profile ...)` clause |
 //! | 3.1.9 `clade`, 3.2.1 `a2ml-valid` | suspended: not scored as file questions |
@@ -118,7 +118,14 @@ impl Overlay {
             "2.1.4" => (vec![doc("CODE_OF_CONDUCT")], false),
             "2.1.5" => (vec![doc("CONTRIBUTING")], false),
             "2.3.1" => (vec![vec![clause("manifest")]], true),
-            "3.1.2" => (vec![vec![descriptile("STATE"), clause("state")]], true),
+            "3.1.2" => (
+                vec![vec![
+                    descriptile("STATE"),
+                    clause("status"),
+                    clause("maturity"),
+                ]],
+                true,
+            ),
             "3.1.3" => (vec![vec![descriptile("META"), clause("meta")]], true),
             "3.1.4" => (
                 vec![vec![descriptile("ECOSYSTEM"), clause("ecosystem")]],
