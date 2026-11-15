@@ -129,26 +129,14 @@ impl Deed {
         let Some(clause) = self.clause("rsr-profile") else {
             return Ok(None);
         };
-        const KEYS: &[&str] = &[
-            ":preset",
-            ":capabilities",
-            ":add",
-            ":remove",
-            ":role",
-            ":spec",
-            ":declares-against",
-            ":policy",
-            ":omitted-rationale",
-            ":schema-version",
-            ":version",
-        ];
+        let keys = RSR_PROFILE_KEYS;
         let members = clause.members();
         for node in members {
             if let Node::Atom(atom) = node
                 && atom.starts_with(':')
             {
                 ensure!(
-                    KEYS.contains(&atom.as_str()),
+                    keys.contains(&atom.as_str()),
                     "unknown key {atom} in (rsr-profile ...); a misspelt key would declare no \
                      capabilities and silently switch off every gated check"
                 );
@@ -159,10 +147,12 @@ impl Deed {
                 None => Ok(Vec::new()),
                 Some(Node::List(items)) => items
                     .iter()
-                    .map(|item| {
-                        item.text().map(str::to_string).ok_or_else(|| {
-                            anyhow::anyhow!("(rsr-profile {key} ...) holds a nested list")
-                        })
+                    .map(|item| match item {
+                        Node::Str(text) => Ok(text.clone()),
+                        _ => bail!(
+                            "(rsr-profile {key} ...) holds a non-string; capabilities, :add \
+                             and :remove are lists of strings and symbols are refused"
+                        ),
                     })
                     .collect(),
                 Some(_) => bail!("(rsr-profile {key} ...) must be a list"),
@@ -194,6 +184,21 @@ impl Deed {
             .map(|node| BotDirective { node })
     }
 }
+
+/// The top-level keys of `(rsr-profile ...)`, as the standards module defines
+/// them (`bun 1-formats/deed/tools/deed_lint.js --rsr-profile-keys`, standards
+/// #1605). `(notes ...)` is the one nested clause; it is not a key, and it holds
+/// prose, so it is not scanned here. Any other key fails closed.
+pub const RSR_PROFILE_KEYS: &[&str] = &[
+    ":version",
+    ":spec",
+    ":declares-against",
+    ":role",
+    ":preset",
+    ":capabilities",
+    ":add",
+    ":remove",
+];
 
 /// The `(rsr-profile ...)` clause, before it is checked against the gate table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -366,7 +371,7 @@ mod tests {
   :repo-uuid #u8"gv-clade-index:github.com/o/r"   ; trailing comment
   (meta :version "0.1.0")
   (anchor :id "x")
-  (rsr-profile :preset library :add (rust) :remove ())
+  (rsr-profile :preset library :add ("rust") :remove ())
   (bot-directives
     (bot :name panicbot :allow (assail))
     (bot :name rhodibot (config :community-doc-format md))))
@@ -466,5 +471,62 @@ mod profile_shape_tests {
         assert!(two.rsr_profile().is_err());
         let empty = Deed::parse("(repo-deed (rsr-profile :role \"x\"))").unwrap();
         assert!(empty.rsr_profile().is_err());
+    }
+}
+
+#[cfg(test)]
+mod module_alignment_tests {
+    use super::*;
+
+    /// The set standards' module reports (`deed_lint.js --rsr-profile-keys`).
+    #[test]
+    fn the_key_set_is_the_modules() {
+        assert_eq!(
+            RSR_PROFILE_KEYS,
+            [
+                ":version",
+                ":spec",
+                ":declares-against",
+                ":role",
+                ":preset",
+                ":capabilities",
+                ":add",
+                ":remove"
+            ]
+        );
+    }
+
+    #[test]
+    fn keys_that_belong_to_other_clauses_are_refused() {
+        // :policy belongs to (anchor ...) and (egress ...); :omitted-rationale
+        // belongs inside (notes ...).
+        for key in [":policy", ":omitted-rationale", ":schema-version"] {
+            let deed = Deed::parse(&format!(
+                "(repo-deed (rsr-profile :capabilities (\"rust\") {key} \"x\"))"
+            ))
+            .unwrap();
+            assert!(deed.rsr_profile().is_err(), "{key}");
+        }
+    }
+
+    #[test]
+    fn omitted_rationale_inside_notes_is_fine() {
+        let deed = Deed::parse(
+            "(repo-deed (rsr-profile :capabilities (\"rust\") (notes :omitted-rationale \"why\")))",
+        )
+        .unwrap();
+        assert!(deed.rsr_profile().unwrap().is_some());
+    }
+
+    #[test]
+    fn symbols_in_the_capability_lists_are_refused() {
+        for text in [
+            "(repo-deed (rsr-profile :capabilities (rust)))",
+            "(repo-deed (rsr-profile :preset \"p\" :add (rust)))",
+            "(repo-deed (rsr-profile :preset \"p\" :remove (rust)))",
+        ] {
+            let deed = Deed::parse(text).unwrap();
+            assert!(deed.rsr_profile().is_err(), "{text}");
+        }
     }
 }
