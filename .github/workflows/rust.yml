@@ -21,6 +21,28 @@ env:
   # recompiling the vendored copy (matches the documented local build).
   OPENSSL_NO_VENDOR: '1'
 jobs:
+  gate:
+    name: CI/gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    needs: [rust, dispatch-contracts, gsbot]
+    if: always()
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          for job in rust dispatch-contracts gsbot; do
+            result=$(jq -r --arg job "$job" '.[$job].result // "missing"' <<< "$NEEDS_JSON")
+            if [[ "$result" != success ]]; then
+              echo "::error::$job did not succeed (result: $result)"
+              exit 1
+            fi
+          done
+          echo 'CI/gate passed: Rust matrix, dispatch contracts and GSBot succeeded.'
+
   rust:
     name: build · test · clippy (${{ matrix.module }})
     runs-on: ubuntu-latest
