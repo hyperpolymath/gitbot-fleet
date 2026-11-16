@@ -219,11 +219,43 @@ HYPATIA_HOME="${HYPATIA_HOME:-${REPOS_BASE}/hypatia}"
 HYPATIA_OUTCOME_REPORT="${HYPATIA_OUTCOME_REPORT:-on}"
 HYPATIA_BATCH_ID="${HYPATIA_BATCH_ID:-}"
 
+# Does this Hypatia know `--verdict`? Learned ONCE per run, from the help text of
+# the task and never from an exit code: a Hypatia from before E0-01 ignores an
+# option that it does not know, so a no_op call would be recorded as a success.
+#   verdict  Hypatia names --verdict: every verdict is passed to it, and no_op and
+#            unverified are recorded (they carry no credit).
+#   legacy   an older Hypatia: no --verdict, and no call for no_op or unverified
+#            (the behaviour before this check, exactly).
+#   off      no calls are made at all (reporting off, no checkout, no mix).
+# A help command that fails is not an older Hypatia: the run stops, visibly.
+HYPATIA_VERDICT_MODE="off"
+hypatia_detect_verdict_mode() {
+    HYPATIA_VERDICT_MODE="off"
+    [[ "$HYPATIA_OUTCOME_REPORT" == "on" ]] || return 0
+    [[ -d "$HYPATIA_HOME" ]] || return 0
+    command -v mix &>/dev/null || return 0
+
+    local help_text rc=0
+    help_text=$(cd "$HYPATIA_HOME" && mix help hypatia.record_outcome 2>&1) || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        HYPATIA_VERDICT_MODE="error"
+        echo "ERROR: 'mix help hypatia.record_outcome' failed (exit $rc) in $HYPATIA_HOME: Hypatia does not answer, and a Hypatia that does not answer is not an older Hypatia. Stopping." >&2
+        return 1
+    fi
+    if grep -q -- '--verdict' <<< "$help_text"; then
+        HYPATIA_VERDICT_MODE="verdict"
+    else
+        HYPATIA_VERDICT_MODE="legacy"
+    fi
+    echo "hypatia outcome mode: $HYPATIA_VERDICT_MODE"
+}
+
 hypatia_record_outcome() {
     local recipe_id="$1"
     local repo="$2"
     local file="$3"
     local outcome="$4"
+    local verdict="${5:-}"
 
     # Opt-out short-circuit.
     if [[ "$HYPATIA_OUTCOME_REPORT" != "on" ]]; then
@@ -249,6 +281,13 @@ hypatia_record_outcome() {
     local file_arg="${file:-.}"
     [[ -z "$file_arg" ]] && file_arg="."
 
+    # The verdict goes along only when Hypatia knows the option, and only the
+    # 5 verdicts of the pair table (a refusal has none).
+    local verdict_args=()
+    if [[ "$HYPATIA_VERDICT_MODE" == "verdict" && -n "$verdict" ]]; then
+        verdict_args=(--verdict "$verdict")
+    fi
+
     local rc=0
     (
         cd "$HYPATIA_HOME"
@@ -256,7 +295,8 @@ hypatia_record_outcome() {
             --recipe   "$recipe_id" \
             --repo     "$repo" \
             --file     "$file_arg" \
-            --outcome  "$outcome"
+            --outcome  "$outcome" \
+            "${verdict_args[@]}"
     ) || rc=$?
 
     case "$rc" in
@@ -336,26 +376,39 @@ record_outcome() {
     #   failed / incomplete → failure (the fix ran but the work remains)
     #   refused_*           → false_positive (the recipe is misfiring, not
     #                         the code; surfaces this to auto-quarantine)
-    #   no_op / unverified  → skip: no evidence either way, so it must not
-    #                         move the recipe's confidence.
-    local hypatia_outcome
+    #   no_op / unverified  → with a Hypatia that knows --verdict: recorded, as
+    #                         success WITH the verdict, which Hypatia stores as
+    #                         an audit row with no credit (E0-01). With an older
+    #                         Hypatia: skipped, as before, because without the
+    #                         verdict it would be recorded as a success.
+    local hypatia_outcome verdict_arg=""
     case "$verdict" in
         verified)
             hypatia_outcome="success"
+            verdict_arg="$verdict"
             echo "$repo" >> "$RESCAN_REPOS_FILE"
             ;;
         failed|incomplete)
             hypatia_outcome="failure"
+            verdict_arg="$verdict"
             ;;
         refused_license_policy|refused_*)
             hypatia_outcome="false_positive"
+            ;;
+        no_op|unverified)
+            [[ "$HYPATIA_VERDICT_MODE" == "verdict" ]] || return 0
+            hypatia_outcome="success"
+            verdict_arg="$verdict"
             ;;
         *)
             return 0
             ;;
     esac
-    hypatia_record_outcome "$recipe_id" "$repo" "$file" "$hypatia_outcome" || true
+    hypatia_record_outcome "$recipe_id" "$repo" "$file" "$hypatia_outcome" "$verdict_arg" || true
 }
+
+# Learn once per run which of the 2 calls Hypatia takes. Stop if it does not answer.
+hypatia_detect_verdict_mode || exit 1
 
 # --- Execute a single manifest entry ---
 execute_entry() {

@@ -332,3 +332,40 @@ fn a_real_repository_classifies_the_way_the_pilot_recorded_it() {
         "the pilot's eleven, reclassified by the canon's own words"
     );
 }
+
+/// The overlay is a deliberate divergence from the vendored canon, so it is
+/// recorded in `canon/pin.toml` and the record has to match the code.
+#[test]
+fn the_overlay_is_recorded_in_the_pin_and_matches_the_module() {
+    use rhodibot::canon::overlay::{CHORA_DEED_ID, RETARGETED, SUSPENDED};
+
+    let text =
+        std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("canon/pin.toml"))
+            .expect("pin.toml is readable");
+    let pin: toml::Value = toml::from_str(&text).expect("pin.toml parses");
+    let overlay = pin.get("overlay").expect("pin.toml records the overlay");
+
+    let list = |key: &str| -> Vec<String> {
+        overlay
+            .get(key)
+            .and_then(|value| value.as_array())
+            .unwrap_or_else(|| panic!("[overlay] {key} is a list"))
+            .iter()
+            .map(|item| item.as_str().expect("strings").to_string())
+            .collect()
+    };
+
+    assert_eq!(list("retargeted"), RETARGETED);
+    assert_eq!(list("suspended"), SUSPENDED);
+    assert_eq!(list("manual"), rhodibot::canon::overlay::MANUAL_ONLY);
+    assert_eq!(list("extra_checks"), vec![CHORA_DEED_ID.to_string()]);
+
+    // Every id it names is a real criterion of the vendored canon.
+    let canon = Canon::vendored().expect("parses");
+    for id in RETARGETED.iter().chain(SUSPENDED) {
+        assert!(
+            canon.criteria().any(|c| c.id == *id),
+            "{id} is not in the canon"
+        );
+    }
+}

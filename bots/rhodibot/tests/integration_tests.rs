@@ -87,6 +87,17 @@ mod rsr_tests {
             .await;
     }
 
+    /// The repository's chora deed, served raw.
+    async fn mount_deed(server: &MockServer, text: &str) {
+        Mock::given(method("GET"))
+            .and(path(
+                "/repos/test-org/test-repo/contents/test-repo_chora.deed",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_string(text.to_string()))
+            .mount(server)
+            .await;
+    }
+
     #[tokio::test]
     async fn test_all_required_files_present_high_score() {
         let server = MockServer::start().await;
@@ -99,9 +110,6 @@ mod rsr_tests {
             "CONTRIBUTING.adoc",
             "CODE_OF_CONDUCT.adoc",
             ".claude/CLAUDE.md",
-            ".machine_readable/STATE.a2ml",
-            ".machine_readable/META.scm",
-            ".machine_readable/ECOSYSTEM.scm",
             ".github/workflows",
             ".editorconfig",
             ".gitattributes",
@@ -111,6 +119,7 @@ mod rsr_tests {
         ];
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
+        mount_deed(&server, "(repo-deed :schema-version \"1.0.0\")").await;
 
         // Mock repository info with approved license
         Mock::given(method("GET"))
@@ -259,6 +268,174 @@ mod rsr_tests {
                 name
             );
         }
+    }
+
+    /// Run the check against a repository with these files and this deed, and
+    /// return the check named `name`'s message and status.
+    async fn check_with(
+        files: &[&str],
+        deed: Option<&str>,
+        policy: PolicyPack,
+    ) -> ComplianceReport {
+        let server = MockServer::start().await;
+        let config = mock_config(&server.uri());
+        mount_file_mocks(&server, "test-org", "test-repo", files).await;
+        if let Some(deed) = deed {
+            mount_deed(&server, deed).await;
+        }
+        let repo_config = RepoConfig {
+            policy,
+            ..Default::default()
+        };
+        check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
+            .await
+            .expect("compliance check should succeed")
+    }
+
+    fn doc_check<'a>(report: &'a ComplianceReport, stem: &str) -> &'a Check {
+        report
+            .checks
+            .iter()
+            .find(|c| c.name.starts_with(stem))
+            .unwrap_or_else(|| panic!("a {stem} check"))
+    }
+
+    #[tokio::test]
+    async fn test_no_a2ml_or_scm_file_is_ever_demanded() {
+        // A bare repository under the strictest policy: everything missing.
+        let report = check_with(&[], None, PolicyPack::Enterprise).await;
+        for check in &report.checks {
+            assert!(
+                !check.name.contains("a2ml")
+                    && !check.name.ends_with(".scm")
+                    && !check.message.contains("a2ml")
+                    && !check.message.contains(".scm"),
+                "{} / {}",
+                check.name,
+                check.message
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_chora_deed_is_required_in_place_of_a2ml_files() {
+        let missing = check_with(&["README.adoc"], None, PolicyPack::Strict).await;
+        let check = missing
+            .checks
+            .iter()
+            .find(|c| c.name == "test-repo_chora.deed")
+            .expect("a chora deed check");
+        assert_eq!(check.status, CheckStatus::Fail);
+        assert!(!missing.required_passed);
+
+        let present = check_with(
+            &["README.adoc"],
+            Some("(repo-deed :schema-version \"1.0.0\")"),
+            PolicyPack::Strict,
+        )
+        .await;
+        let check = present
+            .checks
+            .iter()
+            .find(|c| c.name == "test-repo_chora.deed")
+            .expect("a chora deed check");
+        assert_eq!(check.status, CheckStatus::Pass);
+    }
+
+    #[tokio::test]
+    async fn test_adoc_community_documents_pass_by_default() {
+        let report = check_with(
+            &["CONTRIBUTING.adoc", "CODE_OF_CONDUCT.adoc"],
+            None,
+            PolicyPack::Strict,
+        )
+        .await;
+        for stem in ["CONTRIBUTING", "CODE_OF_CONDUCT"] {
+            let check = doc_check(&report, stem);
+            assert_eq!(check.status, CheckStatus::Pass, "{}", check.message);
+            assert_eq!(check.name, format!("{stem}.adoc"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_md_community_documents_pass_by_default() {
+        let report = check_with(
+            &["CONTRIBUTING.md", "CODE_OF_CONDUCT.md"],
+            None,
+            PolicyPack::Strict,
+        )
+        .await;
+        for stem in ["CONTRIBUTING", "CODE_OF_CONDUCT"] {
+            let check = doc_check(&report, stem);
+            assert_eq!(check.status, CheckStatus::Pass, "{}", check.message);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_both_community_document_forms_are_never_both_required() {
+        // Only one form present, under the strictest policy: still a pass.
+        let report = check_with(&["CONTRIBUTING.adoc"], None, PolicyPack::Enterprise).await;
+        assert_eq!(doc_check(&report, "CONTRIBUTING").status, CheckStatus::Pass);
+        let message = &doc_check(&report, "CODE_OF_CONDUCT").message;
+        // The missing one names both spellings as alternatives ("or"), not two demands.
+        assert!(
+            message.contains("CODE_OF_CONDUCT.adoc") && message.contains("(or CODE_OF_CONDUCT.md)"),
+            "{message}"
+        );
+    }
+
+    const MD_DEED: &str = "(repo-deed (bot-directives (bot :name rhodibot \
+                           (config :community-doc-format md))))";
+
+    #[tokio::test]
+    async fn test_bot_directive_makes_md_the_named_form() {
+        let report = check_with(&[], Some(MD_DEED), PolicyPack::Strict).await;
+        let check = doc_check(&report, "CONTRIBUTING");
+        assert_eq!(check.name, "CONTRIBUTING.md");
+        assert_eq!(check.status, CheckStatus::Fail);
+        assert!(
+            check.message.contains("(or CONTRIBUTING.adoc)"),
+            "{}",
+            check.message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bot_directive_does_not_make_adoc_missing() {
+        // The repo prefers .md but carries .adoc: not missing.
+        let report = check_with(
+            &["CONTRIBUTING.adoc", "CODE_OF_CONDUCT.adoc"],
+            Some(MD_DEED),
+            PolicyPack::Strict,
+        )
+        .await;
+        for stem in ["CONTRIBUTING", "CODE_OF_CONDUCT"] {
+            assert_eq!(doc_check(&report, stem).status, CheckStatus::Pass);
+        }
+        // And the reverse: prefers the default, carries .md.
+        let report = check_with(
+            &["CONTRIBUTING.md"],
+            Some("(repo-deed)"),
+            PolicyPack::Strict,
+        )
+        .await;
+        assert_eq!(doc_check(&report, "CONTRIBUTING").status, CheckStatus::Pass);
+    }
+
+    #[tokio::test]
+    async fn test_a_bad_directive_value_is_an_error() {
+        let server = MockServer::start().await;
+        let config = mock_config(&server.uri());
+        mount_file_mocks(&server, "test-org", "test-repo", &[]).await;
+        mount_deed(
+            &server,
+            "(repo-deed (bot-directives (bot :name rhodibot (config :community-doc-format rst))))",
+        )
+        .await;
+        let result =
+            check_compliance_with_policy(&config, "test-org", "test-repo", &RepoConfig::default())
+                .await;
+        assert!(result.is_err());
     }
 
     /// The estate has no `www/` tree at all yet (0/269 as of 2026-09-18), so
@@ -1420,13 +1597,13 @@ mod fleet_tests {
                     message: "Go module (use Rust) detected - policy violation".to_string(),
                 },
                 Check {
-                    name: ".machine_readable/STATE.a2ml".to_string(),
+                    name: ".editorconfig".to_string(),
                     category: CheckCategory::Structure,
                     severity: Severity::Recommended,
                     status: CheckStatus::Skip,
                     points: 0,
                     max_points: 0,
-                    message: "Project state file not present (optional)".to_string(),
+                    message: "EditorConfig not present (optional)".to_string(),
                 },
             ],
             summary: "RSR standard policy: Required checks failed".to_string(),

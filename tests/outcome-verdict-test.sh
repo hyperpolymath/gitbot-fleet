@@ -256,6 +256,91 @@ for PARALLEL in 1 2; do
         "EXECUTED=$EXECUTED SUCCEEDED=$SUCCEEDED FAILED=$FAILED SKIPPED=$SKIPPED"
 done
 
+# --- 10. the verdict goes to Hypatia when Hypatia knows the option (E0-02) -
+# A stub `mix` on PATH records its arguments and answers `mix help
+# hypatia.record_outcome` as the case needs. The mode is learned once, from the
+# help text and never from an exit code: an older Hypatia ignores an option that
+# it does not know, so a no_op call would be recorded as a success. The main
+# loop is not run; it sits behind the quarantine (exit 78).
+stub_dir="$TMP/stub-bin"
+mkdir -p "$stub_dir" "$TMP/hy-home"
+cat > "$stub_dir/mix" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1" == "help" ]]; then
+    case "$STUB_HELP" in
+        verdict) echo "mix hypatia.record_outcome --recipe R --verdict verified|no_op|incomplete|unverified|failed"; exit 0 ;;
+        legacy)  echo "mix hypatia.record_outcome --recipe R --repo X --file F --outcome O"; exit 0 ;;
+        *)       echo "mix: cannot start" >&2; exit 3 ;;
+    esac
+fi
+echo "$*" >> "$STUB_LOG"
+exit 0
+STUB
+chmod +x "$stub_dir/mix"
+
+# run_case <what the stub's help says> [on|off]: runs the runner's own contract
+# block in a subshell, as the runner does: detect first, stop if that fails,
+# then record each verdict and one refusal.
+run_case() {
+    local mode="$1" report="${2:-on}"
+    : > "$TMP/stub.log"
+    (
+        export PATH="$stub_dir:$PATH" STUB_HELP="$mode" STUB_LOG="$TMP/stub.log"
+        export HYPATIA_HOME="$TMP/hy-home" HYPATIA_OUTCOME_REPORT="$report" REPOS_BASE="$TMP/repos"
+        OUTCOME_FILE="$TMP/case-outcomes.jsonl"
+        OUTCOME_FILE_CENTRAL="$OUTCOME_FILE"
+        RESCAN_REPOS_FILE="$TMP/case-rescan"
+        : > "$OUTCOME_FILE"
+        : > "$RESCAN_REPOS_FILE"
+        # shellcheck disable=SC1091
+        source "$TMP/extracted.sh"
+        rc=0
+        hypatia_detect_verdict_mode || rc=$?
+        echo "detect_rc=$rc mode=${HYPATIA_VERDICT_MODE:-unset}"
+        if [[ "$rc" -eq 0 ]]; then
+            for v in verified no_op unverified incomplete failed; do
+                record_outcome PA009 recipe-x repo f "$v" 0 3 0
+            done
+            record_outcome PA009 recipe-lic repo "" refused_license_policy
+        fi
+    ) > "$TMP/case.out" 2>&1 || true
+}
+calls() { cat "$TMP/stub.log"; }
+
+run_case verdict
+check "knows --verdict: mode is verdict" "detect_rc=0 mode=verdict" "$(grep '^detect_rc' "$TMP/case.out")"
+check "knows --verdict: the mode is logged once" 1 "$(grep -c '^hypatia outcome mode: verdict' "$TMP/case.out")"
+check "knows --verdict: 6 calls, one for each verdict and the refusal" 6 "$(calls | wc -l | tr -d ' ')"
+for pair in verified:success no_op:success unverified:success incomplete:failure failed:failure; do
+    v="${pair%%:*}" o="${pair##*:}"
+    check "knows --verdict: $v is passed with outcome $o" \
+        "hypatia.record_outcome --recipe recipe-x --repo repo --file f --outcome $o --verdict $v" \
+        "$(calls | grep -- "--verdict $v\$" || true)"
+done
+check "knows --verdict: a refusal has no --verdict" \
+    "hypatia.record_outcome --recipe recipe-lic --repo repo --file . --outcome false_positive" \
+    "$(calls | grep -- 'recipe-lic' || true)"
+
+run_case legacy
+check "older Hypatia: mode is legacy" "detect_rc=0 mode=legacy" "$(grep '^detect_rc' "$TMP/case.out")"
+check "older Hypatia: the mode is logged once" 1 "$(grep -c '^hypatia outcome mode: legacy' "$TMP/case.out")"
+check "older Hypatia: no --verdict in any call" 0 "$(calls | grep -c -- '--verdict' || true)"
+check "older Hypatia: no call for no_op or unverified, 4 calls in all" 4 "$(calls | wc -l | tr -d ' ')"
+check "older Hypatia: the calls are the calls of today" \
+    "success failure failure false_positive" \
+    "$(calls | sed -E 's/.*--outcome ([a-z_]+).*/\1/' | tr '\n' ' ' | sed 's/ $//')"
+
+run_case fail
+check "help fails: detection fails" "detect_rc=1 mode=error" "$(grep '^detect_rc' "$TMP/case.out")"
+check "help fails: a visible error says why" 1 "$(grep -c 'does not answer' "$TMP/case.out")"
+check "help fails: no record call is made" 0 "$(calls | wc -l | tr -d ' ')"
+check "the runner stops when detection fails (before any call)" 1 \
+    "$(grep -c '^hypatia_detect_verdict_mode || exit 1$' "$ROOT/scripts/dispatch-runner.sh")"
+
+run_case fail off
+check "reporting off: no help call and no record call" "detect_rc=0 mode=off 0" \
+    "$(grep '^detect_rc' "$TMP/case.out") $(calls | wc -l | tr -d ' ')"
+
 echo ""
 echo "Results: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]

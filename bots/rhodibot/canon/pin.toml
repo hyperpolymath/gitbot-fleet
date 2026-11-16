@@ -64,3 +64,24 @@ sha256 = "5c510bba025be718deebb12d0333bfe7db2da43c66578b728b1a334df65290b1"
 # inapplicable -- the failure mode is quiet, so the numbers are asserted.
 known = 28
 presets = 11
+
+# The overlay: where rhodibot DIVERGES from the vendored criteria, on purpose.
+#
+# The vendored `rsr-criteria-v2.a2ml` above is untouched -- its digest is still
+# the standards copy's digest. But the estate has retired A2ML, so rhodibot no
+# longer demands the `.a2ml` files that file names, and the .md/.adoc choice for
+# CONTRIBUTING / CODE_OF_CONDUCT is toggleable. `src/canon/overlay.rs` re-targets
+# these criteria as *requirements*; this table is the explicit record of that,
+# and `tests/canon_lockstep.rs` fails if it and the module disagree.
+#
+# The criteria canon's own deed form is an A7 mapping-spec item (M5, converted
+# under kyX or an owner-granted D313 exception, behind a parity gate, with
+# `canon.lock` bumped in the same commit). When that lands, delete the overlay
+# module and this table in the same commit that re-pins.
+[overlay]
+module = "src/canon/overlay.rs"
+retargeted = ["2.1.3", "2.1.4", "2.1.5", "2.3.1", "3.1.2", "3.1.3", "3.1.4", "3.1.5", "3.1.6", "3.1.7", "3.1.8", "3.2.2"]
+suspended = ["3.1.9", "3.2.1"]
+manual = ["9.1.4"]
+extra_checks = ["rhodibot.chora-deed"]
+removed_by = "the criteria-praxis-deed re-pin (A7 M5)"

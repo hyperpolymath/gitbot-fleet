@@ -14,6 +14,7 @@
 pub mod app_auth;
 pub mod canon;
 pub mod config;
+pub mod deed;
 pub mod fleet;
 pub mod github;
 pub mod graphql;
