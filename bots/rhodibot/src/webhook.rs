@@ -175,14 +175,14 @@ Welcome to the hyperpolymath organization! Please ensure your repository follows
 - [ ] `CONTRIBUTING.adoc` - Contribution guidelines (AsciiDoc)
 - [ ] `CODE_OF_CONDUCT.adoc` - Code of conduct (AsciiDoc)
 - [ ] `Justfile` - Just task runner (capital J)
-- [ ] `0-AI-MANIFEST.a2ml` - Machine-readable manifest at the repository root
+- [ ] `<repo>_chora.deed` - The chora deed: repository identity and facts (manifest, meta, ecosystem, agentic, anchor, rsr-profile, bot directives)
 - [ ] `.claude/CLAUDE.md` - AI assistant instructions
 - [ ] `.machine_readable/root-allow.txt` - Root-shape allowlist
 - [ ] `www/.well-known/security.txt` - Security contact in the canonical location
 
 Note: paths are given in the current convention. Superseded spellings
 (`LICENSE.txt`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
-lowercase `justfile`, `.machine_readable/STATE.scm` and its siblings) are
+lowercase `justfile`) are
 still accepted by the checker and are not compliance failures.
 
 ### Language Policy (CCCP)

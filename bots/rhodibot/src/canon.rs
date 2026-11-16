@@ -40,6 +40,7 @@
 //! and reports every repository as compliant.
 
 pub mod local;
+pub mod overlay;
 pub mod profile;
 pub mod report;
 pub mod requirement;
