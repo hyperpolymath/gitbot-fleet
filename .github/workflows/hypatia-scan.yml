@@ -17,10 +17,16 @@ on:
   schedule:
     - cron: '0 0 * * 0'
   workflow_dispatch:
+    inputs:
+      credential_read_check:
+        description: Only validate this repository's saved scanner credential
+        type: boolean
+        required: false
+        default: false
 
 # Estate guardrail: cancel superseded runs so re-pushes don't pile up.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.credential_read_check && 'credential-check' || 'scan' }}
   cancel-in-progress: true
 
 permissions:
@@ -30,7 +36,17 @@ permissions:
   pull-requests: write
 
 jobs:
+  scanner-credential:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.credential_read_check }}
+    permissions:
+      contents: read
+    uses: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@b93f0615a61ee4c05af66eb526538eab47120aaa
+    with:
+      scanner_only: true
+    secrets:
+      HYPATIA_SCAN_PAT: ${{ secrets.HYPATIA_SCAN_PAT }}
   hypatia:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.credential_read_check) }}
     uses: metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml@75bd5994470661a099df562d6d5ad2fe744dbd66
     # hypatia-scan-reusable declares one secret; pass that one, not everything.
     secrets:

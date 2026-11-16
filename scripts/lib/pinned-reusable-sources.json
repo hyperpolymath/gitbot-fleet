@@ -241,7 +241,7 @@
         {
           "workflow": ".github/workflows/hypatia-scan.yml",
           "job": "hypatia",
-          "line": 34
+          "line": 50
         }
       ],
       "uses": [
@@ -725,6 +725,30 @@
         }
       ],
       "source_url": "https://github.com/hyperpolymath/proven-cicd-and-workflows/blob/1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6/.github/workflows/secret-scanner-reusable.yml"
+    },
+    {
+      "repository": "hyperpolymath/hypatia",
+      "commit": "b93f0615a61ee4c05af66eb526538eab47120aaa",
+      "path": ".github/workflows/credential-read-check.yml",
+      "blob": "15c597ea720a5affb861dab058084f7245ee4cbd",
+      "content_sha256": "645e8ac8ff118c33f2dc941ec46f1abac895f7836339736841c269e4b9dc084d",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/hypatia-scan.yml",
+          "job": "scanner-credential"
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a"
+        },
+        {
+          "kind": "step",
+          "ref": "step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a"
+        }
+      ]
     }
   ],
   "dependencies": {
@@ -841,6 +865,12 @@
       "uses": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
       ]
+    },
+    "step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a": {
+      "ref": "v2.22.4",
+      "commit": "sha1-1d88384fd173af6ecb012dfd0264a306b711241a",
+      "owner_id": 88700172,
+      "repo_id": 422287306
     }
   }
 }
