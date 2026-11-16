@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Required CI gate
+
+The Branch-Floor ruleset requires the exact check name `CI/gate`. The gate
+in `rust.yml` waits for its Rust build/test/Clippy/format matrix, dispatch
+contracts and GSBot build/test/dependency-audit job. All three dependency
+results must be success; GitHub aggregates all Rust matrix legs into the
+Rust dependency result. Failed, skipped, cancelled, missing or unexpected
+results fail the gate. The gate itself requires no token permissions.
+
+This is the primary CI aggregate, not a replacement for the separate source
+attestation, E2E, governance, security or reviewer checks. It does not assert
+a coverage percentage. GitHub's native coverage threshold rule requires
+Code Quality and uploaded coverage data; those prerequisites need their own
+evidence. No branch rule or coverage threshold is changed by this gate.
