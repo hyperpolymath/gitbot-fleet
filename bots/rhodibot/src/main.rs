@@ -22,8 +22,9 @@ use tracing::{info, warn};
 
 use rhodibot::canon::Canon;
 use rhodibot::canon::local;
+use rhodibot::canon::overlay as local_overlay;
 use rhodibot::canon::profile::GateTable;
-use rhodibot::canon::report::{CanonReport, FailOn};
+use rhodibot::canon::report::{CanonReport, FailOn, RepoInput};
 use rhodibot::config;
 use rhodibot::github::GitHubClient;
 use rhodibot::rsr;
@@ -71,8 +72,8 @@ enum Command {
     /// Check a repository against the RSR canon's file-presence criteria.
     ///
     /// Reads the canon vendored beside the rules (never a hardcoded list),
-    /// skips the criteria the repository's `.machine_readable/rsr-profile.a2ml`
-    /// does not declare a capability for, and reports what is present where the
+    /// skips the criteria the repository's chora deed `(rsr-profile ...)`
+    /// clause does not declare a capability for, and reports what is present where the
     /// canon records it, present elsewhere, present under a location the canon
     /// has retired, or absent.
     ///
@@ -216,8 +217,9 @@ async fn main() -> Result<()> {
 
 /// One-shot RSR compliance check for CI. Prints a report and exits non-zero
 /// when required checks fail (so the caller's job fails too).
-/// The file paths a repository's profile may live at, in preference order.
-const PROFILE_PATHS: [&str; 2] = [
+/// Where a **legacy** profile file may still be: a read fallback, consulted
+/// only when the chora deed has no `(rsr-profile ...)` clause.
+const LEGACY_PROFILE_PATHS: [&str; 2] = [
     ".machine_readable/rsr-profile.a2ml",
     "machine-readable/rsr-profile.a2ml",
 ];
@@ -237,38 +239,68 @@ async fn run_canon(
 ) -> Result<()> {
     let fail_on = FailOn::parse(fail_on)?;
 
-    let (subject, files, profile_source, from_git) = match (owner, repo, path) {
+    let (subject, input, from_git) = match (owner, repo, path) {
         (Some(owner), Some(repo), None) => {
             rhodibot::sanitize::validate_owner_repo(owner, repo)?;
             let client = GitHubClient::new(config);
             let files = client.tree_paths(owner, repo).await?;
 
-            // The profile decides which criteria apply, so a failure to read it
-            // must not pass as "declares nothing".
-            let mut profile = None;
-            for candidate in PROFILE_PATHS {
+            // The chora deed holds the profile and the bot directives, which
+            // decide which criteria apply and which document spelling is
+            // preferred, so a failure to read it must not pass as "declares
+            // nothing".
+            let chora_deed = match local_overlay::find_chora_deed(&files)? {
+                Some(name) => {
+                    client
+                        .get_file_content_if_present(owner, repo, &name)
+                        .await?
+                }
+                None => None,
+            };
+
+            // A legacy profile file is a read fallback, used only when the
+            // deed has no (rsr-profile ...) clause.
+            let mut legacy_profile = None;
+            for candidate in LEGACY_PROFILE_PATHS {
                 if let Some(text) = client
                     .get_file_content_if_present(owner, repo, candidate)
                     .await?
                 {
-                    profile = Some(text);
+                    legacy_profile = Some(text);
                     break;
                 }
             }
 
-            (format!("{owner}/{repo}"), files, profile, true)
+            let input = RepoInput {
+                name: repo.clone(),
+                files,
+                chora_deed,
+                legacy_profile,
+            };
+            (format!("{owner}/{repo}"), input, true)
         }
         (None, None, Some(path)) => {
             let source = local::read(std::path::Path::new(path))?;
             let from_git = source.from_git();
-            (path.clone(), source.files, source.profile, from_git)
+            let name = std::path::Path::new(path)
+                .canonicalize()
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_default();
+            let input = RepoInput {
+                name,
+                files: source.files,
+                chora_deed: source.chora_deed,
+                legacy_profile: source.profile,
+            };
+            (path.clone(), input, from_git)
         }
         _ => anyhow::bail!("give either --owner and --repo, or --path: one repository, one way"),
     };
 
     let canon = Canon::vendored()?;
     let gates = GateTable::vendored()?;
-    let report = CanonReport::build(&subject, &canon, &gates, &files, profile_source.as_deref())?;
+    let report = CanonReport::build_with(&subject, &canon, &gates, &input)?;
 
     if format == "json" {
         println!("{}", serde_json::to_string_pretty(&report)?);

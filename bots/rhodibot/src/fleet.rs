@@ -53,22 +53,15 @@ fn rule_id(check_name: &str) -> String {
         "CONTRIBUTING.md" | "CONTRIBUTING.adoc" => format!("{}-004", RULE_PREFIX),
         "CODE_OF_CONDUCT.md" | "CODE_OF_CONDUCT.adoc" => format!("{}-005", RULE_PREFIX),
         ".claude/CLAUDE.md" => format!("{}-006", RULE_PREFIX),
-        ".machine_readable/STATE.scm" | ".machine_readable/STATE.a2ml" => {
-            format!("{}-007", RULE_PREFIX)
-        }
-        ".machine_readable/META.scm" | ".machine_readable/META.a2ml" => {
-            format!("{}-008", RULE_PREFIX)
-        }
-        ".machine_readable/ECOSYSTEM.scm" | ".machine_readable/ECOSYSTEM.a2ml" => {
-            format!("{}-009", RULE_PREFIX)
-        }
+        // RSR-007..009 were the retired per-file state/meta/ecosystem checks;
+        // those facts are clauses of the chora deed (RSR-016) now.
         ".github/workflows" => format!("{}-010", RULE_PREFIX),
         ".editorconfig" => format!("{}-011", RULE_PREFIX),
         ".gitattributes" => format!("{}-012", RULE_PREFIX),
         ".gitignore" => format!("{}-013", RULE_PREFIX),
         "justfile" | "Justfile" => format!("{}-014", RULE_PREFIX),
         ".machine_readable/bot_directives" => format!("{}-015", RULE_PREFIX),
-        "0-AI-MANIFEST.a2ml" => format!("{}-016", RULE_PREFIX),
+        name if name.ends_with("_chora.deed") => format!("{}-016", RULE_PREFIX),
         "www/.well-known/security.txt" => format!("{}-017", RULE_PREFIX),
         ".machine_readable/root-allow.txt" => format!("{}-018", RULE_PREFIX),
         "no-.bot_directives" => format!("{}-LEGACY-001", RULE_PREFIX),
@@ -89,13 +82,13 @@ fn suggestion_for(check_name: &str) -> Option<String> {
     match check_name {
         "README.adoc" => Some("Create a README.adoc file with project documentation".to_string()),
         "LICENSE.txt" | "LICENSE" => Some("Add a LICENSE file with MPL-2.0 (LICENSE is the current spelling)".to_string()),
-        "SECURITY.adoc" | "SECURITY.md" => Some("Add a SECURITY.adoc with vulnerability reporting instructions".to_string()),
-        "CONTRIBUTING.adoc" | "CONTRIBUTING.md" => Some("Add a CONTRIBUTING.adoc with contribution guidelines".to_string()),
-        "CODE_OF_CONDUCT.adoc" | "CODE_OF_CONDUCT.md" => Some("Add a CODE_OF_CONDUCT.adoc (Contributor Covenant recommended)".to_string()),
+        "SECURITY.adoc" => Some("Add a SECURITY.adoc with vulnerability reporting instructions".to_string()),
+        "SECURITY.md" => Some("Add a SECURITY.md with vulnerability reporting instructions (this repository's bot directive prefers .md)".to_string()),
+        "CONTRIBUTING.adoc" => Some("Add a CONTRIBUTING.adoc with contribution guidelines".to_string()),
+        "CONTRIBUTING.md" => Some("Add a CONTRIBUTING.md with contribution guidelines (this repository's bot directive prefers .md)".to_string()),
+        "CODE_OF_CONDUCT.adoc" => Some("Add a CODE_OF_CONDUCT.adoc (Contributor Covenant recommended)".to_string()),
+        "CODE_OF_CONDUCT.md" => Some("Add a CODE_OF_CONDUCT.md (Contributor Covenant recommended; this repository's bot directive prefers .md)".to_string()),
         ".claude/CLAUDE.md" => Some("Create .claude/CLAUDE.md with AI assistant instructions".to_string()),
-        ".machine_readable/STATE.a2ml" | ".machine_readable/STATE.scm" => Some("Add .machine_readable/STATE.a2ml with project state".to_string()),
-        ".machine_readable/META.a2ml" | ".machine_readable/META.scm" => Some("Add .machine_readable/META.a2ml with meta information".to_string()),
-        ".machine_readable/ECOSYSTEM.a2ml" | ".machine_readable/ECOSYSTEM.scm" => Some("Add .machine_readable/ECOSYSTEM.a2ml with ecosystem position".to_string()),
         ".github/workflows" => Some("Add GitHub Actions workflows in .github/workflows/".to_string()),
         ".editorconfig" => Some("Add .editorconfig for consistent formatting".to_string()),
         ".gitattributes" => Some("Add .gitattributes for line ending and diff config".to_string()),
@@ -103,7 +96,9 @@ fn suggestion_for(check_name: &str) -> Option<String> {
         "Justfile" | "justfile" => Some("Add a Justfile as the primary build system".to_string()),
         ".machine_readable/bot_directives" => Some("Create .machine_readable/bot_directives/ for bot configs".to_string()),
         "no-.bot_directives" => Some("Migrate legacy .bot_directives/ to .machine_readable/bot_directives/".to_string()),
-        "0-AI-MANIFEST.a2ml" => Some("Add a 0-AI-MANIFEST.a2ml machine-readable manifest at the repository root".to_string()),
+        name if name.ends_with("_chora.deed") => Some(format!(
+            "Add {name} (the chora deed): the repository's identity and facts, including its manifest, meta, ecosystem, agentic, anchor, rsr-profile and bot-directives clauses; check it with deed_lint.js from metadatastician/standards"
+        )),
         "www/.well-known/security.txt" => Some("Create www/.well-known/security.txt; run scripts/migrate-wellknown-to-www.sh to move an existing root .well-known/".to_string()),
         ".machine_readable/root-allow.txt" => Some("Add .machine_readable/root-allow.txt declaring the permitted root entries".to_string()),
         // Move, do not delete: the generic no- arm below would advise
