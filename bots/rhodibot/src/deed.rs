@@ -132,6 +132,7 @@ impl Deed {
         let keys = RSR_PROFILE_KEYS;
         let members = clause.members();
         let mut seen_clauses = BTreeSet::new();
+        let mut seen_keys = BTreeSet::new();
         let mut layout = Vec::new();
         for (index, node) in members.iter().enumerate() {
             if let Node::Atom(atom) = node
@@ -142,12 +143,33 @@ impl Deed {
                     "unknown key {atom} in (rsr-profile ...); a misspelt key would declare no \
                      capabilities and silently switch off every gated check"
                 );
+                ensure!(
+                    seen_keys.insert(atom.clone()),
+                    "(rsr-profile ...) carries {atom} once; a second one would be ignored"
+                );
+                // Each key's value has its kind: a list for the list keys, a
+                // single value for the rest. A list after a scalar key is
+                // neither its value nor a sub-clause to skip.
+                let value = members.get(index + 1);
+                if RSR_PROFILE_LIST_KEYS.contains(&atom.as_str()) {
+                    ensure!(
+                        matches!(value, Some(Node::List(_))),
+                        "(rsr-profile {atom} ...) must be a list"
+                    );
+                } else {
+                    ensure!(
+                        matches!(value, Some(Node::Str(_) | Node::Atom(_)))
+                            && !matches!(value, Some(Node::Atom(next)) if next.starts_with(':')),
+                        "(rsr-profile {atom} ...) takes one value, not a list or nothing"
+                    );
+                }
             }
-            // A list right after a :keyword is that field's value. Any other
-            // list is a sub-clause, and J39 refuses one it does not know
-            // rather than skipping it.
+            // Only a list key's value is exempt; any other list is a
+            // sub-clause, and J39 refuses one it does not know rather than
+            // skipping it.
             let is_value = index > 0
-                && matches!(&members[index - 1], Node::Atom(atom) if atom.starts_with(':'));
+                && matches!(&members[index - 1], Node::Atom(atom)
+                    if RSR_PROFILE_LIST_KEYS.contains(&atom.as_str()));
             if let Node::List(_) = node
                 && !is_value
             {
@@ -287,6 +309,10 @@ pub const RSR_PROFILE_KEYS: &[&str] = &[
     ":add",
     ":remove",
 ];
+
+/// The keys of [`RSR_PROFILE_KEYS`] whose value is a list of strings; the
+/// rest take one string (standards rsr-profile.abnf).
+pub const RSR_PROFILE_LIST_KEYS: &[&str] = &[":capabilities", ":add", ":remove"];
 
 /// The sub-clauses of `(rsr-profile ...)`, in the order
 /// `deed_lint.js --rsr-profile-keys` prints them after the keys.
@@ -637,6 +663,33 @@ mod module_alignment_tests {
                 .unwrap();
         let err = deed.rsr_profile().unwrap_err().to_string();
         assert!(err.contains("unknown clause (extras"), "{err}");
+    }
+
+    /// A list after a scalar key is neither that key's value nor a sub-clause
+    /// to skip: `:preset (extras ...)` once read as a missing preset and
+    /// switched every gated check off (Codex on #687).
+    #[test]
+    fn a_list_after_a_scalar_key_is_refused() {
+        for key in [":version", ":spec", ":declares-against", ":role", ":preset"] {
+            let deed = Deed::parse(&format!(
+                "(repo-deed (rsr-profile :capabilities (\"rust\") {key} (extras :x \"y\")))"
+            ))
+            .unwrap();
+            assert!(deed.rsr_profile().is_err(), "{key}");
+        }
+        let deed = Deed::parse("(repo-deed (rsr-profile :preset (extras :x \"y\")))").unwrap();
+        assert!(deed.rsr_profile().is_err());
+    }
+
+    #[test]
+    fn a_list_key_takes_a_list_value() {
+        for key in [":capabilities", ":add", ":remove"] {
+            let deed = Deed::parse(&format!(
+                "(repo-deed (rsr-profile :preset \"p\" :capabilities (\"rust\") {key} \"rust\"))"
+            ))
+            .unwrap();
+            assert!(deed.rsr_profile().is_err(), "{key}");
+        }
     }
 
     #[test]
