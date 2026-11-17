@@ -304,8 +304,15 @@ impl MachineAnalyzer {
                 .with_suggestion(
                     "Check it with standards' `bun 1-formats/deed/tools/deed_lint.js FILE`",
                 );
-                if let deed_reader::ChoraError::Parse(p, de) = &e {
-                    f = f.with_file(p.clone()).with_line(de.line);
+                match &e {
+                    deed_reader::ChoraError::Parse(p, de) => {
+                        f = f.with_file(p.clone()).with_line(de.line);
+                    }
+                    deed_reader::ChoraError::Io(p, _) | deed_reader::ChoraError::WrongHead(p, _) => {
+                        f = f.with_file(p.clone());
+                    }
+                    // Several deeds: no single offender, the directory stands.
+                    deed_reader::ChoraError::Multiple(_) => {}
                 }
                 result.add(f);
             }
@@ -440,7 +447,7 @@ mod tests {
         // The repo's machine-readable facts: its chora deed at the root.
         std::fs::write(
             dir.path().join("test_chora.deed"),
-            "(repo-deed :canonical-name \"test\" (status :phase beta))\n",
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed :canonical-name \"test\" (status :phase beta))\n",
         )
         .unwrap();
         // Create robots.txt
@@ -516,7 +523,11 @@ mod tests {
     #[test]
     fn mach_006_and_007_are_retired_and_a_deed_needs_no_machine_readable_dir() {
         let dir = TempDir::new().unwrap();
-        std::fs::write(dir.path().join("x_chora.deed"), "(repo-deed)").unwrap();
+        std::fs::write(
+            dir.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed :x y)\n",
+        )
+        .unwrap();
         let got = ids(dir.path());
         for retired in ["MACH-006", "MACH-007", "MACH-008", "MACH-009"] {
             assert!(!got.contains(&retired.to_string()), "{retired}: {got:?}");
@@ -531,22 +542,57 @@ mod tests {
     #[test]
     fn mach_009_for_two_deeds_a_parse_error_or_a_wrong_head() {
         let two = TempDir::new().unwrap();
-        std::fs::write(two.path().join("a_chora.deed"), "(repo-deed)").unwrap();
-        std::fs::write(two.path().join("b_chora.deed"), "(repo-deed)").unwrap();
+        std::fs::write(two.path().join("a_chora.deed"), "(repo-deed :x y)").unwrap();
+        std::fs::write(two.path().join("b_chora.deed"), "(repo-deed :x y)").unwrap();
         assert!(ids(two.path()).contains(&"MACH-009".to_string()));
 
         let bad = TempDir::new().unwrap();
-        std::fs::write(bad.path().join("x_chora.deed"), "(repo-deed\n :a").unwrap();
+        std::fs::write(
+            bad.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed\n :a",
+        )
+        .unwrap();
         let r = MachineAnalyzer::default()
             .analyze(bad.path(), &default_config())
             .unwrap();
         let f = r.findings.iter().find(|f| f.id == "MACH-009").unwrap();
         assert_eq!(f.severity, Severity::Error);
-        assert_eq!(f.line, Some(2));
+        assert_eq!(f.line, Some(3));
+        assert_eq!(
+            f.file.as_deref(),
+            Some(bad.path().join("x_chora.deed").as_path())
+        );
 
         let head = TempDir::new().unwrap();
-        std::fs::write(head.path().join("x_chora.deed"), "(praxis-deed)").unwrap();
+        std::fs::write(
+            head.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(praxis-deed :x y)\n",
+        )
+        .unwrap();
         assert!(ids(head.path()).contains(&"MACH-009".to_string()));
+    }
+
+    #[test]
+    fn mach_009_names_the_offending_deed_file_for_every_single_file_error() {
+        // A wrong doc-head and an unreadable file (not UTF-8) carry the deed path;
+        // the finding must point at it, not at the repository directory.
+        let head = TempDir::new().unwrap();
+        let deed = head.path().join("x_chora.deed");
+        std::fs::write(
+            &deed,
+            ";; SPDX-License-Identifier: MPL-2.0\n(praxis-deed :x y)\n",
+        )
+        .unwrap();
+        let unreadable = TempDir::new().unwrap();
+        let bad = unreadable.path().join("x_chora.deed");
+        std::fs::write(&bad, [0xff, 0xfe, 0xfd]).unwrap();
+        for (dir, file) in [(head.path(), &deed), (unreadable.path(), &bad)] {
+            let r = MachineAnalyzer::default()
+                .analyze(dir, &default_config())
+                .unwrap();
+            let f = r.findings.iter().find(|f| f.id == "MACH-009").unwrap();
+            assert_eq!(f.file.as_deref(), Some(file.as_path()), "{}", f.message);
+        }
     }
 
     const JSONC: &str =

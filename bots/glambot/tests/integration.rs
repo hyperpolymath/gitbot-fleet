@@ -38,7 +38,7 @@ fn create_well_formed_repo() -> TempDir {
     // The repo deed (its machine-readable facts)
     std::fs::write(
         path.join("test_chora.deed"),
-        "(repo-deed :canonical-name \"test\" (status :phase beta))\n",
+        ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed :canonical-name \"test\" (status :phase beta))\n",
     )
     .unwrap();
 
