@@ -60,7 +60,9 @@ fn rule_id(check_name: &str) -> String {
         ".gitattributes" => format!("{}-012", RULE_PREFIX),
         ".gitignore" => format!("{}-013", RULE_PREFIX),
         "justfile" | "Justfile" => format!("{}-014", RULE_PREFIX),
-        ".machine_readable/bot_directives" => format!("{}-015", RULE_PREFIX),
+        // RSR-015 (.machine_readable/bot_directives/) is retired: the bot
+        // directives are the chora deed's (bot-directives ...) clause.
+        crate::rsr::A2ML_CHECK => format!("{}-A2ML-001", RULE_PREFIX),
         name if name.ends_with("_chora.deed") => format!("{}-016", RULE_PREFIX),
         "www/.well-known/security.txt" => format!("{}-017", RULE_PREFIX),
         ".machine_readable/root-allow.txt" => format!("{}-018", RULE_PREFIX),
@@ -94,8 +96,8 @@ fn suggestion_for(check_name: &str) -> Option<String> {
         ".gitattributes" => Some("Add .gitattributes for line ending and diff config".to_string()),
         ".gitignore" => Some("Add .gitignore for build artifacts".to_string()),
         "Justfile" | "justfile" => Some("Add a Justfile as the primary build system".to_string()),
-        ".machine_readable/bot_directives" => Some("Create .machine_readable/bot_directives/ for bot configs".to_string()),
-        "no-.bot_directives" => Some("Migrate legacy .bot_directives/ to .machine_readable/bot_directives/".to_string()),
+        "no-.bot_directives" => Some("Migrate legacy .bot_directives/ into the chora deed's (bot-directives ...) clause; do not recreate .machine_readable/bot_directives/".to_string()),
+        crate::rsr::A2ML_CHECK => Some("P1: A2ML is retired. Convert each .a2ml with kyX under the standards mapping specs (D313); where kyX refuses or has no front end, the fleet opens a P1 issue. Never hand-convert".to_string()),
         name if name.ends_with("_chora.deed") => Some(format!(
             "Add {name} (the chora deed): the repository's identity and facts, including its manifest, meta, ecosystem, agentic, anchor, rsr-profile and bot-directives clauses; check it with deed_lint.js from metadatastician/standards"
         )),
@@ -157,6 +159,34 @@ pub fn report_to_findings(report: &ComplianceReport) -> Vec<Finding> {
         let mut finding = Finding::new(BotId::Rhodibot, &rid, fleet_severity, &check.message)
             .with_rule_name(&check.name)
             .with_category(category);
+
+        // The priority-1 A2ML check: one finding per retired file, at its real
+        // path, so a downstream bot can match it to a changed file. With no
+        // paths (the tree could not be listed) it stays one fileless finding,
+        // never a finding at the literal wildcard.
+        if check.name == crate::rsr::A2ML_CHECK && !report.retired_a2ml.is_empty() {
+            let suggestion = suggestion_for(&check.name);
+            for path in &report.retired_a2ml {
+                let mut one = Finding::new(
+                    BotId::Rhodibot,
+                    &rid,
+                    fleet_severity,
+                    &format!("P1: retired .a2ml file {path}"),
+                )
+                .with_rule_name(&check.name)
+                .with_category(category)
+                .with_file(PathBuf::from(path));
+                if let Some(s) = &suggestion {
+                    one = one.with_suggestion(s);
+                }
+                findings.push(one);
+            }
+            continue;
+        }
+        if check.name == crate::rsr::A2ML_CHECK {
+            findings.push(finding);
+            continue;
+        }
 
         // Set file path for file-based checks
         if !check.name.starts_with("license-type") && !check.name.starts_with("no-") {

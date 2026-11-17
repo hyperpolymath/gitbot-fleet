@@ -235,6 +235,10 @@ pub enum Severity {
     Deprecated,
     /// Not present.
     Missing,
+    /// A retired format is present: an `.a2ml` file (D99, D269c, D312, D313).
+    /// Priority 1, worse than a missing file, because it is a live record in a
+    /// form nothing may read or extend; see [`super::a2ml`].
+    Retired,
 }
 
 impl Severity {
@@ -245,6 +249,7 @@ impl Severity {
             Self::Relocated => "relocated",
             Self::Deprecated => "deprecated",
             Self::Missing => "missing",
+            Self::Retired => "retired",
         }
     }
 
@@ -384,6 +389,9 @@ impl Verdict {
             Severity::Relocated => "elsewhere",
             Severity::Deprecated => "deprecated location",
             Severity::Missing => "absent",
+            // A criterion's verdict never computes to Retired (see severity());
+            // only the per-file `.a2ml` rule uses it.
+            Severity::Retired => "retired format",
         }
     }
 
