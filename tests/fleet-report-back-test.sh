@@ -676,7 +676,10 @@ if [ -n "${STANDARDS_DIR:-}" ] && [ -f "$GRID" ]; then
   ( cd "$REPO" && bash "$GRID" render --out "$TMP/grid" --hypatia /dev/null --panic /dev/null --pons /dev/null \
       --report-backs "$TMP/o1" --enrolment .gitbot-fleet/enrolment.json --sha 0000000 >/dev/null )
   rowstate() { jq -r --arg id "$1" '.reporters[] | select(.id == $id) | .state' "$TMP/grid/report.json"; }
-  check "renderer: rhodibot's error finding is a red row" red "$(rowstate rhodibot)"
+  # rhodibot carries a P1 retired .a2ml (critical) as well as an error, and
+  # critical outranks red. error -> red stays pinned by ponsbot's row above.
+  check "renderer: rhodibot's P1 (critical) .a2ml finding makes its row purple" purple "$(rowstate rhodibot)"
+  check "renderer: rhodibot's P1 .a2ml is counted as critical" 1 "$(jq -r '.reporters[] | select(.id == "rhodibot") | .counts.critical' "$TMP/grid/report.json")"
   check "renderer: glambot's info finding is a blue row" blue "$(rowstate glambot)"
   check "renderer: panicbot's warning is a yellow row" yellow "$(rowstate panicbot)"
   check "renderer: echidnabot not_run is orange" orange "$(rowstate echidnabot)"
