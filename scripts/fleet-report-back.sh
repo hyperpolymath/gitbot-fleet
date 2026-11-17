@@ -47,7 +47,7 @@
 # Usage:
 #   fleet-report-back.sh --repo DIR --out DIR [--enrolment FILE] [--bin-dir DIR]
 #                        [--member NAME]... [--fleet-ref SHA] [--summary FILE]
-#                        [--timeout SECONDS]
+#                        [--timeout SECONDS] [--pr NUMBER --pr-repo OWNER/NAME]
 #   fleet-report-back.sh --plan [--enrolment FILE] [--member NAME]...
 #
 #   --repo        the checkout to report on (its root; paths are made relative)
@@ -60,7 +60,12 @@
 #                 checkout's HEAD, else "unknown"
 #   --summary     append a Markdown table of the members and their status
 #   --timeout     seconds allowed per adapter (default 300)
-#   --plan        print "member<TAB>crate-dir<TAB>binary" for every member
+#   --pr, --pr-repo  the pull request whose head DIR is: finishingbot then also
+#                 reports whether it is ready to review and merge (advisory).
+#                 The token is read from FLEET_PR_TOKEN, which the driver
+#                 removes from its own environment at once and hands to
+#                 finishing-bot alone (as GH_TOKEN), never to another adapter
+#   --plan       print "member<TAB>crate-dir<TAB>binary" for every member
 #                 that would run, so a workflow can build only those crates
 #
 # Exit 0 whenever envelopes were written (whatever they say); 2 on usage
@@ -201,7 +206,12 @@ default_title_of() {
 
 # ── argument parsing ─────────────────────────────────────────────────────────
 repo="" out="" enrol="__default__" bindir="" fleet_ref="" summary="" plan=false
-timeout_s=300
+timeout_s=300 pr_number="" pr_repo=""
+# The pull-request token is for finishing-bot alone: take it out of the
+# environment before anything else runs, so no other adapter (some execute the
+# scanned repository's code) can inherit it.
+pr_token="${FLEET_PR_TOKEN:-}"
+unset FLEET_PR_TOKEN
 members=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -213,6 +223,8 @@ while [ $# -gt 0 ]; do
     --fleet-ref) fleet_ref="$2"; shift 2 ;;
     --summary) summary="$2"; shift 2 ;;
     --timeout) timeout_s="$2"; shift 2 ;;
+    --pr) pr_number="$2"; shift 2 ;;
+    --pr-repo) pr_repo="$2"; shift 2 ;;
     --plan) plan=true; shift ;;
     -h|--help) usage ;;
     *) echo "unknown option: $1" >&2; usage ;;
@@ -231,6 +243,12 @@ command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 2; }
 # GNU timeout reads 0 as "no limit", which would let one hung adapter spend the
 # whole job; the limit must be a positive integer.
 [[ "$timeout_s" =~ ^[1-9][0-9]*$ ]] || { echo "--timeout must be a positive integer (0 would disable the limit)" >&2; exit 2; }
+# --pr and --pr-repo come from the calling workflow's event: both or neither,
+# and each in its one valid form.
+if [ -n "$pr_number$pr_repo" ]; then
+  [[ "$pr_number" =~ ^[1-9][0-9]{0,9}$ ]] || { echo "--pr must be a pull request number (with --pr-repo)" >&2; exit 2; }
+  [[ "$pr_repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "--pr-repo must be owner/name (with --pr)" >&2; exit 2; }
+fi
 
 # ── enrolment ────────────────────────────────────────────────────────────────
 # Which members run. An explicit --member list wins; otherwise every reporter
@@ -517,11 +535,18 @@ translate_panicbot() { # member
 # to temporary capture files and ADAPTER_RC to the exit status (124 on timeout)
 # without propagating it. The caller must remove the files; creation failures
 # are not caught.
+# ADAPTER_ENV (NAME=value words) is added to this one adapter's environment and
+# reset afterwards, so a value meant for one adapter never reaches the next.
+ADAPTER_ENV=()
 run_adapter() { # binary args... ; sets ADAPTER_OUT, ADAPTER_ERR, ADAPTER_RC
   local bin="$1"; shift
   ADAPTER_OUT=$(mktemp); ADAPTER_ERR=$(mktemp); ADAPTER_RC=0
   # --bin-dir is also prepended to PATH: panicbot finds panic-attack with `which`.
-  ( cd "$repo" && PATH="${bindir:+$bindir:}$PATH" RUST_LOG=off timeout "$timeout_s" "$bin" "$@" ) > "$ADAPTER_OUT" 2> "$ADAPTER_ERR" || ADAPTER_RC=$?
+  # Exported inside the subshell, never passed as arguments: a token on a
+  # command line is visible to every process on the runner.
+  ( cd "$repo" && for kv in ${ADAPTER_ENV[@]+"${ADAPTER_ENV[@]}"}; do export "${kv?}"; done \
+      && PATH="${bindir:+$bindir:}$PATH" RUST_LOG=off timeout "$timeout_s" "$bin" "$@" ) > "$ADAPTER_OUT" 2> "$ADAPTER_ERR" || ADAPTER_RC=$?
+  ADAPTER_ENV=()
 }
 # Print up to 240 characters of the first nonblank ADAPTER_ERR line excluding
 # Stack backtrace headers, or an ADAPTER_RC diagnostic if no line is selected.
@@ -683,8 +708,22 @@ run_member() {
           | { rule_id: ("SEAM-" + (.check // "?" | tostring)), severity: (.severity // "unknown" | tostring),
               file: ((.location // "") | rel), line: 0, message: (.message // "" | tostring) } ]' ;;
     finishingbot|finishbot|finishing-bot)
-      run_adapter "$bin" --path "$repo" --format json audit
-      translate_or_error "$m" "$SHAPE_ANALYZERS [ .[] | .findings[] | $FINDING ]" ;;
+      # With --pr, `audit` also reads the pull request's readiness from GitHub
+      # (review conversations, change requests, behind/conflict, checks, and
+      # required contexts nothing on the head provides) and prints it as one
+      # more analyzer, `pr_readiness`, whose PRR-* findings flatten like the
+      # rest. It is advisory: it never changes the adapter's exit status. Its
+      # one-line verdict becomes the envelope reason, so the grid shows it.
+      local fargs=(--path "$repo" --format json audit)
+      if [ -n "$pr_number" ]; then
+        fargs+=(--pr "$pr_number" --pr-repo "$pr_repo")
+        # The evaluating Actions run's own checks are in progress by definition.
+        [[ "${GITHUB_RUN_ID:-}" =~ ^[0-9]+$ ]] && fargs+=(--exclude-run-id "$GITHUB_RUN_ID")
+        [ -z "$pr_token" ] || ADAPTER_ENV=("GH_TOKEN=$pr_token")
+      fi
+      run_adapter "$bin" "${fargs[@]}"
+      translate_or_error "$m" "$SHAPE_ANALYZERS [ .[] | .findings[] | $FINDING ]" \
+        'if type == "object" and (.pr_readiness | type) == "object" then (.pr_readiness.summary // "" | tostring | .[0:400]) else "" end' ;;
     glambot)
       run_adapter "$bin" --path "$repo" --format json audit
       # An analyzer that could not run (git-seo missing) reports `skipped`; say so
@@ -711,7 +750,10 @@ for m in "${members[@]+"${members[@]}"}"; do
   # fork-governance SPEC section 3.0: absence of a location is not evidence of
   # absence of a defect), so a repository-level rule that omits its path makes
   # the row identical on every pull request. Say so, loudly, at the source.
-  unpathed=$(jq -r '[.findings[] | select((.file // "") == "")] | length' "$out/$m.json")
+  # finishingbot's PRR-* pull-request readiness findings are the exception by
+  # design: they are facts about the change as a whole, which is exactly the
+  # scope a path-less finding is graded at.
+  unpathed=$(jq -r '[.findings[] | select((.file // "") == "" and ((.rule_id // "") | startswith("PRR-") | not))] | length' "$out/$m.json")
   if [ "$unpathed" -gt 0 ]; then
     echo "fleet-report-back: WARNING: $m reported $unpathed finding(s) with no path; the grid grades those as part of every change. The adapter must name the file each rule is about (the expected path, for a missing-file rule)." >&2
   fi
