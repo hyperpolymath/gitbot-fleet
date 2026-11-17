@@ -291,12 +291,18 @@ impl Value {
     }
 }
 
+/// How deeply clauses and lists may nest. Real deeds nest a handful of levels;
+/// the limit exists so a hostile or broken deed is a parse error, not a stack
+/// overflow, which aborts the whole process and cannot be caught.
+pub const MAX_DEPTH: usize = 64;
+
 /// Parse a whole deed: one top-level clause, nothing after it.
 pub fn parse(text: &str) -> Result<Clause> {
     let mut p = Parser {
         s: text.chars().collect(),
         i: 0,
         line: 1,
+        depth: 0,
     };
     p.skip_sep()?;
     if p.peek() != Some('(') {
@@ -314,6 +320,7 @@ struct Parser {
     s: Vec<char>,
     i: usize,
     line: usize,
+    depth: usize,
 }
 
 fn is_sym_start(c: char) -> bool {
@@ -330,6 +337,17 @@ impl Parser {
             line: self.line,
             message: message.to_string(),
         }
+    }
+
+    /// Enter one level of nesting, refusing past [`MAX_DEPTH`].
+    fn descend(&mut self) -> Result<()> {
+        if self.depth >= MAX_DEPTH {
+            return Err(self.err(&format!(
+                "clauses and lists nest deeper than {MAX_DEPTH} levels"
+            )));
+        }
+        self.depth += 1;
+        Ok(())
     }
 
     fn peek(&self) -> Option<char> {
@@ -398,6 +416,13 @@ impl Parser {
 
     fn clause(&mut self) -> Result<Clause> {
         let line = self.line;
+        self.descend()?;
+        let clause = self.clause_body(line);
+        self.depth -= 1;
+        clause
+    }
+
+    fn clause_body(&mut self, line: usize) -> Result<Clause> {
         self.bump(); // '('
         let head = self.symbol()?;
         let mut items = Vec::new();
@@ -465,6 +490,13 @@ impl Parser {
 
     fn list(&mut self) -> Result<Value> {
         let line = self.line;
+        self.descend()?;
+        let list = self.list_body(line);
+        self.depth -= 1;
+        list
+    }
+
+    fn list_body(&mut self, line: usize) -> Result<Value> {
         self.bump(); // '('
         let mut out = Vec::new();
         loop {
@@ -584,6 +616,36 @@ mod tests {
             other => panic!("{other:?}"),
         }
         assert_eq!(c.items.len(), 10);
+    }
+
+    /// `depth` clauses nested inside one another: `(a (a (a)))`.
+    fn nested_clauses(depth: usize) -> String {
+        "(a".to_string() + &" (a".repeat(depth - 1) + &")".repeat(depth)
+    }
+
+    #[test]
+    fn deep_nesting_is_a_parse_error_not_a_stack_overflow() {
+        // Far deeper than any stack: without the limit this aborts the test
+        // process instead of failing it.
+        let e = parse(&nested_clauses(100_000)).unwrap_err();
+        assert!(e.message.contains("nest deeper than 64"), "{e}");
+        let lists = format!("(a :v {}{})", "(".repeat(100_000), ")".repeat(100_000));
+        let e = parse(&lists).unwrap_err();
+        assert!(e.message.contains("nest deeper than 64"), "{e}");
+        let quoted = format!("(a :v '{}{})", "(".repeat(100_000), ")".repeat(100_000));
+        assert!(parse(&quoted).is_err());
+    }
+
+    #[test]
+    fn nesting_up_to_the_limit_still_reads() {
+        assert!(parse(&nested_clauses(MAX_DEPTH)).is_ok());
+        assert!(parse(&nested_clauses(MAX_DEPTH + 1)).is_err());
+        // The root clause is one level, so a list may nest MAX_DEPTH - 1 deep.
+        let n = MAX_DEPTH - 1;
+        let list = format!("(a :v {}{})", "(".repeat(n), ")".repeat(n));
+        assert!(parse(&list).is_ok());
+        let list = format!("(a :v {}{})", "(".repeat(n + 1), ")".repeat(n + 1));
+        assert!(parse(&list).is_err());
     }
 
     #[test]
