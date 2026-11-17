@@ -5,7 +5,7 @@
 //! The six descriptive documents that used to be `STATE.scm`, `META.scm`,
 //! `ECOSYSTEM.scm`, `PLAYBOOK.scm`, `AGENTIC.scm` and `NEUROSYM.scm` are
 //! clauses of the repository's one `<repo>_chora.deed` (owner rulings D312,
-//! D313), and the project state is its `(status …)` clause, or
+//! D313), and the project state is its `(status …)` or `(maturity …)` clause, or
 //! `.machine_readable/descriptiles/STATE.deed` once standards' A7 migration
 //! moves it there (J15). This analyzer therefore reads the deed, through
 //! `gitbot-deed-reader`, and treats any surviving `.scm` document as legacy:
@@ -21,7 +21,7 @@
 //! - `DEED-002` (error): more than one chora deed (D312 allows exactly one).
 //! - `DEED-003` (error): the chora deed cannot be read or parsed, or its
 //!   doc-head is not `repo-deed`.
-//! - `DEED-004` (warning): no project state: neither a `(status …)` clause in
+//! - `DEED-004` (warning): no project state: neither a `(status …)` nor a `(maturity …)` clause in
 //!   the chora deed nor a `.machine_readable/descriptiles/STATE.deed`.
 //! - `SCM-006-<NAME>.scm` (warning): a retired `.scm` document is present.
 //!
@@ -76,13 +76,13 @@ impl Analyzer for ScmFilesAnalyzer {
             Ok(Some(chora)) => {
                 result.files_checked += 1;
                 debug!("read {}", chora.path.display());
-                if !chora.root.has("status") && !has_state_deed {
+                if !chora.root.has("status") && !chora.root.has("maturity") && !has_state_deed {
                     result.add(
                         Finding::new(
                             "DEED-004",
                             "Project state not recorded",
                             Severity::Warning,
-                            "The chora deed has no (status …) clause and there is no \
+                            "The chora deed has neither a (status …) nor a (maturity …) clause and there is no \
                              .machine_readable/descriptiles/STATE.deed, so the project's \
                              phase is not recorded anywhere a bot can read.",
                         )
@@ -239,16 +239,24 @@ mod tests {
     #[test]
     fn an_unparseable_or_wrong_head_deed_is_deed_003_with_a_line() {
         let d = TempDir::new().unwrap();
-        std::fs::write(d.path().join("x_chora.deed"), "(repo-deed\n\n :a").unwrap();
+        std::fs::write(
+            d.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed\n\n :a",
+        )
+        .unwrap();
         let r = ScmFilesAnalyzer
             .analyze(d.path(), &Config::default())
             .unwrap();
         let f = r.findings.iter().find(|f| f.id == "DEED-003").unwrap();
         assert_eq!(f.severity, Severity::Error);
-        assert_eq!(f.line, Some(3));
+        assert_eq!(f.line, Some(4));
 
         let d = TempDir::new().unwrap();
-        std::fs::write(d.path().join("x_chora.deed"), "(praxis-deed :a \"b\")").unwrap();
+        std::fs::write(
+            d.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(praxis-deed :a \"b\")\n",
+        )
+        .unwrap();
         assert_eq!(ids(d.path()), vec!["DEED-003".to_string()]);
     }
 
@@ -257,7 +265,7 @@ mod tests {
         let d = TempDir::new().unwrap();
         std::fs::write(
             d.path().join("x_chora.deed"),
-            "(repo-deed :canonical-name \"x\")",
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed :canonical-name \"x\")\n",
         )
         .unwrap();
         assert_eq!(ids(d.path()), vec!["DEED-004".to_string()]);
@@ -265,6 +273,21 @@ mod tests {
         std::fs::create_dir_all(&dd).unwrap();
         std::fs::write(dd.join("STATE.deed"), "(descriptile-deed)").unwrap();
         assert!(ids(d.path()).is_empty());
+    }
+
+    #[test]
+    fn a_maturity_clause_alone_records_the_project_state() {
+        // rhodibot's canon overlay lists STATE.deed, (status) and (maturity) as
+        // the three alternatives; none of them is DEED-004.
+        for clause in ["(maturity :level experimental)", "(status :phase beta)"] {
+            let d = TempDir::new().unwrap();
+            std::fs::write(
+                d.path().join("x_chora.deed"),
+                format!(";; SPDX-License-Identifier: MPL-2.0\n(repo-deed :canonical-name \"x\" {clause})\n"),
+            )
+            .unwrap();
+            assert!(ids(d.path()).is_empty(), "{clause}");
+        }
     }
 
     #[test]
