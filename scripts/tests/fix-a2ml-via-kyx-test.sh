@@ -266,7 +266,10 @@ cat > "$WRAP/git" <<SH
 #!/usr/bin/env bash
 for a in "\$@"; do
   case "\$a" in
-    rm) [[ -n "\${FAIL_GIT_RM:-}" ]] && { echo "fatal: injected rm failure" >&2; exit 128; } ;;
+    rm) [[ -n "\${FAIL_GIT_RM:-}" ]] && { : > "$WRAP/rm-failed"; echo "fatal: injected rm failure" >&2; exit 128; } ;;
+    status)
+      [[ -n "\${FAIL_GIT_STATUS:-}" ]] && { echo "fatal: injected status failure" >&2; exit 128; }
+      [[ -n "\${FAIL_GIT_STATUS_AFTER_RM:-}" && -e "$WRAP/rm-failed" ]] && { echo "fatal: injected status failure" >&2; exit 128; } ;;
     reset) [[ -n "\${FAIL_GIT_RESET:-}" ]] && { echo "fatal: injected reset failure" >&2; exit 128; } ;;
   esac
 done
@@ -284,6 +287,7 @@ exec "$REAL_MKTEMP" "\$@"
 SH
 chmod +x "$WRAP"/*
 wrun() { # repo -> RC; the wrapped PATH, plus whatever FAIL_* the caller set
+  rm -f "$WRAP/rm-failed"
   REPORT="$TMP/report-$RANDOM"; mkdir -p "$REPORT"; RC=0
   PATH="$WRAP:$PATH" A2ML_REPORT_DIR="$REPORT" STUB_KYX=ok bash "$FIX" "$1" > "$TMP/out" 2> "$TMP/err" || RC=$?
 }
@@ -294,6 +298,11 @@ check "git rm fails: the reason says it was rolled back" 1 "$(jq '[.refused[] | 
 r=$(mkrepo undo-fails); FAIL_GIT_RM=1 FAIL_GIT_RESET=1 wrun "$r"
 check "git rm AND the rollback fail: exit 70, never a clean refusal" 70 "$RC"
 check "a failed rollback says INCONSISTENT and needs a human" 1 "$(grep -c 'INCONSISTENT: staging the conversion' "$TMP/err")"
+r=$(mkrepo verify-fails); FAIL_GIT_RM=1 FAIL_GIT_STATUS_AFTER_RM=1 wrun "$r"
+check "the rollback runs but git status cannot verify it: exit 70, not \"rolled back\"" 70 "$RC"
+r=$(mkrepo status-fails); FAIL_GIT_STATUS=1 wrun "$r"
+check "git status fails in the preflight: refused as unknown, not read as clean" 1 "$(jq '[.refused[] | select(.reasons[0]|test("state is unknown"))] | length' "$REPORT/a2ml-report.json")"
+check "git status fails in the preflight: nothing staged" "" "$(git -C "$r" diff --cached --name-only)"
 r=$(mkrepo publish-fails); FAIL_MV=1 wrun "$r"
 check "a report that cannot be published after staging: non-zero exit" 1 "$([[ "$RC" -ne 0 ]] && echo 1 || echo 0)"
 check "publish fails: the staged conversion is rolled back, tree as it was" "" "$(git -C "$r" status --porcelain)"

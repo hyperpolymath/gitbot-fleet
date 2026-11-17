@@ -147,11 +147,14 @@ REPORTS_DONE=0   # set once every report is published
 # Put the index and work tree back as they were before `src` was staged, and
 # say whether that worked: every step is checked, then the result is.
 undo_stage() { # src
-  local src="$1"
+  local src="$1" status
   git -C "$REPO" reset -q -- "$TARGET" "$src" 2>> "$WORK/undo.err" || return 1
   rm -f -- "$REPO/$TARGET" 2>> "$WORK/undo.err" || return 1
   git -C "$REPO" checkout -q -- "$src" 2>> "$WORK/undo.err" || return 1
-  [[ -z "$(git -C "$REPO" status --porcelain -- "$TARGET" "$src" 2>> "$WORK/undo.err")" ]]
+  # The check itself must succeed: a failed `git status` prints nothing, and
+  # nothing would read as clean.
+  status="$(git -C "$REPO" status --porcelain -- "$TARGET" "$src" 2>> "$WORK/undo.err")" || return 1
+  [[ -z "$status" ]]
 }
 
 # A rollback that failed leaves a state this script cannot vouch for. Say so
@@ -266,11 +269,17 @@ mapfile -d '' -t choras < <(git -C "$REPO" ls-files -z -- ':(glob)*_chora.deed')
 # Why `src` cannot be converted in this work tree right now, or nothing. Asked
 # BEFORE kyX runs, so a failed `git add`/`git rm` cannot leave half a change.
 preflight() { # src
-  local src="$1" dir
-  if [[ -n "$(git -C "$REPO" status --porcelain -- "${choras[0]}")" ]]; then
+  local src="$1" dir st
+  # A failed `git status` prints nothing, which would read as clean: check
+  # that it ran before reading what it printed.
+  st="$(git -C "$REPO" status --porcelain -- "${choras[0]}" 2>&1)" \
+    || { echo "git status could not read ${choras[0]}, so its state is unknown: ${st:0:200}"; return; }
+  if [[ -n "$st" ]]; then
     echo "${choras[0]} has uncommitted changes; kyX must read the committed chora deed the PR will reference."; return
   fi
-  if [[ -n "$(git -C "$REPO" status --porcelain -- "$src")" ]]; then
+  st="$(git -C "$REPO" status --porcelain -- "$src" 2>&1)" \
+    || { echo "git status could not read the source, so its state is unknown: ${st:0:200}"; return; }
+  if [[ -n "$st" ]]; then
     echo "the source has uncommitted changes; kyX would convert content the PR does not delete."; return
   fi
   # Each directory on the way to the target must be absent or a real
