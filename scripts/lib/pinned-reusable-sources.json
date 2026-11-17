@@ -731,7 +731,7 @@
     },
     {
       "repository": "hyperpolymath/hypatia",
-      "commit": "b93f0615a61ee4c05af66eb526538eab47120aaa",
+      "commit": "29a9e4a881b6a3cc4cd27fcbc0886ffbadcbc5fe",
       "path": ".github/workflows/credential-read-check.yml",
       "blob": "15c597ea720a5affb861dab058084f7245ee4cbd",
       "content_sha256": "645e8ac8ff118c33f2dc941ec46f1abac895f7836339736841c269e4b9dc084d",
