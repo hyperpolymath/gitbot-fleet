@@ -59,6 +59,8 @@ pub struct Counts {
     pub deprecated: usize,
     pub missing: usize,
     pub manual: usize,
+    /// `.a2ml` files present (one per file, not per criterion).
+    pub retired: usize,
 }
 
 impl Counts {
@@ -68,6 +70,7 @@ impl Counts {
             Severity::Relocated => self.relocated += 1,
             Severity::Deprecated => self.deprecated += 1,
             Severity::Missing => self.missing += 1,
+            Severity::Retired => self.retired += 1,
             Severity::Manual => self.manual += 1,
         }
     }
@@ -112,6 +115,8 @@ pub enum FailOn {
     Relocated,
     Deprecated,
     Missing,
+    /// Only a retired format (`.a2ml`), the priority-1 finding.
+    Retired,
 }
 
 impl FailOn {
@@ -122,6 +127,7 @@ impl FailOn {
             Self::Relocated => Some(Severity::Relocated),
             Self::Deprecated => Some(Severity::Deprecated),
             Self::Missing => Some(Severity::Missing),
+            Self::Retired => Some(Severity::Retired),
         }
     }
 
@@ -131,9 +137,10 @@ impl FailOn {
             "relocated" => Ok(Self::Relocated),
             "deprecated" => Ok(Self::Deprecated),
             "missing" => Ok(Self::Missing),
+            "retired" => Ok(Self::Retired),
             other => anyhow::bail!(
                 "unknown --fail-on value {other:?}; expected one of none, relocated, deprecated, \
-                 missing"
+                 missing, retired"
             ),
         }
     }
@@ -144,6 +151,7 @@ impl FailOn {
             Self::Relocated => "relocated",
             Self::Deprecated => "deprecated",
             Self::Missing => "missing",
+            Self::Retired => "retired",
         }
     }
 
@@ -299,6 +307,15 @@ impl CanonReport {
             report.record(&criterion, &verdict);
         }
 
+        // Priority 1: every tracked `.a2ml` file, one finding each. These are
+        // not criteria, so they count in `counts.retired` and not in `scored`.
+        // The real file list only: the overlay's virtual paths are deed
+        // clauses, never `.a2ml`.
+        for finding in super::a2ml::findings(&input.files) {
+            report.counts.retired += 1;
+            report.findings.push(finding);
+        }
+
         // Worst first, and stable, so equal severities stay in canon order --
         // which is category order, and the order a reader expects.
         report
@@ -348,6 +365,12 @@ impl CanonReport {
             self.counts.deprecated,
             self.counts.missing
         ));
+        if self.counts.retired > 0 {
+            out.push_str(&format!(
+                "  P1: {} retired .a2ml file(s) present (A2ML is retired; convert with kyX, D313)\n",
+                self.counts.retired
+            ));
+        }
 
         if !self.declared_capabilities.is_empty() {
             out.push_str(&format!(
@@ -924,6 +947,40 @@ mod tests {
             state.canon_keeps_it_at.is_none(),
             "the canon's own a2ml location must not be quoted: {state:?}"
         );
+    }
+
+    #[test]
+    fn every_a2ml_is_a_p1_finding_ranked_first_and_trips_fail_on_retired() {
+        let report = report_for(
+            &[
+                "widgets_chora.deed",
+                ".machine_readable/descriptiles/STATE.a2ml",
+                "contractiles/must/Mustfile.a2ml",
+            ],
+            Some("(repo-deed)"),
+            None,
+        );
+        let p1: Vec<&Finding> = report
+            .findings
+            .iter()
+            .filter(|f| f.id == super::super::a2ml::NO_A2ML_ID)
+            .collect();
+        assert_eq!(p1.len(), 2, "{:#?}", report.findings);
+        assert_eq!(report.counts.retired, 2);
+        // Worst first: the P1 findings lead the report.
+        assert_eq!(report.findings[0].severity, Severity::Retired);
+        assert_eq!(report.findings[1].severity, Severity::Retired);
+        // The legacy read is unchanged: 3.1.2 still reads it as "migrate".
+        assert_eq!(
+            finding(&report, "3.1.2").map(|f| f.severity),
+            Some(Severity::Relocated)
+        );
+        assert!(FailOn::Retired.breached_by(&report));
+        assert!(report.render().contains("P1: 2 retired .a2ml"));
+        // A repository with no .a2ml has no P1 finding and does not trip.
+        let clean = report_for(&["widgets_chora.deed"], Some("(repo-deed)"), None);
+        assert_eq!(clean.counts.retired, 0);
+        assert!(!FailOn::Retired.breached_by(&clean));
     }
 
     #[test]

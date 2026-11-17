@@ -39,6 +39,7 @@
 //! The failure mode to avoid is the quiet one: a rule set that silently shrinks
 //! and reports every repository as compliant.
 
+pub mod a2ml;
 pub mod local;
 pub mod overlay;
 pub mod profile;

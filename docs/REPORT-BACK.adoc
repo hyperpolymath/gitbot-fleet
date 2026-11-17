@@ -113,7 +113,7 @@ that emits a path-less finding; rhodibot and seambot already comply.
 | rhodibot
 | `rhodibot canon --path <repo> --format json`
 | File-presence criteria against the vendored RSR canon. `satisfied` rows are
-  not findings; `missing` → error, `deprecated` → warning, `relocated` → info.
+  not findings; `retired` (a tracked `.a2ml`, priority 1) → critical, `missing` → error, `deprecated` → warning, `relocated` → info.
   Advisory by rhodibot's own design: hypatia's `rsr-conformance` is the
   normative checker.
 
