@@ -82,7 +82,8 @@ cat <<J
  "findings":[
   {"id":"1.1.2","name":"justfile","tier":"T1","severity":"missing","canon_keeps_it_at":"Justfile","expected":["Justfile"],"found":[],"deprecated_copies":[],"details":["absent"]},
   {"id":"2.3","name":"readme","tier":"T1","severity":"satisfied","canon_keeps_it_at":"README.adoc","expected":["README.adoc"],"found":["README.adoc"],"deprecated_copies":[],"details":[]},
-  {"id":"4.1","name":"security.txt","tier":"T2","severity":"relocated","canon_keeps_it_at":"www/.well-known/security.txt","expected":["www/.well-known/security.txt"],"found":[".well-known/security.txt"],"deprecated_copies":[],"details":["found elsewhere"]}]}
+  {"id":"4.1","name":"security.txt","tier":"T2","severity":"relocated","canon_keeps_it_at":"www/.well-known/security.txt","expected":["www/.well-known/security.txt"],"found":[".well-known/security.txt"],"deprecated_copies":[],"details":["found elsewhere"]},
+  {"id":"rhodibot.no-a2ml","name":"A2ML is retired (D99, D269c, D312, D313)","tier":"P1","severity":"retired","canon_keeps_it_at":null,"expected":[".machine_readable/descriptiles/STATE.deed, or the chora (status ...) clause"],"found":[".machine_readable/descriptiles/STATE.a2ml"],"deprecated_copies":[],"details":["retired A2ML"]}]}
 J'
 stub panicbot '[ "$1 $2 $3" = "--format json scan" ] || { echo "bad args: $*" >&2; exit 9; }
 command -v panic-attack >/dev/null || { echo "Error: Failed to run panic-attack assail" >&2; exit 1; }
@@ -139,9 +140,11 @@ check "...and says so" yes "$(grep -q 'enrolment manifest unreadable' "$TMP/o1c.
 
 # 2. translation ───────────────────────────────────────────────────────────────
 r="$TMP/o1/rhodibot.json"
-check "rhodibot: satisfied rows are not findings" 2 "$(field "$r" '.findings | length')"
+check "rhodibot: satisfied rows are not findings" 3 "$(field "$r" '.findings | length')"
 check "rhodibot: missing is error" error "$(field "$r" '.findings[] | select(.rule_id == "1.1.2") | .severity')"
 check "rhodibot: relocated is info" info "$(field "$r" '.findings[] | select(.rule_id == "4.1") | .severity')"
+check "rhodibot: a retired .a2ml is critical (P1)" critical "$(field "$r" '.findings[] | select(.rule_id == "rhodibot.no-a2ml") | .severity')"
+check "rhodibot: a retired .a2ml is named where it is" .machine_readable/descriptiles/STATE.a2ml "$(field "$r" '.findings[] | select(.rule_id == "rhodibot.no-a2ml") | .file')"
 check "rhodibot: a missing file is named where the canon keeps it" Justfile "$(field "$r" '.findings[] | select(.rule_id == "1.1.2") | .file')"
 check "rhodibot: a relocated file is named where it was found, so the diff can match it" .well-known/security.txt "$(field "$r" '.findings[] | select(.rule_id == "4.1") | .file')"
 check "rhodibot: title comes from the manifest" "rhodibot (RSR compliance)" "$(field "$r" .title)"

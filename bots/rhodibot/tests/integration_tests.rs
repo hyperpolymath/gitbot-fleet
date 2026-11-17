@@ -305,6 +305,17 @@ mod rsr_tests {
         // A bare repository under the strictest policy: everything missing.
         let report = check_with(&[], None, PolicyPack::Enterprise).await;
         for check in &report.checks {
+            // The one check that names .a2ml FORBIDS it (priority 1); it never
+            // asks for one.
+            if check.name == A2ML_CHECK {
+                let m = check.message.to_lowercase();
+                assert!(
+                    !m.contains("add ") && !m.contains("create"),
+                    "{}",
+                    check.message
+                );
+                continue;
+            }
             assert!(
                 !check.name.contains("a2ml")
                     && !check.name.ends_with(".scm")
@@ -809,15 +820,111 @@ mod rsr_tests {
         assert!(jf_check.is_some(), "should have justfile check");
         assert_eq!(jf_check.unwrap().status, CheckStatus::Pass);
 
-        let bd_check = report
+        // RSR-015 is retired: its files were .a2ml, and the bot directives are
+        // the chora deed's (bot-directives ...) clause, so the directory is
+        // neither demanded nor scored.
+        assert!(
+            report
+                .checks
+                .iter()
+                .all(|c| c.name != ".machine_readable/bot_directives"),
+            "RSR-015 must not be demanded"
+        );
+    }
+
+    /// Serve a repository listing (default branch `main`) and its tree.
+    async fn mount_tree(server: &MockServer, paths: &[&str]) {
+        Mock::given(method("GET"))
+            .and(path("/repos/test-org/test-repo"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(repo_json(Some("mpl-2.0"), None)),
+            )
+            .mount(server)
+            .await;
+        let tree: Vec<serde_json::Value> = paths
+            .iter()
+            .map(|p| serde_json::json!({ "path": p, "type": "blob" }))
+            .collect();
+        Mock::given(method("GET"))
+            .and(path("/repos/test-org/test-repo/git/trees/main"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "truncated": false, "tree": tree })),
+            )
+            .mount(server)
+            .await;
+    }
+
+    async fn report_for_tree(paths: &[&str], policy: PolicyPack) -> ComplianceReport {
+        let server = MockServer::start().await;
+        let config = mock_config(&server.uri());
+        mount_file_mocks(&server, "test-org", "test-repo", &[]).await;
+        mount_tree(&server, paths).await;
+        let repo_config = RepoConfig {
+            policy,
+            ..Default::default()
+        };
+        check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
+            .await
+            .expect("compliance check should succeed")
+    }
+
+    #[tokio::test]
+    async fn any_a2ml_is_a_required_failure_under_every_policy() {
+        for policy in [
+            PolicyPack::Minimal,
+            PolicyPack::Standard,
+            PolicyPack::Strict,
+            PolicyPack::Enterprise,
+            PolicyPack::Custom,
+        ] {
+            let report = report_for_tree(
+                &[
+                    "README.adoc",
+                    ".machine_readable/descriptiles/STATE.a2ml",
+                    "deep/x.A2ML",
+                ],
+                policy,
+            )
+            .await;
+            let check = report
+                .checks
+                .iter()
+                .find(|c| c.name == A2ML_CHECK)
+                .unwrap_or_else(|| panic!("{policy:?}: an a2ml check"));
+            assert_eq!(check.status, CheckStatus::Fail, "{policy:?}");
+            assert_eq!(check.severity, Severity::Required, "{policy:?}");
+            assert!(
+                check.message.starts_with("P1: 2 retired"),
+                "{}",
+                check.message
+            );
+            assert!(check.message.contains("deep/x.A2ML"), "{}", check.message);
+            assert!(!report.required_passed, "{policy:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_tree_without_a2ml_has_no_a2ml_check() {
+        let report = report_for_tree(&["README.adoc", "x_chora.deed"], PolicyPack::Strict).await;
+        assert!(report.checks.iter().all(|c| c.name != A2ML_CHECK));
+    }
+
+    #[tokio::test]
+    async fn an_unlistable_tree_is_skipped_with_its_reason_never_passed() {
+        // No tree mock: the listing fails.
+        let report = check_with(&[], None, PolicyPack::Strict).await;
+        let check = report
             .checks
             .iter()
-            .find(|c| c.name == ".machine_readable/bot_directives");
+            .find(|c| c.name == A2ML_CHECK)
+            .expect("the check is reported");
+        assert_eq!(check.status, CheckStatus::Skip);
         assert!(
-            bd_check.is_some(),
-            "should have .machine_readable/bot_directives check"
+            check.message.starts_with("could not list the tree"),
+            "{}",
+            check.message
         );
-        assert_eq!(bd_check.unwrap().status, CheckStatus::Pass);
     }
 
     #[tokio::test]

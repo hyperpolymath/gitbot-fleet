@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::canon::a2ml;
 use crate::config::Config;
 use crate::deed::{Deed, DocFormat};
 use crate::github::GitHubClient;
@@ -172,6 +173,9 @@ pub async fn check_candidates_exist(
     (false, candidates[0].clone())
 }
 
+/// The name of the priority-1 check for retired `.a2ml` files.
+pub const A2ML_CHECK: &str = "no-*.a2ml";
+
 /// Required files for RSR compliance with policy-based severity
 pub const REQUIRED_FILES: &[CheckDef] = &[
     // NOTE ON THE 2026-09-18 REVISION
@@ -331,19 +335,9 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
             Severity::Required,
         ),
     },
-    CheckDef {
-        name: ".machine_readable/bot_directives",
-        alternates: &[],
-        description: "Bot directives directory in canonical machine-readable location",
-        category: CheckCategory::Structure,
-        points: 2,
-        severity: (
-            Severity::Optional,
-            Severity::Optional,
-            Severity::Recommended,
-            Severity::Required,
-        ),
-    },
+    // RSR-015 (.machine_readable/bot_directives/) is retired: its files were
+    // .a2ml, and the bot directives are the chora deed's (bot-directives ...)
+    // clause now. Requiring the directory demanded a retired form.
     CheckDef {
         // Entered the template 2026-08-26; 59/269 as of 2026-09-18. Either
         // canonical spelling is accepted (see check-root-shape.sh).
@@ -405,7 +399,7 @@ impl BannedPattern {
 pub const BANNED_PATTERNS: &[BannedPattern] = &[
     BannedPattern {
         name: ".bot_directives",
-        description: "Legacy bot directives directory at repo root (use .machine_readable/bot_directives)",
+        description: "Legacy bot directives directory at repo root (use the chora deed's (bot-directives ...) clause)",
         category: CheckCategory::Structure,
         severity: (
             Severity::Optional,
@@ -787,6 +781,49 @@ pub async fn check_compliance_with_policy(
                 message: format!("{} detected - policy violation", banned.description),
             });
         }
+    }
+
+    // Priority 1: any `.a2ml` file anywhere in the tree. A2ML is retired (D99,
+    // D269c, D312, D313), so this is Required in every policy pack and a repo
+    // config can neither skip nor downgrade it. A tree that cannot be listed is
+    // reported as skipped with the reason, never as a pass.
+    match client.tree_paths(owner, repo).await {
+        Ok(paths) => {
+            let found: Vec<&String> = paths.iter().filter(|p| a2ml::is_a2ml(p)).collect();
+            if !found.is_empty() {
+                required_passed = false;
+                let shown: Vec<&str> = found.iter().take(10).map(|p| p.as_str()).collect();
+                let more = found.len().saturating_sub(shown.len());
+                checks.push(Check {
+                    name: A2ML_CHECK.to_string(),
+                    category: CheckCategory::Structure,
+                    severity: Severity::Required,
+                    status: CheckStatus::Fail,
+                    points: 0,
+                    max_points: 0,
+                    message: format!(
+                        "P1: {} retired .a2ml file(s) present: {}{} - A2ML is retired; convert \
+                         with kyX (D313), never by hand",
+                        found.len(),
+                        shown.join(", "),
+                        if more > 0 {
+                            format!(" (+{more} more)")
+                        } else {
+                            String::new()
+                        }
+                    ),
+                });
+            }
+        }
+        Err(error) => checks.push(Check {
+            name: A2ML_CHECK.to_string(),
+            category: CheckCategory::Structure,
+            severity: Severity::Required,
+            status: CheckStatus::Skip,
+            points: 0,
+            max_points: 0,
+            message: format!("could not list the tree to look for .a2ml files: {error}"),
+        }),
     }
 
     // Check for workflow files

@@ -104,14 +104,12 @@ Each RSR check has a severity (Required, Recommended, Optional) that varies by p
 | CONTRIBUTING.md | Optional | Recommended | Required | Required
 | CODE_OF_CONDUCT.md | Optional | Optional | Recommended | Required
 | .claude/CLAUDE.md | Optional | Optional | Recommended | Required
-| STATE.scm | Optional | Recommended | Required | Required
-| META.scm | Optional | Recommended | Required | Required
-| ECOSYSTEM.scm | Optional | Optional | Recommended | Required
+| `<repo>_chora.deed` | Optional | Recommended | Required | Required
 | .editorconfig | Optional | Recommended | Required | Required
 | .gitattributes | Optional | Recommended | Required | Required
 | .gitignore | Optional | Recommended | Required | Required
 | Justfile | Optional | Optional | Recommended | Required
-| .bot_directives | Optional | Optional | Recommended | Required
+| any `*.a2ml` (`no-*.a2ml`, P1) | Required | Required | Required | Required
 |===
 
 Repositories can override severity or skip checks entirely via `.rsr.toml`:
@@ -205,8 +203,10 @@ Options:
 | .gitattributes | Structure | 2
 | .gitignore | Structure | 2
 | Justfile | Structure | 2
-| .bot_directives | Structure | 2
 |===
+
+RSR-015 (`.machine_readable/bot_directives/`) is retired: its files were `.a2ml`, and
+the bot directives are the chora deed's `(bot-directives ...)` clause.
 
 === Banned Patterns (6)
 
@@ -235,9 +235,20 @@ A2ML is retired. The repo facts that used to be `.a2ml` files (manifest, state,
 meta, ecosystem, agentic, neurosym, playbook, anchor, rsr-profile) are clauses of
 `<repo>_chora.deed`, or of a descriptile deed (`STATE.deed`, `META.deed`,
 `ECOSYSTEM.deed`, `AGENTIC.deed`). Rhodibot requires the chora deed and never
-demands or suggests an `.a2ml` file. A legacy `.a2ml` that is still present is
-read only as a fallback after the deed, and is reported as "migrate", never as
-"missing". Whether a deed *conforms* is `deed_lint.js`'s job in
+demands or suggests an `.a2ml` file.
+
+*Any `.a2ml` file is a priority-1 finding.* `canon` reports each tracked `.a2ml`
+as `rhodibot.no-a2ml` with severity `retired` (above `missing`; `--fail-on
+retired` gates on it), naming the deed form its family maps to under the
+standards mapping specs and whether kyX can convert it today (only
+`ECOSYSTEM.a2ml`, D313). The fleet report-back carries it as `critical`. The
+GitHub App check reports `no-*.a2ml` (RSR-A2ML-001) as a Required failure in every
+policy pack; `.rsr.toml` cannot skip or downgrade it. Rhodibot only reports:
+conversion is `scripts/fix-a2ml-via-kyx.sh`, never by hand.
+
+Separately, a legacy `.a2ml` that is still present is read only as a fallback
+after the deed, and the criterion it would satisfy is reported as "migrate",
+never as "missing". Whether a deed *conforms* is `deed_lint.js`'s job in
 `metadatastician/standards`; rhodibot only reads its structure.
 
 The vendored criteria canon is itself still an `.a2ml` file; its deed form is a
