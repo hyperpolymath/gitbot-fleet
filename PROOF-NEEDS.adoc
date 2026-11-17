@@ -1,40 +1,346 @@
-== Proof Requirements
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2025-2026 Jonathan D.A. Jewell
+= Proof status: gitbot-fleet
+:toc:
+:toc-placement: preamble
 
-=== Current state
+This is the proof-status file of `hyperpolymath/gitbot-fleet` in the sense of
+`3-practice/PROOF-POLICY.adoc` §5 (hyperpolymath/standards). It replaces the
+pre-policy template of 2026-03-29.
 
-* ABI directory exists (template-level)
-* No dangerous patterns found
-* 100K lines; bot fleet for repository quality enforcement
-* Claims: "`formal mathematical/statistical verification`"
+* *Date*: 2026-11-17.
+* *Measured against*: gitbot-fleet `origin/main` at
+  `7907099b4e6912059ad71a4897005463d214f0bf`.
+* *Tokens*: the closed vocabulary of PROOF-POLICY §5: `proven`,
+  `proven-with-postulates`, `tested-only`, `argued`, `open`.
+* *Prover for each obligation*: PROOF-POLICY §1. Rust code is verified with
+  Creusot (Pearlite contracts) and Verus by default, on the code itself (§1.2);
+  APIs, ABIs and engineering properties with Idris2; Ada with SPARK; theory
+  with Agda, rechecked in Rocq and Lean.
 
-=== What needs proving
+== Census
 
-* *Bot action safety*: Prove that automated bot actions (PRs, issues,
-fixes) are reversible and do not destroy repository state
-* *Confidence threshold correctness*: Prove that the
-robot-repo-automaton confidence thresholds correctly gate automated
-merges (no auto-merge below threshold)
-* *Rule conflict resolution*: Prove that when multiple bots (rhodibot,
-echidnabot, sustainabot, etc.) produce conflicting recommendations, the
+15 rows: 0 `proven`, 0 `proven-with-postulates`, 4 `tested-only`, 4 `argued`,
+7 `open`.
+
+No row is `proven` here. The four `argued` rows are echidnabot's theory
+files, whose kernel receipts were taken in the standalone echidnabot
+repository, not in this one (see the trust-boundary column). No checker
+(Agda, Idris2, Lean, Rocq) was available when this file was written, so no
+proof file in this repository was checked by the author of this file.
+
+== Ledger: proof files tracked in this repository
+
+All eleven tracked proof files sit under `bots/echidnabot/`, a copy of
+`hyperpolymath/echidnabot`. Seven of them are obligations (rows below); four
+are prover fixtures (next section).
+
+The authoritative status of every `bots/echidnabot/` row lives in
+`docs/PROOF-STATUS.adoc` of the standalone echidnabot repository, read at
+echidnabot `origin/main` `7a5b8c48ffef8236b06b7174d855d88124b7f380`. The copy
+in this repository does not carry that file. When the two disagree, echidnabot's
+file governs and this one is wrong.
+
+[cols="2,1,2,2,3",options="header"]
+|===
+|Obligation |Status |Checker (version, flags) |Where |Trust boundary
+
+|T-RECEIPT: a general evidence token does not imply its claim
+(`no-unconditional-reflection`, `receive-with-soundness`)
+|`argued`
+|None run here. echidnabot's receipt R-AGDA: Agda 2.8.0.2, `--safe --without-K
+--cubical-compatible --exact-split --no-sized-types --no-guardedness
+--no-libraries --no-default-libraries --ignore-interfaces`, session receipt of
+2026-11-09 at echidnabot `1443adfabb98a9e0daea562bc8dbe764442c14cc`
+|`bots/echidnabot/proofs/agda/ReceiptBoundary.agda`
+|The file here is byte-identical to the file that receipt hashed (sha256
+`276ee4b5...0c9014`, compared on 2026-11-17). Echidnabot records it as
+`proven`, with no postulate in the import cone. This repository re-ran
+nothing, so it records `argued`. Grep for escape hatches finds none in the
+file. Authoritative status: echidnabot `docs/PROOF-STATUS.adoc`, row T-RECEIPT.
+
+|T-RECEIPT-LEAN: Lean restatement of T-RECEIPT
+|`argued`
+|None run here. echidnabot receipt R-LEAN: Lean 4.35.0, `lean -o` plus
+`#print axioms` on the three theorems
+|`bots/echidnabot/proofs/theory/lean/ReceiptBoundary.lean`
+|Byte-identical to the receipt input (sha256 `00ea31f0...28858f`). Echidnabot
+records no axioms. The statement match with the Agda source is `BRIDGE-PENDING`
+there: agent-drafted, awaiting owner review, so the leg does not count towards a
+PWG. Dedukti transport was tried upstream and failed; this is a re-proof.
+Authoritative status: echidnabot `docs/PROOF-STATUS.adoc`, row T-RECEIPT-LEAN.
+
+|T-RECEIPT-ROCQ: Rocq restatement of T-RECEIPT
+|`argued`
+|None run here. echidnabot receipt R-ROCQ: Coq 8.18.0 (not a Rocq 9 release),
+`coqc -q -Q . Recheck` plus `Print Assumptions`
+|`bots/echidnabot/proofs/theory/rocq/ReceiptBoundary.v`
+|Byte-identical to the receipt input (sha256 `ca65d1dd...f3e66d`). Same
+`BRIDGE-PENDING` state as the Lean leg. Authoritative status: echidnabot
+`docs/PROOF-STATUS.adoc`, row T-RECEIPT-ROCQ.
+
+|Fixture identity: `(A : Set) -> A -> A`, a semantic reconstruction of the
+constructive identity schema used by the Rocq and Lean prover fixtures
+|`argued`
+|None run here. echidnabot receipt R-AGDA (same invocation as T-RECEIPT)
+|`bots/echidnabot/proofs/agda/FixtureIdentity.agda`
+|Byte-identical to the receipt input (sha256 `9c7b80b1...6a91fb`). Not witness
+transport: Agda `Set` and Rocq/Lean `Prop` differ, and echidnabot keeps the
+correspondence `open`. Authoritative status: echidnabot `docs/PROOF-STATUS.adoc`,
+section "Pre-existing proof material".
+
+|ABI `Types.idr`: echidnabot ABI types
+|`open`
+|None. Idris2 is the §1 prover for an ABI; none was run
+|`bots/echidnabot/src/abi/Types.idr`
+|Three `{{...}}` template placeholders remain, so the module does not describe
+an instantiated echidnabot ABI. Byte-identical to echidnabot `origin/main`.
+Echidnabot's PROOF-STATUS records the ABI scaffold as `open` ("ABI scaffold
+debt (not verified)"). Do not read this file as verification.
+
+|ABI `Layout.idr`: layout contracts
+|`open`
+|None. Idris2 is the §1 prover; none was run
+|`bots/echidnabot/src/abi/Layout.idr`
+|Three unresolved holes (`?fieldsAlignedProof` at line 140,
+`?exampleFieldsAligned` at line 161, `?offsetInBoundsProof` at line 178) and
+two template placeholders. Echidnabot's PROOF-STATUS notes that
+`offsetInBounds` quantifies over arbitrary fields and cannot be proved as
+written. Holes are not to be replaced by postulates.
+
+|ABI `Foreign.idr`: foreign-function declarations
+|`open`
+|None. Idris2 is the §1 prover; none was run
+|`bots/echidnabot/src/abi/Foreign.idr`
+|Fourteen `{{...}}` template placeholders; the symbols are placeholders, not
+exported echidnabot symbols. The only `believe_me` match is in a comment that
+bans it. Echidnabot's PROOF-STATUS records the scaffold as `open`.
+|===
+
+=== Escape-hatch search
+
+Searched on 2026-11-17 with `grep` over the eleven proof files for
+`postulate`, `sorry`, `Admitted`, `admit`, `believe_me`, `assert_total`,
+`assert_smaller`, Agda `{! !}` holes, Idris `?name` holes, `trustMe` and
+`axiom`.
+
+* The four obligation files in `proofs/agda/` and `proofs/theory/` contain no
+  escape hatch. The only `axiom` matches are `#print axioms` and "axioms or
+  admitted obligations" in comments of the Lean and Rocq files.
+* `src/abi/Layout.idr` contains the three holes listed above. `Types.idr` and
+  `Foreign.idr` contain only template placeholders.
+* `proofs/coq/admitted_stub.v` (`Admitted.`) and `proofs/lean/sorry_stub.lean`
+  (`sorry`) contain escape hatches on purpose (next section).
+
+== Not obligations
+
+These four files are prover fixtures for echidnabot's CI, test material for a
+multi-prover system (PROOF-POLICY §3, last bullet). They are not rows and are
+not counted in the census. Their escape hatches must stay intact.
+
+* `bots/echidnabot/proofs/coq/admitted_stub.v`: deliberate `Admitted.`, a
+  negative fixture for echidnabot's axiom scanner.
+* `bots/echidnabot/proofs/lean/sorry_stub.lean`: deliberate `sorry`, a negative
+  fixture checked by echidnabot's `protocol_contract` test.
+* `bots/echidnabot/proofs/coq/trivial_ok.v` and
+  `bots/echidnabot/proofs/lean/trivial_ok.lean`: trivial identity proofs used
+  as positive fixtures.
+
+The JSON files in `bots/echidnabot/proofs/test_fixtures/` are webhook inputs,
+not proofs. `idris-dependents/tests/fixtures/*.ipkg` are package fixtures for
+an Idris-dependents test, not proofs of this repository.
+
+== Ledger: report-back producer (tested-only)
+
+The report-back producer is the part of this repository that the Hypatia
+verdict grid reads (`docs/REPORT-BACK.adoc`): `scripts/fleet-report-back.sh`,
+`scripts/fleet-report-back-build.sh` and the rollout fixer
+`scripts/fix-fleet-enrolment.sh`. It is shell. No Creusot, SPARK or Idris2
+artefact exists for it, so the evidence is test evidence only, and each row is
+`tested-only` with the bounds the test file actually covers.
+
+Observed on 2026-11-17 at the commit above (pass counts are the lines each
+script itself reports, with 0 failed in every run):
+
+* `STANDARDS_DIR=<local standards checkout> bash tests/fleet-report-back-test.sh`:
+  229 passed, 0 failed for its own checks, then it runs the build-helper suite
+  (below) and the run totals 298 `PASS` lines and 0 `FAIL` lines. The renderer
+  round-trip checks ran (no `SKIP` line); the standards checkout was not
+  pinned to a commit.
+* `bash tests/fix-fleet-enrolment-test.sh`: 139 passed, 0 failed.
+* `bash tests/fleet-report-back-build-test.sh`: 69 passed, 0 failed. These 69
+  are part of the 298 above, not additional to them.
+
+[cols="3,1,2,2,3",options="header"]
+|===
+|Obligation |Status |Checker (version, flags) |Where |Bounds and trust boundary
+
+|R-ENVELOPE: `fleet-report-back.sh` writes one envelope per enrolled member.
+A missing binary, a crash without JSON, a timeout, or an output of the wrong
+shape is an `error` envelope with a reason, never a clean `ran`
+(`docs/REPORT-BACK.adoc` §4, last paragraph)
+|`tested-only`
+|`bash tests/fleet-report-back-test.sh`, 229 checks (298 with the build suite);
+bash with `jq`
+|`scripts/fleet-report-back.sh`
+|Bounds: the adapters are stubs that print the JSON shape of the real adapters
+(taken from a live run on 2026-10-27), not the seven Rust crates. Cases: only
+`enrolled: true` members run; an unreadable manifest runs nothing; missing
+binary, crash without JSON and timeout are `error` with a reason; exit 1 with
+valid JSON stays `ran`, any other non-zero status is `error`; empty scans,
+malformed output and path normalisation; `echidnabot` and `sustainabot` are
+`not_run` with a reason; an unknown member is `error`; the driver never writes
+`not_applicable`; the envelope is key-sorted compact JSON with one final LF;
+the scanned tree is unchanged. Not covered: real adapter behaviour, other
+operating systems, other `jq` or bash versions. The grid-side properties (how
+an envelope becomes a row colour) are proved in hyperpolymath/standards
+`3-practice/fork-governance/proofs/ReportBack.idr`, which is being added on the
+standards branch `claude/gitbot-fleet-feedback-0vdo64` and is *pending*, not
+merged. They are not re-proved here. The renderer round-trip in the test
+exercises the real standards renderer on these envelopes and is also
+`tested-only`.
+
+|R-SLUG: member names are restricted to the slug `^[a-z][a-z0-9-]{0,63}$`, so a
+hostile manifest key cannot steer the build or a path
+|`tested-only`
+|`bash tests/fleet-report-back-test.sh`; `bash tests/fleet-report-back-build-test.sh`
+|`scripts/fleet-report-back.sh` (member filter, line 279);
+`scripts/fleet-report-back-build.sh` (crate-name filter)
+|Bounds: a 64-character slug is accepted and a 65-character one rejected, in
+both planning and execution; a leading digit, uppercase, underscore and a dot
+are rejected and warned about; a manifest key containing a tab and `../`
+sequences, and a key with a space, are dropped with a warning and write
+nothing; an explicit `--member ../escape` writes nothing; a path in the crate
+list of the build helper is skipped. Sampled names, not an exhaustive or
+property-based check of the pattern. Grid-side trust boundary as in
+R-ENVELOPE.
+
+|R-WIRED: `fix-fleet-enrolment.sh` exits 0 only when the lane that reads the
+artifact and the job that produces it are both wired. Exit 3 means written or
+checked but not wired end to end; exit 2 is a refusal or invalid input and
+changes nothing
+|`tested-only`
+|`bash tests/fix-fleet-enrolment-test.sh`, 139 checks
+|`scripts/fix-fleet-enrolment.sh`
+|Bounds: offline fixture repositories and fake standards checkouts, in the
+numbered sections 0 to 18: canonical and non-canonical workflows, owner
+detection, existing `needs` forms (list, scalar, block list, an item that
+merely starts with `fleet`, a job merely named `fleet`), a pin whose Hypatia
+reusable does or does not read the artifact, a pin that lacks the producer
+(refused), a remote pin with no standards checkout or without the pinned
+commit (reported unverified, not `ok`), refusals that change nothing, an
+existing manifest left alone, a malformed panic-attack pin rejected before any
+file is created, and a second run changing nothing. Case 13 reports a skip on
+a shallow clone; no skip occurred in this run. No real GitHub repository,
+workflow run or `gh actions-lock` was exercised. Whether a deployed repository
+is actually wired is a live fact this test cannot establish.
+
+|R-BUILD: `fleet-report-back-build.sh`: a crate that fails to build is a
+warning and later an `error` row, never a dead run
+|`tested-only`
+|`bash tests/fleet-report-back-build-test.sh`, 69 checks (also run by the
+report-back test)
+|`scripts/fleet-report-back-build.sh`
+|Bounds: Cargo and `timeout` are stubbed, so no Rust crate is built and no
+network is used. Cases: a failed crate's partial binary is not copied and its
+warning names the report-back consequence; an all-failed build publishes
+nothing and counts both failures; aliases are deduplicated and members without
+crates skipped; a path in the crate list is skipped; for `ponsbot`, the
+install is copied, a cache hit does not reinstall, a failed install is a
+warning, a non-commit value or a commit differing from the pin never reaches
+Cargo, an unreadable pin installs nothing, and a spent build budget skips the
+install. Real compile failures, timeouts of real builds and cache corruption
+are not covered. Grid-side trust boundary as in R-ENVELOPE.
+|===
+
+== Ledger: open obligations
+
+These four obligations come from the pre-policy file. Each concerns the
+behaviour of first-party code, so under PROOF-POLICY §1 the code mapping takes
+precedence: Rust code is verified with Creusot (Pearlite contracts) and Verus
+on the code itself (§1.2), and the cross-bot contract that stands apart from any one
+implementation is an Idris2 interface. The earlier suggestion of Lean 4 for
+"algebraic properties of confidence scoring" is not policy. If the confidence
+scoring is stated as a theory theorem, true of any implementation, the source
+is Agda, rechecked in Rocq and Lean; a statement about this repository's
+functions is engineering and stays with Creusot.
+
+None has a checker run against it, and none has a receipt. Each stays `open`
+until a verifier discharges it.
+
+[cols="3,1,2,2,3",options="header"]
+|===
+|Obligation |Status |Checker (version, flags) |Where |Trust boundary
+
+|O-ACTION: bot action safety. Automated actions (pull requests, issues, fixes)
+are reversible and do not destroy repository state
+|`open`
+|Rust: Creusot with Pearlite contracts, and Verus, none run. The interface
+contract between a bot and the fleet: Idris2, not started
+|`robot-repo-automaton/` (Rust), `scripts/dispatch-runner.sh` and `scripts/fix-*.sh`
+(shell, no verifier maps to shell)
+|Reversibility of a GitHub operation depends on GitHub's behaviour and the
+repository's branch protection, so it would be an `ASSUMED` boundary
+specification, not something this repository proves. The shell fix scripts are
+guarded only by tests and the Repo Integrity Guard
+(`.github/workflows/repo-integrity-guard.yml`), which are not proofs.
+
+|O-THRESHOLD: confidence-threshold gating. Nothing is auto-merged or
+auto-executed below its threshold (Safety Triangle: eliminate at 0.95 and
+above, substitute at 0.85 and above, control below)
+|`open`
+|Rust: Creusot with Pearlite contracts, and Verus, none run. If the scoring
+order is stated as theory: Agda, rechecked in Rocq and Lean, none started
+|`robot-repo-automaton/` (Rust); `scripts/dispatch-runner.sh` (shell, thresholds
+read from findings)
+|The confidence values are produced by scanners outside this repository
+(hypatia), so the property can only be stated relative to the input value
+(`ASSUMED` boundary). Where the gate is in shell, no verifier maps to it, and
+the obligation would need the gate moved into Rust first.
+
+|O-CONFLICT: when several bots produce conflicting recommendations, the
 resolution is deterministic and documented
-* *Rate limiting*: Prove bots respect GitHub API rate limits and do not
-cause cascading failures across the fleet
+|`open`
+|Rust arbiter: Creusot with Pearlite contracts, and Verus, none run. The
+ordering and tie-break contract: Idris2, not started
+|`shared-context/` (Rust crate for inter-bot communication) and
+`fleet-coordinator.sh`
+|Determinism over the coordinator's inputs only; the order in which concurrent
+bots finish is outside the property and would be an `ASSUMED` boundary.
 
-=== Recommended prover
+|O-RATE: bots respect GitHub API rate limits and do not cause cascading
+failures across the fleet
+|`open`
+|Rust: Creusot with Pearlite contracts, and Verus, none run
+|Rate-limit handling in the Rust crates under `bots/` and `robot-repo-automaton/`
+|Only a local bound on the bot's own request counts is provable. GitHub's
+limits, clocks and failure behaviour are `ASSUMED` boundaries, and "no
+cascading failure" is a fleet-level property that needs a stated model first.
+|===
 
-* *Idris2* — For bot action safety and confidence threshold properties
-* *Lean4* — For algebraic properties of confidence scoring if modeled as
-an ordered semiring
+Using Creusot and Verus together does not make two independent witnesses
+(policy §1.2).
 
-=== Priority
+== Not verified when this file was written
 
-* *MEDIUM* — The fleet manages automated repository changes. Incorrect
-bot behavior at scale could damage many repos. The "`formal
-verification`" claim should be substantiated.
+* No Agda, Idris2, Lean or Rocq checker was available, so the `argued` rows
+  rest on echidnabot's receipts plus a byte-identity comparison, and the
+  receipts themselves were not reproduced.
+* The state of `ReportBack.idr` on the standards branch was not checked
+  beyond its being pending; no claim here depends on it.
+* The census counts the 15 rows above and nothing else: the report-back and
+  open rows cover the properties that this file names, not the whole of the
+  repository's shell and Rust code, which has no proof coverage.
+
+== History
 
 === Template ABI Cleanup (2026-03-29)
 
-Template ABI removed – was creating false impression of formal
-verification. The removed files (Types.idr, Layout.idr, Foreign.idr)
+Template ABI removed: it was creating a false impression of formal
+verification. The removed files (`Types.idr`, `Layout.idr`, `Foreign.idr`)
 contained only RSR template scaffolding with unresolved
-\{\{PROJECT}}/\{\{AUTHOR}} placeholders and no domain-specific proofs.
+`+{{PROJECT}}+`/`+{{AUTHOR}}+` placeholders and no domain-specific proofs.
+
+The same three file names are tracked again at the date above, under
+`bots/echidnabot/src/abi/`, as echidnabot's own scaffold. They still carry
+template placeholders and holes, and are recorded `open` above.
