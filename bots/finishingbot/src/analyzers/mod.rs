@@ -215,6 +215,11 @@ pub struct AuditResult {
     pub tooling: AnalysisResult,
     /// V1 release readiness
     pub v1_readiness: AnalysisResult,
+    /// Pull-request readiness, when a pull request was named (`audit --pr`).
+    /// ADVISORY: deliberately left out of the totals and of
+    /// `should_block_release`, so it never changes the exit status.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr_readiness: Option<crate::pr_readiness::PrReadiness>,
 }
 
 impl AuditResult {
