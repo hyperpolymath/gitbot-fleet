@@ -29,5 +29,5 @@ This is a reader, not the validator: `bun 1-formats/deed/tools/deed_lint.js`
 in standards stays the conformance gate.
 
 Users: finishingbot (DEED-001 to DEED-004, SCM-006), glambot (MACH-008,
-MACH-009). panicbot and rhodibot still carry their own readers; moving them
-onto this crate is a follow-up.
+MACH-009) and panicbot (its `deed` module re-exports this crate). rhodibot still
+carries its own reader; moving it onto this crate waits on #687.

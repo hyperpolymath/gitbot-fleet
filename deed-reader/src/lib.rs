@@ -31,7 +31,8 @@
 //!
 //! Extracted from panicbot's `src/deed.rs` (2026-11-13) so that finishingbot
 //! and glambot read the deed the same way; panicbot and rhodibot keep their
-//! own copies until they are moved onto this crate.
+//! own copies until they are moved onto this crate. panicbot's `deed` module
+//! now re-exports this crate; rhodibot's move waits on #687.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
