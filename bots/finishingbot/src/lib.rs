@@ -17,6 +17,7 @@ pub mod analyzers;
 pub mod baseline;
 pub mod config;
 pub mod error;
+pub mod pr_readiness;
 
 pub use analyzers::{
     claims::ClaimsAnalyzer, license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer,

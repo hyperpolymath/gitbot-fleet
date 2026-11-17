@@ -32,6 +32,9 @@
 #  10. the build-helper unit suite (stubbed Cargo, no Rust builds or network).
 #  11. ponsbot: translation, status mapping (never a pass), SPECULATIVE carried at
 #      info, gating read from the enrolment; panicbot envelope-parity failure modes.
+#  12. finishingbot pull-request readiness: --pr/--pr-repo reach finishing-bot with
+#      the evaluating run id, the token reaches finishing-bot alone, the verdict
+#      is the envelope reason, PRR findings need no path, bad --pr is refused.
 #
 # Run: bash tests/fleet-report-back-test.sh
 
@@ -669,6 +672,50 @@ else
   echo "SKIP: STANDARDS_DIR not set; ponsbot gating/evidence renderer round-trip not run"
 fi
 check "ponsbot and panicbot runs never change the scanned tree" "$repo_before" "$(repo_state)"
+
+# 12. finishingbot pull-request readiness ─────────────────────────────────────
+# The stub asserts the --pr invocation, records the token it was handed, and
+# prints the pr_readiness analyzer the way finishing-bot does (one PRR-007 with
+# no path, and the one-line summary). A second stub records what token an
+# adapter that must NOT receive it sees.
+stub finishing-bot '[ "$1 $3 $4 $5" = "--path --format json audit" ] || { echo "bad args: $*" >&2; exit 9; }
+printf "%s|%s\n" "${GH_TOKEN:-none}" "${FLEET_PR_TOKEN:-none}" > "$PRT_DIR/finishing.token"
+printf "%s\n" "${*:6}" > "$PRT_DIR/finishing.args"
+if [ "${6:-}" = "--pr" ]; then
+cat <<J
+{"license":{"findings":[]},"pr_readiness":{"findings":[{"id":"PRR-007","name":"Required status context not provided","severity":"error","message":"1 required status context(s) on main have no check run or commit status on head 4af3735: \`CI/gate\`.","file":null,"line":null,"column":null,"suggestion":"s","fixable":false}],"files_checked":0,"duration_ms":1,"verdict":"not_ready","summary":"PR #435 not ready: required context(s) not provided: CI/gate; draft: no; auto-merge: on (squash)"}}
+J
+else
+echo "{\"license\":{\"findings\":[]}}"
+fi'
+stub cipherbot 'printf "%s|%s\n" "${GH_TOKEN:-none}" "${FLEET_PR_TOKEN:-none}" > "$PRT_DIR/cipher.token"; echo "[]"'
+# Start from no ambient token (a developer shell may carry one), so the checks
+# below see only what the driver hands out.
+unset GH_TOKEN GITHUB_TOKEN
+export PRT_DIR="$TMP/prt"; mkdir -p "$PRT_DIR"
+FLEET_PR_TOKEN=sekrit GITHUB_RUN_ID=4242 run "$TMP/prr" --enrolment "" --member finishingbot --member cipherbot --pr 435 --pr-repo hyperpolymath/rsr-template-repo
+check "readiness: finishing-bot gets --pr, --pr-repo and the evaluating run" "--pr 435 --pr-repo hyperpolymath/rsr-template-repo --exclude-run-id 4242" "$(cat "$PRT_DIR/finishing.args")"
+check "readiness: finishing-bot alone receives the token, as GH_TOKEN" "sekrit|none" "$(cat "$PRT_DIR/finishing.token")"
+check "readiness: no other adapter sees the token" "none|none" "$(cat "$PRT_DIR/cipher.token")"
+check "readiness: the token never reaches the log" 0 "$(grep -c sekrit "$TMP/prr.log" || true)"
+check "readiness: PRR findings are carried in the envelope" "PRR-007|error|" \
+  "$(field "$TMP/prr/finishingbot.json" '.findings[] | "\(.rule_id)|\(.severity)|\(.file)"')"
+check "readiness: the verdict line is the envelope reason, status ran" \
+  "ran|PR #435 not ready: required context(s) not provided: CI/gate; draft: no; auto-merge: on (squash)" \
+  "$(field "$TMP/prr/finishingbot.json" '"\(.status)|\(.reason)"')"
+check "readiness: a path-less PRR finding is not warned about (it is change-scoped by design)" 0 \
+  "$(grep -c 'WARNING: finishingbot' "$TMP/prr.log" || true)"
+
+run "$TMP/prr-none" --enrolment "" --member finishingbot
+check "readiness: without --pr finishing-bot gets no --pr and no token" "|none|none" \
+  "$(cat "$PRT_DIR/finishing.args")|$(cat "$PRT_DIR/finishing.token")"
+check "readiness: without --pr the reason stays empty" "ran|null" "$(field "$TMP/prr-none/finishingbot.json" '"\(.status)|\(.reason)"')"
+
+for bad in "--pr 0 --pr-repo o/r" "--pr 12 --pr-repo o/r/x" "--pr 12" "--pr-repo o/r" "--pr 1;id --pr-repo o/r"; do
+  rc=0; read -r -a badargs <<< "$bad"
+  bash "$DRIVER" --repo "$REPO" --out "$TMP/prr-bad" --bin-dir "$BIN" --enrolment "" --member finishingbot "${badargs[@]}" > /dev/null 2>&1 || rc=$?
+  check "readiness: refuses '$bad' as a usage error" 2 "$rc"
+done
 
 # 8. the real renderer ─────────────────────────────────────────────────────────
 GRID="${STANDARDS_DIR:-}/scripts/verdict-grid.sh"

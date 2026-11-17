@@ -8,6 +8,7 @@ mod config;
 mod error;
 #[cfg(feature = "fleet")]
 mod fleet;
+mod pr_readiness;
 
 use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
@@ -59,6 +60,40 @@ enum Command {
         /// Fail on any warnings (strict mode)
         #[arg(long)]
         strict: bool,
+
+        /// Also report whether this pull request is ready to review and
+        /// merge (advisory; never changes the exit status). Needs --pr-repo.
+        #[arg(long, value_name = "NUMBER", requires = "pr_repo")]
+        pr: Option<u64>,
+
+        /// Repository of --pr, as owner/name
+        #[arg(long, value_name = "OWNER/NAME", requires = "pr")]
+        pr_repo: Option<String>,
+
+        /// GitHub Actions run doing this audit: its own checks are not
+        /// counted as pending
+        #[arg(long, value_name = "RUN_ID")]
+        exclude_run_id: Option<u64>,
+    },
+
+    /// Report whether a pull request is ready to review and merge (advisory)
+    PrReadiness {
+        /// Repository, as owner/name
+        #[arg(long, value_name = "OWNER/NAME", required_unless_present = "snapshot")]
+        repo: Option<String>,
+
+        /// Pull request number
+        #[arg(long, value_name = "NUMBER", required_unless_present = "snapshot")]
+        pr: Option<u64>,
+
+        /// Evaluate a recorded snapshot (JSON) instead of reading GitHub
+        #[arg(long, value_name = "FILE", conflicts_with_all = ["repo", "pr"])]
+        snapshot: Option<PathBuf>,
+
+        /// GitHub Actions run doing this check: its own checks are not
+        /// counted as pending
+        #[arg(long, value_name = "RUN_ID")]
+        exclude_run_id: Option<u64>,
     },
 
     /// Apply automatic fixes
@@ -148,7 +183,24 @@ fn main() -> ExitCode {
     match cli.command {
         Some(Command::Init { format }) => handle_init(&config_path, &format),
         Some(Command::Show) => handle_show(&config),
-        Some(Command::Audit { strict }) => handle_audit(&cli.path, &config, strict, &cli.format),
+        Some(Command::Audit {
+            strict,
+            pr,
+            pr_repo,
+            exclude_run_id,
+        }) => {
+            let readiness = match (pr, pr_repo) {
+                (Some(n), Some(repo)) => Some(read_pr_readiness(&repo, n, exclude_run_id)),
+                _ => None,
+            };
+            handle_audit(&cli.path, &config, strict, &cli.format, readiness)
+        }
+        Some(Command::PrReadiness {
+            repo,
+            pr,
+            snapshot,
+            exclude_run_id,
+        }) => handle_pr_readiness(repo, pr, snapshot, exclude_run_id, &cli.format),
         Some(Command::Fix { only }) => handle_fix(&cli.path, &config, only.as_deref()),
         Some(Command::License { list_allowed }) => handle_license(&cli.path, &config, list_allowed),
         Some(Command::Placeholders { action }) => handle_placeholders(&cli.path, &config, &action),
@@ -163,9 +215,99 @@ fn main() -> ExitCode {
         }) => handle_fleet_mode(repo, context, session, output, config),
         None => {
             // Default to audit
-            handle_audit(&cli.path, &config, false, &cli.format)
+            handle_audit(&cli.path, &config, false, &cli.format, None)
         }
     }
+}
+
+/// Read and evaluate one pull request's readiness. Never fails: a pull
+/// request that cannot be read is a `skipped` report saying why.
+fn read_pr_readiness(
+    repo: &str,
+    pr: u64,
+    exclude_run_id: Option<u64>,
+) -> pr_readiness::PrReadiness {
+    use pr_readiness::{evaluate, github, EvalOptions, PrReadiness};
+    let started = std::time::Instant::now();
+    if !github::valid_repo_slug(repo) {
+        return PrReadiness::skipped(Some(pr), &format!("not an owner/name repository: {repo:?}"));
+    }
+    let client = match github::Client::from_env() {
+        Ok(c) => c,
+        Err(e) => return PrReadiness::skipped(Some(pr), &e),
+    };
+    let rt = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(e) => return PrReadiness::skipped(Some(pr), &format!("async runtime: {e}")),
+    };
+    match rt.block_on(client.snapshot(repo, pr)) {
+        Ok(snapshot) => {
+            let mut r = evaluate(&snapshot, &EvalOptions { exclude_run_id });
+            r.duration_ms = started.elapsed().as_millis() as u64;
+            r
+        }
+        Err(e) => PrReadiness::skipped(Some(pr), &e),
+    }
+}
+
+fn handle_pr_readiness(
+    repo: Option<String>,
+    pr: Option<u64>,
+    snapshot: Option<PathBuf>,
+    exclude_run_id: Option<u64>,
+    format: &str,
+) -> ExitCode {
+    use pr_readiness::{evaluate, EvalOptions, Snapshot};
+    let report = if let Some(path) = snapshot {
+        let parsed = std::fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|t| serde_json::from_str::<Snapshot>(&t).map_err(|e| e.to_string()));
+        match parsed {
+            Ok(s) => evaluate(&s, &EvalOptions { exclude_run_id }),
+            Err(e) => {
+                eprintln!("Error reading snapshot {}: {}", path.display(), e);
+                return ExitCode::FAILURE;
+            }
+        }
+    } else {
+        // clap guarantees both when no snapshot is given.
+        read_pr_readiness(
+            repo.as_deref().unwrap_or_default(),
+            pr.unwrap_or_default(),
+            exclude_run_id,
+        )
+    };
+    if format == "json" {
+        match serde_json::to_string_pretty(&report) {
+            Ok(json) => println!("{}", json),
+            Err(e) => eprintln!("JSON serialization error: {}", e),
+        }
+    } else {
+        print_pr_readiness(&report);
+    }
+    // Advisory: the verdict never sets the exit status; only a failure to
+    // evaluate at all does, so a caller can tell "not ready" from "broken".
+    if report.skipped.is_some() {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+fn print_pr_readiness(r: &pr_readiness::PrReadiness) {
+    println!();
+    println!("PULL REQUEST READINESS (advisory)");
+    println!("{}", r.summary);
+    if let Some(u) = &r.url {
+        println!("{}", u);
+    }
+    for f in &r.findings {
+        println!("  [{}] {:?}: {}", f.id, f.severity, f.message);
+    }
+    println!();
 }
 
 #[cfg(feature = "fleet")]
@@ -319,7 +461,13 @@ fn handle_show(config: &config::Config) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn handle_audit(path: &Path, config: &config::Config, strict: bool, format: &str) -> ExitCode {
+fn handle_audit(
+    path: &Path,
+    config: &config::Config,
+    strict: bool,
+    format: &str,
+    pr_readiness: Option<pr_readiness::PrReadiness>,
+) -> ExitCode {
     use crate::analyzers::{
         claims::ClaimsAnalyzer, license::LicenseAnalyzer, placeholder::PlaceholderAnalyzer,
         release::ReleaseAnalyzer, scm_files::ScmFilesAnalyzer, testing::TestingAnalyzer,
@@ -402,6 +550,9 @@ fn handle_audit(path: &Path, config: &config::Config, strict: bool, format: &str
         }
     };
 
+    // Advisory: carried in the report, never in the exit status below.
+    result.pr_readiness = pr_readiness;
+
     // Output results
     if format == "json" {
         match serde_json::to_string_pretty(&result) {
@@ -410,9 +561,12 @@ fn handle_audit(path: &Path, config: &config::Config, strict: bool, format: &str
         }
     } else {
         print_summary(&result);
+        if let Some(r) = &result.pr_readiness {
+            print_pr_readiness(r);
+        }
     }
 
-    // Determine exit code
+    // Determine exit code (pull-request readiness takes no part)
     if result.should_block_release() {
         ExitCode::FAILURE
     } else if strict && result.total_warnings() > 0 {
