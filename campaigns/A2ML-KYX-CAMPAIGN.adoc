@@ -59,8 +59,9 @@ Every converted file passes all four, or nothing in the tree changes for it:
   plus ecosystem.abnf). A `.k9`/`.k9.ncl` output, when a future front end emits
   one, must pass `k9-validate.sh --strict`.
 . The value census (`scripts/lib/a2ml-census.js`): every non-empty source value
-  appears in the deed (`deed_lint --ast-json`), independently of kyX. It errs
-  towards refusing.
+  appears in the deed (`deed_lint --ast-json`) at least as many times as in
+  the source, so a field collapsed into another is caught; independently of
+  kyX. It errs towards refusing.
 
 Bots open PRs, never push: the fixer stages the change and writes the PR and
 P1 issue bodies; it never commits, pushes or publishes. A refusal's issue body

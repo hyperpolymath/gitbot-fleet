@@ -66,7 +66,11 @@
 # Exit: 0 no .a2ml left (converted, or none to begin with) · 2 refused and
 # nothing converted (P1 issue) · 3 partial: some converted (PR), some refused
 # (P1 issue) — a dispatcher must not record 2 or 3 as a clean success · 64
-# usage · 69 a file needs kyX and a tool or its provenance is missing.
+# usage · 69 a file needs kyX and a tool or its provenance is missing · 70
+# INCONSISTENT: a rollback failed, so the index and work tree need a human ·
+# 73 the report directory is not writable (checked before anything changes).
+# Any other non-zero exit after a conversion was staged rolls it back first:
+# a conversion stays in the tree only together with the reports describing it.
 #
 # outcome-predicate: --check
 #
@@ -130,8 +134,55 @@ for name in a2ml-report.json a2ml-pr.md a2ml-p1-issue.md; do
     die "$REPORT_DIR/$name exists and is not a regular file; refusing to write through it" 64
   fi
 done
+# The reports must be writable BEFORE anything is staged: a run that stages a
+# conversion and then cannot report it leaves a change nobody was told about.
+probe="$(mktemp "$REPORT_DIR/.a2ml-probe.XXXXXX" 2>/dev/null)" \
+  || die "cannot write to A2ML_REPORT_DIR $REPORT_DIR; nothing was changed" 73
+rm -f -- "$probe"
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/a2ml-kyx-work.XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+STAGED=()        # sources whose conversion is staged in the index
+REPORTS_DONE=0   # set once every report is published
+
+# Put the index and work tree back as they were before `src` was staged, and
+# say whether that worked: every step is checked, then the result is.
+undo_stage() { # src
+  local src="$1"
+  git -C "$REPO" reset -q -- "$TARGET" "$src" 2>> "$WORK/undo.err" || return 1
+  rm -f -- "$REPO/$TARGET" 2>> "$WORK/undo.err" || return 1
+  git -C "$REPO" checkout -q -- "$src" 2>> "$WORK/undo.err" || return 1
+  [[ -z "$(git -C "$REPO" status --porcelain -- "$TARGET" "$src" 2>> "$WORK/undo.err")" ]]
+}
+
+# A rollback that failed leaves a state this script cannot vouch for. Say so
+# loudly, with its own exit code, and do nothing further.
+inconsistent() {
+  printf 'fix-a2ml-via-kyx: INCONSISTENT: %s. The index and work tree of %s need a human (git status); nothing further was done.\n' "$1" "$REPO" >&2
+  [[ -s "$WORK/undo.err" ]] && sed 's/^/fix-a2ml-via-kyx:   /' "$WORK/undo.err" >&2
+  exit 70
+}
+
+# On any exit before the reports are out, undo what was staged: a conversion
+# is only left in the tree together with the PR body that describes it.
+# shellcheck disable=SC2317  # invoked by the EXIT trap below
+on_exit() {
+  local rc=$? src
+  trap - EXIT
+  if [[ "$REPORTS_DONE" -ne 1 && "${#STAGED[@]}" -gt 0 ]]; then
+    for src in "${STAGED[@]}"; do
+      if undo_stage "$src"; then
+        printf 'fix-a2ml-via-kyx: the run stopped before its reports were written; the staged conversion of %s was rolled back\n' "$src" >&2
+      else
+        printf 'fix-a2ml-via-kyx: INCONSISTENT: the run stopped before its reports were written, and rolling back %s failed. The index and work tree of %s need a human (git status).\n' "$src" "$REPO" >&2
+        rc=70
+      fi
+    done
+    [[ "$rc" -ne 0 ]] || rc=1
+  fi
+  rm -rf "$WORK"
+  exit "$rc"
+}
+trap on_exit EXIT
 
 : > "$WORK/converted.jsonl"
 : > "$WORK/refused.jsonl"
@@ -267,7 +318,7 @@ for src in "${eco_sources[@]}"; do
     refuse "$src" ECOSYSTEM "$spec" "kyX reads :canonical-name and the chora id from the repository's one *_chora.deed and never mints one (U1); found ${#choras[@]}."
     continue
   fi
-  if [[ -e "$REPO/$TARGET" ]]; then
+  if [[ -e "$REPO/$TARGET" || -L "$REPO/$TARGET" ]]; then
     refuse "$src" ECOSYSTEM "$spec" "$TARGET already exists; it is never overwritten. Reconcile the two by hand-review, not by hand-conversion."
     continue
   fi
@@ -320,8 +371,8 @@ for src in "${eco_sources[@]}"; do
   census_json="$(bun "$CENSUS" check "$REPO/$src" "$WORK/ast.json" 2> "$WORK/census.err")" || crc=$?
   if [[ "$crc" -ne 0 ]]; then
     if [[ "$crc" -eq 1 ]]; then
-      mapfile -t lost < <(jq -r '.missing[] | "value not found in the deed: " + (tojson)' <<< "$census_json")
-      refuse "$src" ECOSYSTEM "$spec" "not lossless: the value census found source values the deed does not carry:" "${lost[@]}"
+      mapfile -t lost < <(jq -r '.short[] | "value \(.value | tojson) occurs \(.source) time(s) in the source, \(.deed) in the deed"' <<< "$census_json")
+      refuse "$src" ECOSYSTEM "$spec" "not lossless: the value census found source values the deed carries fewer times than the source:" "${lost[@]}"
     else
       refuse "$src" ECOSYSTEM "$spec" "the value census could not read the source, so losslessness is unproven: $(scrub "$WORK/census.err"; head -c 400 "$WORK/census.err")"
     fi
@@ -329,17 +380,18 @@ for src in "${eco_sources[@]}"; do
   fi
   # Every gate passed: stage the deed and the deletion, all or nothing. The
   # preflight makes a failure here unlikely; if one happens anyway, the tree
-  # and index are put back and the file is refused with the reason.
+  # and index are put back (checked) and the file is refused with the reason.
   if ! { mkdir -p "$REPO/$(dirname "$TARGET")" \
       && cp "$out" "$REPO/$TARGET" \
       && git -C "$REPO" add -- "$TARGET" \
       && git -C "$REPO" rm -q -- "$src"; } 2> "$WORK/stage.err"; then
-    git -C "$REPO" reset -q -- "$TARGET" "$src" 2>/dev/null || true
-    rm -f -- "$REPO/$TARGET"
-    git -C "$REPO" checkout -q -- "$src" 2>/dev/null || true
+    scrub "$WORK/stage.err"
+    undo_stage "$src" \
+      || inconsistent "staging the conversion of $src failed ($(head -c 200 "$WORK/stage.err")), and rolling it back failed too"
     refuse "$src" ECOSYSTEM "$spec" "staging the conversion failed and was rolled back: $(head -c 400 "$WORK/stage.err")"
     continue
   fi
+  STAGED+=("$src")
   jq -nc --arg source "$src" --arg target "$TARGET" --arg kyx "$KYX_COMMIT" --arg std "$STANDARDS_COMMIT" \
     --arg affirmed "$AFFIRMED" --argjson census "$census_json" --args \
     '{source:$source, target:$target, kyx_commit:$kyx, standards_commit:$std, affirmed:$affirmed,
@@ -375,7 +427,7 @@ if [[ "$n_conv" -gt 0 ]]; then
     "|---|---|---|---|---|",
     (.converted[] | "| `\(.source)` | `\(.target)` | `\(.kyx_commit[0:12])` | `\(.standards_commit[0:12])` | \(.values_checked) |"),
     "",
-    "Gates passed for every file: kyX exit 0 (fail-closed), " + (if .accept_spec_drops then "spec §4 drops accepted by A2ML_ACCEPT_SPEC_DROPS=1 and listed below" else "no content dropped" end) + ", `deed_lint --ecosystem --root` (canon grammar), and the value census (every source value is in the deed).",
+    "Gates passed for every file: kyX exit 0 (fail-closed), " + (if .accept_spec_drops then "spec §4 drops accepted by A2ML_ACCEPT_SPEC_DROPS=1 and listed below" else "no content dropped" end) + ", `deed_lint --ecosystem --root` (canon grammar), and the value census (every source value is in the deed, as often as in the source).",
     (if any(.converted[]; (.spec_drops|length) > 0) then ("\nDropped under spec §4:\n" + ([.converted[] | .spec_drops[] | "- " + .] | join("\n"))) else empty end),
     "",
     "Review it like any PR: the deed is owner-facing, and :affirmed records the date of this conversion.\n",
@@ -399,6 +451,7 @@ if [[ "$n_ref" -gt 0 ]]; then
   ' "$REPORT_DIR/a2ml-report.json" > "$WORK/a2ml-p1-issue.md"
   publish "$WORK/a2ml-p1-issue.md" a2ml-p1-issue.md
 fi
+REPORTS_DONE=1
 
 echo "fix-a2ml-via-kyx: $n_conv converted, $n_ref refused; reports in $REPORT_DIR"
 if [[ "$n_ref" -gt 0 ]]; then

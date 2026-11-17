@@ -8,10 +8,12 @@
 //
 // AST.json is `bun deed_lint.js --ast-json OUT.deed` (standards). Every
 // non-empty scalar VALUE in the A2ML source (strings, numbers, booleans, dates)
-// must appear as a value somewhere in the deed. Keys and table names are not
-// values (a mapping spec renames them), and comments are not values (kyX's own
+// must appear as a value in the deed at least as many times as in the source
+// (a multiset check, so a field collapsed into another is caught). Keys and
+// table names are not values (a mapping spec renames them), and comments are not values (kyX's own
 // drop report covers those). Prints one JSON object
-//   {"source_values": N, "missing": [ ... ]}
+//   {"source_values": N, "missing": [value, ...],
+//    "short": [{"value", "source": count, "deed": count}, ...]}
 // and exits 0 when nothing is missing, 1 when something is, 2 on a usage or
 // parse error. It is a NECESSARY condition for losslessness, checked
 // independently of kyX: it errs towards reporting loss (a value a spec
@@ -188,11 +190,25 @@ export function deedValues(ast) {
   return out;
 }
 
+// A multiset count: how many times each value occurs.
+function tally(values) {
+  const n = new Map();
+  for (const v of values) n.set(v, (n.get(v) ?? 0) + 1);
+  return n;
+}
+
 export function census(sourceText, ast) {
   const want = a2mlValues(sourceText).filter((v) => v.trim() !== "");
-  const have = new Set(deedValues(ast));
-  const missing = [...new Set(want.filter((v) => !have.has(v)))];
-  return { source_values: want.length, missing };
+  // Counted, not just present: two source fields holding the same value must
+  // be two deed values, or a field collapsed into another passes unseen.
+  const need = tally(want);
+  const have = tally(deedValues(ast));
+  const short = [];
+  for (const [value, source] of need) {
+    const deed = have.get(value) ?? 0;
+    if (deed < source) short.push({ value, source, deed });
+  }
+  return { source_values: want.length, missing: short.map((s) => s.value), short };
 }
 
 if (import.meta.main) {

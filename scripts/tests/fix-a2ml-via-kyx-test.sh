@@ -118,6 +118,13 @@ printf 'a = """\nA\\u00e9\\U0001F600"""\nb = "\\u00e9"\n' > "$TMP/src4.a2ml"
 check "census: \\u and \\U escapes decode in multi-line strings as in single-line ones" \
   '["Aé😀","é"]' \
   "$(bun -e 'const {a2mlValues} = await import(process.argv[1]); console.log(JSON.stringify(a2mlValues(require("fs").readFileSync(process.argv[2],"utf8"))))' "$CENSUS" "$TMP/src4.a2ml")"
+printf 'a = "same"\nb = "same"\nc = "once"\n' > "$TMP/dup.a2ml"
+printf '{"items":[["field","a",["string","same"]],["field","c",["string","once"]]]}\n' > "$TMP/dup-ast.json"
+check "census: a value in two source fields but one deed field is reported (counted, not just present)" \
+  '["same"] 2 1' \
+  "$(bun "$CENSUS" check "$TMP/dup.a2ml" "$TMP/dup-ast.json" | jq -r '"\(.missing | tojson) \(.short[0].source) \(.short[0].deed)"' || true)"
+printf '{"items":[["field","a",["string","same"]],["field","b",["string","same"]],["field","c",["string","once"]]]}\n' > "$TMP/dup-ast2.json"
+check "census: the same value twice in the deed passes" 0 "$(bun "$CENSUS" check "$TMP/dup.a2ml" "$TMP/dup-ast2.json" >/dev/null; echo $?)"
 printf 'oops\n' > "$TMP/bad.a2ml"
 check "census: an unreadable source is exit 2, not a pass" 2 "$(bun "$CENSUS" check "$TMP/bad.a2ml" "$TMP/ast.json" >/dev/null 2>&1; echo $?)"
 
@@ -248,6 +255,55 @@ check "a hard-linked report file is replaced, not written through" "precious" "$
 mkdir -p "$TMP/nojq-bin"; for t in git dirname; do ln -sf "$(command -v "$t")" "$TMP/nojq-bin/$t"; done
 r=$(mkrepo nojq); RC=0; PATH="$TMP/nojq-bin" A2ML_REPORT_DIR="$TMP/nojq-rep" "$(command -v bash)" "$FIX" "$r" >/dev/null 2>&1 || RC=$?
 check "jq missing: exit 69 before anything is classified" 69 "$RC"
+
+
+# --- failures after the gates: staging, rollback and reporting ----------------
+# Wrappers first on PATH fail one command at a chosen point and pass everything
+# else to the real tool, so the script needs no test hooks.
+WRAP="$TMP/wrap"; mkdir -p "$WRAP"
+REAL_GIT="$(command -v git)" REAL_MV="$(command -v mv)" REAL_MKTEMP="$(command -v mktemp)"
+cat > "$WRAP/git" <<SH
+#!/usr/bin/env bash
+for a in "\$@"; do
+  case "\$a" in
+    rm) [[ -n "\${FAIL_GIT_RM:-}" ]] && { echo "fatal: injected rm failure" >&2; exit 128; } ;;
+    reset) [[ -n "\${FAIL_GIT_RESET:-}" ]] && { echo "fatal: injected reset failure" >&2; exit 128; } ;;
+  esac
+done
+exec "$REAL_GIT" "\$@"
+SH
+cat > "$WRAP/mv" <<SH
+#!/usr/bin/env bash
+[[ -n "\${FAIL_MV:-}" ]] && { echo "mv: injected failure" >&2; exit 1; }
+exec "$REAL_MV" "\$@"
+SH
+cat > "$WRAP/mktemp" <<SH
+#!/usr/bin/env bash
+[[ -n "\${FAIL_PROBE:-}" && "\$*" == *a2ml-probe* ]] && { echo "mktemp: injected failure" >&2; exit 1; }
+exec "$REAL_MKTEMP" "\$@"
+SH
+chmod +x "$WRAP"/*
+wrun() { # repo -> RC; the wrapped PATH, plus whatever FAIL_* the caller set
+  REPORT="$TMP/report-$RANDOM"; mkdir -p "$REPORT"; RC=0
+  PATH="$WRAP:$PATH" A2ML_REPORT_DIR="$REPORT" STUB_KYX=ok bash "$FIX" "$1" > "$TMP/out" 2> "$TMP/err" || RC=$?
+}
+r=$(mkrepo rm-fails); FAIL_GIT_RM=1 wrun "$r"
+check "git rm fails mid-staging: refused, not converted -> exit 2" 2 "$RC"
+check "git rm fails: the rollback leaves the tree exactly as it was" "" "$(git -C "$r" status --porcelain)"
+check "git rm fails: the reason says it was rolled back" 1 "$(jq '[.refused[] | select(.reasons[0]|test("rolled back"))] | length' "$REPORT/a2ml-report.json")"
+r=$(mkrepo undo-fails); FAIL_GIT_RM=1 FAIL_GIT_RESET=1 wrun "$r"
+check "git rm AND the rollback fail: exit 70, never a clean refusal" 70 "$RC"
+check "a failed rollback says INCONSISTENT and needs a human" 1 "$(grep -c 'INCONSISTENT: staging the conversion' "$TMP/err")"
+r=$(mkrepo publish-fails); FAIL_MV=1 wrun "$r"
+check "a report that cannot be published after staging: non-zero exit" 1 "$([[ "$RC" -ne 0 ]] && echo 1 || echo 0)"
+check "publish fails: the staged conversion is rolled back, tree as it was" "" "$(git -C "$r" status --porcelain)"
+check "publish fails: it says so" 1 "$(grep -c 'staged conversion of .* was rolled back' "$TMP/err")"
+r=$(mkrepo probe-fails); FAIL_PROBE=1 wrun "$r"
+check "an unwritable report directory: exit 73 before anything changes" "73 " "$RC $(git -C "$r" status --porcelain)"
+r=$(mkrepo dangling); ln -s "$TMP/no-such-deed" "$r/.machine_readable/descriptiles/ECOSYSTEM.deed"; STUB_KYX=ok run "$r"
+check "a dangling symlink at the target is refused as existing" 1 "$(jq '[.refused[] | select(.reasons[0]|test("never overwritten"))] | length' "$REPORT/a2ml-report.json")"
+check "dangling symlink: left in place, nothing written through it" "1 0" \
+  "$([[ -L "$r/.machine_readable/descriptiles/ECOSYSTEM.deed" ]] && echo 1 || echo 0) $([[ -e "$TMP/no-such-deed" ]] && echo 1 || echo 0)"
 
 r="$TMP/none"; mkdir -p "$r"; git -C "$r" init -q
 check "no .a2ml: exit 0, nothing to do" 0 "$(bash "$FIX" "$r" >/dev/null 2>&1; echo $?)"
