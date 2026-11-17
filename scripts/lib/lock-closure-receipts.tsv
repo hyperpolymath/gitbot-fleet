@@ -76,5 +76,5 @@ metadatastician/standards	ea2f4d8a886585ed442687ae63d4ad7493379ba4	oven-sh/setup
 # Reviewed source: hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6
 hyperpolymath/proven-cicd-and-workflows	1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-# Reviewed source: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@b93f0615a61ee4c05af66eb526538eab47120aaa
-hyperpolymath/hypatia	b93f0615a61ee4c05af66eb526538eab47120aaa	step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a
+# Reviewed source: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@29a9e4a881b6a3cc4cd27fcbc0886ffbadcbc5fe
+hyperpolymath/hypatia	29a9e4a881b6a3cc4cd27fcbc0886ffbadcbc5fe	step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a
