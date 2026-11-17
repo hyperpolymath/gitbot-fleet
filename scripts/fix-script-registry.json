@@ -56,7 +56,8 @@
       "RetiredDescriptilePolicy": "fix-retired-descriptile-policy.sh",
       "ToolchainInputMissing": "fix-rust-toolchain-input.sh",
       "StaleReusablePin": "fix-stale-reusable-pin.sh",
-      "LockSelfShaRef": "fix-lock-self-sha-refs.sh"
+      "LockSelfShaRef": "fix-lock-self-sha-refs.sh",
+      "RetiredA2ML": "fix-a2ml-via-kyx.sh"
     },
     "by_recipe": {
       "recipe-actions-allow-all": "fix-actions-policy.sh",
@@ -130,7 +131,8 @@
       "pin_integrity/self_sha_lock_record": "fix-lock-self-sha-refs.sh",
       "recipe-workflow-linter-spdx-rule": "fix-workflow-linter-spdx-rule.sh",
       "recipe-sonarqube-token-guard": "fix-sonarqube-token-guard.sh",
-      "recipe-workflow-split-comment-keys": "fix-split-comment-keys.sh"
+      "recipe-workflow-split-comment-keys": "fix-split-comment-keys.sh",
+      "recipe-a2ml-kyx": "fix-a2ml-via-kyx.sh"
     }
   }
 }
