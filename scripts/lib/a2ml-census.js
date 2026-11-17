@@ -83,7 +83,12 @@ export function a2mlValues(text) {
       const c = s[i++];
       if (c === "\n") line++;
       if (q === '"' && c === "\\") {
-        if (peek() === "\n") { // line-ending backslash: trim the break and indent
+        // A line-ending backslash is the last non-whitespace character on its
+        // line (TOML 1.0), so spaces or tabs may follow it before the break.
+        let j = i;
+        while (s[j] === " " || s[j] === "\t") j++;
+        if (s[j] === "\n") { // trim the padding, the break and the next indent
+          i = j;
           while (peek() === "\n" || peek() === " " || peek() === "\t") { if (peek() === "\n") line++; i++; }
           continue;
         }

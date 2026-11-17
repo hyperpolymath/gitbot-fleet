@@ -118,6 +118,13 @@ printf 'a = """\nA\\u00e9\\U0001F600"""\nb = "\\u00e9"\n' > "$TMP/src4.a2ml"
 check "census: \\u and \\U escapes decode in multi-line strings as in single-line ones" \
   '["Aé😀","é"]' \
   "$(bun -e 'const {a2mlValues} = await import(process.argv[1]); console.log(JSON.stringify(a2mlValues(require("fs").readFileSync(process.argv[2],"utf8"))))' "$CENSUS" "$TMP/src4.a2ml")"
+printf 'a = """\none \\  \t\n    two \\\n  three"""\n' > "$TMP/pad.a2ml"
+check "census: a line-ending backslash with spaces or tabs after it is still a continuation" \
+  '["one two three"]' \
+  "$(bun -e 'const {a2mlValues} = await import(process.argv[1]); console.log(JSON.stringify(a2mlValues(require("fs").readFileSync(process.argv[2],"utf8"))))' "$CENSUS" "$TMP/pad.a2ml")"
+printf 'a = """\none \\  two"""\n' > "$TMP/padbad.a2ml"
+check "census: a backslash followed by spaces and more text on the line is still a bad escape (exit 2)" 2 \
+  "$(bun "$CENSUS" check "$TMP/padbad.a2ml" "$TMP/ast.json" >/dev/null 2>&1; echo $?)"
 printf 'a = "same"\nb = "same"\nc = "once"\n' > "$TMP/dup.a2ml"
 printf '{"items":[["field","a",["string","same"]],["field","c",["string","once"]]]}\n' > "$TMP/dup-ast.json"
 check "census: a value in two source fields but one deed field is reported (counted, not just present)" \
