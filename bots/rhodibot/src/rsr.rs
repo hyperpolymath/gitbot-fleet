@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::canon::a2ml;
 use crate::config::Config;
 use crate::deed::{Deed, DocFormat};
 use crate::github::GitHubClient;
@@ -172,6 +173,26 @@ pub async fn check_candidates_exist(
     (false, candidates[0].clone())
 }
 
+/// The name of the priority-1 check for retired `.a2ml` files.
+pub const A2ML_CHECK: &str = "no-*.a2ml";
+
+/// A tracked path as it may be shown in Markdown check output: control
+/// characters (a newline could forge a check row) are escaped, then the
+/// Markdown metacharacters [`crate::sanitize::sanitize_markdown`] covers.
+pub fn display_path(path: &str) -> String {
+    let flat: String = path
+        .chars()
+        .flat_map(|c| -> Box<dyn Iterator<Item = char>> {
+            if c.is_control() {
+                Box::new(c.escape_debug())
+            } else {
+                Box::new(std::iter::once(c))
+            }
+        })
+        .collect();
+    crate::sanitize::sanitize_markdown(&flat)
+}
+
 /// Required files for RSR compliance with policy-based severity
 pub const REQUIRED_FILES: &[CheckDef] = &[
     // NOTE ON THE 2026-09-18 REVISION
@@ -331,19 +352,9 @@ pub const REQUIRED_FILES: &[CheckDef] = &[
             Severity::Required,
         ),
     },
-    CheckDef {
-        name: ".machine_readable/bot_directives",
-        alternates: &[],
-        description: "Bot directives directory in canonical machine-readable location",
-        category: CheckCategory::Structure,
-        points: 2,
-        severity: (
-            Severity::Optional,
-            Severity::Optional,
-            Severity::Recommended,
-            Severity::Required,
-        ),
-    },
+    // RSR-015 (.machine_readable/bot_directives/) is retired: its files were
+    // .a2ml, and the bot directives are the chora deed's (bot-directives ...)
+    // clause now. Requiring the directory demanded a retired form.
     CheckDef {
         // Entered the template 2026-08-26; 59/269 as of 2026-09-18. Either
         // canonical spelling is accepted (see check-root-shape.sh).
@@ -405,7 +416,7 @@ impl BannedPattern {
 pub const BANNED_PATTERNS: &[BannedPattern] = &[
     BannedPattern {
         name: ".bot_directives",
-        description: "Legacy bot directives directory at repo root (use .machine_readable/bot_directives)",
+        description: "Legacy bot directives directory at repo root (use the chora deed's (bot-directives ...) clause)",
         category: CheckCategory::Structure,
         severity: (
             Severity::Optional,
@@ -509,6 +520,10 @@ pub struct ComplianceReport {
     pub required_passed: bool,
     pub checks: Vec<Check>,
     pub summary: String,
+    /// Every retired `.a2ml` path the priority-1 check found, raw and in tree
+    /// order, so the fleet gets one finding per file rather than a wildcard.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retired_a2ml: Vec<String>,
 }
 
 /// Individual compliance check
@@ -568,20 +583,46 @@ pub async fn check_compliance(
     owner: &str,
     repo: &str,
 ) -> Result<ComplianceReport> {
+    check_compliance_at(config, owner, repo, None).await
+}
+
+/// Check repository compliance, scanning the tree at `reference` (a commit SHA
+/// or ref) for retired `.a2ml` files instead of the default branch. A push or
+/// pull-request check passes the head it reports on, so a PR that adds an
+/// `.a2ml` file fails and one that removes the last of them passes.
+pub async fn check_compliance_at(
+    config: &Config,
+    owner: &str,
+    repo: &str,
+    reference: Option<&str>,
+) -> Result<ComplianceReport> {
     let client = GitHubClient::new(config);
 
     // Load repo-specific configuration
     let repo_config = load_repo_config(&client, owner, repo).await;
 
-    check_compliance_with_policy(config, owner, repo, &repo_config).await
+    check_compliance_with_policy_at(config, owner, repo, &repo_config, reference).await
 }
 
-/// Check repository compliance with a specific policy configuration
+/// Check repository compliance with a specific policy configuration, scanning
+/// the default branch for retired `.a2ml` files.
 pub async fn check_compliance_with_policy(
     config: &Config,
     owner: &str,
     repo: &str,
     repo_config: &RepoConfig,
+) -> Result<ComplianceReport> {
+    check_compliance_with_policy_at(config, owner, repo, repo_config, None).await
+}
+
+/// [`check_compliance_with_policy`], scanning the tree at `reference` (the
+/// default branch when `None`) for retired `.a2ml` files.
+pub async fn check_compliance_with_policy_at(
+    config: &Config,
+    owner: &str,
+    repo: &str,
+    repo_config: &RepoConfig,
+    reference: Option<&str>,
 ) -> Result<ComplianceReport> {
     let client = GitHubClient::new(config);
     let policy = repo_config.policy;
@@ -590,6 +631,7 @@ pub async fn check_compliance_with_policy(
     let mut total_score = 0u8;
     let mut max_score = 0u8;
     let mut required_passed = true;
+    let mut retired_a2ml: Vec<String> = Vec::new();
 
     // The chora deed holds the repo facts and the bot directives. A deed that
     // is present but does not read is an error, not "no directives".
@@ -785,6 +827,64 @@ pub async fn check_compliance_with_policy(
                 points: 0,
                 max_points: 0,
                 message: format!("{} detected - policy violation", banned.description),
+            });
+        }
+    }
+
+    // Priority 1: any `.a2ml` file anywhere in the tree. A2ML is retired (D99,
+    // D269c, D312, D313), so this is Required in every policy pack and a repo
+    // config can neither skip nor downgrade it. The tree scanned is the one at
+    // `reference` (the head a push or PR check reports on), else the default
+    // branch. A tree that cannot be listed FAILS the check, closed: an
+    // unknowable answer to a P1 question is not a pass.
+    let listing = match reference {
+        Some(reference) => client.tree_paths_at(owner, repo, reference).await,
+        None => client.tree_paths(owner, repo).await,
+    };
+    match listing {
+        Ok(paths) => {
+            retired_a2ml = paths.into_iter().filter(|p| a2ml::is_a2ml(p)).collect();
+            let found = &retired_a2ml;
+            if !found.is_empty() {
+                required_passed = false;
+                // A path is contributor-controlled and this message is rendered
+                // as Markdown in the check run: show it escaped, match it raw.
+                let shown: Vec<String> = found.iter().take(10).map(|p| display_path(p)).collect();
+                let more = found.len().saturating_sub(shown.len());
+                checks.push(Check {
+                    name: A2ML_CHECK.to_string(),
+                    category: CheckCategory::Structure,
+                    severity: Severity::Required,
+                    status: CheckStatus::Fail,
+                    points: 0,
+                    max_points: 0,
+                    message: format!(
+                        "P1: {} retired .a2ml file(s) present: {}{} - A2ML is retired; convert \
+                         with kyX (D313), never by hand",
+                        found.len(),
+                        shown.join(", "),
+                        if more > 0 {
+                            format!(" (+{more} more)")
+                        } else {
+                            String::new()
+                        }
+                    ),
+                });
+            }
+        }
+        Err(error) => {
+            required_passed = false;
+            checks.push(Check {
+                name: A2ML_CHECK.to_string(),
+                category: CheckCategory::Structure,
+                severity: Severity::Required,
+                status: CheckStatus::Fail,
+                points: 0,
+                max_points: 0,
+                message: format!(
+                    "could not list the tree to look for .a2ml files, so the P1 check fails \
+                     closed: {error}"
+                ),
             });
         }
     }
@@ -1068,6 +1168,7 @@ pub async fn check_compliance_with_policy(
         required_passed,
         checks,
         summary,
+        retired_a2ml,
     })
 }
 
