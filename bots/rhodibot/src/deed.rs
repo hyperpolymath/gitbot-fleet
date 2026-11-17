@@ -131,7 +131,10 @@ impl Deed {
         };
         let keys = RSR_PROFILE_KEYS;
         let members = clause.members();
-        for node in members {
+        let mut seen_clauses = BTreeSet::new();
+        let mut seen_keys = BTreeSet::new();
+        let mut layout = Vec::new();
+        for (index, node) in members.iter().enumerate() {
             if let Node::Atom(atom) = node
                 && atom.starts_with(':')
             {
@@ -140,6 +143,49 @@ impl Deed {
                     "unknown key {atom} in (rsr-profile ...); a misspelt key would declare no \
                      capabilities and silently switch off every gated check"
                 );
+                ensure!(
+                    seen_keys.insert(atom.clone()),
+                    "(rsr-profile ...) carries {atom} once; a second one would be ignored"
+                );
+                // Each key's value has its kind: a list for the list keys, a
+                // single value for the rest. A list after a scalar key is
+                // neither its value nor a sub-clause to skip.
+                let value = members.get(index + 1);
+                if RSR_PROFILE_LIST_KEYS.contains(&atom.as_str()) {
+                    ensure!(
+                        matches!(value, Some(Node::List(_))),
+                        "(rsr-profile {atom} ...) must be a list"
+                    );
+                } else {
+                    ensure!(
+                        matches!(value, Some(Node::Str(_) | Node::Atom(_)))
+                            && !matches!(value, Some(Node::Atom(next)) if next.starts_with(':')),
+                        "(rsr-profile {atom} ...) takes one value, not a list or nothing"
+                    );
+                }
+            }
+            // Only a list key's value is exempt; any other list is a
+            // sub-clause, and J39 refuses one it does not know rather than
+            // skipping it.
+            let is_value = index > 0
+                && matches!(&members[index - 1], Node::Atom(atom)
+                    if RSR_PROFILE_LIST_KEYS.contains(&atom.as_str()));
+            if let Node::List(_) = node
+                && !is_value
+            {
+                let head = node.head().unwrap_or("");
+                ensure!(
+                    RSR_PROFILE_CLAUSES.contains(&head),
+                    "unknown clause ({head} ...) in (rsr-profile ...); J39 refuses a sub-clause \
+                     the standards module does not define"
+                );
+                ensure!(
+                    seen_clauses.insert(head.to_string()),
+                    "(rsr-profile ...) carries ({head} ...) once"
+                );
+                if head == "layout" {
+                    layout = layout_bindings(node)?;
+                }
             }
         }
         let list = |key: &str| -> Result<Vec<String>> {
@@ -172,6 +218,7 @@ impl Deed {
             add: list(":add")?,
             remove: list(":remove")?,
             role: word(":role"),
+            layout,
         }))
     }
 
@@ -185,10 +232,73 @@ impl Deed {
     }
 }
 
+/// The members of `(rsr-profile (layout ...))`: one or more
+/// `(module :gate "<row>" :at ("<path>" ...))` (standards rsr-profile.abnf
+/// v1.1.0, owner ruling 2026-11-16). This reader checks the shape and keys;
+/// whether a gate names a real row, and what each path must be, is standards'
+/// `check-rsr-profile.sh` and `deed_lint.js --rsr-profile`.
+fn layout_bindings(layout: &Node) -> Result<Vec<LayoutBinding>> {
+    let modules = layout.members();
+    ensure!(
+        !modules.is_empty(),
+        "(rsr-profile (layout ...)) binds at least one (module ...)"
+    );
+    let mut out: Vec<LayoutBinding> = Vec::new();
+    for module in modules {
+        ensure!(
+            module.head() == Some("module"),
+            "(rsr-profile (layout ...)) holds (module ...) clauses only (J39)"
+        );
+        let members = module.members();
+        let mut index = 0;
+        let (mut gate, mut at) = (None, None);
+        while index < members.len() {
+            let key = match &members[index] {
+                Node::Atom(atom) if RSR_PROFILE_LAYOUT_KEYS.contains(&atom.as_str()) => atom,
+                other => bail!(
+                    "(rsr-profile (layout (module ...))) holds :gate and :at only, not {other:?} \
+                     (J39)"
+                ),
+            };
+            let value = members.get(index + 1);
+            match (key.as_str(), value) {
+                (":gate", Some(Node::Str(text))) if !text.is_empty() => {
+                    ensure!(gate.is_none(), "(layout (module ...)) carries :gate once");
+                    gate = Some(text.clone());
+                }
+                (":at", Some(Node::List(items)))
+                    if !items.is_empty() && items.iter().all(|i| matches!(i, Node::Str(_))) =>
+                {
+                    ensure!(at.is_none(), "(layout (module ...)) carries :at once");
+                    at = Some(
+                        items
+                            .iter()
+                            .filter_map(Node::text)
+                            .map(str::to_string)
+                            .collect::<Vec<_>>(),
+                    );
+                }
+                (":gate", _) => bail!("(layout (module :gate ...)) must be a non-empty string"),
+                _ => bail!("(layout (module :at ...)) must be a non-empty list of strings"),
+            }
+            index += 2;
+        }
+        let gate = gate.ok_or_else(|| anyhow::anyhow!("(layout (module ...)) is missing :gate"))?;
+        let at = at.ok_or_else(|| anyhow::anyhow!("(layout (module ...)) is missing :at"))?;
+        ensure!(
+            out.iter().all(|binding| binding.gate != gate),
+            "(rsr-profile (layout ...)) binds :gate \"{gate}\" once"
+        );
+        out.push(LayoutBinding { gate, at });
+    }
+    Ok(out)
+}
+
 /// The top-level keys of `(rsr-profile ...)`, as the standards module defines
 /// them (`bun 1-formats/deed/tools/deed_lint.js --rsr-profile-keys`, standards
-/// #1605). `(notes ...)` is the one nested clause; it is not a key, and it holds
-/// prose, so it is not scanned here. Any other key fails closed.
+/// #1605, #1630). `(notes ...)` and `(layout ...)` are its sub-clauses
+/// ([`RSR_PROFILE_CLAUSES`]); `(notes ...)` holds prose, so it is not scanned
+/// here. Any other key or sub-clause fails closed.
 pub const RSR_PROFILE_KEYS: &[&str] = &[
     ":version",
     ":spec",
@@ -200,6 +310,25 @@ pub const RSR_PROFILE_KEYS: &[&str] = &[
     ":remove",
 ];
 
+/// The keys of [`RSR_PROFILE_KEYS`] whose value is a list of strings; the
+/// rest take one string (standards rsr-profile.abnf).
+pub const RSR_PROFILE_LIST_KEYS: &[&str] = &[":capabilities", ":add", ":remove"];
+
+/// The sub-clauses of `(rsr-profile ...)`, in the order
+/// `deed_lint.js --rsr-profile-keys` prints them after the keys.
+pub const RSR_PROFILE_CLAUSES: &[&str] = &["notes", "layout"];
+
+/// The keys of a `(layout (module ...))` binding.
+pub const RSR_PROFILE_LAYOUT_KEYS: &[&str] = &[":gate", ":at"];
+
+/// One `(module :gate ... :at ...)` of `(rsr-profile (layout ...))`: where this
+/// repository keeps the module a gate-table row asks for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutBinding {
+    pub gate: String,
+    pub at: Vec<String>,
+}
+
 /// The `(rsr-profile ...)` clause, before it is checked against the gate table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProfileClause {
@@ -208,6 +337,8 @@ pub struct ProfileClause {
     pub add: Vec<String>,
     pub remove: Vec<String>,
     pub role: Option<String>,
+    /// The `(layout ...)` bindings, in order; empty when there is none.
+    pub layout: Vec<LayoutBinding>,
 }
 
 /// One `(bot :name ...)` entry of the `(bot-directives ...)` clause.
@@ -516,6 +647,98 @@ mod module_alignment_tests {
         )
         .unwrap();
         assert!(deed.rsr_profile().unwrap().is_some());
+    }
+
+    /// The sub-clauses standards' module reports after the keys.
+    #[test]
+    fn the_clause_set_is_the_modules() {
+        assert_eq!(RSR_PROFILE_CLAUSES, ["notes", "layout"]);
+        assert_eq!(RSR_PROFILE_LAYOUT_KEYS, [":gate", ":at"]);
+    }
+
+    #[test]
+    fn an_unknown_sub_clause_is_refused_not_skipped() {
+        let deed =
+            Deed::parse("(repo-deed (rsr-profile :capabilities (\"rust\") (extras :x \"y\")))")
+                .unwrap();
+        let err = deed.rsr_profile().unwrap_err().to_string();
+        assert!(err.contains("unknown clause (extras"), "{err}");
+    }
+
+    /// A list after a scalar key is neither that key's value nor a sub-clause
+    /// to skip: `:preset (extras ...)` once read as a missing preset and
+    /// switched every gated check off (Codex on #687).
+    #[test]
+    fn a_list_after_a_scalar_key_is_refused() {
+        for key in [":version", ":spec", ":declares-against", ":role", ":preset"] {
+            let deed = Deed::parse(&format!(
+                "(repo-deed (rsr-profile :capabilities (\"rust\") {key} (extras :x \"y\")))"
+            ))
+            .unwrap();
+            assert!(deed.rsr_profile().is_err(), "{key}");
+        }
+        let deed = Deed::parse("(repo-deed (rsr-profile :preset (extras :x \"y\")))").unwrap();
+        assert!(deed.rsr_profile().is_err());
+    }
+
+    #[test]
+    fn a_list_key_takes_a_list_value() {
+        for key in [":capabilities", ":add", ":remove"] {
+            let deed = Deed::parse(&format!(
+                "(repo-deed (rsr-profile :preset \"p\" :capabilities (\"rust\") {key} \"rust\"))"
+            ))
+            .unwrap();
+            assert!(deed.rsr_profile().is_err(), "{key}");
+        }
+    }
+
+    #[test]
+    fn a_list_value_after_a_key_is_not_a_sub_clause() {
+        // ("rust") follows :capabilities, so it is that field's value.
+        let deed = Deed::parse("(repo-deed (rsr-profile :capabilities (\"rust\")))").unwrap();
+        assert!(deed.rsr_profile().unwrap().is_some());
+    }
+
+    #[test]
+    fn the_template_layout_binding_is_read() {
+        let deed = Deed::parse(
+            "(repo-deed (rsr-profile :version \"1.0.0\" :role \"spine\" \
+             :capabilities (\"abi\") \
+             (layout (module :gate \"abi.ipkg\" :at (\"src/interface/abi.ipkg\"))) \
+             (notes :omitted-rationale \"x\")))",
+        )
+        .unwrap();
+        let clause = deed.rsr_profile().unwrap().unwrap();
+        assert_eq!(
+            clause.layout,
+            vec![LayoutBinding {
+                gate: "abi.ipkg".into(),
+                at: vec!["src/interface/abi.ipkg".into()]
+            }]
+        );
+    }
+
+    #[test]
+    fn malformed_layouts_are_refused() {
+        for body in [
+            "(layout)",
+            "(layout :gate \"abi.ipkg\")",
+            "(layout (path :gate \"abi.ipkg\" :at (\"a/abi.ipkg\")))",
+            "(layout (module :gate \"abi.ipkg\" :at (\"a/abi.ipkg\") :why \"x\"))",
+            "(layout (module :at (\"a/abi.ipkg\")))",
+            "(layout (module :gate \"abi.ipkg\"))",
+            "(layout (module :gate \"abi.ipkg\" :at ()))",
+            "(layout (module :gate \"abi.ipkg\" :at \"a/abi.ipkg\"))",
+            "(layout (module :gate abi :at (\"a/abi.ipkg\")))",
+            "(layout (module :gate \"abi.ipkg\" :at (\"a\")) (module :gate \"abi.ipkg\" :at (\"b\")))",
+            "(layout (module :gate \"a\" :at (\"a\"))) (layout (module :gate \"b\" :at (\"b\")))",
+        ] {
+            let deed = Deed::parse(&format!(
+                "(repo-deed (rsr-profile :capabilities (\"abi\") {body}))"
+            ))
+            .unwrap();
+            assert!(deed.rsr_profile().is_err(), "{body}");
+        }
     }
 
     #[test]
