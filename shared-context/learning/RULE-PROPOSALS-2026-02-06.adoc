@@ -2,14 +2,14 @@
 
 === Summary
 
-Generated 3 Logtalk rule proposals from patterns that crossed the
+Generated 3 rule proposals from patterns that crossed the
 5-observation threshold during fleet deployment.
 
 === Proposed Rules
 
 ==== 1. technical_debt_detector
 
-* *File:* `+rule-proposals/technical_debt.lgt+`
+* *Rule:* `+technical_debt+` (proposal file since removed)
 * *Observations:* 196 (39x threshold)
 * *Severity:* INFO
 * *CWE:* CWE-1057
@@ -33,7 +33,7 @@ accumulation. Not a bug, but essential for maintenance planning.
 
 ==== 2. unsafe_without_doc_detector
 
-* *File:* `+rule-proposals/unsafe_without_doc.lgt+`
+* *Rule:* `+unsafe_without_doc+` (proposal file since removed)
 * *Observations:* 19 (3.8x threshold)
 * *Severity:* HIGH (CRITICAL in production)
 * *CWE:* CWE-1188
@@ -59,7 +59,7 @@ Critical for Rust’s safety guarantees.
 
 ==== 3. eval_usage_detector
 
-* *File:* `+rule-proposals/eval_usage.lgt+`
+* *Rule:* `+eval_usage+` (proposal file since removed)
 * *Observations:* 7 (1.4x threshold)
 * *Severity:* CRITICAL
 * *CWE:* CWE-95 (Code Injection)
@@ -93,7 +93,7 @@ Metadata for tracking and auditing
 
 ==== Validation Status
 
-*Static Analysis:* ✅ PASS - Valid Logtalk syntax - Extends
+*Static Analysis:* ✅ PASS - Valid syntax - Extends
 code_pattern_detector protocol - Implements required predicates - SPDX
 headers present
 
@@ -166,7 +166,7 @@ format)
 
 ==== Phase 1: Validation (Current)
 
-* [x] Generate Logtalk rule proposals
+* [x] Generate rule proposals
 * [ ] Run ECHIDNA semantic validation
 * [ ] Human review of rule logic
 * [ ] Approve rules for deployment

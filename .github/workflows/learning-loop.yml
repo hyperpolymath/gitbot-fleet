@@ -40,14 +40,6 @@ jobs:
           echo "🧠 Generating rule proposals from observed patterns..."
           bash fleet-coordinator.sh generate-rules
 
-      - name: Upload rule proposals
-        if: always()
-        uses: actions/upload-artifact@v7.0.2
-        with:
-          name: rule-proposals
-          path: shared-context/learning/rule-proposals/*.lgt
-          if-no-files-found: ignore
-
       - name: Show learning summary
         run: |
           echo "## Learning Loop Summary" >> $GITHUB_STEP_SUMMARY
@@ -57,19 +49,6 @@ jobs:
             echo "- Total observations: $TOTAL" >> $GITHUB_STEP_SUMMARY
           else
             echo "- No observations yet" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ -d shared-context/learning/rule-proposals ]; then
-            PROPOSALS=$(find shared-context/learning/rule-proposals -name "*.lgt" | wc -l)
-            echo "- Rule proposals: $PROPOSALS" >> $GITHUB_STEP_SUMMARY
-
-            if [ $PROPOSALS -gt 0 ]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Proposed Rules" >> $GITHUB_STEP_SUMMARY
-              for rule in shared-context/learning/rule-proposals/*.lgt; do
-                [ -f "$rule" ] && echo "- $(basename "$rule")" >> $GITHUB_STEP_SUMMARY
-              done
-            fi
           fi
 
   deploy-approved-rules:
