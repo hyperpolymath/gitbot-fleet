@@ -16,7 +16,10 @@
 //! - values: `"strings"` (escapes `\"` `\\` `\n` `\t` only), bare symbols,
 //!   integers, `#t` / `#f`, the `#u5"..."` / `#u8"..."` / `#uuid"..."`
 //!   literals, `'quoted` symbols and lists, and `( lists )`;
-//! - the whole input must be consumed.
+//! - the whole input must be consumed;
+//! - [`parse_deed`] (used by [`load_chora`]) also requires the SPDX header and a
+//!   non-empty top-level form; [`parse`] is the same form grammar without those
+//!   two document-level rules.
 //!
 //! Lookup follows the conventions of the estate's shell reader
 //! (`scripts/deed-field.sh` in the RSR template and kyX): [`find_chora`] is
@@ -66,6 +69,9 @@ pub enum Value {
     Str(String),
     Sym(String),
     Int(i64),
+    /// An integer outside `i64` (deed.abnf `integer` is unbounded digits),
+    /// kept as its token text, sign included, so it never invalidates a deed.
+    BigInt(String),
     Bool(bool),
     /// `#u5"..."`, `#u8"..."` or `#uuid"..."`: carried as its text, unused here.
     Literal(String),
@@ -78,7 +84,7 @@ impl Value {
         match self {
             Value::Str(_) => "a string",
             Value::Sym(_) => "a symbol",
-            Value::Int(_) => "an integer",
+            Value::Int(_) | Value::BigInt(_) => "an integer",
             Value::Bool(_) => "a boolean",
             Value::Literal(_) => "a literal",
             Value::Quoted(_) => "a quoted value",
@@ -202,6 +208,8 @@ pub fn is_chora_name(name: &str) -> bool {
     match name.strip_suffix(CHORA_SUFFIX) {
         Some(stem) => {
             !stem.is_empty()
+                // deed.abnf: estate_chora.deed is an estate-file, tested before repo-file.
+                && stem != "estate"
                 && stem
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || "-._".contains(c))
@@ -220,12 +228,24 @@ pub fn find_chora(dir: &Path) -> std::result::Result<Option<PathBuf>, ChoraError
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(ChoraError::Io(dir.to_path_buf(), e)),
     };
-    let mut found: Vec<PathBuf> = entries
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_name().to_str().is_some_and(is_chora_name))
-        .map(|e| e.path())
-        .filter(|p| p.is_file())
-        .collect();
+    pick_chora(dir, entries.map(|e| e.map(|e| (e.file_name(), e.path()))))
+}
+
+/// The chora deed among directory `entries` (name, path). An entry that
+/// failed to read is an error, never skipped: `read_dir` may fail while
+/// advancing, and skipping would turn an unreadable or ambiguous deed set into
+/// a false "none" or "one".
+fn pick_chora(
+    dir: &Path,
+    entries: impl Iterator<Item = std::io::Result<(std::ffi::OsString, PathBuf)>>,
+) -> std::result::Result<Option<PathBuf>, ChoraError> {
+    let mut found: Vec<PathBuf> = Vec::new();
+    for entry in entries {
+        let (name, path) = entry.map_err(|e| ChoraError::Io(dir.to_path_buf(), e))?;
+        if name.to_str().is_some_and(is_chora_name) && path.is_file() {
+            found.push(path);
+        }
+    }
     found.sort();
     match found.len() {
         0 => Ok(None),
@@ -248,7 +268,7 @@ pub fn load_chora(dir: &Path) -> std::result::Result<Option<Chora>, ChoraError> 
         return Ok(None);
     };
     let text = std::fs::read_to_string(&path).map_err(|e| ChoraError::Io(path.clone(), e))?;
-    let root = parse(&text).map_err(|e| ChoraError::Parse(path.clone(), e))?;
+    let root = parse_deed(&text).map_err(|e| ChoraError::Parse(path.clone(), e))?;
     if root.head != "repo-deed" {
         let head = root.head.clone();
         return Err(ChoraError::WrongHead(path, head));
@@ -296,19 +316,47 @@ impl Value {
 /// overflow, which aborts the whole process and cannot be caught.
 pub const MAX_DEPTH: usize = 64;
 
-/// Parse a whole deed: one top-level clause, nothing after it.
+/// Parse a deed's form: one top-level clause, nothing after it. Lexically
+/// strict (comments, separators), but it does not demand the document-level
+/// rules of [`parse_deed`], so a consumer reading a hand-written fixture or a
+/// file the linter has yet to see is not refused for a missing header.
 pub fn parse(text: &str) -> Result<Clause> {
+    parse_with(text, false)
+}
+
+/// Parse a whole deed as deed.abnf defines it: the mandatory SPDX header
+/// (`header = 1*spdx-line`), then one form with at least one field or clause,
+/// nothing after it. This is what [`load_chora`] applies to a chora deed.
+pub fn parse_deed(text: &str) -> Result<Clause> {
+    parse_with(text, true)
+}
+
+fn parse_with(text: &str, document: bool) -> Result<Clause> {
     let mut p = Parser {
         s: text.chars().collect(),
         i: 0,
         line: 1,
         depth: 0,
     };
+    if document {
+        p.header()?;
+    }
     p.skip_sep()?;
     if p.peek() != Some('(') {
         return Err(p.err("a deed starts with '('"));
     }
     let root = p.clause()?;
+    // deed.abnf `form` is `"(" doc-head 1*(token-sep (field / clause))`: the
+    // top-level form needs an item, though a nested clause may be empty.
+    if document && root.items.is_empty() {
+        return Err(DeedError {
+            line: root.line,
+            message: format!(
+                "the top-level form '{}' needs at least one field or clause",
+                root.head
+            ),
+        });
+    }
     p.skip_sep()?;
     if p.peek().is_some() {
         return Err(p.err("trailing content after the closing ')'"));
@@ -321,6 +369,12 @@ struct Parser {
     i: usize,
     line: usize,
     depth: usize,
+}
+
+/// deed.abnf `text-char`: printable ASCII, space, or any non-ASCII scalar.
+/// Control characters (C0, DEL) are not text.
+fn is_text_char(c: char) -> bool {
+    !((c as u32) < 0x20 || c as u32 == 0x7f)
 }
 
 fn is_sym_start(c: char) -> bool {
@@ -363,6 +417,67 @@ impl Parser {
         Some(c)
     }
 
+    /// Consume one comment, from its `;` through its line end (deed.abnf
+    /// `comment = ";" *text-char line-end`): the content is text characters
+    /// only, the line end is LF or CRLF, and the end of the file is not one.
+    /// Leaves the LF (or the CR of a CRLF) for the caller.
+    fn comment(&mut self) -> Result<()> {
+        self.bump(); // ';'
+        loop {
+            match self.peek() {
+                None => {
+                    return Err(self.err(
+                        "a comment reaches the end of the file without a line ending (end it with LF or CRLF)",
+                    ))
+                }
+                Some('\n') => return Ok(()),
+                Some('\r') => {
+                    if self.s.get(self.i + 1) != Some(&'\n') {
+                        return Err(self.err("a bare CR is not a line end (use LF or CRLF)"));
+                    }
+                    return Ok(());
+                }
+                Some(c) if !is_text_char(c) => {
+                    return Err(self.err("a control character in a comment"))
+                }
+                Some(_) => {
+                    self.bump();
+                }
+            }
+        }
+    }
+
+    /// The mandatory header (deed.abnf `header = 1*spdx-line`): at the very
+    /// start, one or more `;; SPDX-...` lines, each ended by a line end.
+    fn header(&mut self) -> Result<()> {
+        let mut lines = 0;
+        while self.starts_with(";; SPDX-") {
+            // `1*text-char` after the prefix: it may not end the line.
+            if matches!(self.s.get(self.i + 8), None | Some('\n' | '\r')) {
+                return Err(self.err("an SPDX header line has no content after 'SPDX-'"));
+            }
+            self.comment()?;
+            lines += 1;
+            // comment() leaves the CR of a CRLF or the LF: take the line end.
+            if self.peek() == Some('\r') {
+                self.bump();
+            }
+            self.bump();
+        }
+        if lines == 0 {
+            return Err(self.err(
+                "a deed starts with an SPDX header: a line beginning ';; SPDX-' (deed.abnf header)",
+            ));
+        }
+        Ok(())
+    }
+
+    fn starts_with(&self, lit: &str) -> bool {
+        lit.chars()
+            .enumerate()
+            .all(|(k, c)| self.s.get(self.i + k) == Some(&c))
+    }
+
     /// Skip spaces, line ends and comments. Returns whether anything was
     /// consumed. A tab, or a CR that does not start a CRLF, is an error
     /// (deed.abnf `line-end = CRLF / LF`).
@@ -384,15 +499,7 @@ impl Parser {
                     // A comment runs to the line end, which is LF or CRLF: a CR
                     // inside it that does not start a CRLF is a bare CR, an
                     // error here as everywhere else.
-                    while let Some(c) = self.peek() {
-                        if c == '\n' {
-                            break;
-                        }
-                        if c == '\r' && self.s.get(self.i + 1) != Some(&'\n') {
-                            return Err(self.err("a bare CR is not a line end (use LF or CRLF)"));
-                        }
-                        self.bump();
-                    }
+                    self.comment()?;
                 }
                 _ => break,
             }
@@ -571,9 +678,8 @@ impl Parser {
         if self.peek().is_some_and(is_sym_char) {
             return Err(self.err("an integer must end at a separator"));
         }
-        text.parse::<i64>()
-            .map(Value::Int)
-            .map_err(|_| self.err("integer out of range"))
+        // deed.abnf `integer` is unbounded digits: past i64 keep the token.
+        Ok(text.parse::<i64>().map_or(Value::BigInt(text), Value::Int))
     }
 
     fn hash_literal(&mut self) -> Result<Value> {
@@ -608,6 +714,12 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The fixtures below are bodies; every deed starts with the SPDX header
+    /// (it is one line, so reported line numbers are one more than the body's).
+    fn parse(body: &str) -> Result<Clause> {
+        parse_deed(&format!(";; SPDX-License-Identifier: MPL-2.0\n{body}"))
+    }
 
     #[test]
     fn reads_fields_clauses_comments_and_every_value_kind() {
@@ -644,12 +756,12 @@ mod tests {
 
     #[test]
     fn a_bare_cr_inside_a_comment_is_an_error_but_crlf_and_lf_end_one() {
-        let e = parse("(repo-deed ; comment\rstill comment\n)").unwrap_err();
+        let e = parse("(repo-deed :x y ; comment\rstill comment\n)").unwrap_err();
         assert!(e.message.contains("bare CR"), "{e}");
-        assert_eq!(e.line, 1);
-        assert!(parse("(repo-deed ; comment\r\n)").is_ok());
-        assert!(parse("(repo-deed ; comment\n)").is_ok());
-        assert!(parse(";; SPDX-License-Identifier: MPL-2.0\r\n(repo-deed)\r\n").is_ok());
+        assert_eq!(e.line, 2);
+        assert!(parse("(repo-deed ; comment\r\n :x y)").is_ok());
+        assert!(parse("(repo-deed ; comment\n :x y)").is_ok());
+        assert!(parse("(repo-deed :x y)\r\n").is_ok());
     }
 
     #[test]
@@ -688,11 +800,12 @@ mod tests {
             ("bad bool", "(a :b #true)"),
             ("quoted string", "(a :b '\"x\")"),
             ("empty", ""),
+            ("empty top-level form", "(a)"),
         ] {
             assert!(parse(text).is_err(), "{label} should not parse");
         }
         let e = parse("(a\n\n :b c\n :d").unwrap_err();
-        assert!(e.line >= 3, "{e}");
+        assert!(e.line >= 4, "{e}");
     }
 
     #[test]
@@ -763,16 +876,138 @@ mod tests {
         let c = load_chora(&d).unwrap().unwrap();
         assert!(c.path.ends_with("r_chora.deed") && c.root.has("status"));
 
-        std::fs::write(d.join("s_chora.deed"), "(repo-deed)").unwrap();
+        std::fs::write(d.join("s_chora.deed"), "(repo-deed :x y)").unwrap();
         assert!(matches!(find_chora(&d), Err(ChoraError::Multiple(v)) if v.len() == 2));
 
         let d = tmp("bad");
-        std::fs::write(d.join("r_chora.deed"), "(repo-deed\n :x").unwrap();
-        assert!(matches!(load_chora(&d), Err(ChoraError::Parse(_, e)) if e.line == 2));
+        std::fs::write(d.join("r_chora.deed"), format!("{SPDX}(repo-deed\n :x")).unwrap();
+        assert!(matches!(load_chora(&d), Err(ChoraError::Parse(_, e)) if e.line == 2 + 1));
 
         let d = tmp("head");
-        std::fs::write(d.join("r_chora.deed"), "(praxis-deed :x \"y\")").unwrap();
+        std::fs::write(
+            d.join("r_chora.deed"),
+            format!("{SPDX}(praxis-deed :x \"y\")"),
+        )
+        .unwrap();
         let e = load_chora(&d).unwrap_err();
         assert!(e.to_string().contains("must be a repo-deed"), "{e}");
+    }
+
+    // --- Grammar strictness (review of #689) -------------------------------
+
+    const SPDX: &str = ";; SPDX-License-Identifier: MPL-2.0\n";
+
+    #[test]
+    fn estate_chora_deed_is_not_a_repo_deed_name() {
+        // deed.abnf: estate-file is tested before repo-file; stem "estate" is excluded.
+        assert!(!is_chora_name("estate_chora.deed"));
+        assert!(is_chora_name("estate2_chora.deed"));
+        assert!(is_chora_name("my-estate_chora.deed"));
+        let d = tmp("estate");
+        std::fs::write(
+            d.join("estate_chora.deed"),
+            format!("{SPDX}(estate-deed :schema-version \"1.0.0\")\n"),
+        )
+        .unwrap();
+        assert!(find_chora(&d).unwrap().is_none());
+        std::fs::write(
+            d.join("r_chora.deed"),
+            format!("{SPDX}(repo-deed :schema-version \"1.0.0\")\n"),
+        )
+        .unwrap();
+        let c = load_chora(&d).unwrap().unwrap();
+        assert!(c.path.ends_with("r_chora.deed"));
+    }
+
+    #[test]
+    fn a_comment_must_end_in_a_line_end() {
+        let ok = format!("{SPDX}(repo-deed :schema-version \"1.0.0\")\n; trailing\n");
+        assert!(parse_deed(&ok).is_ok());
+        let e = parse_deed(&format!(
+            "{SPDX}(repo-deed :schema-version \"1.0.0\")\n; trailing"
+        ))
+        .unwrap_err();
+        assert!(e.message.contains("end of the file"), "{e}");
+        // An SPDX line is a comment too and needs its line end.
+        assert!(parse_deed(";; SPDX-License-Identifier: MPL-2.0").is_err());
+    }
+
+    #[test]
+    fn a_comment_holds_text_chars_only() {
+        let doc = |c: &str| format!("{SPDX}(repo-deed :schema-version \"1.0.0\" ; {c}\n)\n");
+        assert!(parse_deed(&doc("plain ascii and utf-8: \u{a9} \u{4e2d}")).is_ok());
+        for bad in ["bad\tcomment", "del\u{7f}", "nul\u{0}", "esc\u{1b}"] {
+            let e = parse_deed(&doc(bad)).unwrap_err();
+            assert!(e.message.contains("control character"), "{bad:?}: {e}");
+        }
+    }
+
+    #[test]
+    fn a_top_level_form_needs_at_least_one_item_but_a_nested_clause_may_be_empty() {
+        let e = parse_deed(&format!("{SPDX}(repo-deed)\n")).unwrap_err();
+        assert!(e.message.contains("at least one"), "{e}");
+        assert!(parse_deed(&format!("{SPDX}(repo-deed ; only a comment\n)\n")).is_err());
+        assert!(parse_deed(&format!("{SPDX}(repo-deed (status))\n")).is_ok());
+    }
+
+    #[test]
+    fn plain_parse_is_the_form_only_but_lexically_strict() {
+        assert!(super::parse("(repo-deed)").is_ok());
+        assert!(super::parse("(repo-deed :a b)\n; no line end").is_err());
+        assert!(super::parse("(repo-deed :a b ; tab\there\n)").is_err());
+    }
+
+    #[test]
+    fn the_spdx_header_is_mandatory() {
+        let body = "(repo-deed :schema-version \"1.0.0\")\n";
+        let e = parse_deed(body).unwrap_err();
+        assert!(e.message.contains("SPDX"), "{e}");
+        assert!(parse_deed(&format!("; just a note\n{body}")).is_err());
+        assert!(parse_deed(&format!(";; not spdx\n{body}")).is_err());
+        assert!(parse_deed(&format!("\n{SPDX}{body}")).is_err());
+        assert!(parse_deed(&format!("{SPDX}{body}")).is_ok());
+        assert!(parse_deed(&format!("{SPDX}{SPDX}; more\n{body}")).is_ok());
+        assert!(parse_deed(&format!(";; SPDX-License-Identifier: MPL-2.0\r\n{body}")).is_ok());
+        assert!(parse_deed(&format!(";; SPDX-\n{body}")).is_err());
+    }
+
+    #[test]
+    fn an_integer_beyond_i64_is_kept_as_its_digits() {
+        let c = parse_deed(&format!(
+            "{SPDX}(repo-deed :schema-version \"1.0.0\" :big 123456789012345678901234567890 :neg -99999999999999999999 :n 7)\n"
+        ))
+        .unwrap();
+        assert_eq!(
+            c.field("big"),
+            Some(&Value::BigInt("123456789012345678901234567890".into()))
+        );
+        assert_eq!(
+            c.field("neg"),
+            Some(&Value::BigInt("-99999999999999999999".into()))
+        );
+        assert_eq!(c.field("n"), Some(&Value::Int(7)));
+        assert_eq!(
+            c.field("big")
+                .unwrap()
+                .as_symbol("x", 1)
+                .unwrap_err()
+                .message,
+            "x must be a symbol, found an integer"
+        );
+    }
+
+    #[test]
+    fn an_error_while_iterating_the_directory_is_an_error_not_a_skipped_entry() {
+        let ok = |n: &str| Ok((std::ffi::OsString::from(n), PathBuf::from(n)));
+        let boom = || Err(std::io::Error::other("transient"));
+        let none: Vec<std::io::Result<(std::ffi::OsString, PathBuf)>> = vec![ok("a.txt")];
+        assert!(pick_chora(Path::new("d"), none.into_iter())
+            .unwrap()
+            .is_none());
+        let failed = vec![ok("r_chora.deed"), boom()];
+        assert!(matches!(
+            pick_chora(Path::new("d"), failed.into_iter()),
+            Err(ChoraError::Io(p, _)) if p == Path::new("d")
+        ));
     }
 }
