@@ -42,8 +42,14 @@ test('AST names and unknown items cannot satisfy missing values', () => {
     source_values: 1, missing: ['needle'], short: [{ value: 'needle', source: 1, deed: 0 }],
   });
 });
-test('empty and whitespace-only source values are excluded', () => {
-  assert.deepEqual(census('a = ["", "  ", "\\t", "x"]', strings('x')), {source_values: 1, missing: [], short: []});
+test('only empty values are excluded; whitespace-only values are counted', () => {
+  // A value that is only spaces or a tab is still a value: a deed that drops
+  // it has lost something, so it must show as a shortfall.
+  assert.deepEqual(census('a = ["", "  ", "\\t", "x"]', strings('x')), {
+    source_values: 3, missing: ['  ', '\t'],
+    short: [{value: '  ', source: 1, deed: 0}, {value: '\t', source: 1, deed: 0}],
+  });
+  assert.deepEqual(census('a = ["", "  ", "\\t", "x"]', strings('x', '  ', '\t')).missing, []);
 });
 test('nonempty values retain significant whitespace', () => {
   assert.deepEqual(census('a = " x "', strings('x')).missing, [' x ']);

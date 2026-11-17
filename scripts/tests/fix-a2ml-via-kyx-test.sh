@@ -371,6 +371,14 @@ check "a dangling symlink at the target is refused as existing" 1 "$(jq '[.refus
 check "dangling symlink: left in place, nothing written through it" "1 0" \
   "$([[ -L "$r/.machine_readable/descriptiles/ECOSYSTEM.deed" ]] && echo 1 || echo 0) $([[ -e "$TMP/no-such-deed" ]] && echo 1 || echo 0)"
 
+r=$(mkrepo staged-del); cp "$TMP/ECOSYSTEM.deed" "$r/.machine_readable/descriptiles/ECOSYSTEM.deed"
+git -C "$r" add -A; git -C "$r" commit -qm deed; git -C "$r" rm -q .machine_readable/descriptiles/ECOSYSTEM.deed
+STUB_KYX=ok run "$r"
+check "a staged deletion of the target is refused, never overwritten by git add" 1 \
+  "$(jq '[.refused[] | select(.reasons[0]|test("ECOSYSTEM.deed has uncommitted changes"))] | length' "$REPORT/a2ml-report.json")"
+check "staged deletion of the target: kept as the owner staged it" "D  .machine_readable/descriptiles/ECOSYSTEM.deed" \
+  "$(git -C "$r" status --porcelain -- .machine_readable/descriptiles/ECOSYSTEM.deed)"
+
 r="$TMP/none"; mkdir -p "$r"; git -C "$r" init -q
 check "no .a2ml: exit 0, nothing to do" 0 "$(bash "$FIX" "$r" >/dev/null 2>&1; echo $?)"
 

@@ -295,22 +295,24 @@ mapfile -d '' -t choras < <(git -C "$REPO" ls-files -z -- ':(glob)*_chora.deed')
 preflight() { # src
   local src="$1" dir st
   # A failed `git status` prints nothing, which would read as clean: check
-  # that it ran before reading what it printed.
-  st="$(git -C "$REPO" status --porcelain -- "${choras[0]}" 2>&1)" \
-    || { echo "git status could not read ${choras[0]}, so its state is unknown: ${st:0:200}"; return; }
+  # that it ran before reading what it printed. Its stderr is kept apart:
+  # a harmless warning (a missing parent directory of an absent target) is
+  # not a change, and a real failure is quoted from it.
+  st="$(git -C "$REPO" status --porcelain -- "${choras[0]}" 2> "$WORK/status.err")" \
+    || { echo "git status could not read ${choras[0]}, so its state is unknown: $(head -c 200 "$WORK/status.err")"; return; }
   if [[ -n "$st" ]]; then
     echo "${choras[0]} has uncommitted changes; kyX must read the committed chora deed the PR will reference."; return
   fi
   if [[ -L "$REPO/$src" ]]; then
     echo "the source is a symlink; kyX must read content Git tracks."; return
   fi
-  st="$(git -C "$REPO" status --porcelain -- "$src" 2>&1)" \
-    || { echo "git status could not read the source, so its state is unknown: ${st:0:200}"; return; }
+  st="$(git -C "$REPO" status --porcelain -- "$src" 2> "$WORK/status.err")" \
+    || { echo "git status could not read the source, so its state is unknown: $(head -c 200 "$WORK/status.err")"; return; }
   if [[ -n "$st" ]]; then
     echo "the source has uncommitted changes; kyX would convert content the PR does not delete."; return
   fi
-  st="$(git -C "$REPO" status --porcelain -- "$TARGET" 2>&1)" \
-    || { echo "git status could not read the target, so its state is unknown: ${st:0:200}"; return; }
+  st="$(git -C "$REPO" status --porcelain -- "$TARGET" 2> "$WORK/status.err")" \
+    || { echo "git status could not read the target, so its state is unknown: $(head -c 200 "$WORK/status.err")"; return; }
   if [[ -n "$st" ]]; then
     echo "$TARGET has uncommitted changes; they must be preserved."; return
   fi
