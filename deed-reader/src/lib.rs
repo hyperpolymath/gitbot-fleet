@@ -30,9 +30,8 @@
 //! input is an `Err` with a line number, never a silent default.
 //!
 //! Extracted from panicbot's `src/deed.rs` (2026-11-13) so that finishingbot
-//! and glambot read the deed the same way; panicbot and rhodibot keep their
-//! own copies until they are moved onto this crate. panicbot's `deed` module
-//! now re-exports this crate; rhodibot's move waits on #687.
+//! and glambot read the deed the same way. panicbot's `deed` module now
+//! re-exports this crate; rhodibot keeps its own reader until #687 lands.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
