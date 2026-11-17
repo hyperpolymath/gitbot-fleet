@@ -160,6 +160,17 @@ done
 r=$(mkrepo drop-ok); STUB_KYX=drop A2ML_ACCEPT_SPEC_DROPS=1 run "$r"
 check "A2ML_ACCEPT_SPEC_DROPS=1 accepts a spec §4 drop and lists it in the PR" 1 "$(grep -c 'Dropped under spec §4' "$REPORT/a2ml-pr.md")"
 
+# --- a root 0-AI-MANIFEST.a2ml (the shape hyperpolymath/proven-tests-and-benches
+# carries): its mapping (ai-manifest-decision.adoc) is an open owner ruling, so
+# it must be refused loudly, naming the spec, never guessed or converted.
+r=$(mkrepo manifest); printf '# SPDX-License-Identifier: MPL-2.0\n# AI manifest\n' > "$r/0-AI-MANIFEST.a2ml"; git -C "$r" add -A; git -C "$r" commit -qm x
+STUB_KYX=ok run "$r"
+check "0-AI-MANIFEST.a2ml: refused as AI-MANIFEST, citing ai-manifest-decision.adoc" \
+  "AI-MANIFEST ai-manifest-decision.adoc" \
+  "$(jq -r '.refused[] | select(.path == "0-AI-MANIFEST.a2ml") | "\(.family) \(.spec)"' "$REPORT/a2ml-report.json")"
+check "0-AI-MANIFEST.a2ml: never handed to kyX, never deleted" "0-AI-MANIFEST.a2ml" "$(git -C "$r" ls-files 0-AI-MANIFEST.a2ml)"
+check "0-AI-MANIFEST.a2ml: listed in the P1 issue under its family" 1 "$(grep -c '^### AI-MANIFEST' "$REPORT/a2ml-p1-issue.md")"
+
 # --- preconditions --------------------------------------------------------------
 r=$(mkrepo nochora); git -C "$r" rm -q demo_chora.deed; git -C "$r" commit -qm x; STUB_KYX=ok run "$r"
 check "no chora deed: refused, never minted" 1 "$(jq '[.refused[] | select(.reasons[0]|test("never mints"))] | length' "$REPORT/a2ml-report.json")"
