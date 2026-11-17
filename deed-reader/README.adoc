@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= deed-reader
+
+A small, strict, std-only, read-only reader for the repo deed
+(`<repo>_chora.deed`), shared by the bots in this fleet.
+
+Repo facts that used to live in the retired `.scm` and `.a2ml` descriptiles
+are clauses of the one chora deed at the repository root (owner rulings D312,
+D313). Bots here only read deeds: they never write, extend or hand-convert
+one.
+
+The grammar is `metadatastician/standards` `1-formats/deed/spec/abnf/deed.abnf`.
+Lookup follows the estate's shell reader, `scripts/deed-field.sh`
+(rsr-template-repo, kyX):
+
+[cols="1,2"]
+|===
+| `deed-field.sh` | `deed_reader`
+
+| `--find DIR` | `find_chora(dir)`: exactly one `*_chora.deed` (none is `Ok(None)`, several is `ChoraError::Multiple`)
+| `--has DEED PATH` | `Clause::has(path)`
+| `DEED PATH KEY` | `Clause::clause_at(path)` then `Clause::field(key)`: KEY at the clause's top level only
+|===
+
+`load_chora(dir)` finds, reads and parses the deed and requires the doc-head
+`repo-deed`. Every malformed input is an error with a line number.
+
+This is a reader, not the validator: `bun 1-formats/deed/tools/deed_lint.js`
+in standards stays the conformance gate.
+
+Users: finishingbot (DEED-001 to DEED-004, SCM-006), glambot (MACH-008,
+MACH-009). panicbot and rhodibot still carry their own readers; moving them
+onto this crate is a follow-up.

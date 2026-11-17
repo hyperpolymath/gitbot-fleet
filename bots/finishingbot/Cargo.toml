@@ -11,6 +11,9 @@ keywords = ["release", "validation", "ci-cd", "compliance", "gitbot-fleet"]
 categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
+# Repo deed reader (shared, std-only, in-repo)
+gitbot-deed-reader = { path = "../../deed-reader" }
+
 # Async runtime
 tokio = { version = "1.52.3", features = ["full"] }
 

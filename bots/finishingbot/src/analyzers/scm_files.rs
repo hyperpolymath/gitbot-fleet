@@ -1,14 +1,56 @@
 // SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: 2025 Jonathan D.A. Jewell
-//! SCM documentation files analyzer
+//! Repo-deed analyzer (formerly the SCM documentation files analyzer).
+//!
+//! The six descriptive documents that used to be `STATE.scm`, `META.scm`,
+//! `ECOSYSTEM.scm`, `PLAYBOOK.scm`, `AGENTIC.scm` and `NEUROSYM.scm` are
+//! clauses of the repository's one `<repo>_chora.deed` (owner rulings D312,
+//! D313), and the project state is its `(status …)` clause, or
+//! `.machine_readable/descriptiles/STATE.deed` once standards' A7 migration
+//! moves it there (J15). This analyzer therefore reads the deed, through
+//! `gitbot-deed-reader`, and treats any surviving `.scm` document as legacy:
+//! it says "migrate", never "move" or "complete" (the earlier
+//! direct-under-`.machine_readable/` layout is retired and must not be
+//! restored).
+//!
+//! The type and the report key keep their old names (`ScmFilesAnalyzer`,
+//! `scm_files`) so the library API and the JSON report shape do not change.
+//!
+//! Finding ids:
+//! - `DEED-001` (warning): no `<repo>_chora.deed` at the root.
+//! - `DEED-002` (error): more than one chora deed (D312 allows exactly one).
+//! - `DEED-003` (error): the chora deed cannot be read or parsed, or its
+//!   doc-head is not `repo-deed`.
+//! - `DEED-004` (warning): no project state: neither a `(status …)` clause in
+//!   the chora deed nor a `descriptiles/STATE.deed`.
+//! - `SCM-006-<NAME>.scm` (warning): a retired `.scm` document is present.
+//!
+//! Retired: `SCM-001` (missing `.scm`), `SCM-002`/`003`/`004` (validating a
+//! retired file's content) and `SCM-005` (which advised MOVING a root `.scm`
+//! into `.machine_readable/`, i.e. restoring a retired layout).
 
 use super::{AnalysisResult, Analyzer, Finding, Severity};
 use crate::config::Config;
 use crate::error::Result;
+use deed_reader::{load_chora, ChoraError};
 use std::path::Path;
 use tracing::debug;
 
-/// SCM documentation files analyzer
+/// The retired descriptive documents and the deed clause each one became.
+const LEGACY_SCM: [(&str, &str); 6] = [
+    ("STATE.scm", "status"),
+    ("META.scm", "meta"),
+    ("ECOSYSTEM.scm", "ecosystem"),
+    ("PLAYBOOK.scm", "playbook"),
+    ("AGENTIC.scm", "agentic"),
+    ("NEUROSYM.scm", "neurosym"),
+];
+
+/// Where a legacy `.scm` document may still be found: the root, the retired
+/// direct-under-`.machine_readable/` layout and the retired `6scm/` layout.
+const LEGACY_DIRS: [&str; 3] = ["", ".machine_readable", ".machine_readable/6scm"];
+
+/// Repo-deed analyzer (historical name kept for API stability).
 pub struct ScmFilesAnalyzer;
 
 impl Default for ScmFilesAnalyzer {
@@ -19,68 +61,126 @@ impl Default for ScmFilesAnalyzer {
 
 impl Analyzer for ScmFilesAnalyzer {
     fn name(&self) -> &str {
-        "SCM Documentation Files"
+        "Repo Deed (chora)"
     }
 
     fn analyze(&self, path: &Path, _config: &Config) -> Result<AnalysisResult> {
         let mut result = AnalysisResult::new();
         let start = std::time::Instant::now();
 
-        // Required SCM files for v1.0
-        let required_scm_files = [
-            ("STATE.scm", "Project state and progress tracking"),
-            (
-                "META.scm",
-                "Meta-level information and architectural decisions",
-            ),
-            ("ECOSYSTEM.scm", "Project's place in the ecosystem"),
-            ("PLAYBOOK.scm", "Operational playbooks and procedures"),
-            ("AGENTIC.scm", "Agentic AI integration documentation"),
-            ("NEUROSYM.scm", "Neurosymbolic AI documentation"),
-        ];
+        let has_state_deed = path
+            .join(".machine_readable/descriptiles/STATE.deed")
+            .is_file();
 
-        let machine_readable_dir = path.join(".machine_readable");
-
-        for (filename, _description) in &required_scm_files {
-            let correct_path = machine_readable_dir.join(filename);
-            let root_path = path.join(filename);
-
-            if correct_path.exists() {
-                debug!("Found {} in .machine_readable/", filename);
+        match load_chora(path) {
+            Ok(Some(chora)) => {
                 result.files_checked += 1;
-
-                // Validate SCM file content
-                if let Ok(content) = std::fs::read_to_string(&correct_path) {
-                    self.validate_scm_content(filename, &content, &correct_path, &mut result);
+                debug!("read {}", chora.path.display());
+                if !chora.root.has("status") && !has_state_deed {
+                    result.add(
+                        Finding::new(
+                            "DEED-004",
+                            "Project state not recorded",
+                            Severity::Warning,
+                            "The chora deed has no (status …) clause and there is no \
+                             .machine_readable/descriptiles/STATE.deed, so the project's \
+                             phase is not recorded anywhere a bot can read.",
+                        )
+                        .with_file(chora.path.clone())
+                        .with_suggestion(
+                            "Add a (status …) clause to the chora deed (standards \
+                             1-formats/deed/mappings/clade-to-repo-deed.adoc §3), and check it \
+                             with `bun 1-formats/deed/tools/deed_lint.js`",
+                        ),
+                    );
                 }
-            } else if root_path.exists() {
-                // File is in root instead of .machine_readable/
+            }
+            Ok(None) => {
+                result.add(
+                    Finding::new(
+                        "DEED-001",
+                        "No chora deed",
+                        Severity::Warning,
+                        "No <repo>_chora.deed at the repository root. Repo facts (state, meta, \
+                         ecosystem, agentic, neurosym, playbook) are clauses of that one deed \
+                         (D312).",
+                    )
+                    .with_file(path.to_path_buf())
+                    .with_suggestion(
+                        "Mint the deed from rsr-template-repo's model \
+                         (rsr-template-repo_chora.deed); bots read deeds but never write them",
+                    ),
+                );
+            }
+            Err(ChoraError::Multiple(paths)) => {
+                let names: Vec<String> = paths
+                    .iter()
+                    .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                    .collect();
+                result.add(
+                    Finding::new(
+                        "DEED-002",
+                        "More than one chora deed",
+                        Severity::Error,
+                        &format!(
+                            "D312 allows exactly one chora deed per repository; found {}.",
+                            names.join(", ")
+                        ),
+                    )
+                    .with_file(path.to_path_buf())
+                    .with_suggestion("Keep the deed whose stem is the repository's name"),
+                );
+            }
+            Err(e) => {
+                let (file, line) = match &e {
+                    ChoraError::Parse(p, de) => (p.clone(), Some(de.line)),
+                    ChoraError::Io(p, _) | ChoraError::WrongHead(p, _) => (p.clone(), None),
+                    ChoraError::Multiple(_) => unreachable!("handled above"),
+                };
+                let mut f = Finding::new(
+                    "DEED-003",
+                    "Chora deed cannot be read",
+                    Severity::Error,
+                    &e.to_string(),
+                )
+                .with_file(file)
+                .with_suggestion(
+                    "Check it with standards' `bun 1-formats/deed/tools/deed_lint.js FILE`",
+                );
+                if let Some(l) = line {
+                    f = f.with_line(l);
+                }
+                result.add(f);
+            }
+        }
+
+        for dir in LEGACY_DIRS {
+            for (name, clause) in LEGACY_SCM {
+                let file = if dir.is_empty() {
+                    path.join(name)
+                } else {
+                    path.join(dir).join(name)
+                };
+                if !file.is_file() {
+                    continue;
+                }
                 result.files_checked += 1;
                 result.add(
                     Finding::new(
-                        &format!("SCM-005-{}", filename),
-                        &format!("{} in wrong location", filename),
+                        &format!("SCM-006-{name}"),
+                        &format!("Legacy {name} should be migrated"),
                         Severity::Warning,
                         &format!(
-                            "{} found in repository root but should be in .machine_readable/",
-                            filename
+                            "{name} is retired: its facts belong in the ({clause} …) clause of \
+                             the chora deed. It is not validated, and it must not be moved or \
+                             extended."
                         ),
                     )
-                    .with_file(root_path)
+                    .with_file(file)
                     .with_suggestion(&format!(
-                        "Move {} to .machine_readable/{}",
-                        filename, filename
+                        "Migrate it into ({clause} …) under the standards mapping specs \
+                         (1-formats/deed/mappings/), then delete it"
                     )),
-                );
-            } else {
-                // SCM-001 (a required .scm file is missing) is retired. The six
-                // descriptive documents (STATE, META, ECOSYSTEM, PLAYBOOK,
-                // AGENTIC, NEUROSYM) are clauses of the repository's
-                // `<name>_chora.deed`, not files, so absence is the canonical
-                // state. Files that DO exist are still validated above.
-                debug!(
-                    "{} not present (retired: now a clause of the chora deed)",
-                    filename
                 );
             }
         }
@@ -90,105 +190,11 @@ impl Analyzer for ScmFilesAnalyzer {
     }
 
     fn fix(&self, _path: &Path, _config: &Config, _findings: &[Finding]) -> Result<Vec<String>> {
-        // SCM files should be manually created with proper content
+        // Bots read deeds; they never write one or hand-convert a legacy file.
         Ok(vec![
-            "SCM files must be manually created with appropriate content.".to_string(),
-            "Use templates from existing hyperpolymath repos.".to_string(),
+            "The chora deed is owner-authored: finishingbot does not write or convert it."
+                .to_string(),
         ])
-    }
-}
-
-impl ScmFilesAnalyzer {
-    /// Validate SCM file content
-    fn validate_scm_content(
-        &self,
-        filename: &str,
-        content: &str,
-        file_path: &Path,
-        result: &mut AnalysisResult,
-    ) {
-        // Check for SPDX header
-        if !content.starts_with(";; SPDX-License-Identifier:") {
-            result.add(
-                Finding::new(
-                    &format!("SCM-002-{}", filename),
-                    &format!("{} missing SPDX header", filename),
-                    Severity::Warning,
-                    &format!("{} should start with SPDX license identifier.", filename),
-                )
-                .with_file(file_path.to_path_buf())
-                .with_suggestion("Add ;; SPDX-License-Identifier: MPL-2.0 at the top"),
-            );
-        }
-
-        // Check minimum content length (should have substantial content)
-        if content.len() < 200 {
-            result.add(
-                Finding::new(
-                    &format!("SCM-003-{}", filename),
-                    &format!("{} appears incomplete", filename),
-                    Severity::Warning,
-                    &format!(
-                        "{} is very short ({}  bytes). May be a placeholder.",
-                        filename,
-                        content.len()
-                    ),
-                )
-                .with_file(file_path.to_path_buf())
-                .with_suggestion("Ensure file has complete documentation content"),
-            );
-        }
-
-        // Check for specific required sections based on file type
-        match filename {
-            "STATE.scm"
-                if !content.contains("metadata") || !content.contains("current-position") =>
-            {
-                result.add(
-                    Finding::new(
-                        "SCM-004-STATE",
-                        "STATE.scm missing required sections",
-                        Severity::Warning,
-                        "STATE.scm should contain 'metadata' and 'current-position' sections.",
-                    )
-                    .with_file(file_path.to_path_buf())
-                    .with_suggestion(
-                        "Add required sections following hyperpolymath STATE.scm format",
-                    ),
-                );
-            }
-            "META.scm"
-                if !content.contains("architecture-decisions")
-                    || !content.contains("development-practices") =>
-            {
-                result.add(
-                    Finding::new(
-                        "SCM-004-META",
-                        "META.scm missing required sections",
-                        Severity::Warning,
-                        "META.scm should contain 'architecture-decisions' and 'development-practices'.",
-                    )
-                    .with_file(file_path.to_path_buf())
-                    .with_suggestion("Add ADRs and development practices following hyperpolymath META.scm spec"),
-                );
-            }
-            "ECOSYSTEM.scm"
-                if !content.contains("position-in-ecosystem")
-                    || !content.contains("related-projects") =>
-            {
-                result.add(
-                    Finding::new(
-                        "SCM-004-ECOSYSTEM",
-                        "ECOSYSTEM.scm missing required sections",
-                        Severity::Warning,
-                        "ECOSYSTEM.scm should contain 'position-in-ecosystem' and 'related-projects'.",
-                    )
-                    .with_file(file_path.to_path_buf())
-                    .with_suggestion("Define ecosystem position and relationships"),
-                );
-            }
-            _ => {}
-        }
     }
 }
 
@@ -196,6 +202,8 @@ impl ScmFilesAnalyzer {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    const DEED: &str = ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed\n  :schema-version \"1.0.0\"\n  :canonical-name \"x\"\n  (status :phase beta))\n";
 
     fn ids(dir: &Path) -> Vec<String> {
         ScmFilesAnalyzer
@@ -208,24 +216,82 @@ mod tests {
     }
 
     #[test]
-    fn absent_scm_files_are_not_a_finding() {
-        // The six descriptive documents are clauses of <name>_chora.deed now.
+    fn a_deed_with_status_and_no_scm_is_clean() {
         let d = TempDir::new().unwrap();
-        std::fs::write(d.path().join("x_chora.deed"), "(deed)").unwrap();
-        let got = ids(d.path());
-        assert!(
-            got.iter().all(|i| !i.starts_with("SCM-001")),
-            "SCM-001 is retired, got {:?}",
-            got
-        );
-        assert!(got.is_empty(), "got {:?}", got);
+        std::fs::write(d.path().join("x_chora.deed"), DEED).unwrap();
+        assert!(ids(d.path()).is_empty(), "{:?}", ids(d.path()));
     }
 
     #[test]
-    fn a_misplaced_scm_file_is_still_reported() {
-        // Negative control: the analyzer still runs for files that exist.
+    fn no_deed_is_deed_001_and_absent_scm_is_not_a_finding() {
         let d = TempDir::new().unwrap();
+        assert_eq!(ids(d.path()), vec!["DEED-001".to_string()]);
+    }
+
+    #[test]
+    fn two_deeds_is_deed_002() {
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("x_chora.deed"), DEED).unwrap();
+        std::fs::write(d.path().join("y_chora.deed"), DEED).unwrap();
+        assert_eq!(ids(d.path()), vec!["DEED-002".to_string()]);
+    }
+
+    #[test]
+    fn an_unparseable_or_wrong_head_deed_is_deed_003_with_a_line() {
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("x_chora.deed"), "(repo-deed\n\n :a").unwrap();
+        let r = ScmFilesAnalyzer
+            .analyze(d.path(), &Config::default())
+            .unwrap();
+        let f = r.findings.iter().find(|f| f.id == "DEED-003").unwrap();
+        assert_eq!(f.severity, Severity::Error);
+        assert_eq!(f.line, Some(3));
+
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("x_chora.deed"), "(praxis-deed :a \"b\")").unwrap();
+        assert_eq!(ids(d.path()), vec!["DEED-003".to_string()]);
+    }
+
+    #[test]
+    fn missing_status_is_deed_004_unless_state_deed_exists() {
+        let d = TempDir::new().unwrap();
+        std::fs::write(
+            d.path().join("x_chora.deed"),
+            "(repo-deed :canonical-name \"x\")",
+        )
+        .unwrap();
+        assert_eq!(ids(d.path()), vec!["DEED-004".to_string()]);
+        let dd = d.path().join(".machine_readable/descriptiles");
+        std::fs::create_dir_all(&dd).unwrap();
+        std::fs::write(dd.join("STATE.deed"), "(descriptile-deed)").unwrap();
+        assert!(ids(d.path()).is_empty());
+    }
+
+    #[test]
+    fn legacy_scm_is_reported_as_migrate_wherever_it_is_and_never_validated() {
+        let d = TempDir::new().unwrap();
+        std::fs::write(d.path().join("x_chora.deed"), DEED).unwrap();
         std::fs::write(d.path().join("STATE.scm"), ";; x\n").unwrap();
-        assert!(ids(d.path()).contains(&"SCM-005-STATE.scm".to_string()));
+        std::fs::create_dir_all(d.path().join(".machine_readable/6scm")).unwrap();
+        std::fs::write(d.path().join(".machine_readable/META.scm"), "(meta)").unwrap();
+        std::fs::write(d.path().join(".machine_readable/6scm/ECOSYSTEM.scm"), "(e)").unwrap();
+        let mut got = ids(d.path());
+        got.sort();
+        assert_eq!(
+            got,
+            vec![
+                "SCM-006-ECOSYSTEM.scm".to_string(),
+                "SCM-006-META.scm".to_string(),
+                "SCM-006-STATE.scm".to_string()
+            ]
+        );
+        let r = ScmFilesAnalyzer
+            .analyze(d.path(), &Config::default())
+            .unwrap();
+        for f in &r.findings {
+            assert_eq!(f.severity, Severity::Warning);
+            let s = f.suggestion.as_deref().unwrap_or("");
+            assert!(s.contains("Migrate") && !s.contains("Move"), "{s}");
+        }
     }
 }

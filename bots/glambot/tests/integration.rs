@@ -35,12 +35,12 @@ fn create_well_formed_repo() -> TempDir {
     // Valid YAML
     std::fs::write(path.join("config.yml"), "name: test\nversion: 1.0\n").unwrap();
 
-    // .machine_readable/ with SCM files
-    let mr_dir = path.join(".machine_readable");
-    std::fs::create_dir_all(&mr_dir).unwrap();
-    std::fs::write(mr_dir.join("STATE.scm"), "(state (metadata))").unwrap();
-    std::fs::write(mr_dir.join("META.scm"), "(meta)").unwrap();
-    std::fs::write(mr_dir.join("ECOSYSTEM.scm"), "(ecosystem)").unwrap();
+    // The repo deed (its machine-readable facts)
+    std::fs::write(
+        path.join("test_chora.deed"),
+        "(repo-deed :canonical-name \"test\" (status :phase beta))\n",
+    )
+    .unwrap();
 
     // robots.txt
     std::fs::write(path.join("robots.txt"), "User-agent: *\nAllow: /\n").unwrap();
