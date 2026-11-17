@@ -90,7 +90,7 @@ Evaluates repository discoverability through README descriptions, HTML meta tags
 
 === Machine-Readability (`MachineAnalyzer`)
 
-Validates JSON/YAML file syntax, structured data presence, robots.txt, and the `.machine_readable/` directory. Legacy SCM files there are validated only if present; their absence is canonical (the descriptiles are clauses of `<name>_chora.deed`).
+Validates JSON/YAML file syntax, structured data presence, robots.txt, and the repo deed: the one `<repo>_chora.deed` at the root (D312), read through the shared `deed-reader/` crate. The repo's machine-readable facts are that deed's clauses, so a `.machine_readable/` directory is not required and legacy `.scm` files are not read.
 
 [cols="1,2,1"]
 |===
@@ -101,8 +101,10 @@ Validates JSON/YAML file syntax, structured data presence, robots.txt, and the `
 | MACH-003 | Missing structured data (HTML) | Warning
 | MACH-004 | Invalid JSON-LD | Error
 | MACH-005 | Missing robots.txt | Info
-| MACH-006 | Missing .machine_readable/ directory | Warning
+| MACH-006 | _Retired_: a missing `.machine_readable/` directory is not reported; a repo whose facts are all in its chora deed needs none | n/a
 | MACH-007 | _Retired_: the STATE/META/ECOSYSTEM `.scm` files are clauses of the repository's `<name>_chora.deed`, so their absence is not reported | n/a
+| MACH-008 | Missing `<repo>_chora.deed` | Warning
+| MACH-009 | Chora deed cannot be read: more than one (D312), unreadable, unparseable (with its line), or not a `repo-deed` | Error
 |===
 
 **Auto-fixes:** Adds schema.org JSON-LD template (MACH-003), creates robots.txt (MACH-005).

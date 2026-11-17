@@ -45,8 +45,8 @@ impl Analyzer for MachineAnalyzer {
         // Check for robots.txt
         self.check_robots_txt(path, &mut result);
 
-        // Check for .machine_readable/ directory
-        self.check_machine_readable_dir(path, &mut result);
+        // Check the repo deed (<repo>_chora.deed): where repo facts live
+        self.check_chora_deed(path, &mut result);
 
         result.duration_ms = start.elapsed().as_millis() as u64;
         Ok(result)
@@ -263,31 +263,60 @@ impl MachineAnalyzer {
         }
     }
 
-    fn check_machine_readable_dir(&self, path: &Path, result: &mut AnalysisResult) {
-        let mr_dir = path.join(".machine_readable");
-
-        if !mr_dir.exists() {
-            result.add(
+    /// The repo's machine-readable facts live in its one `<repo>_chora.deed`
+    /// at the root (D312), read through `gitbot-deed-reader`.
+    ///
+    /// - MACH-008 (warning): no chora deed.
+    /// - MACH-009 (error): more than one, unreadable, unparseable, or not a
+    ///   `repo-deed`.
+    ///
+    /// Retired: MACH-006 (missing `.machine_readable/` directory; a repo whose
+    /// facts are all in its chora deed needs none) and MACH-007 (missing
+    /// STATE/META/ECOSYSTEM `.scm`; those are deed clauses now). Neither is
+    /// auto-fixable: the deed is owner-authored and bots never write one.
+    fn check_chora_deed(&self, path: &Path, result: &mut AnalysisResult) {
+        match deed_reader::load_chora(path) {
+            Ok(Some(chora)) => {
+                result.files_checked += 1;
+                debug!("read {}", chora.path.display());
+            }
+            Ok(None) => result.add(
                 Finding::new(
-                    "MACH-006",
-                    "Missing .machine_readable/ directory",
+                    "MACH-008",
+                    "Missing chora deed",
                     Severity::Warning,
-                    "No .machine_readable/ directory found (contractiles and other machine-readable estate metadata live here).",
+                    "No <repo>_chora.deed at the repository root: the repo's machine-readable \
+                     facts (identity, state, meta, ecosystem, agentic, playbook) are its clauses (D312).",
                 )
-                .with_file(mr_dir.clone())
-                // Not auto-fixable: git cannot track an empty directory, and a
-                // placeholder file would be invented content. What belongs here
-                // (contractiles, the chora deed) is owner-authored.
-                .with_suggestion("Create the .machine_readable/ directory"),
-            );
-            return;
+                .with_file(path.to_path_buf())
+                .with_suggestion(
+                    "Mint the deed from rsr-template-repo's model (rsr-template-repo_chora.deed)",
+                ),
+            ),
+            Err(e) => {
+                let mut f = Finding::new(
+                    "MACH-009",
+                    "Chora deed cannot be read",
+                    Severity::Error,
+                    &e.to_string(),
+                )
+                .with_file(path.to_path_buf())
+                .with_suggestion(
+                    "Check it with standards' `bun 1-formats/deed/tools/deed_lint.js FILE`",
+                );
+                match &e {
+                    deed_reader::ChoraError::Parse(p, de) => {
+                        f = f.with_file(p.clone()).with_line(de.line);
+                    }
+                    deed_reader::ChoraError::Io(p, _) | deed_reader::ChoraError::WrongHead(p, _) => {
+                        f = f.with_file(p.clone());
+                    }
+                    // Several deeds: no single offender, the directory stands.
+                    deed_reader::ChoraError::Multiple(_) => {}
+                }
+                result.add(f);
+            }
         }
-
-        result.files_checked += 1;
-
-        // MACH-007 (missing STATE/META/ECOSYSTEM .scm) is retired: those
-        // documents are clauses of the repository's `<name>_chora.deed` now,
-        // not files under .machine_readable/, so their absence is canonical.
     }
 }
 
@@ -415,12 +444,12 @@ mod tests {
             "name: test\nversion: 1.0.0\n",
         )
         .unwrap();
-        // Create .machine_readable/ with SCM files
-        let mr_dir = dir.path().join(".machine_readable");
-        std::fs::create_dir_all(&mr_dir).unwrap();
-        std::fs::write(mr_dir.join("STATE.scm"), "(state)").unwrap();
-        std::fs::write(mr_dir.join("META.scm"), "(meta)").unwrap();
-        std::fs::write(mr_dir.join("ECOSYSTEM.scm"), "(ecosystem)").unwrap();
+        // The repo's machine-readable facts: its chora deed at the root.
+        std::fs::write(
+            dir.path().join("test_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed :canonical-name \"test\" (status :phase beta))\n",
+        )
+        .unwrap();
         // Create robots.txt
         std::fs::write(dir.path().join("robots.txt"), "User-agent: *\nAllow: /\n").unwrap();
 
@@ -454,36 +483,31 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_machine_readable_dir() {
+    fn test_missing_chora_deed() {
         let dir = TempDir::new().unwrap();
-        // No .machine_readable/ directory
-
-        let analyzer = MachineAnalyzer::default();
-        let config = default_config();
-        let result = analyzer.analyze(dir.path(), &config).unwrap();
-
-        let ids: Vec<&str> = result.findings.iter().map(|f| f.id.as_str()).collect();
-        assert!(
-            ids.contains(&"MACH-006"),
-            "Should report MACH-006 for missing .machine_readable/"
-        );
+        let ids = ids(dir.path());
+        assert!(ids.contains(&"MACH-008".to_string()), "{ids:?}");
     }
 
     #[test]
-    fn mach_006_is_not_auto_fixable_and_fix_creates_nothing() {
+    fn mach_008_is_not_auto_fixable_and_fix_creates_nothing() {
         let dir = TempDir::new().unwrap();
         let analyzer = MachineAnalyzer::default();
         let config = default_config();
         let result = analyzer.analyze(dir.path(), &config).unwrap();
-        let f = result.findings.iter().find(|f| f.id == "MACH-006").unwrap();
-        assert!(!f.fixable, "an empty dir is untracked by git; not fixable");
-        let findings = vec![f.clone()];
-        let fixes = analyzer.fix(dir.path(), &config, &findings).unwrap();
+        let f = result.findings.iter().find(|f| f.id == "MACH-008").unwrap();
+        assert!(
+            !f.fixable,
+            "the deed is owner-authored; bots never write one"
+        );
+        let fixes = analyzer
+            .fix(dir.path(), &config, std::slice::from_ref(f))
+            .unwrap();
         assert_eq!(
             fixes,
             vec!["No machine-readability fixes applicable".to_string()]
         );
-        assert!(!dir.path().join(".machine_readable").exists());
+        assert!(deed_reader::find_chora(dir.path()).unwrap().is_none());
     }
 
     fn ids(dir: &Path) -> Vec<String> {
@@ -497,26 +521,78 @@ mod tests {
     }
 
     #[test]
-    fn mach_007_is_retired() {
+    fn mach_006_and_007_are_retired_and_a_deed_needs_no_machine_readable_dir() {
         let dir = TempDir::new().unwrap();
-        std::fs::create_dir_all(dir.path().join(".machine_readable")).unwrap();
+        std::fs::write(
+            dir.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed :x y)\n",
+        )
+        .unwrap();
         let got = ids(dir.path());
-        assert!(!got.contains(&"MACH-007".to_string()), "{got:?}");
-        assert!(!got.contains(&"MACH-006".to_string()), "{got:?}");
-        // The directory itself is still expected.
-        let empty = TempDir::new().unwrap();
-        assert!(ids(empty.path()).contains(&"MACH-006".to_string()));
+        for retired in ["MACH-006", "MACH-007", "MACH-008", "MACH-009"] {
+            assert!(!got.contains(&retired.to_string()), "{retired}: {got:?}");
+        }
+        assert!(!dir.path().join(".machine_readable").exists());
+        // A .machine_readable/ directory alone does not stand in for the deed.
+        let mr = TempDir::new().unwrap();
+        std::fs::create_dir_all(mr.path().join(".machine_readable")).unwrap();
+        assert!(ids(mr.path()).contains(&"MACH-008".to_string()));
     }
 
     #[test]
-    fn mach_006_is_not_auto_fixable() {
-        // The README documents the auto-fix list; MACH-006 must stay off it.
-        let dir = TempDir::new().unwrap();
-        let a = MachineAnalyzer::default();
-        let findings = a.analyze(dir.path(), &default_config()).unwrap().findings;
-        assert!(findings.iter().any(|f| f.id == "MACH-006"));
-        a.fix(dir.path(), &default_config(), &findings).unwrap();
-        assert!(!dir.path().join(".machine_readable").exists());
+    fn mach_009_for_two_deeds_a_parse_error_or_a_wrong_head() {
+        let two = TempDir::new().unwrap();
+        std::fs::write(two.path().join("a_chora.deed"), "(repo-deed :x y)").unwrap();
+        std::fs::write(two.path().join("b_chora.deed"), "(repo-deed :x y)").unwrap();
+        assert!(ids(two.path()).contains(&"MACH-009".to_string()));
+
+        let bad = TempDir::new().unwrap();
+        std::fs::write(
+            bad.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(repo-deed\n :a",
+        )
+        .unwrap();
+        let r = MachineAnalyzer::default()
+            .analyze(bad.path(), &default_config())
+            .unwrap();
+        let f = r.findings.iter().find(|f| f.id == "MACH-009").unwrap();
+        assert_eq!(f.severity, Severity::Error);
+        assert_eq!(f.line, Some(3));
+        assert_eq!(
+            f.file.as_deref(),
+            Some(bad.path().join("x_chora.deed").as_path())
+        );
+
+        let head = TempDir::new().unwrap();
+        std::fs::write(
+            head.path().join("x_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n(praxis-deed :x y)\n",
+        )
+        .unwrap();
+        assert!(ids(head.path()).contains(&"MACH-009".to_string()));
+    }
+
+    #[test]
+    fn mach_009_names_the_offending_deed_file_for_every_single_file_error() {
+        // A wrong doc-head and an unreadable file (not UTF-8) carry the deed path;
+        // the finding must point at it, not at the repository directory.
+        let head = TempDir::new().unwrap();
+        let deed = head.path().join("x_chora.deed");
+        std::fs::write(
+            &deed,
+            ";; SPDX-License-Identifier: MPL-2.0\n(praxis-deed :x y)\n",
+        )
+        .unwrap();
+        let unreadable = TempDir::new().unwrap();
+        let bad = unreadable.path().join("x_chora.deed");
+        std::fs::write(&bad, [0xff, 0xfe, 0xfd]).unwrap();
+        for (dir, file) in [(head.path(), &deed), (unreadable.path(), &bad)] {
+            let r = MachineAnalyzer::default()
+                .analyze(dir, &default_config())
+                .unwrap();
+            let f = r.findings.iter().find(|f| f.id == "MACH-009").unwrap();
+            assert_eq!(f.file.as_deref(), Some(file.as_path()), "{}", f.message);
+        }
     }
 
     const JSONC: &str =

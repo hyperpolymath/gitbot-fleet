@@ -480,6 +480,7 @@ dependencies = [
  "clap",
  "criterion",
  "git2",
+ "gitbot-deed-reader",
  "gitbot-shared-context",
  "glob",
  "globset",
@@ -630,6 +631,10 @@ dependencies = [
  "libgit2-sys",
  "log",
 ]
+
+[[package]]
+name = "gitbot-deed-reader"
+version = "0.1.0"
 
 [[package]]
 name = "gitbot-shared-context"
