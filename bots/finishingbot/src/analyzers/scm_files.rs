@@ -22,7 +22,7 @@
 //! - `DEED-003` (error): the chora deed cannot be read or parsed, or its
 //!   doc-head is not `repo-deed`.
 //! - `DEED-004` (warning): no project state: neither a `(status …)` clause in
-//!   the chora deed nor a `descriptiles/STATE.deed`.
+//!   the chora deed nor a `.machine_readable/descriptiles/STATE.deed`.
 //! - `SCM-006-<NAME>.scm` (warning): a retired `.scm` document is present.
 //!
 //! Retired: `SCM-001` (missing `.scm`), `SCM-002`/`003`/`004` (validating a

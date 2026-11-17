@@ -49,7 +49,7 @@ the gitbot-fleet shared context layer and makes the final release-readiness dete
 |No
 
 |**Repo Deed** (the `scm_files` report key)
-|Reads the one `<repo>_chora.deed` at the root (through `deed-reader/`): none is DEED-001 (warning), more than one is DEED-002 (error, D312), unreadable or not a `repo-deed` is DEED-003 (error), no `(status …)` clause and no `descriptiles/STATE.deed` is DEED-004 (warning). A retired STATE, META, ECOSYSTEM, PLAYBOOK, AGENTIC or NEUROSYM `.scm` at the root, under `.machine_readable/` or `6scm/` is SCM-006 (warning, "migrate"): it is not validated and is never to be moved
+|Reads the one `<repo>_chora.deed` at the root (through `deed-reader/`): none is DEED-001 (warning), more than one is DEED-002 (error, D312), unreadable or not a `repo-deed` is DEED-003 (error), no `(status …)` clause and no `.machine_readable/descriptiles/STATE.deed` is DEED-004 (warning). A retired STATE, META, ECOSYSTEM, PLAYBOOK, AGENTIC or NEUROSYM `.scm` at the root, under `.machine_readable/` or under `.machine_readable/6scm/` is SCM-006 (warning, "migrate"): it is not validated and is never to be moved
 |No
 
 |**Testing**
@@ -418,7 +418,7 @@ src/
     placeholder.rs           Placeholder detection and removal
     claims.rs                Documentation claims verification
     release.rs               Release artifact and security checks
-    scm_files.rs             .machine_readable/ SCM file validation
+    scm_files.rs             Repo deed (<repo>_chora.deed) checks; retired .scm reported as "migrate"
     testing.rs               Testing infrastructure analysis
     tooling.rs               Tooling and CI workflow validation
     v1_readiness.rs          V1 release readiness assessment

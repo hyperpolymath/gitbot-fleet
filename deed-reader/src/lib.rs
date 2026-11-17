@@ -381,9 +381,15 @@ impl Parser {
                 }
                 Some('\t') => return Err(self.err("a tab is not a valid separator (use spaces)")),
                 Some(';') => {
+                    // A comment runs to the line end, which is LF or CRLF: a CR
+                    // inside it that does not start a CRLF is a bare CR, an
+                    // error here as everywhere else.
                     while let Some(c) = self.peek() {
                         if c == '\n' {
                             break;
+                        }
+                        if c == '\r' && self.s.get(self.i + 1) != Some(&'\n') {
+                            return Err(self.err("a bare CR is not a line end (use LF or CRLF)"));
                         }
                         self.bump();
                     }
@@ -634,6 +640,16 @@ mod tests {
         assert!(e.message.contains("nest deeper than 64"), "{e}");
         let quoted = format!("(a :v '{}{})", "(".repeat(100_000), ")".repeat(100_000));
         assert!(parse(&quoted).is_err());
+    }
+
+    #[test]
+    fn a_bare_cr_inside_a_comment_is_an_error_but_crlf_and_lf_end_one() {
+        let e = parse("(repo-deed ; comment\rstill comment\n)").unwrap_err();
+        assert!(e.message.contains("bare CR"), "{e}");
+        assert_eq!(e.line, 1);
+        assert!(parse("(repo-deed ; comment\r\n)").is_ok());
+        assert!(parse("(repo-deed ; comment\n)").is_ok());
+        assert!(parse(";; SPDX-License-Identifier: MPL-2.0\r\n(repo-deed)\r\n").is_ok());
     }
 
     #[test]
