@@ -81,9 +81,10 @@ CENSUS="$SELF_DIR/lib/a2ml-census.js"
 usage() { sed -n '/^# Usage:/,/^set -euo/p' "$0" | sed '$d; s/^# \{0,1\}//' >&2; exit 64; }
 die() { printf 'fix-a2ml-via-kyx: %s\n' "$1" >&2; exit "${2:-2}"; }
 
-# The tracked .a2ml files, NUL-safe, sorted, case-insensitive suffix.
+# The tracked .a2ml files, NUL-delimited end to end (a name with a newline in
+# it stays one name, and is refused below), sorted, case-insensitive suffix.
 a2ml_files() {
-  git -C "$1" ls-files -z | tr '\0' '\n' | grep -iE '\.a2ml$' | LC_ALL=C sort || true
+  git -C "$1" ls-files -z | grep -zaiE '\.a2ml$' | LC_ALL=C sort -z || true
 }
 
 check_mode=0
@@ -93,13 +94,20 @@ REPO="$1"
 [[ -d "$REPO" ]] || die "not a directory: $REPO" 64
 git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a git work tree: $REPO" 64
 REPO="$(cd "$REPO" && git rev-parse --show-toplevel)"
+REPO="$(cd "$REPO" && pwd -P)"
 
 if [[ "$check_mode" -eq 1 ]]; then
-  a2ml_files "$REPO" | grep -c . || true
+  a2ml_files "$REPO" | tr -cd '\0' | wc -c | tr -d ' '
   exit 0
 fi
 
-mapfile -t FILES < <(a2ml_files "$REPO")
+# Every refusal is recorded with jq, so it is needed before anything is
+# classified, not only on kyX's path: without it there would be no report.
+for tool in jq sha256sum; do
+  command -v "$tool" >/dev/null 2>&1 || die "$tool is required to record any outcome; nothing was changed" 69
+done
+
+mapfile -d '' -t FILES < <(a2ml_files "$REPO")
 if [[ "${#FILES[@]}" -eq 0 ]]; then
   echo "fix-a2ml-via-kyx: no .a2ml in $REPO; nothing to do"
   exit 0
@@ -114,42 +122,59 @@ done
 REPORT_DIR="${A2ML_REPORT_DIR:-}"
 if [[ -z "$REPORT_DIR" ]]; then REPORT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/a2ml-kyx.XXXXXX")"; fi
 mkdir -p "$REPORT_DIR"
-case "$(cd "$REPORT_DIR" && pwd)/" in "$REPO"/*) die "A2ML_REPORT_DIR must be outside the repository" 64 ;; esac
+# Physical paths on both sides: a symlink outside that points inside is inside.
+REPORT_DIR="$(cd "$REPORT_DIR" && pwd -P)"
+case "$REPORT_DIR/" in "$REPO"/*) die "A2ML_REPORT_DIR must be outside the repository" 64 ;; esac
+for name in a2ml-report.json a2ml-pr.md a2ml-p1-issue.md; do
+  if [[ -L "$REPORT_DIR/$name" || ( -e "$REPORT_DIR/$name" && ! -f "$REPORT_DIR/$name" ) ]]; then
+    die "$REPORT_DIR/$name exists and is not a regular file; refusing to write through it" 64
+  fi
+done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/a2ml-kyx-work.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 : > "$WORK/converted.jsonl"
 : > "$WORK/refused.jsonl"
 
+# Replace the random work directory with <work> in a file, literally.
+scrub() {
+  local text
+  text="$(<"$1")"
+  [[ -n "$text" ]] || return 0
+  printf '%s\n' "${text//"$WORK"/<work>}" > "$1"
+}
+
 refuse() { # path family spec reason...
   local path="$1" family="$2" spec="$3"; shift 3
   jq -nc --arg path "$path" --arg family "$family" --arg spec "$spec" \
     --args '{path:$path, family:$family, spec:(if $spec=="" then null else $spec end), reasons:$ARGS.positional}' \
-    "$@" >> "$WORK/refused.jsonl"
+    -- "$@" >> "$WORK/refused.jsonl"
 }
 
-# family <path> -> "family<TAB>spec<TAB>kyx(0|1)"; the table rhodibot's
-# canon/a2ml.rs reports from, so the finding and the fixer agree.
+# family <path> -> "family|spec|kyx(0|1)", spec empty when none; the table
+# rhodibot's canon/a2ml.rs reports from, so the finding and the fixer agree.
+# The delimiter is "|", not a tab: a tab is IFS whitespace, so `read` would
+# collapse an empty spec and shift kyx into it.
 family_of() {
   local lower name
   lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
   name="${lower##*/}"
   case "$name" in
-    ecosystem.a2ml) printf 'ECOSYSTEM\tmeta-ecosystem-to-repo-deed.adoc\t1\n' ;;
-    meta.a2ml) printf 'META\tmeta-ecosystem-to-repo-deed.adoc\t0\n' ;;
-    state.a2ml) printf 'STATE\tstate-v1-decision.adoc\t0\n' ;;
-    agentic.a2ml) printf 'AGENTIC\tagentic-neurosym-playbook-to-repo-deed.adoc\t0\n' ;;
-    neurosym.a2ml) printf 'NEUROSYM\tagentic-neurosym-playbook-to-repo-deed.adoc\t0\n' ;;
-    playbook.a2ml) printf 'PLAYBOOK\tagentic-neurosym-playbook-to-repo-deed.adoc\t0\n' ;;
-    clade.a2ml) printf 'CLADE\tclade-to-repo-deed.adoc\t0\n' ;;
-    0-ai-manifest.a2ml) printf 'AI-MANIFEST\tai-manifest-decision.adoc\t0\n' ;;
-    anchor.a2ml) printf 'ANCHOR\t\t0\n' ;;
-    rsr-profile.a2ml) printf 'RSR-PROFILE\t\t0\n' ;;
-    rsr-criteria-v2.a2ml) printf 'RSR-CRITERIA\trsr-criteria-to-praxis-deed.adoc\t0\n' ;;
+    ecosystem.a2ml) printf 'ECOSYSTEM|meta-ecosystem-to-repo-deed.adoc|1\n' ;;
+    meta.a2ml) printf 'META|meta-ecosystem-to-repo-deed.adoc|0\n' ;;
+    state.a2ml) printf 'STATE|state-v1-decision.adoc|0\n' ;;
+    agentic.a2ml) printf 'AGENTIC|agentic-neurosym-playbook-to-repo-deed.adoc|0\n' ;;
+    neurosym.a2ml) printf 'NEUROSYM|agentic-neurosym-playbook-to-repo-deed.adoc|0\n' ;;
+    playbook.a2ml) printf 'PLAYBOOK|agentic-neurosym-playbook-to-repo-deed.adoc|0\n' ;;
+    clade.a2ml) printf 'CLADE|clade-to-repo-deed.adoc|0\n' ;;
+    0-ai-manifest.a2ml) printf 'AI-MANIFEST|ai-manifest-decision.adoc|0\n' ;;
+    anchor.a2ml) printf 'ANCHOR||0\n' ;;
+    rsr-profile.a2ml) printf 'RSR-PROFILE||0\n' ;;
+    rsr-criteria-v2.a2ml) printf 'RSR-CRITERIA|rsr-criteria-to-praxis-deed.adoc|0\n' ;;
     *)
-      if [[ "$lower" == *bot_directives/* ]]; then printf 'BOT-DIRECTIVES\t\t0\n'
-      elif [[ "$name" == *file.a2ml ]]; then printf 'CONTRACTILE\t\t0\n'
-      else printf 'UNMAPPED\t\t0\n'; fi ;;
+      if [[ "$lower" == *bot_directives/* ]]; then printf 'BOT-DIRECTIVES||0\n'
+      elif [[ "$name" == *file.a2ml && "$lower" == *contractiles/* ]]; then printf 'CONTRACTILE||0\n'
+      else printf 'UNMAPPED||0\n'; fi ;;
   esac
 }
 
@@ -182,14 +207,38 @@ AFFIRMED="${AFFIRMED:-$(date -u +%Y-%m-%d)}"
 ACCEPT_DROPS="${A2ML_ACCEPT_SPEC_DROPS:-0}"
 [[ "$ACCEPT_DROPS" == 0 || "$ACCEPT_DROPS" == 1 ]] || die "A2ML_ACCEPT_SPEC_DROPS must be 0 or 1" 64
 
-# Exactly one chora deed at the root (D312), or none to convert against.
-shopt -s nullglob
-choras=("$REPO"/*_chora.deed)
-shopt -u nullglob
+# Exactly one chora deed at the root (D312), or none to convert against. It is
+# taken from the index, not the filesystem: the PR carries only the deed and
+# the deletion, so the chora kyX reads must be the committed one.
+mapfile -d '' -t choras < <(git -C "$REPO" ls-files -z -- ':(glob)*_chora.deed')
+
+# Why `src` cannot be converted in this work tree right now, or nothing. Asked
+# BEFORE kyX runs, so a failed `git add`/`git rm` cannot leave half a change.
+preflight() { # src
+  local src="$1" dir
+  if [[ -n "$(git -C "$REPO" status --porcelain -- "${choras[0]}")" ]]; then
+    echo "${choras[0]} has uncommitted changes; kyX must read the committed chora deed the PR will reference."; return
+  fi
+  if [[ -n "$(git -C "$REPO" status --porcelain -- "$src")" ]]; then
+    echo "the source has uncommitted changes; kyX would convert content the PR does not delete."; return
+  fi
+  # Each directory on the way to the target must be absent or a real
+  # directory: a symlink would put the deed outside the work tree.
+  dir="$REPO"
+  for part in .machine_readable descriptiles; do
+    dir="$dir/$part"
+    if [[ -L "$dir" || ( -e "$dir" && ! -d "$dir" ) ]]; then
+      echo "${dir#"$REPO"/} is a symlink or not a directory; the deed is written only inside the work tree."; return
+    fi
+  done
+  if git -C "$REPO" check-ignore -q --no-index -- "$TARGET"; then
+    echo "$TARGET is gitignored here, so it could not be staged."; return
+  fi
+}
 
 eco_sources=()
 for f in "${FILES[@]}"; do
-  IFS=$'\t' read -r fam spec kyx <<< "$(family_of "$f")"
+  IFS='|' read -r fam spec kyx <<< "$(family_of "$f")"
   if [[ "$kyx" != 1 ]]; then
     if [[ -n "$spec" ]]; then
       refuse "$f" "$fam" "$spec" "kyX has no front end for $fam yet; $spec decides where it goes. Do not hand-convert (D313)."
@@ -222,11 +271,19 @@ for src in "${eco_sources[@]}"; do
     refuse "$src" ECOSYSTEM "$spec" "$TARGET already exists; it is never overwritten. Reconcile the two by hand-review, not by hand-conversion."
     continue
   fi
+  blocked="$(preflight "$src")"
+  if [[ -n "$blocked" ]]; then
+    refuse "$src" ECOSYSTEM "$spec" "$blocked"
+    continue
+  fi
   need_tools
   out="$WORK/ECOSYSTEM.deed"; rm -f "$out" "$WORK/kyx.err" "$WORK/ast.json"
   rc=0
-  bun "$KYX" a2ml ecosystem "$REPO/$src" --chora "${choras[0]}" --affirmed "$AFFIRMED" --out "$out" \
+  bun "$KYX" a2ml ecosystem "$REPO/$src" --chora "$REPO/${choras[0]}" --affirmed "$AFFIRMED" --out "$out" \
     > "$WORK/kyx.out" 2> "$WORK/kyx.err" || rc=$?
+  # The work directory is random per run; a reason that names it would give
+  # the same refusal a new fingerprint every time, and a duplicate P1 issue.
+  scrub "$WORK/kyx.err"
   mapfile -t kyx_err < "$WORK/kyx.err"
   if [[ "$rc" -eq 1 ]]; then
     mapfile -t why < <(grep '^kyx: refused: ' "$WORK/kyx.err" | sed 's/^kyx: refused: /kyX refused: /')
@@ -243,6 +300,7 @@ for src in "${eco_sources[@]}"; do
     continue
   fi
   if ! bun "$DEED_LINT" --ecosystem --root "$REPO" "$out" > "$WORK/lint.out" 2>&1; then
+    scrub "$WORK/lint.out"
     mapfile -t lint < "$WORK/lint.out"
     refuse "$src" ECOSYSTEM "$spec" "kyX's output does not pass standards deed_lint --ecosystem --root (canon grammar):" "${lint[@]}"
     continue
@@ -255,7 +313,7 @@ for src in "${eco_sources[@]}"; do
     fi
   done
   if ! bun "$DEED_LINT" --ast-json "$out" > "$WORK/ast.json" 2> "$WORK/ast.err"; then
-    refuse "$src" ECOSYSTEM "$spec" "deed_lint --ast-json could not read kyX's output: $(head -c 400 "$WORK/ast.err")"
+    refuse "$src" ECOSYSTEM "$spec" "deed_lint --ast-json could not read kyX's output: $(scrub "$WORK/ast.err"; head -c 400 "$WORK/ast.err")"
     continue
   fi
   crc=0
@@ -265,28 +323,46 @@ for src in "${eco_sources[@]}"; do
       mapfile -t lost < <(jq -r '.missing[] | "value not found in the deed: " + (tojson)' <<< "$census_json")
       refuse "$src" ECOSYSTEM "$spec" "not lossless: the value census found source values the deed does not carry:" "${lost[@]}"
     else
-      refuse "$src" ECOSYSTEM "$spec" "the value census could not read the source, so losslessness is unproven: $(head -c 400 "$WORK/census.err")"
+      refuse "$src" ECOSYSTEM "$spec" "the value census could not read the source, so losslessness is unproven: $(scrub "$WORK/census.err"; head -c 400 "$WORK/census.err")"
     fi
     continue
   fi
-  # Every gate passed: stage the deed and the deletion.
-  mkdir -p "$REPO/$(dirname "$TARGET")"
-  cp "$out" "$REPO/$TARGET"
-  git -C "$REPO" add -- "$TARGET"
-  git -C "$REPO" rm -q -- "$src"
+  # Every gate passed: stage the deed and the deletion, all or nothing. The
+  # preflight makes a failure here unlikely; if one happens anyway, the tree
+  # and index are put back and the file is refused with the reason.
+  if ! { mkdir -p "$REPO/$(dirname "$TARGET")" \
+      && cp "$out" "$REPO/$TARGET" \
+      && git -C "$REPO" add -- "$TARGET" \
+      && git -C "$REPO" rm -q -- "$src"; } 2> "$WORK/stage.err"; then
+    git -C "$REPO" reset -q -- "$TARGET" "$src" 2>/dev/null || true
+    rm -f -- "$REPO/$TARGET"
+    git -C "$REPO" checkout -q -- "$src" 2>/dev/null || true
+    refuse "$src" ECOSYSTEM "$spec" "staging the conversion failed and was rolled back: $(head -c 400 "$WORK/stage.err")"
+    continue
+  fi
   jq -nc --arg source "$src" --arg target "$TARGET" --arg kyx "$KYX_COMMIT" --arg std "$STANDARDS_COMMIT" \
     --arg affirmed "$AFFIRMED" --argjson census "$census_json" --args \
     '{source:$source, target:$target, kyx_commit:$kyx, standards_commit:$std, affirmed:$affirmed,
       values_checked:$census.source_values, spec_drops:$ARGS.positional}' \
-    "${drops[@]}" >> "$WORK/converted.jsonl"
+    -- "${drops[@]}" >> "$WORK/converted.jsonl"
 done
 
 repo_name="$(basename "$REPO")"
 jq -n --arg repo "$repo_name" --arg accept "$ACCEPT_DROPS" \
   --slurpfile converted "$WORK/converted.jsonl" --slurpfile refused "$WORK/refused.jsonl" \
   '{repo:$repo, accept_spec_drops:($accept=="1"), converted:$converted, refused:$refused}' \
-  > "$REPORT_DIR/a2ml-report.json"
-rm -f "$REPORT_DIR/a2ml-pr.md" "$REPORT_DIR/a2ml-p1-issue.md"
+  > "$WORK/a2ml-report.json"
+
+# Each report is written to a new file in REPORT_DIR and renamed over the old
+# one: a rename replaces a link instead of writing through it.
+publish() { # source name
+  local tmp
+  tmp="$(mktemp "$REPORT_DIR/.$2.XXXXXX")"
+  cat -- "$1" > "$tmp"
+  mv -fT -- "$tmp" "$REPORT_DIR/$2"
+}
+publish "$WORK/a2ml-report.json" a2ml-report.json
+rm -f -- "$REPORT_DIR/a2ml-pr.md" "$REPORT_DIR/a2ml-p1-issue.md"
 
 n_conv="$(jq '.converted | length' "$REPORT_DIR/a2ml-report.json")"
 n_ref="$(jq '.refused | length' "$REPORT_DIR/a2ml-report.json")"
@@ -304,7 +380,8 @@ if [[ "$n_conv" -gt 0 ]]; then
     "",
     "Review it like any PR: the deed is owner-facing, and :affirmed records the date of this conversion.\n",
     "_Opened by gitbot-fleet `scripts/fix-a2ml-via-kyx.sh` (opportunistic A2ML retirement)._"
-  ' "$REPORT_DIR/a2ml-report.json" > "$REPORT_DIR/a2ml-pr.md"
+  ' "$REPORT_DIR/a2ml-report.json" > "$WORK/a2ml-pr.md"
+  publish "$WORK/a2ml-pr.md" a2ml-pr.md
 fi
 
 if [[ "$n_ref" -gt 0 ]]; then
@@ -319,7 +396,8 @@ if [[ "$n_ref" -gt 0 ]]; then
       ""),
     "What unblocks each: a kyX front end for the family (metadatastician/kyx), a mapping spec where there is none, or a fix to the source that kyX names.\n",
     "_Opened by gitbot-fleet `scripts/fix-a2ml-via-kyx.sh`; it will not open a second issue for the same refusal._"
-  ' "$REPORT_DIR/a2ml-report.json" > "$REPORT_DIR/a2ml-p1-issue.md"
+  ' "$REPORT_DIR/a2ml-report.json" > "$WORK/a2ml-p1-issue.md"
+  publish "$WORK/a2ml-p1-issue.md" a2ml-p1-issue.md
 fi
 
 echo "fix-a2ml-via-kyx: $n_conv converted, $n_ref refused; reports in $REPORT_DIR"

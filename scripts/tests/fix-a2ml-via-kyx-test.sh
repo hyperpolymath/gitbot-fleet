@@ -114,6 +114,10 @@ printf 'a = """\nmulti\nline"""\nb = [ "x", # c\n  "y" ]\nc = { d = 1, e = true 
 check "census: multi-line, arrays with comments, inline tables, literals; directives skipped" \
   '["multi\nline","x","y","1","true","lit"]' \
   "$(bun -e 'const {a2mlValues} = await import(process.argv[1]); console.log(JSON.stringify(a2mlValues(require("fs").readFileSync(process.argv[2],"utf8"))))' "$CENSUS" "$TMP/src3.a2ml")"
+printf 'a = """\nA\\u00e9\\U0001F600"""\nb = "\\u00e9"\n' > "$TMP/src4.a2ml"
+check "census: \\u and \\U escapes decode in multi-line strings as in single-line ones" \
+  '["Aé😀","é"]' \
+  "$(bun -e 'const {a2mlValues} = await import(process.argv[1]); console.log(JSON.stringify(a2mlValues(require("fs").readFileSync(process.argv[2],"utf8"))))' "$CENSUS" "$TMP/src4.a2ml")"
 printf 'oops\n' > "$TMP/bad.a2ml"
 check "census: an unreadable source is exit 2, not a pass" 2 "$(bun "$CENSUS" check "$TMP/bad.a2ml" "$TMP/ast.json" >/dev/null 2>&1; echo $?)"
 
@@ -132,6 +136,9 @@ check "nothing is committed" 1 "$(git -C "$r" rev-list --count HEAD)"
 check "report: one converted, with provenance" "$KYX_COMMIT" "$(jq -r '.converted[0].kyx_commit' "$REPORT/a2ml-report.json")"
 check "report: STATE refused as no front end" STATE "$(jq -r '.refused[] | select(.path|endswith("STATE.a2ml")) | .family' "$REPORT/a2ml-report.json")"
 check "report: Mustfile refused as a contractile with no spec" CONTRACTILE "$(jq -r '.refused[] | select(.path|endswith("Mustfile.a2ml")) | .family' "$REPORT/a2ml-report.json")"
+check "report: a contractile has no spec (null), not a shifted field" null "$(jq -c '.refused[] | select(.path|endswith("Mustfile.a2ml")) | .spec' "$REPORT/a2ml-report.json")"
+check "the issue says a contractile has no mapping spec yet, and links no spec" "1 0" \
+  "$(grep -c '^### CONTRACTILE — no mapping spec yet' "$REPORT/a2ml-p1-issue.md") $(grep -c 'mappings/0' "$REPORT/a2ml-p1-issue.md" || true)"
 check "a PR body is written" 1 "$(grep -c 'kyX conversion' "$REPORT/a2ml-pr.md")"
 check "a P1 issue body is written, fingerprinted" 1 "$(grep -c '^<!-- a2ml-kyx:fingerprint=' "$REPORT/a2ml-p1-issue.md")"
 check "the issue says never hand-convert" 1 "$(grep -c 'Do not hand-convert them' "$REPORT/a2ml-p1-issue.md")"
@@ -157,6 +164,20 @@ for mode in refuse drop lossy badgrammar crash; do
   esac
   if [[ "$reason" == *"$want"* ]]; then ok "$mode: the reason names the gate"; else no "$mode: reason ${reason@Q} lacks ${want@Q}"; fi
 done
+r=$(mkrepo g-fp); STUB_KYX=badgrammar run "$r"; fpa=$(head -1 "$REPORT/a2ml-p1-issue.md")
+STUB_KYX=badgrammar run "$r"
+check "badgrammar: the same refusal keeps its fingerprint across runs (no work path in it)" "$fpa" "$(head -1 "$REPORT/a2ml-p1-issue.md")"
+check "badgrammar: no reason names the work directory" 0 "$(grep -c 'a2ml-kyx-work' "$REPORT/a2ml-report.json" || true)"
+
+# A reason that starts with a dash is data, not a jq option.
+cat > "$TMP/dashlint.js" <<'JS'
+process.stdout.write("-x: not a deed\n"); process.exit(1);
+JS
+r=$(mkrepo dash); RC=0; REPORT="$TMP/report-dash"; mkdir -p "$REPORT"
+DEED_LINT="$TMP/dashlint.js" STUB_KYX=ok A2ML_REPORT_DIR="$REPORT" bash "$FIX" "$r" >/dev/null 2>&1 || RC=$?
+check "a lint line starting with '-' is recorded as a reason -> exit 2" 2 "$RC"
+check "the dash line is in the reasons" 1 "$(jq '[.refused[].reasons[] | select(. == "-x: not a deed")] | length' "$REPORT/a2ml-report.json")"
+
 r=$(mkrepo drop-ok); STUB_KYX=drop A2ML_ACCEPT_SPEC_DROPS=1 run "$r"
 check "A2ML_ACCEPT_SPEC_DROPS=1 accepts a spec §4 drop and lists it in the PR" 1 "$(grep -c 'Dropped under spec §4' "$REPORT/a2ml-pr.md")"
 
@@ -185,6 +206,49 @@ check "kyX missing when a file needs it: exit 69, operator error" 69 "$RC"
 check "kyX missing: nothing changed" "" "$(git -C "$r" status --porcelain)"
 r=$(mkrepo inside); RC=0; A2ML_REPORT_DIR="$r/reports" STUB_KYX=ok bash "$FIX" "$r" >/dev/null 2>&1 || RC=$?
 check "a report directory inside the repository is refused" 64 "$RC"
+
+# --- the work tree must be in a state the PR can carry ------------------------
+r=$(mkrepo dirtysrc); printf 'extra = "local edit"\n' >> "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml"
+STUB_KYX=ok run "$r"
+check "a source with uncommitted changes is refused before kyX runs" 1 "$(jq '[.refused[] | select(.reasons[0]|test("source has uncommitted"))] | length' "$REPORT/a2ml-report.json")"
+check "dirty source: only the local edit is in the tree; nothing staged" " M .machine_readable/descriptiles/ECOSYSTEM.a2ml" "$(git -C "$r" status --porcelain)"
+r=$(mkrepo dirtychora); printf ';; local edit\n' >> "$r/demo_chora.deed"; STUB_KYX=ok run "$r"
+check "a chora deed with uncommitted changes is refused" 1 "$(jq '[.refused[] | select(.reasons[0]|test("demo_chora.deed has uncommitted"))] | length' "$REPORT/a2ml-report.json")"
+r=$(mkrepo untrackedchora); git -C "$r" rm -q --cached demo_chora.deed; git -C "$r" commit -qm x; STUB_KYX=ok run "$r"
+check "an untracked chora deed does not count; refused, found 0" 1 "$(jq '[.refused[] | select(.reasons[0]|test("found 0"))] | length' "$REPORT/a2ml-report.json")"
+r=$(mkrepo ignored); printf '.machine_readable/descriptiles/*.deed\n' > "$r/.gitignore"; git -C "$r" add .gitignore; git -C "$r" commit -qm x
+STUB_KYX=ok run "$r"
+check "a gitignored target is refused before kyX runs" 1 "$(jq '[.refused[] | select(.reasons[0]|test("gitignored"))] | length' "$REPORT/a2ml-report.json")"
+check "gitignored target: the tree is untouched" "" "$(git -C "$r" status --porcelain)"
+r=$(mkrepo symdir); mkdir -p "$TMP/outside-desc"
+git -C "$r" mv .machine_readable/descriptiles/ECOSYSTEM.a2ml .machine_readable/ECOSYSTEM.a2ml
+git -C "$r" mv .machine_readable/descriptiles/STATE.a2ml .machine_readable/STATE.a2ml
+rmdir "$r/.machine_readable/descriptiles"; ln -s "$TMP/outside-desc" "$r/.machine_readable/descriptiles"; git -C "$r" commit -qm x
+STUB_KYX=ok run "$r"
+check "a symlinked descriptiles directory is refused" 1 "$(jq '[.refused[] | select(.reasons[0]|test("symlink"))] | length' "$REPORT/a2ml-report.json")"
+check "symlinked descriptiles: nothing written outside the work tree" 0 "$(find "$TMP/outside-desc" -type f | wc -l | tr -d ' ')"
+r=$(mkrepo stray); mkdir -p "$r/docs"; printf 'x = "y"\n' > "$r/docs/profile.a2ml"; git -C "$r" add -A; git -C "$r" commit -qm x
+STUB_KYX=ok run "$r"
+check "a *file.a2ml outside contractiles/ is UNMAPPED, not a contractile" UNMAPPED "$(jq -r '.refused[] | select(.path=="docs/profile.a2ml") | .family' "$REPORT/a2ml-report.json")"
+
+# --- names and report paths -------------------------------------------------------
+r=$(mkrepo nl); : > "$r/odd"$'\n'"name.a2ml"; git -C "$r" add -A; git -C "$r" commit -qm x
+check "--check counts a name with a newline once" 4 "$(bash "$FIX" --check "$r")"
+RC=0; A2ML_REPORT_DIR="$TMP/nl-rep" bash "$FIX" "$r" >/dev/null 2> "$TMP/err" || RC=$?
+check "a tracked name with a newline is refused whole, never split" "2 1" "$RC $(grep -c "odd\\\\nname.a2ml" "$TMP/err")"
+r=$(mkrepo inside-link); mkdir -p "$r/reports"; ln -s "$r/reports" "$TMP/looks-outside"
+RC=0; A2ML_REPORT_DIR="$TMP/looks-outside" STUB_KYX=ok bash "$FIX" "$r" >/dev/null 2>&1 || RC=$?
+check "a report directory that symlinks into the repository is refused" 64 "$RC"
+r=$(mkrepo replink); mkdir -p "$TMP/rl"; printf 'precious\n' > "$r/precious.txt"; ln -s "$r/precious.txt" "$TMP/rl/a2ml-report.json"
+RC=0; A2ML_REPORT_DIR="$TMP/rl" STUB_KYX=ok bash "$FIX" "$r" >/dev/null 2>&1 || RC=$?
+check "a report file that is a symlink is refused, and its target untouched" "64 precious" "$RC $(cat "$r/precious.txt")"
+r=$(mkrepo hardlink); mkdir -p "$TMP/hl"; printf 'precious\n' > "$TMP/hl-target"; ln "$TMP/hl-target" "$TMP/hl/a2ml-report.json"
+STUB_KYX=ok A2ML_REPORT_DIR="$TMP/hl" bash "$FIX" "$r" >/dev/null 2>&1 || true
+check "a hard-linked report file is replaced, not written through" "precious" "$(cat "$TMP/hl-target")"
+mkdir -p "$TMP/nojq-bin"; for t in git dirname; do ln -sf "$(command -v "$t")" "$TMP/nojq-bin/$t"; done
+r=$(mkrepo nojq); RC=0; PATH="$TMP/nojq-bin" A2ML_REPORT_DIR="$TMP/nojq-rep" "$(command -v bash)" "$FIX" "$r" >/dev/null 2>&1 || RC=$?
+check "jq missing: exit 69 before anything is classified" 69 "$RC"
+
 r="$TMP/none"; mkdir -p "$r"; git -C "$r" init -q
 check "no .a2ml: exit 0, nothing to do" 0 "$(bash "$FIX" "$r" >/dev/null 2>&1; echo $?)"
 

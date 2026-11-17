@@ -44,6 +44,22 @@ export function a2mlValues(text) {
       else return;
     }
   };
+  // One escape, after its backslash; the same rules in "..." and """...""".
+  const escape = () => {
+    const e = s[i++];
+    const map = { n: "\n", t: "\t", r: "\r", '"': '"', "\\": "\\", b: "\b", f: "\f" };
+    if (e in map) return map[e];
+    if (e === "u" || e === "U") {
+      const n = e === "u" ? 4 : 8;
+      const hex = s.slice(i, i + n);
+      if (!/^[0-9A-Fa-f]+$/.test(hex) || hex.length !== n) err("bad \\u escape");
+      const cp = parseInt(hex, 16);
+      if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) err("\\u escape is not a Unicode scalar value");
+      i += n;
+      return String.fromCodePoint(cp);
+    }
+    err(`bad escape \\${e}`);
+  };
   const basic = () => {
     // after the opening quote
     let v = "";
@@ -51,18 +67,8 @@ export function a2mlValues(text) {
       const c = s[i++];
       if (c === undefined || c === "\n") err("unterminated string");
       if (c === '"') return v;
-      if (c === "\\") {
-        const e = s[i++];
-        const map = { n: "\n", t: "\t", r: "\r", '"': '"', "\\": "\\", b: "\b", f: "\f" };
-        if (e in map) v += map[e];
-        else if (e === "u" || e === "U") {
-          const n = e === "u" ? 4 : 8;
-          const hex = s.slice(i, i + n);
-          if (!/^[0-9A-Fa-f]+$/.test(hex) || hex.length !== n) err("bad \\u escape");
-          v += String.fromCodePoint(parseInt(hex, 16));
-          i += n;
-        } else err(`bad escape \\${e}`);
-      } else v += c;
+      if (c === "\\") v += escape();
+      else v += c;
     }
   };
   const multi = (q) => {
@@ -79,9 +85,7 @@ export function a2mlValues(text) {
           while (peek() === "\n" || peek() === " " || peek() === "\t") { if (peek() === "\n") line++; i++; }
           continue;
         }
-        const e = s[i++];
-        const map = { n: "\n", t: "\t", r: "\r", '"': '"', "\\": "\\", b: "\b", f: "\f" };
-        if (e in map) v += map[e]; else err(`bad escape \\${e}`);
+        v += escape();
       } else v += c;
     }
   };
