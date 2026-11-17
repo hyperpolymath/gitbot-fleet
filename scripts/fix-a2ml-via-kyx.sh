@@ -162,13 +162,31 @@ rm -f -- "$probe"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/a2ml-kyx-work.XXXXXX")"
 STAGED=()        # sources whose conversion is staged in the index
 REPORTS_DONE=0   # set once every report is published
+CREATED_TARGET=0 # set once THIS run created the target file (never a file that was already there)
 
 # Put the index and work tree back as they were before `src` was staged, and
 # say whether that worked: every step is checked, then the result is.
 undo_stage() { # src
-  local src="$1" status
-  git -C "$REPO" reset -q -- "$TARGET" "$src" 2>> "$WORK/undo.err" || return 1
-  rm -f -- "$REPO/$TARGET" 2>> "$WORK/undo.err" || return 1
+  local src="$1" status paths=("$1")
+  if [[ "$CREATED_TARGET" -eq 1 ]]; then
+    # The target is ours to remove only while it is still exactly what this
+    # run generated, in the work tree and in the index. An edit made since
+    # belongs to the owner: keep it and fail the rollback.
+    if [[ -e "$REPO/$TARGET" || -L "$REPO/$TARGET" ]]; then
+      if [[ -L "$REPO/$TARGET" ]] || ! cmp -s -- "$REPO/$TARGET" "$WORK/ECOSYSTEM.deed"; then
+        echo "$TARGET was changed after it was generated; left unchanged" >> "$WORK/undo.err"; return 1
+      fi
+    fi
+    if [[ -n "$(git -C "$REPO" ls-files --cached -- "$TARGET" 2>> "$WORK/undo.err")" ]]; then
+      git -C "$REPO" show ":$TARGET" 2>> "$WORK/undo.err" | cmp -s -- - "$WORK/ECOSYSTEM.deed" \
+        || { echo "$TARGET was changed in the index after it was generated; left unchanged" >> "$WORK/undo.err"; return 1; }
+    fi
+    paths=("$TARGET" "$src")
+  fi
+  git -C "$REPO" reset -q -- "${paths[@]}" 2>> "$WORK/undo.err" || return 1
+  if [[ "$CREATED_TARGET" -eq 1 ]]; then
+    rm -f -- "$REPO/$TARGET" 2>> "$WORK/undo.err" || return 1
+  fi
   # A missing source is the expected result of git rm. If it still exists,
   # preserve any edits made since preflight rather than checking over them.
   if [[ -e "$REPO/$src" || -L "$REPO/$src" ]]; then
@@ -177,7 +195,7 @@ undo_stage() { # src
   git -C "$REPO" checkout -q -- "$src" 2>> "$WORK/undo.err" || return 1
   # The check itself must succeed: a failed `git status` prints nothing, and
   # nothing would read as clean.
-  status="$(git -C "$REPO" status --porcelain -- "$TARGET" "$src" 2>> "$WORK/undo.err")" || return 1
+  status="$(git -C "$REPO" status --porcelain -- "${paths[@]}" 2>> "$WORK/undo.err")" || return 1
   [[ -z "$status" ]]
 }
 
@@ -425,7 +443,8 @@ for src in "${eco_sources[@]}"; do
   # preflight makes a failure here unlikely; if one happens anyway, the tree
   # and index are put back (checked) and the file is refused with the reason.
   if ! { mkdir -p "$REPO/$(dirname "$TARGET")" \
-      && cp "$out" "$REPO/$TARGET" \
+      && ( set -o noclobber; cat -- "$out" > "$REPO/$TARGET" ) \
+      && CREATED_TARGET=1 \
       && git -C "$REPO" add -- "$TARGET" \
       && git -C "$REPO" rm -q -- "$src"; } 2> "$WORK/stage.err"; then
     scrub "$WORK/stage.err"

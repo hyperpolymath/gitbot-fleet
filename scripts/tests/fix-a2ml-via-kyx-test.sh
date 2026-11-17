@@ -317,6 +317,17 @@ for a in "\$@"; do
     status)
       [[ -n "\${FAIL_GIT_STATUS:-}" ]] && { echo "fatal: injected status failure" >&2; exit 128; }
       [[ -n "\${FAIL_GIT_STATUS_AFTER_RM:-}" && -e "$WRAP/rm-failed" ]] && { echo "fatal: injected status failure" >&2; exit 128; } ;;
+    check-ignore)
+      if [[ -n "\${OWNER_CREATES_TARGET:-}" ]]; then
+        mkdir -p "\$2/.machine_readable/descriptiles"
+        printf '# owner deed\\n' > "\$2/.machine_readable/descriptiles/ECOSYSTEM.deed"
+      fi ;;
+    add)
+      if [[ -n "\${OWNER_EDITS_TARGET_AFTER_ADD:-}" ]]; then
+        "$REAL_GIT" "\$@" || exit \$?
+        printf '# owner edit\\n' >> "\$2/.machine_readable/descriptiles/ECOSYSTEM.deed"
+        exit 0
+      fi ;;
     reset) [[ -n "\${FAIL_GIT_RESET:-}" ]] && { echo "fatal: injected reset failure" >&2; exit 128; } ;;
   esac
 done
@@ -348,6 +359,15 @@ check "failed discovery prints no count" "" "$(cat "$TMP/out")"
 r=$(mkrepo owner-edit); EDIT_SOURCE_ON_RM=1 wrun "$r"
 check "rollback with source edits exits INCONSISTENT" 70 "$RC"
 check "rollback preserves source edits" '# owner edit' "$(tail -1 "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml")"
+# A target the owner creates after preflight is never overwritten or removed.
+r=$(mkrepo target-race); OWNER_CREATES_TARGET=1 wrun "$r"
+check "target created after preflight: refused, not converted -> exit 2" 2 "$RC"
+check "target created after preflight: the owner's file is untouched" '# owner deed' "$(cat "$r/.machine_readable/descriptiles/ECOSYSTEM.deed")"
+check "target created after preflight: the source is still there, nothing staged" "" "$(git -C "$r" diff --cached --name-only)"
+# A generated target the owner edits before report publication fails is kept.
+r=$(mkrepo target-edit); OWNER_EDITS_TARGET_AFTER_ADD=1 FAIL_MV=1 wrun "$r"
+check "target edited before a failed publish: exit INCONSISTENT" 70 "$RC"
+check "target edited before a failed publish: the edit is preserved" '# owner edit' "$(tail -1 "$r/.machine_readable/descriptiles/ECOSYSTEM.deed")"
 r=$(mkrepo rm-fails); FAIL_GIT_RM=1 wrun "$r"
 check "git rm fails mid-staging: refused, not converted -> exit 2" 2 "$RC"
 check "git rm fails: the rollback leaves the tree exactly as it was" "" "$(git -C "$r" status --porcelain)"
