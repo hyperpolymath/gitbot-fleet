@@ -120,6 +120,7 @@ mod rsr_tests {
 
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
         mount_deed(&server, "(repo-deed :schema-version \"1.0.0\")").await;
+        mount_tree_only(&server, &[]).await;
 
         // Mock repository info with approved license
         Mock::given(method("GET"))
@@ -305,6 +306,17 @@ mod rsr_tests {
         // A bare repository under the strictest policy: everything missing.
         let report = check_with(&[], None, PolicyPack::Enterprise).await;
         for check in &report.checks {
+            // The one check that names .a2ml FORBIDS it (priority 1); it never
+            // asks for one.
+            if check.name == A2ML_CHECK {
+                let m = check.message.to_lowercase();
+                assert!(
+                    !m.contains("add ") && !m.contains("create"),
+                    "{}",
+                    check.message
+                );
+                continue;
+            }
             assert!(
                 !check.name.contains("a2ml")
                     && !check.name.ends_with(".scm")
@@ -557,6 +569,7 @@ mod rsr_tests {
         // Only README and LICENSE - minimal policy should be satisfied
         let files = &["README.adoc", "LICENSE"];
         mount_file_mocks(&server, "test-org", "test-repo", files).await;
+        mount_tree_only(&server, &[]).await;
 
         Mock::given(method("GET"))
             .and(path("/repos/test-org/test-repo"))
@@ -809,15 +822,163 @@ mod rsr_tests {
         assert!(jf_check.is_some(), "should have justfile check");
         assert_eq!(jf_check.unwrap().status, CheckStatus::Pass);
 
-        let bd_check = report
+        // RSR-015 is retired: its files were .a2ml, and the bot directives are
+        // the chora deed's (bot-directives ...) clause, so the directory is
+        // neither demanded nor scored.
+        assert!(
+            report
+                .checks
+                .iter()
+                .all(|c| c.name != ".machine_readable/bot_directives"),
+            "RSR-015 must not be demanded"
+        );
+    }
+
+    /// Serve a repository listing (default branch `main`) and its tree.
+    async fn mount_tree(server: &MockServer, paths: &[&str]) {
+        Mock::given(method("GET"))
+            .and(path("/repos/test-org/test-repo"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(repo_json(Some("mpl-2.0"), None)),
+            )
+            .mount(server)
+            .await;
+        mount_tree_only(server, paths).await;
+    }
+
+    /// Serve the default branch's (`main`) tree, without the repository listing.
+    async fn mount_tree_only(server: &MockServer, paths: &[&str]) {
+        mount_tree_at(server, "main", paths).await;
+    }
+
+    /// Serve the tree at one ref.
+    async fn mount_tree_at(server: &MockServer, reference: &str, paths: &[&str]) {
+        let tree: Vec<serde_json::Value> = paths
+            .iter()
+            .map(|p| serde_json::json!({ "path": p, "type": "blob" }))
+            .collect();
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/repos/test-org/test-repo/git/trees/{reference}"
+            )))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "truncated": false, "tree": tree })),
+            )
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn a_pull_request_check_scans_its_head_not_the_default_branch() {
+        // main is clean; the PR head adds an .a2ml file. The check reports on
+        // the head, so it must see the head's tree.
+        const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
+        let server = MockServer::start().await;
+        let config = mock_config(&server.uri());
+        mount_file_mocks(&server, "test-org", "test-repo", &[]).await;
+        mount_tree(&server, &["README.adoc"]).await;
+        mount_tree_at(&server, HEAD, &["README.adoc", "STATE.a2ml"]).await;
+
+        let at_head = check_compliance_with_policy_at(
+            &config,
+            "test-org",
+            "test-repo",
+            &RepoConfig::default(),
+            Some(HEAD),
+        )
+        .await
+        .expect("compliance check should succeed");
+        let check = at_head
             .checks
             .iter()
-            .find(|c| c.name == ".machine_readable/bot_directives");
+            .find(|c| c.name == A2ML_CHECK)
+            .expect("the head's .a2ml is found");
+        assert_eq!(check.status, CheckStatus::Fail);
+        assert!(check.message.contains("STATE.a2ml"), "{}", check.message);
+        assert!(!at_head.required_passed);
+
+        // Negative control: the same repository's default branch is clean.
+        let at_main =
+            check_compliance_with_policy(&config, "test-org", "test-repo", &RepoConfig::default())
+                .await
+                .expect("compliance check should succeed");
+        assert!(at_main.checks.iter().all(|c| c.name != A2ML_CHECK));
+    }
+
+    async fn report_for_tree(paths: &[&str], policy: PolicyPack) -> ComplianceReport {
+        let server = MockServer::start().await;
+        let config = mock_config(&server.uri());
+        mount_file_mocks(&server, "test-org", "test-repo", &[]).await;
+        mount_tree(&server, paths).await;
+        let repo_config = RepoConfig {
+            policy,
+            ..Default::default()
+        };
+        check_compliance_with_policy(&config, "test-org", "test-repo", &repo_config)
+            .await
+            .expect("compliance check should succeed")
+    }
+
+    #[tokio::test]
+    async fn any_a2ml_is_a_required_failure_under_every_policy() {
+        for policy in [
+            PolicyPack::Minimal,
+            PolicyPack::Standard,
+            PolicyPack::Strict,
+            PolicyPack::Enterprise,
+            PolicyPack::Custom,
+        ] {
+            let report = report_for_tree(
+                &[
+                    "README.adoc",
+                    ".machine_readable/descriptiles/STATE.a2ml",
+                    "deep/x.A2ML",
+                ],
+                policy,
+            )
+            .await;
+            let check = report
+                .checks
+                .iter()
+                .find(|c| c.name == A2ML_CHECK)
+                .unwrap_or_else(|| panic!("{policy:?}: an a2ml check"));
+            assert_eq!(check.status, CheckStatus::Fail, "{policy:?}");
+            assert_eq!(check.severity, Severity::Required, "{policy:?}");
+            assert!(
+                check.message.starts_with("P1: 2 retired"),
+                "{}",
+                check.message
+            );
+            assert!(check.message.contains("deep/x.A2ML"), "{}", check.message);
+            assert!(!report.required_passed, "{policy:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_tree_without_a2ml_has_no_a2ml_check() {
+        let report = report_for_tree(&["README.adoc", "x_chora.deed"], PolicyPack::Strict).await;
+        assert!(report.checks.iter().all(|c| c.name != A2ML_CHECK));
+    }
+
+    #[tokio::test]
+    async fn an_unlistable_tree_fails_the_p1_check_closed() {
+        // No tree mock: the listing fails, and an unknowable answer to a P1
+        // question is a failure, never a pass or a quiet skip.
+        let report = check_with(&[], None, PolicyPack::Minimal).await;
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.name == A2ML_CHECK)
+            .expect("the check is reported");
+        assert_eq!(check.status, CheckStatus::Fail);
+        assert_eq!(check.severity, Severity::Required);
+        assert!(!report.required_passed);
         assert!(
-            bd_check.is_some(),
-            "should have .machine_readable/bot_directives check"
+            check.message.starts_with("could not list the tree"),
+            "{}",
+            check.message
         );
-        assert_eq!(bd_check.unwrap().status, CheckStatus::Pass);
     }
 
     #[tokio::test]
@@ -1455,6 +1616,7 @@ mod report_tests {
                 },
             ],
             summary: "Partial RSR compliance (standard) - improvements needed".to_string(),
+            retired_a2ml: vec![],
         }
     }
 
@@ -1607,7 +1769,65 @@ mod fleet_tests {
                 },
             ],
             summary: "RSR standard policy: Required checks failed".to_string(),
+            retired_a2ml: vec![],
         }
+    }
+
+    fn a2ml_check() -> Check {
+        Check {
+            name: A2ML_CHECK.to_string(),
+            category: CheckCategory::Structure,
+            severity: Severity::Required,
+            status: CheckStatus::Fail,
+            points: 0,
+            max_points: 0,
+            message: "P1: 2 retired .a2ml file(s) present".to_string(),
+        }
+    }
+
+    #[test]
+    fn each_retired_a2ml_is_its_own_finding_at_its_real_path() {
+        let mut report = sample_report_with_issues();
+        report.checks = vec![a2ml_check()];
+        report.retired_a2ml = vec![
+            ".machine_readable/descriptiles/STATE.a2ml".to_string(),
+            "deep/x.A2ML".to_string(),
+        ];
+        let findings = fleet::report_to_findings(&report);
+        let files: Vec<String> = findings
+            .iter()
+            .map(|f| {
+                f.file
+                    .as_ref()
+                    .expect("a path")
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        assert_eq!(files, report.retired_a2ml);
+        assert_ne!(findings[0].id, findings[1].id, "distinct findings");
+        assert!(
+            findings
+                .iter()
+                .all(|f| f.file.as_deref() != Some(std::path::Path::new("*.a2ml")))
+        );
+    }
+
+    #[test]
+    fn an_unlisted_tree_is_one_fileless_a2ml_finding_never_a_wildcard() {
+        let mut report = sample_report_with_issues();
+        report.checks = vec![a2ml_check()];
+        let findings = fleet::report_to_findings(&report);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].file.is_none());
+    }
+
+    #[test]
+    fn displayed_paths_cannot_forge_markdown() {
+        let shown = display_path("a\n## forged [x](http://e)<b>.a2ml");
+        assert!(!shown.contains('\n'), "{shown}");
+        assert!(!shown.contains("[x]"), "{shown}");
+        assert!(!shown.contains('<'), "{shown}");
     }
 
     #[test]

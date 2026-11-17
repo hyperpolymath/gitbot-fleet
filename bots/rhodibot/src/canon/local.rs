@@ -113,6 +113,7 @@ fn tracked_files(root: &Path) -> Option<Vec<String>> {
         .arg("-C")
         .arg(root)
         .arg("ls-files")
+        .arg("-z")
         .output()
         .ok()?;
 
@@ -120,12 +121,14 @@ fn tracked_files(root: &Path) -> Option<Vec<String>> {
         return None;
     }
 
-    let listing = String::from_utf8(output.stdout).ok()?;
-    let mut files: Vec<String> = listing
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
+    // NUL-separated and raw: without `-z`, git C-quotes an unusual name (a
+    // newline, a quote, non-ASCII), and a quoted `"x.a2ml"` would slip past a
+    // suffix test. A name that is not UTF-8 is kept, lossily, rather than lost.
+    let mut files: Vec<String> = output
+        .stdout
+        .split(|b| *b == 0)
+        .filter(|name| !name.is_empty())
+        .map(|name| String::from_utf8_lossy(name).into_owned())
         .collect();
     files.sort();
     files.dedup();
@@ -227,6 +230,30 @@ mod tests {
                 "README.adoc".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn git_listing_keeps_unusual_names_raw() {
+        // Without `ls-files -z`, git C-quotes a name with a newline in it and
+        // the quoted form no longer ends in `.a2ml`.
+        let scratch = Scratch::new("ls-files-z");
+        scratch.write("evil\nname.a2ml", "x");
+        scratch.write("plain.adoc", "x");
+        let git = |args: &[&str]| {
+            let ok = Command::new("git")
+                .arg("-C")
+                .arg(scratch.path())
+                .args(args)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            assert!(ok, "git {args:?}");
+        };
+        git(&["init", "-q"]);
+        git(&["add", "-A"]);
+        let files = tracked_files(scratch.path()).expect("git can list the index");
+        assert!(files.contains(&"evil\nname.a2ml".to_string()), "{files:?}");
+        assert!(files.contains(&"plain.adoc".to_string()), "{files:?}");
     }
 
     #[test]

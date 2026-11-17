@@ -60,7 +60,7 @@ pub async fn handle_push(config: &Config, body: &str) -> Result<()> {
 
     // Run compliance check
     let client = GitHubClient::new(config);
-    let report = rsr::check_compliance(config, owner, repo_name).await?;
+    let report = rsr::check_compliance_at(config, owner, repo_name, Some(&event.after)).await?;
 
     // Create check run - fail if required checks didn't pass
     let conclusion = if !report.required_passed {
@@ -115,7 +115,9 @@ pub async fn handle_pull_request(config: &Config, body: &str) -> Result<()> {
 
     // Run compliance check
     let client = GitHubClient::new(config);
-    let report = rsr::check_compliance(config, owner, repo_name).await?;
+    let report =
+        rsr::check_compliance_at(config, owner, repo_name, Some(&event.pull_request.head.sha))
+            .await?;
 
     // Create check run - fail if required checks didn't pass
     let conclusion = if !report.required_passed {
