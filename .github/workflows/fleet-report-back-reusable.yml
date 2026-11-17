@@ -240,6 +240,16 @@ jobs:
           MEMBERS: ${{ inputs.members }}
           ADAPTER_TIMEOUT: ${{ inputs.adapter-timeout-seconds }}
           FLEET_REF: ${{ job.workflow_sha }}
+          # Pull-request readiness (finishingbot, advisory): the PR number from
+          # the caller's event, and this job's read-only token. The driver
+          # takes FLEET_PR_TOKEN out of its environment before any adapter runs
+          # and hands it to finishing-bot alone. This job grants only
+          # `contents: read`; GitHub documents the pull-request, checks and
+          # rules reads as open to any caller for public data, and whatever the
+          # token cannot read is named in the row ("could not read: ..."), so a
+          # private repository's row says so rather than reading clean.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          FLEET_PR_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # The job limit (timeout-minutes) assumes at most 300 s per adapter; a
@@ -255,6 +265,7 @@ jobs:
           args=(--repo . --out "$RUNNER_TEMP/report-backs" --bin-dir "$RUNNER_TEMP/fleet-bin"
                 --enrolment "$ENROLMENT" --fleet-ref "$FLEET_REF"
                 --timeout "$ADAPTER_TIMEOUT" --summary "$GITHUB_STEP_SUMMARY")
+          [ -z "${PR_NUMBER:-}" ] || args+=(--pr "$PR_NUMBER" --pr-repo "$GITHUB_REPOSITORY")
           IFS=',' read -r -a _m <<< "${MEMBERS:-}"
           for m in "${_m[@]}"; do m="${m// /}"; [ -n "$m" ] && args+=(--member "$m"); done
           bash "$FLEET_DIR/scripts/fleet-report-back.sh" "${args[@]}"
