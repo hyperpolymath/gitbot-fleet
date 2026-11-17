@@ -161,10 +161,26 @@ that emits a path-less finding; rhodibot and seambot already comply.
   that is wanted is the enrolment manifest's call.
 
 | finishingbot
-| `finishing-bot --path <repo> --format json audit`
+| `finishing-bot --path <repo> --format json audit [--pr N --pr-repo o/r --exclude-run-id ID]`
 | Eight analyzers (license, placeholders, claims, release, SCM files, testing,
   tooling, v1 readiness) flattened to one list. Exits 1 when findings block a
   release; that is still a run.
+  When the driver is given `--pr`/`--pr-repo` (the reusable passes the caller's
+  pull request), `audit` also reads whether that pull request is ready to
+  review and merge, as one more analyzer, `pr_readiness`: PRR-001 unresolved
+  review conversations (count, a link to each), PRR-002 a reviewer whose latest
+  review requests changes, PRR-003 behind base, PRR-004 merge conflict,
+  PRR-005 checks failing, PRR-006 checks pending (the evaluating run's own
+  checks excluded), PRR-007 a required status context (rulesets and classic
+  protection) that no check run or commit status on the head provides, PRR-008
+  draft. Severity follows the base branch's rules (unresolved conversations
+  and behind-base are `error` only where the rules require resolution or an
+  up-to-date head). These findings carry no path by design: they are about the
+  change as a whole. The one-line verdict (`ready`, `not ready` with reasons,
+  or `readiness unknown` naming what could not be read; draft and auto-merge)
+  is the envelope `reason`. Advisory: it never changes the exit status. Review
+  threads are read through GraphQL `reviewThreads { isResolved }`; the token is
+  `FLEET_PR_TOKEN`, which the driver hands to finishing-bot alone.
 
 | glambot
 | `glambot --path <repo> --format json audit`
