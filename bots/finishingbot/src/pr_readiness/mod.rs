@@ -729,14 +729,35 @@ pub fn evaluate(s: &Snapshot, opts: &EvalOptions) -> PrReadiness {
             })
             .map(|(ctx, _)| format!("`{ctx}`"))
             .collect();
-        if !missing.is_empty() {
+        // A job waiting on `needs:` (or a called workflow's jobs) has no check
+        // run until it starts, so while anything on the head is unfinished a
+        // missing context may still appear: say "not yet", at warning. Only
+        // once every check has finished is the absence a settled fact.
+        let unfinished = runs.iter().any(|cr| cr.status != "completed")
+            || statuses.iter().any(|cs| cs.state == "pending");
+        if !missing.is_empty() && unfinished {
+            findings.push(finding(
+                "PRR-007",
+                "Required status context not provided yet",
+                Severity::Warning,
+                format!(
+                    "{} required status context(s) on {} have no check run or commit status on head {} yet: {}. \
+                     Checks were still running, so a job that has not started can still produce them",
+                    missing.len(),
+                    pr.base.ref_name,
+                    short(&pr.head.sha),
+                    list(&missing)
+                ),
+                "Re-read once the checks finish; if a context is still missing then, nothing on this pull request produces it.",
+            ));
+        } else if !missing.is_empty() {
             findings.push(finding(
                 "PRR-007",
                 "Required status context not provided",
                 Severity::Error,
                 format!(
                     "{} required status context(s) on {} have no check run or commit status on head {}: {}. \
-                     Until something on the pull request produces each one, it cannot merge whatever reviewers approve",
+                     Every check has finished, so nothing on the pull request produces them, and it cannot merge whatever reviewers approve",
                     missing.len(),
                     pr.base.ref_name,
                     short(&pr.head.sha),
@@ -761,11 +782,7 @@ pub fn evaluate(s: &Snapshot, opts: &EvalOptions) -> PrReadiness {
     let reasons: Vec<String> = findings
         .iter()
         .map(|f| match f.id.as_str() {
-            "PRR-007" => format!(
-                "{}: {}",
-                f.name,
-                f.message.split(". Until").next().unwrap_or("")
-            ),
+            "PRR-007" => format!("{}: {}", f.name, f.message.split(". ").next().unwrap_or("")),
             _ => f.name.to_lowercase(),
         })
         .collect();
@@ -901,6 +918,31 @@ mod tests {
         assert!(r.findings.is_empty(), "{:?}", ids(&r));
         assert_eq!(r.verdict, Verdict::Ready);
         assert!(r.reasons.is_empty());
+    }
+
+    #[test]
+    fn a_missing_context_while_checks_run_is_not_yet_settled() {
+        // gitbot-fleet#693 on 2026-11-17: `CI/gate` (a `needs:` job) had no
+        // check run while 47 checks were still queued. That is "not yet",
+        // a warning, not the settled error #435 gets once all checks finished.
+        let mut s = load("rsr-template-repo-435.json");
+        s.check_runs.as_mut().unwrap().push(CheckRun {
+            id: 3,
+            name: "lint".into(),
+            status: "queued".into(),
+            ..CheckRun::default()
+        });
+        let r = evaluate(&s, &EvalOptions::default());
+        let f = r.findings.iter().find(|f| f.id == "PRR-007").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+        assert!(f.message.contains("yet: `CI/gate`"), "{}", f.message);
+        assert_eq!(r.verdict, Verdict::NotReady);
+        // Settled case for contrast: every check finished.
+        let settled = evaluate(&load("rsr-template-repo-435.json"), &EvalOptions::default());
+        assert_eq!(settled.findings[0].severity, Severity::Error);
+        assert!(settled.findings[0]
+            .message
+            .contains("Every check has finished"));
     }
 
     #[test]

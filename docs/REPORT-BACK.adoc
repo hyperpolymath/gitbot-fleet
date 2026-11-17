@@ -172,7 +172,9 @@ that emits a path-less finding; rhodibot and seambot already comply.
   review requests changes, PRR-003 behind base, PRR-004 merge conflict,
   PRR-005 checks failing, PRR-006 checks pending (the evaluating run's own
   checks excluded), PRR-007 a required status context (rulesets and classic
-  protection) that no check run or commit status on the head provides, PRR-008
+  protection) that no check run or commit status on the head provides (a
+  `warning` "not yet" while checks are unfinished, since a `needs:` job has no
+  check run until it starts; an `error` once every check has finished), PRR-008
   draft. Severity follows the base branch's rules (unresolved conversations
   and behind-base are `error` only where the rules require resolution or an
   up-to-date head). These findings carry no path by design: they are about the
