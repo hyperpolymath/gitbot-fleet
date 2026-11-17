@@ -75,7 +75,8 @@ enum Command {
     /// skips the criteria the repository's chora deed `(rsr-profile ...)`
     /// clause does not declare a capability for, and reports what is present where the
     /// canon records it, present elsewhere, present under a location the canon
-    /// has retired, or absent.
+    /// has retired, or absent. Every tracked `.a2ml` file is also reported, as a
+    /// `retired` (priority-1) finding: A2ML is retired (D99, D269c, D312, D313).
     ///
     /// **Advisory by default**: exits 0 whatever it finds. The canon names
     /// hypatia's `rsr-conformance` the single normative checker, so a second
@@ -102,7 +103,8 @@ enum Command {
         format: String,
 
         /// Exit non-zero when a finding at or above this severity is present
-        #[arg(long, default_value = "none", value_parser = ["none", "relocated", "deprecated", "missing"])]
+        /// (none < relocated < deprecated < missing < retired)
+        #[arg(long, default_value = "none", value_parser = ["none", "relocated", "deprecated", "missing", "retired"])]
         fail_on: String,
     },
 

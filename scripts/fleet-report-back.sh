@@ -639,8 +639,9 @@ run_member() {
   case "$m" in
     rhodibot)
       # canon --path: file-presence criteria against the vendored RSR canon.
-      # "satisfied" rows are not findings; missing > deprecated > relocated; a
-      # "manual" row (not verifiable from files) is carried as info.
+      # "satisfied" rows are not findings; retired > missing > deprecated >
+      # relocated; a "manual" row (not verifiable from files) is carried as
+      # info. "retired" is a tracked .a2ml file: priority 1, so critical.
       run_adapter "$bin" canon --path "$repo" --format json
       translate_or_error "$m" "$SHAPE_OBJ_FINDINGS"'
         [ .findings[]
@@ -652,7 +653,7 @@ run_member() {
               file: ((if .severity == "missing" then (.canon_keeps_it_at // (.expected // [])[0] // "")
                       else ((.found // [])[0] // .canon_keeps_it_at // (.expected // [])[0] // "") end) | tostring),
               line: 0,
-              severity: ({missing: "error", deprecated: "warning", relocated: "info", manual: "info"}[.severity] // .severity),
+              severity: ({retired: "critical", missing: "error", deprecated: "warning", relocated: "info", manual: "info"}[.severity] // .severity),
               message: ("\(.name): \(.severity)" + (if (.details // []) | length > 0 then " — " + ((.details // []) | join("; ")) else "" end)) }
           | .file |= rel ]' ;;
     panicbot)
