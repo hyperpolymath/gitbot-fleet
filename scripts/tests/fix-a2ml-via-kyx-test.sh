@@ -324,5 +324,34 @@ check "dangling symlink: left in place, nothing written through it" "1 0" \
 r="$TMP/none"; mkdir -p "$r"; git -C "$r" init -q
 check "no .a2ml: exit 0, nothing to do" 0 "$(bash "$FIX" "$r" >/dev/null 2>&1; echo $?)"
 
+# --- ambiguity and canonical-location boundaries ----------------------------
+for location in .machine_readable/ECOSYSTEM.a2ml .machine_readable/6a2/ECOSYSTEM.a2ml; do
+  r=$(mkrepo alternate)
+  mkdir -p "$r/$(dirname "$location")"
+  git -C "$r" mv .machine_readable/descriptiles/ECOSYSTEM.a2ml "$location"
+  git -C "$r" rm -q .machine_readable/descriptiles/STATE.a2ml contractiles/must/Mustfile.a2ml
+  git -C "$r" commit -qm alternate
+  STUB_KYX=ok run "$r"
+  check "$location: conversion-only success exits 0" 0 "$RC"
+  check "$location: report identifies the original source and canonical target" \
+    "$location .machine_readable/descriptiles/ECOSYSTEM.deed" \
+    "$(jq -r '.converted[0] | "\(.source) \(.target)"' "$REPORT/a2ml-report.json")"
+  check "$location: no refusal issue" 0 "$([[ -e "$REPORT/a2ml-p1-issue.md" ]] && echo 1 || echo 0)"
+  check "$location: outcome predicate reaches zero" 0 "$(bash "$FIX" --check "$r")"
+done
+r=$(mkrepo ambiguous)
+cp "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml" "$r/.machine_readable/ECOSYSTEM.a2ml"
+git -C "$r" add -A; git -C "$r" commit -qm duplicate
+KYX='' run "$r"
+check "two canonical sources: both refused before requiring kyX" "2 2" \
+  "$RC $(jq '[.refused[] | select(.reasons[0]|contains("more than one ECOSYSTEM"))] | length' "$REPORT/a2ml-report.json")"
+check "two canonical sources: tree untouched" "" "$(git -C "$r" status --porcelain)"
+r=$(mkrepo two-choras)
+cp "$r/demo_chora.deed" "$r/other_chora.deed"; git -C "$r" add -A; git -C "$r" commit -qm duplicate
+KYX='' run "$r"
+check "two chora deeds: refuse ambiguous identity before requiring kyX" "2 1" \
+  "$RC $(jq '[.refused[] | select(.reasons[0]|contains("found 2"))] | length' "$REPORT/a2ml-report.json")"
+check "two chora deeds: tree untouched" "" "$(git -C "$r" status --porcelain)"
+
 echo "fix-a2ml-via-kyx-test: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]
