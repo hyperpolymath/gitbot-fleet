@@ -135,6 +135,15 @@ check "census: the same value twice in the deed passes" 0 "$(bun "$CENSUS" check
 printf 'oops\n' > "$TMP/bad.a2ml"
 check "census: an unreadable source is exit 2, not a pass" 2 "$(bun "$CENSUS" check "$TMP/bad.a2ml" "$TMP/ast.json" >/dev/null 2>&1; echo $?)"
 
+# Empty strings may be dropped, but whitespace is a scalar value.
+printf 'a = ""\nb = " "\nc = "\\t"\n' > "$TMP/space.a2ml"
+printf '{"items":[]}\n' > "$TMP/space-ast.json"
+check "census: missing whitespace values are deficits, empty strings excluded" \
+  '2 [" ","\t"]' \
+  "$(bun "$CENSUS" check "$TMP/space.a2ml" "$TMP/space-ast.json" | jq -r '"\(.source_values) \(.missing|tojson)"' || true)"
+printf '{"items":[["field","b",["string"," "]],["field","c",["string","\\t"]]]}\n' > "$TMP/space-ast.json"
+check "census: matching whitespace values pass" 0 "$(bun "$CENSUS" check "$TMP/space.a2ml" "$TMP/space-ast.json" >/dev/null; echo $?)"
+
 # --- --check (the outcome predicate) -----------------------------------------
 r=$(mkrepo check)
 check "--check counts tracked .a2ml" 3 "$(bash "$FIX" --check "$r")"
@@ -264,6 +273,31 @@ r=$(mkrepo nojq); RC=0; PATH="$TMP/nojq-bin" A2ML_REPORT_DIR="$TMP/nojq-rep" "$(
 check "jq missing: exit 69 before anything is classified" 69 "$RC"
 
 
+# A committed source symlink is clean in Git but its referent is untracked.
+r=$(mkrepo source-link)
+cp "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml" "$TMP/link-source"
+rm "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml"
+ln -s "$TMP/link-source" "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml"
+git -C "$r" add -A; git -C "$r" commit -qm symlink
+STUB_KYX=ok run "$r"
+check "a tracked source symlink is refused" 1 "$(jq '[.refused[] | select(.reasons[0]|test("source is a symlink"))] | length' "$REPORT/a2ml-report.json")"
+check "source symlink: tree unchanged" "" "$(git -C "$r" status --porcelain)"
+
+for deletion in staged unstaged; do
+  r=$(mkrepo "target-$deletion")
+  cp "$TMP/ECOSYSTEM.deed" "$r/.machine_readable/descriptiles/ECOSYSTEM.deed"
+  git -C "$r" add -A; git -C "$r" commit -qm target
+  if [[ "$deletion" == staged ]]; then
+    git -C "$r" rm -q .machine_readable/descriptiles/ECOSYSTEM.deed
+  else
+    rm "$r/.machine_readable/descriptiles/ECOSYSTEM.deed"
+  fi
+  before="$(git -C "$r" status --porcelain)"
+  STUB_KYX=ok run "$r"
+  check "$deletion target deletion: refused" 1 "$(jq '[.refused[] | select(.reasons[0]|test("has uncommitted changes"))] | length' "$REPORT/a2ml-report.json")"
+  check "$deletion target deletion: preserved" "$before" "$(git -C "$r" status --porcelain)"
+done
+
 # --- failures after the gates: staging, rollback and reporting ----------------
 # Wrappers first on PATH fail one command at a chosen point and pass everything
 # else to the real tool, so the script needs no test hooks.
@@ -273,7 +307,13 @@ cat > "$WRAP/git" <<SH
 #!/usr/bin/env bash
 for a in "\$@"; do
   case "\$a" in
-    rm) [[ -n "\${FAIL_GIT_RM:-}" ]] && { : > "$WRAP/rm-failed"; echo "fatal: injected rm failure" >&2; exit 128; } ;;
+    rm)
+      if [[ -n "\${EDIT_SOURCE_ON_RM:-}" ]]; then
+        printf '# owner edit\\n' >> "\$2/.machine_readable/descriptiles/ECOSYSTEM.a2ml"
+        exit 128
+      fi
+      [[ -n "\${FAIL_GIT_RM:-}" ]] && { : > "$WRAP/rm-failed"; echo "fatal: injected rm failure" >&2; exit 128; } ;;
+    ls-files) [[ -n "\${FAIL_GIT_LS_FILES:-}" ]] && { printf 'partial.a2ml\\0'; exit 128; } ;;
     status)
       [[ -n "\${FAIL_GIT_STATUS:-}" ]] && { echo "fatal: injected status failure" >&2; exit 128; }
       [[ -n "\${FAIL_GIT_STATUS_AFTER_RM:-}" && -e "$WRAP/rm-failed" ]] && { echo "fatal: injected status failure" >&2; exit 128; } ;;
@@ -298,6 +338,16 @@ wrun() { # repo -> RC; the wrapped PATH, plus whatever FAIL_* the caller set
   REPORT="$TMP/report-$RANDOM"; mkdir -p "$REPORT"; RC=0
   PATH="$WRAP:$PATH" A2ML_REPORT_DIR="$REPORT" STUB_KYX=ok bash "$FIX" "$1" > "$TMP/out" 2> "$TMP/err" || RC=$?
 }
+r=$(mkrepo discovery-fails)
+FAIL_GIT_LS_FILES=1 wrun "$r"
+check "normal discovery failure propagates past mapfile" 128 "$RC"
+RC=0
+FAIL_GIT_LS_FILES=1 PATH="$WRAP:$PATH" bash "$FIX" --check "$r" > "$TMP/out" 2> "$TMP/err" || RC=$?
+check "--check discovery failure propagates" 128 "$RC"
+check "failed discovery prints no count" "" "$(cat "$TMP/out")"
+r=$(mkrepo owner-edit); EDIT_SOURCE_ON_RM=1 wrun "$r"
+check "rollback with source edits exits INCONSISTENT" 70 "$RC"
+check "rollback preserves source edits" '# owner edit' "$(tail -1 "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml")"
 r=$(mkrepo rm-fails); FAIL_GIT_RM=1 wrun "$r"
 check "git rm fails mid-staging: refused, not converted -> exit 2" 2 "$RC"
 check "git rm fails: the rollback leaves the tree exactly as it was" "" "$(git -C "$r" status --porcelain)"

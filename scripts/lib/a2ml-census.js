@@ -203,7 +203,7 @@ function tally(values) {
 }
 
 export function census(sourceText, ast) {
-  const want = a2mlValues(sourceText).filter((v) => v.trim() !== "");
+  const want = a2mlValues(sourceText).filter((v) => v !== "");
   // Counted, not just present: two source fields holding the same value must
   // be two deed values, or a field collapsed into another passes unseen.
   const need = tally(want);

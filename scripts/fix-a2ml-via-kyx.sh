@@ -88,7 +88,15 @@ die() { printf 'fix-a2ml-via-kyx: %s\n' "$1" >&2; exit "${2:-2}"; }
 # The tracked .a2ml files, NUL-delimited end to end (a name with a newline in
 # it stays one name, and is refused below), sorted, case-insensitive suffix.
 a2ml_files() {
-  git -C "$1" ls-files -z | grep -zaiE '\.a2ml$' | LC_ALL=C sort -z || true
+  local -a statuses
+  if git -C "$1" ls-files -z | grep -zaiE '\.a2ml$' | LC_ALL=C sort -z; then
+    return 0
+  else
+    statuses=("${PIPESTATUS[@]}")
+    [[ "${statuses[0]}" -eq 0 ]] || return "${statuses[0]}"
+    [[ "${statuses[1]}" -le 1 ]] || return "${statuses[1]}"
+    return "${statuses[2]}"
+  fi
 }
 
 check_mode=0
@@ -100,18 +108,29 @@ git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "not a git
 REPO="$(cd "$REPO" && git rev-parse --show-toplevel)"
 REPO="$(cd "$REPO" && pwd -P)"
 
+if [[ "$check_mode" -ne 1 ]]; then
+  # Every refusal is recorded with jq, so it is needed before anything is
+  # classified, not only on kyX's path: without it there would be no report.
+  for tool in jq sha256sum; do
+    command -v "$tool" >/dev/null 2>&1 || die "$tool is required to record any outcome; nothing was changed" 69
+  done
+
+fi
+
+# Materialize discovery so mapfile cannot hide a producer failure. Keep NULs
+# in a file: command substitution cannot preserve them.
+discovery="$(mktemp "${TMPDIR:-/tmp}/a2ml-discovery.XXXXXX")"
+trap 'rm -f -- "$discovery"' EXIT
+a2ml_files "$REPO" > "$discovery" || die "tracked .a2ml discovery failed; nothing was changed" "$?"
+mapfile -d '' -t FILES < "$discovery"
+rm -f -- "$discovery"
+trap - EXIT
+
 if [[ "$check_mode" -eq 1 ]]; then
-  a2ml_files "$REPO" | tr -cd '\0' | wc -c | tr -d ' '
+  printf '%s\n' "${#FILES[@]}"
   exit 0
 fi
 
-# Every refusal is recorded with jq, so it is needed before anything is
-# classified, not only on kyX's path: without it there would be no report.
-for tool in jq sha256sum; do
-  command -v "$tool" >/dev/null 2>&1 || die "$tool is required to record any outcome; nothing was changed" 69
-done
-
-mapfile -d '' -t FILES < <(a2ml_files "$REPO")
 if [[ "${#FILES[@]}" -eq 0 ]]; then
   echo "fix-a2ml-via-kyx: no .a2ml in $REPO; nothing to do"
   exit 0
@@ -150,6 +169,11 @@ undo_stage() { # src
   local src="$1" status
   git -C "$REPO" reset -q -- "$TARGET" "$src" 2>> "$WORK/undo.err" || return 1
   rm -f -- "$REPO/$TARGET" 2>> "$WORK/undo.err" || return 1
+  # A missing source is the expected result of git rm. If it still exists,
+  # preserve any edits made since preflight rather than checking over them.
+  if [[ -e "$REPO/$src" || -L "$REPO/$src" ]]; then
+    git -C "$REPO" diff --quiet -- "$src" 2>> "$WORK/undo.err" || return 1
+  fi
   git -C "$REPO" checkout -q -- "$src" 2>> "$WORK/undo.err" || return 1
   # The check itself must succeed: a failed `git status` prints nothing, and
   # nothing would read as clean.
@@ -277,10 +301,18 @@ preflight() { # src
   if [[ -n "$st" ]]; then
     echo "${choras[0]} has uncommitted changes; kyX must read the committed chora deed the PR will reference."; return
   fi
+  if [[ -L "$REPO/$src" ]]; then
+    echo "the source is a symlink; kyX must read content Git tracks."; return
+  fi
   st="$(git -C "$REPO" status --porcelain -- "$src" 2>&1)" \
     || { echo "git status could not read the source, so its state is unknown: ${st:0:200}"; return; }
   if [[ -n "$st" ]]; then
     echo "the source has uncommitted changes; kyX would convert content the PR does not delete."; return
+  fi
+  st="$(git -C "$REPO" status --porcelain -- "$TARGET" 2>&1)" \
+    || { echo "git status could not read the target, so its state is unknown: ${st:0:200}"; return; }
+  if [[ -n "$st" ]]; then
+    echo "$TARGET has uncommitted changes; they must be preserved."; return
   fi
   # Each directory on the way to the target must be absent or a real
   # directory: a symlink would put the deed outside the work tree.
