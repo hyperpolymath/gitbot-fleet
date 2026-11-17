@@ -82,7 +82,7 @@ pub fn destination(path: &str) -> Destination {
         _ if lower.contains("bot_directives/") => {
             d("the chora (bot-directives ...) clause", None, false)
         }
-        _ if name.ends_with("file.a2ml") => d(
+        _ if name.ends_with("file.a2ml") && lower.contains("contractiles/") => d(
             "a contractile deed (<Verb>file.deed) attesting its .k9.ncl contract",
             None,
             false,
@@ -205,6 +205,15 @@ mod tests {
         );
         assert!(destination("STATE.a2ml").form.contains("STATE.deed"));
         assert_eq!(destination("odd.a2ml").spec, None);
+        // A name ending in "file" outside a contractiles directory is not a
+        // contractile: it waits for a mapping spec like any other stray file.
+        for stray in ["docs/profile.a2ml", "data/myfile.a2ml"] {
+            assert!(
+                destination(stray).form.contains("yet to decide"),
+                "{stray}: {}",
+                destination(stray).form
+            );
+        }
     }
 
     #[test]

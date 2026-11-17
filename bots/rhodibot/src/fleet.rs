@@ -160,6 +160,34 @@ pub fn report_to_findings(report: &ComplianceReport) -> Vec<Finding> {
             .with_rule_name(&check.name)
             .with_category(category);
 
+        // The priority-1 A2ML check: one finding per retired file, at its real
+        // path, so a downstream bot can match it to a changed file. With no
+        // paths (the tree could not be listed) it stays one fileless finding,
+        // never a finding at the literal wildcard.
+        if check.name == crate::rsr::A2ML_CHECK && !report.retired_a2ml.is_empty() {
+            let suggestion = suggestion_for(&check.name);
+            for path in &report.retired_a2ml {
+                let mut one = Finding::new(
+                    BotId::Rhodibot,
+                    &rid,
+                    fleet_severity,
+                    &format!("P1: retired .a2ml file {path}"),
+                )
+                .with_rule_name(&check.name)
+                .with_category(category)
+                .with_file(PathBuf::from(path));
+                if let Some(s) = &suggestion {
+                    one = one.with_suggestion(s);
+                }
+                findings.push(one);
+            }
+            continue;
+        }
+        if check.name == crate::rsr::A2ML_CHECK {
+            findings.push(finding);
+            continue;
+        }
+
         // Set file path for file-based checks
         if !check.name.starts_with("license-type") && !check.name.starts_with("no-") {
             finding = finding.with_file(PathBuf::from(&check.name));

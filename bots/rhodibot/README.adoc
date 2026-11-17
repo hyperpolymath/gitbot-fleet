@@ -243,8 +243,11 @@ retired` gates on it), naming the deed form its family maps to under the
 standards mapping specs and whether kyX can convert it today (only
 `ECOSYSTEM.a2ml`, D313). The fleet report-back carries it as `critical`. The
 GitHub App check reports `no-*.a2ml` (RSR-A2ML-001) as a Required failure in every
-policy pack; `.rsr.toml` cannot skip or downgrade it. Rhodibot only reports:
-conversion is `scripts/fix-a2ml-via-kyx.sh`, never by hand.
+policy pack; `.rsr.toml` cannot skip or downgrade it, it scans the push or PR
+head it reports on, and a tree it cannot list fails it closed. Rhodibot only
+reports: conversion is kyX's (`kyx a2ml ecosystem SRC --chora CHORA ...`, D313),
+run by the fleet's opportunistic fixer once that lands (proposed in #691), never
+by hand.
 
 Separately, a legacy `.a2ml` that is still present is read only as a fallback
 after the deed, and the criterion it would satisfy is reported as "migrate",
