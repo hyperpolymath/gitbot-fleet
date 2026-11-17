@@ -286,10 +286,10 @@
     },
     {
       "repository": "metadatastician/standards",
-      "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "commit": "b49a33e991f37a2249d873cbdc02c27a08f05d6d",
       "path": ".github/workflows/mirror-reusable.yml",
-      "blob": "ec52acc3a975fbd528d9a38741bd868fb55de6e5",
-      "content_sha256": "bc7443e325e255dd19baf48722583f07f7be1cd0cdce0f1ce229cfbeab3d17a1",
+      "blob": "f083ab767099ae224d2be0c64075ccf6c74eda8a",
+      "content_sha256": "ae1e3ee421562b67f2c81938b4589c816fc70d723ee55fae77508b1783aebfc3",
       "role": "active",
       "callers": [
         {
@@ -302,83 +302,87 @@
         {
           "kind": "step",
           "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 91
+          "line": 174
         },
         {
           "kind": "step",
           "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
-          "line": 95
+          "line": 178
         },
         {
           "kind": "step",
           "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 149
+          "line": 235
         },
         {
           "kind": "step",
           "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
-          "line": 153
+          "line": 239
         },
         {
           "kind": "step",
           "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 201
+          "line": 290
         },
         {
           "kind": "step",
           "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
-          "line": 205
+          "line": 294
         },
         {
           "kind": "step",
           "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 253
+          "line": 345
         },
         {
           "kind": "step",
           "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
-          "line": 257
+          "line": 349
         },
         {
           "kind": "step",
           "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 305
+          "line": 400
         },
         {
           "kind": "step",
           "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
-          "line": 309
+          "line": 404
         },
         {
           "kind": "step",
           "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 357
+          "line": 458
         },
         {
           "kind": "step",
           "ref": "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555",
-          "line": 361
+          "line": 462
         },
         {
           "kind": "step",
           "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-          "line": 411
+          "line": 513
         },
         {
           "kind": "step",
-          "ref": "dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f",
-          "line": 427
+          "ref": "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+          "line": 532
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 568
         }
       ],
-      "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/mirror-reusable.yml",
-      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\mirror-reusable.yml"
+      "source_url": "https://github.com/metadatastician/standards/blob/b49a33e991f37a2249d873cbdc02c27a08f05d6d/.github/workflows/mirror-reusable.yml"
     },
     {
       "repository": "metadatastician/standards",
-      "commit": "75bd5994470661a099df562d6d5ad2fe744dbd66",
+      "commit": "b49a33e991f37a2249d873cbdc02c27a08f05d6d",
       "path": ".github/workflows/scorecard-reusable.yml",
-      "blob": "4e4fd33a6259b34cdc8c5f08d0d4280a216fb492",
-      "content_sha256": "db6ae19dcb09329533d1537e63c329d469dc602badcb4cc514af5da7b9b3a9b6",
+      "blob": "9f939f037743e2379efa81c0e263dbc315e9909d",
+      "content_sha256": "fb2dd21f527ed4af110edf574d7ec7b6125dfb5b7880e77b3021a642e0e87943",
       "role": "active",
       "callers": [
         {
@@ -395,7 +399,7 @@
         },
         {
           "kind": "step",
-          "ref": "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+          "ref": "ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e",
           "line": 38
         },
         {
@@ -420,7 +424,7 @@
         },
         {
           "kind": "step",
-          "ref": "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+          "ref": "ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e",
           "line": 146
         },
         {
@@ -439,8 +443,7 @@
           "line": 250
         }
       ],
-      "source_url": "https://github.com/metadatastician/standards/blob/75bd5994470661a099df562d6d5ad2fe744dbd66/.github/workflows/scorecard-reusable.yml",
-      "local_file": "C:\\Users\\sudoodle\\OneDrive\\Documents\\ChatGPT\\TYPE THEORY\\echo-reader-compat-20261106\\closure-cycle-20261107\\sources\\metadatastician\\standards\\75bd5994470661a099df562d6d5ad2fe744dbd66\\.github\\workflows\\scorecard-reusable.yml"
+      "source_url": "https://github.com/metadatastician/standards/blob/b49a33e991f37a2249d873cbdc02c27a08f05d6d/.github/workflows/scorecard-reusable.yml"
     },
     {
       "repository": "metadatastician/standards",
@@ -760,14 +763,6 @@
       "uses": [],
       "original_lock_record": "    'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed':\n        ref: 'v2.0.5'\n        commit: 'sha1-22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'\n        owner_id: 42048915\n        repo_id: 356423100\n"
     },
-    "dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f": {
-      "ref": "v1",
-      "commit": "sha1-e2a55d2ffb04f378e9626c28d38b36d230d1e12f",
-      "owner_id": 1940490,
-      "repo_id": 260749683,
-      "uses": [],
-      "original_lock_record": "    'dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f':\n        ref: 'v1'\n        commit: 'sha1-e2a55d2ffb04f378e9626c28d38b36d230d1e12f'\n        owner_id: 1940490\n        repo_id: 260749683\n"
-    },
     "editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393": {
       "ref": "v3.0.0",
       "commit": "sha1-51f63319f592f97930c73d9c46184d20bd206393",
@@ -802,23 +797,12 @@
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
         "denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
-        "dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f",
         "editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393",
         "erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124",
         "github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63",
-        "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
-        "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555"
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6"
       ],
       "original_lock_record": "    'metadatastician/standards@75bd5994470661a099df562d6d5ad2fe744dbd66':\n        ref: '75bd5994470661a099df562d6d5ad2fe744dbd66'\n        commit: 'sha1-75bd5994470661a099df562d6d5ad2fe744dbd66'\n        owner_id: 297579217\n        repo_id: 1116521501\n        uses:\n            - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'\n            - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'\n            - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'\n            - 'denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed'\n            - 'dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f'\n            - 'editorconfig-checker/action-editorconfig-checker@51f63319f592f97930c73d9c46184d20bd206393'\n            - 'erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124'\n            - 'github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63'\n            - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'\n            - 'oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6'\n            - 'webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555'\n"
-    },
-    "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc": {
-      "ref": "v2.4.4",
-      "commit": "sha1-2d1146689b8cda280b9bc96326124645441f03bc",
-      "owner_id": 67707773,
-      "repo_id": 421101922,
-      "uses": [],
-      "original_lock_record": "    'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc':\n        ref: 'v2.4.4'\n        commit: 'sha1-2d1146689b8cda280b9bc96326124645441f03bc'\n        owner_id: 67707773\n        repo_id: 421101922\n"
     },
     "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": {
       "ref": "v2.2.0",
@@ -871,6 +855,34 @@
       "commit": "sha1-1d88384fd173af6ecb012dfd0264a306b711241a",
       "owner_id": 88700172,
       "repo_id": 422287306
+    },
+    "metadatastician/standards@b49a33e991f37a2249d873cbdc02c27a08f05d6d": {
+      "ref": "b49a33e991f37a2249d873cbdc02c27a08f05d6d",
+      "commit": "sha1-b49a33e991f37a2249d873cbdc02c27a08f05d6d",
+      "owner_id": 297579217,
+      "repo_id": 1116521501,
+      "uses": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+        "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+        "github/codeql-action@b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+        "ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e",
+        "webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555"
+      ]
+    },
+    "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8": {
+      "ref": "v1",
+      "commit": "sha1-683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+      "owner_id": 1940490,
+      "repo_id": 260749683,
+      "uses": []
+    },
+    "ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e": {
+      "ref": "v2.5.0",
+      "commit": "sha1-fa7117db83c52d787ae5a89f350999701505d78e",
+      "owner_id": 67707773,
+      "repo_id": 421101922,
+      "uses": []
     }
   }
 }
