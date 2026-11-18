@@ -220,7 +220,7 @@ artifact and the job that produces it are both wired. Exit 3 means written or
 checked but not wired end to end; exit 2 is a refusal or invalid input and
 changes nothing
 |`tested-only`
-|`bash tests/fix-fleet-enrolment-test.sh`, 139 checks
+|`bash tests/fix-fleet-enrolment-test.sh`, 141 checks; `STANDARDS_DIR=… bash tests/enrolment-canary-test.sh`, 25 checks (fixer, then driver, then the real renderer, end to end)
 |`scripts/fix-fleet-enrolment.sh`
 |Bounds: offline fixture repositories and fake standards checkouts, in the
 numbered sections 0 to 18: canonical and non-canonical workflows, owner
@@ -232,8 +232,12 @@ commit (reported unverified, not `ok`), refusals that change nothing, an
 existing manifest left alone, a malformed panic-attack pin rejected before any
 file is created, and a second run changing nothing. Case 13 reports a skip on
 a shallow clone; no skip occurred in this run. No real GitHub repository,
-workflow run or `gh actions-lock` was exercised. Whether a deployed repository
-is actually wired is a live fact this test cannot establish.
+workflow run or `gh actions-lock` was exercised. The canary harness chains the
+fixer, the driver (adapters stubbed) and standards' renderer on one synthetic
+repository: before, every enrolled row reads "enrolled, but no report-back";
+after, none does. It does not exercise GitHub's startup rules for the inserted
+job. Whether a deployed repository is actually wired is a live fact these tests
+cannot establish.
 
 |R-BUILD: `fleet-report-back-build.sh`: a crate that fails to build is a
 warning and later an `error` row, never a dead run
