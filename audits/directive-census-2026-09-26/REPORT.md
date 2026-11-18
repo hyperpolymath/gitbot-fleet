@@ -64,9 +64,9 @@ Remote snapshots are pinned individually, not a simultaneous estate-wide snapsho
 
 ### 3. Hypatia's local instructions conflict with the fleet's old learning output
 
-[Hypatia AGENTIC](https://github.com/hyperpolymath/hypatia/blob/9f2f62f5c9463c79b33a5ebf54372166ce56f349/.machine_readable/descriptiles/AGENTIC.a2ml) explicitly prohibits Logtalk, says rules are pure Elixir, and prohibits emitting JSON from its tooling. It requires evidence, reruns and behavioral tests, and declares automation rate/confidence constraints.
+[Hypatia AGENTIC](https://github.com/hyperpolymath/hypatia/blob/9f2f62f5c9463c79b33a5ebf54372166ce56f349/.machine_readable/descriptiles/AGENTIC.a2ml) explicitly prohibits the retired rule language, says rules are pure Elixir, and prohibits emitting JSON from its tooling. It requires evidence, reruns and behavioral tests, and declares automation rate/confidence constraints.
 
-The audited fleet coordinator still generates Logtalk `.lgt` proposals and has a publication path to Hypatia. Its local quarantine now blocks that route; the census did not deploy that block.
+The audited fleet coordinator still generated rule-file proposals (the generator has since been removed) and had a publication path to Hypatia. Its local quarantine now blocks that route; the census did not deploy that block.
 
 The same AGENTIC file references retired `6a2` locations while acknowledging the newer `descriptiles` convention. **Do not automatically resolve this by deleting the local constraints or regenerating the file.** Separate the obsolete location reference from still-binding substantive prohibitions.
 

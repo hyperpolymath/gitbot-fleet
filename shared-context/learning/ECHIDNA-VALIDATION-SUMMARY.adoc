@@ -14,7 +14,7 @@ Framework v1.0 *Rules Validated:* 3
 
 ==== 1. Structural Validation ✅
 
-* All rules have valid Logtalk syntax
+* All rules have valid syntax
 * SPDX headers present
 * Objects properly declared and closed
 * Info metadata included

@@ -72,7 +72,7 @@ coordination layer:
 |`+process-findings+` |Process `+findings/<repo>/latest.json+`, dispatch
 auto-fixes, trigger learning
 
-|`+generate-rules+` |Analyze pattern frequency, propose Logtalk rules at
+|`+generate-rules+` |Analyze pattern frequency, (retired) rule proposals at
 threshold (5+ observations)
 
 |`+deploy-bots+` |Generate deployment status JSON
@@ -84,7 +84,7 @@ threshold (5+ observations)
 
 ....
 Findings → observed-patterns.jsonl → threshold (5+) → propose_new_rule()
-  → Logtalk rule in learning/rule-proposals/ → create_rule_approval_pr()
+  → (retired: rule proposal and approval PR)
   → Human reviews PR → Approved rule deployed to hypatia
 ....
 
@@ -366,7 +366,7 @@ license/placeholder - Integration tests
 |*Purpose* |Neurosymbolic CI/CD intelligence platform
 |*Repo* |`+hyperpolymath/hypatia+`
 |*Path* |`+$REPOS_DIR/hypatia/+`
-|*Tech* |Rust + Haskell + Logtalk/Prolog + Ada/SPARK
+|*Tech* |Rust + Haskell + Ada/SPARK
 |*Tier* |0 (Engine)
 |*Completion* |*70%*
 |*Dependencies* |None (coordinates everything)
@@ -374,7 +374,7 @@ license/placeholder - Integration tests
 
 *Components*: - *CLI* (Rust) - 7 commands: scan, deposit, withdraw,
 search, batch, fleet, hooks - *Registry* (Haskell) - Type-safe ruleset
-DSL, property-based testing - *Engine* (Logtalk) - Declarative rule
+DSL, property-based testing - *Engine* - Declarative rule
 execution, distillation - *Adapters* (Rust) - GitHub, GitLab, Bitbucket,
 Codeberg (SourceHut/Radicle pending) - *Data* (Rust) - ArangoDB graph
 DB, Dragonfly cache - *Fixer* (Rust) - Error catalog parser, issue
@@ -461,7 +461,7 @@ git-dispatcher (Central Coordination Hub)
   │     └── shared-context (Rust coordination library)
   │
   ├── hypatia (Rules Engine, Engine tier)
-  │     ├── Logtalk rules (symbolic reasoning)
+  │     ├── Elixir rules (symbolic reasoning)
   │     ├── Haskell registry (type-safe verification)
   │     └── ArangoDB + Dragonfly (graph DB + cache)
   │

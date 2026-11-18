@@ -22,7 +22,7 @@ User question: "why do the svalinn, vordr, cerro-torre, selur, and verified-cont
 3. No CI/CD integration running scans
 
 **Fixed in this session:**
-- ✅ Implemented actual scanning logic in `hypatia/engine/scanner.lgt`
+- ✅ Implemented actual scanning logic in the Hypatia scanner
 - ✅ Created execution layer `gitbot-fleet/fleet-coordinator.sh`
 - ✅ Added autonomous learning system to auto-generate rules
 - ✅ Fixed all critical production code issues
@@ -110,7 +110,7 @@ These are acceptable per security policy.
 1. **getexn_on_external_data** (unsafe_crash)
    - Observations: 9
    - Status: Auto-generated rule proposal ✅
-   - File: `shared-context/learning/rule-proposals/getexn_on_external_data.lgt`
+   - File: (rule proposal file, since removed)
 
 2. **obj_magic_bypass** (type_safety_bypass)
    - Observations: 5
@@ -160,7 +160,7 @@ Success rate: 100% (9/9 attempted fixes succeeded)
 ### Immediate
 1. ✅ Deploy hypatia-scan.yml to all repos
 2. ✅ Add pre-commit hooks to block unsafe patterns
-3. Review auto-generated rule proposal: `getexn_on_external_data.lgt`
+3. Review auto-generated rule proposal: `getexn_on_external_data`
 
 ### Short-term
 1. Monitor learning engine for new pattern proposals
@@ -168,9 +168,8 @@ Success rate: 100% (9/9 attempted fixes succeeded)
 3. Consider adding fuzzing to vordr (critical runtime)
 
 ### Long-term
-1. Install SWI-Prolog for full Logtalk rule validation
-2. Extend patterns to cover more languages (Python, Go if any remain)
-3. Integrate learning feedback from production telemetry
+1. Extend patterns to cover more languages (Python, Go if any remain)
+2. Integrate learning feedback from production telemetry
 
 ---
 
