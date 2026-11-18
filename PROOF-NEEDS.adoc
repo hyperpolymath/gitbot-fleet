@@ -187,7 +187,10 @@ bash with `jq`
 (taken from a live run on 2026-10-27), not the seven Rust crates. Cases: only
 `enrolled: true` members run; an unreadable manifest runs nothing; missing
 binary, crash without JSON and timeout are `error` with a reason; exit 1 with
-valid JSON stays `ran`, any other non-zero status is `error`; empty scans,
+valid JSON stays `ran`, and on the generic findings path any other non-zero
+status is `error`, while a panicbot or ponsbot status object (`error` or
+`not_run` with a reason, as panicbot prints with exit 3 or 4) keeps its own
+status unless the adapter timed out; empty scans,
 malformed output and path normalisation; `echidnabot` and `sustainabot` are
 `not_run` with a reason; an unknown member is `error`; the driver never writes
 `not_applicable`; the envelope is key-sorted compact JSON with one final LF;
@@ -216,11 +219,14 @@ property-based check of the pattern. Grid-side trust boundary as in
 R-ENVELOPE.
 
 |R-WIRED: `fix-fleet-enrolment.sh` exits 0 only when the lane that reads the
-artifact and the job that produces it are both wired. Exit 3 means written or
-checked but not wired end to end; exit 2 is a refusal or invalid input and
-changes nothing
+artifact and the job that produces it are both wired. Exit 0 does not
+establish that `actions.lock` is in sync: the fixer reports a lock that needs
+regenerating (exit 3) only on the run that inserts the job, so a later run can
+exit 0 over a stale lock, and the repository's own lock-sync gate is the check
+for that. Exit 3 means written or checked but not wired end to end; exit 2 is
+a refusal or invalid input and changes nothing
 |`tested-only`
-|`bash tests/fix-fleet-enrolment-test.sh`, 141 checks; `STANDARDS_DIR=… bash tests/enrolment-canary-test.sh`, 25 checks (fixer, then driver, then the real renderer, end to end)
+|`bash tests/fix-fleet-enrolment-test.sh`, 141 checks; `STANDARDS_DIR=… bash tests/enrolment-canary-test.sh`, 56 checks over two synthetic repositories, one bare and one that enrols the conditional members (fixer, then driver, then the real renderer at standards `9ae23875`, end to end). Measured 2026-11-18 on the commit that records these counts (the canary's second fixture lands in the same commit), not at the ledger's `7907099`
 |`scripts/fix-fleet-enrolment.sh`
 |Bounds: offline fixture repositories and fake standards checkouts, in the
 numbered sections 0 to 18: canonical and non-canonical workflows, owner
