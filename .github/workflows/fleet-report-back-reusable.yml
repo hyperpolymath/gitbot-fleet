@@ -114,7 +114,7 @@ jobs:
       PANIC_ATTACK_SHA: 410a8f821ea8297833162565b50a298f787815da
     steps:
       - name: Checkout the repository to report on
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
           # The PR head, not the merge ref: the grid's change scope is computed
@@ -122,7 +122,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Checkout gitbot-fleet at the pinned commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v7.0.1
         with:
           repository: hyperpolymath/gitbot-fleet
           # `job.workflow_sha` is the commit of THIS file, which is what the
@@ -188,7 +188,7 @@ jobs:
       # PR 296 died at plan time with zero jobs on the tag-pinned version).
       - name: Cache adapter builds
         if: steps.plan.outputs.build == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.cargo/registry/index
@@ -209,7 +209,7 @@ jobs:
 
       - name: Restore panic-attack build cache
         if: steps.plan.outputs.panicbot == 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache@v6.1.0
         with:
           path: ~/.panic-attack
           key: panic-attack-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.PANIC_ATTACK_SHA }}
@@ -283,7 +283,7 @@ jobs:
 
       - name: Upload the report-backs
         if: ${{ always() && steps.run.conclusion != 'skipped' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ inputs.artifact-name }}
           path: ${{ runner.temp }}/report-backs
