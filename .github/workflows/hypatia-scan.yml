@@ -40,7 +40,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.credential_read_check }}
     permissions:
       contents: read
-    uses: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@29a9e4a881b6a3cc4cd27fcbc0886ffbadcbc5fe
+    uses: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@689897b4ed00ee9074b88dd01a7959030da93ebc
     with:
       scanner_only: true
     secrets:
