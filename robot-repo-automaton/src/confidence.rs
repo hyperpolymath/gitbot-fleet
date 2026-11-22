@@ -349,7 +349,11 @@ fn is_protected_file(target: &str) -> bool {
         "spec/",
         "verification/",
     ];
-    protected_dirs.iter().any(|dir| target.contains(dir))
+    if protected_dirs.iter().any(|dir| target.contains(dir)) {
+        return true;
+    }
+
+    false
 }
 
 /// Check if a file is a standard repository file (high confidence to create)

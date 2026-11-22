@@ -122,7 +122,10 @@ mod tests {
     fn skeleton_emits_no_a2ml() {
         for (rel, content) in SKELETON {
             assert!(!rel.ends_with(".a2ml"), "{rel} is retired A2ML");
-            assert!(!content.contains(".a2ml"), "{rel} still names a .a2ml file");
+            assert!(
+                !content.contains(".a2ml"),
+                "{rel} still names a .a2ml file"
+            );
         }
         let dir = tempfile::tempdir().unwrap();
         emit(dir.path()).unwrap();
