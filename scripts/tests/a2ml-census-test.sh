@@ -62,6 +62,14 @@ test('duplicate deficits report exact counts and stable first-seen order', () =>
 test('surplus deed values and reordered fields are permitted', () => {
   assert.deepEqual(census('a = ["x", "x", true, 0]', ast(...strings('extra', 'x', 'x', 'x').items, field('n', 'integer', '0'), field('b', 'boolean', '#t'))), {source_values: 4, missing: [], short: []});
 });
+test('different source encodings of the same value share a count across deed clauses', () => {
+  const source = "a = [\"\\u00e9\", 'é', \"e\\u0301\"]";
+  const deed = ast(['clause', 'related', [field('first', 'string', 'é'), field('second', 'string', 'e\u0301')]]);
+  // Escapes decode before counting, but canonically equivalent Unicode spellings stay distinct.
+  assert.deepEqual(census(source, deed), {
+    source_values: 3, missing: ['é'], short: [{ value: 'é', source: 2, deed: 1 }],
+  });
+});
 test('census does not mutate caller AST', () => {
   const input = strings('x'); const before = structuredClone(input);
   census('a = "x"', input); assert.deepEqual(input, before);

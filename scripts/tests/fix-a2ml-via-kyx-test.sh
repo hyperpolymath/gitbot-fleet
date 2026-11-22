@@ -65,7 +65,7 @@ GOOD_DEED=';; SPDX-License-Identifier: MPL-2.0
   :purpose "A demo used by the fixer tests."
   (related :name "standards" :relationship standard-source :notes "Reads its grammar."))'
 
-# The stub: STUB_KYX = ok | refuse | drop | lossy | badgrammar | crash
+# STUB_KYX selects converter outcomes below; ordinary conversions use "ok".
 cat > "$TMP/kyx.js" <<'JS'
 import { writeFileSync } from "node:fs";
 const a = process.argv.slice(2);
@@ -77,6 +77,12 @@ if (a[0] !== "a2ml" || a[1] !== "ecosystem" || !a.includes("--chora") || !a.incl
 }
 if (mode === "refuse") { process.stderr.write("kyx: refused: line 3: [extra] is not in §3\nkyx: 1 reason(s); nothing written\n"); process.exit(1); }
 if (mode === "crash") { process.stderr.write("kyx: cannot read source\n"); process.exit(2); }
+if (mode === "no-output") process.exit(0);
+if (mode === "empty-output") { writeFileSync(out, ""); process.exit(0); }
+if (mode === "k9") {
+  writeFileSync(out.replace(/\.deed$/, ".k9"), "first fixture\n");
+  writeFileSync(out.replace(/\.deed$/, ".k9.ncl"), "second fixture\n");
+}
 let text = good;
 if (mode === "lossy") text = good.replace('"A demo used by the fixer tests."', '"A demo."');
 if (mode === "badgrammar") text = good.replace("standard-source", "depends-on");
@@ -144,6 +150,12 @@ check "census: missing whitespace values are deficits, empty strings excluded" \
 printf '{"items":[["field","b",["string"," "]],["field","c",["string","\\t"]]]}\n' > "$TMP/space-ast.json"
 check "census: matching whitespace values pass" 0 "$(bun "$CENSUS" check "$TMP/space.a2ml" "$TMP/space-ast.json" >/dev/null; echo $?)"
 
+# The dispatcher can select the fixer from either kind of finding.
+check "RetiredA2ML category and recipe both resolve to the fixer" \
+  "fix-a2ml-via-kyx.sh fix-a2ml-via-kyx.sh" \
+  "$(jq -r '.registry | [.by_category.RetiredA2ML, .by_recipe["recipe-a2ml-kyx"]] | join(" ")' \
+    "$ROOT/scripts/fix-script-registry.json")"
+
 # --- --check (the outcome predicate) -----------------------------------------
 r=$(mkrepo check)
 check "--check counts tracked .a2ml" 3 "$(bash "$FIX" --check "$r")"
@@ -173,7 +185,7 @@ check "idempotent: same fingerprint, so no second issue" "$fp1" "$(head -1 "$REP
 check "idempotent: no PR body when nothing converted" 0 "$([[ -e "$REPORT/a2ml-pr.md" ]] && echo 1 || echo 0)"
 
 # --- every gate refuses and leaves the tree untouched ------------------------
-for mode in refuse drop lossy badgrammar crash; do
+for mode in refuse drop lossy badgrammar crash no-output empty-output; do
   r=$(mkrepo "g-$mode"); STUB_KYX=$mode run "$r"
   check "$mode: nothing converted -> exit 2" 2 "$RC"
   check "$mode: the tree is untouched" "" "$(git -C "$r" status --porcelain)"
@@ -184,9 +196,71 @@ for mode in refuse drop lossy badgrammar crash; do
     lossy) want='not lossless: the value census' ;;
     badgrammar) want='does not pass standards deed_lint' ;;
     crash) want='kyX failed (exit 2)' ;;
+    no-output|empty-output) want='kyX failed (exit 0)' ;;
   esac
   if [[ "$reason" == *"$want"* ]]; then ok "$mode: the reason names the gate"; else no "$mode: reason ${reason@Q} lacks ${want@Q}"; fi
 done
+# Grammar validation succeeds with the real linter; fail only AST extraction.
+cat > "$TMP/ast-fails.js" <<'JS'
+const args = process.argv.slice(2);
+if (args[0] === "--ast-json") {
+  console.error(`could not extract AST from ${args[1]}`);
+  process.exit(1);
+}
+const result = Bun.spawnSync([process.execPath, process.env.REAL_DEED_LINT, ...args],
+  { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+JS
+r=$(mkrepo ast-fails)
+REAL_DEED_LINT="$DEED_LINT" DEED_LINT="$TMP/ast-fails.js" STUB_KYX=ok run "$r"
+check "AST extraction fails after grammar validation: refused, tree unchanged" "2 " "$RC $(git -C "$r" status --porcelain)"
+check "AST extraction failure names the gate and scrubs the temp path" 1 \
+  "$(jq '[.refused[] | .reasons[] | select(contains("deed_lint --ast-json") and contains("could not extract AST from <work>/ECOSYSTEM.deed"))] | length' "$REPORT/a2ml-report.json")"
+
+r=$(mkrepo malformed-source)
+printf 'malformed\n' >> "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml"
+git -C "$r" add -A; git -C "$r" commit -qm malformed
+STUB_KYX=ok run "$r"
+check "a census parse error refuses the conversion and preserves the tree" "2 " "$RC $(git -C "$r" status --porcelain)"
+check "a census parse error is reported as unproven losslessness" 1 \
+  "$(jq '[.refused[] | .reasons[] | select(contains("losslessness is unproven") and contains("A2ML line"))] | length' "$REPORT/a2ml-report.json")"
+
+# Check the validator boundary with a stub: the real grammar gate still runs
+# and both K9 suffixes must be passed to the validator in strict mode.
+cat > "$TMP/k9-validator.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# -eq 2 && "$1" == --strict && -s "$2" ]] || exit 64
+name=${2##*/}
+printf '%s\n' "$name" >> "$K9_LOG"
+[[ "$name" != "${K9_REJECT:-}" ]]
+SH
+for mode in unset reject accept; do
+  r=$(mkrepo "k9-$mode")
+  validator="$TMP/k9-validator.sh" reject=""
+  case "$mode" in
+    unset) validator="" ;;
+    reject) reject=ECOSYSTEM.k9.ncl ;;
+  esac
+  log="$TMP/k9-$mode.log"; : > "$log"
+  K9_VALIDATE="$validator" K9_LOG="$log" K9_REJECT="$reject" STUB_KYX=k9 run "$r"
+  if [[ "$mode" == unset ]]; then
+    check "K9 validator unset: no validator called" "" "$(cat "$log")"
+  else
+    check "K9 $mode: validator called in strict mode for both outputs" \
+      $'ECOSYSTEM.k9\nECOSYSTEM.k9.ncl' "$(cat "$log")"
+  fi
+  if [[ "$mode" == accept ]]; then
+    check "valid K9 outputs allow the deed conversion (partial run)" 3 "$RC"
+    check "K9 side outputs are not staged with the deed" \
+      "A .machine_readable/descriptiles/ECOSYSTEM.deed;D .machine_readable/descriptiles/ECOSYSTEM.a2ml;" "$(staged "$r")"
+  else
+    check "K9 $mode: refused, tree unchanged" "2 " "$RC $(git -C "$r" status --porcelain)"
+    check "K9 $mode: refusal names the K9 gate" 1 \
+        "$(jq '[.refused[] | .reasons[] | select(contains("k9-validate.sh --strict"))] | length' "$REPORT/a2ml-report.json")"
+  fi
+done
+
 r=$(mkrepo g-fp); STUB_KYX=badgrammar run "$r"; fpa=$(head -1 "$REPORT/a2ml-p1-issue.md")
 STUB_KYX=badgrammar run "$r"
 check "badgrammar: the same refusal keeps its fingerprint across runs (no work path in it)" "$fpa" "$(head -1 "$REPORT/a2ml-p1-issue.md")"
