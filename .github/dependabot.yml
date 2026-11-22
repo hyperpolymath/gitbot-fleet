@@ -24,6 +24,33 @@
         {
           dependency-name: "github/codeql-action",
         },
+        # ATTESTED reusable workflows: each is a record in
+        # scripts/lib/pinned-reusable-sources.json with closure receipts in
+        # scripts/lib/lock-closure-receipts.tsv. Dependabot cannot update those,
+        # so a bump from it breaks 'Pinned source closure' on main (#686 did).
+        # Move these pins only by a deliberate PR that runs
+        # scripts/reattest-pinned-source.sh. Name-only entries, as for the
+        # CodeQL hold: a SHA re-bump slips past version-scoped ignores.
+        # scripts/tests/dependabot-attested-ignore-test.sh keeps this list
+        # equal to the manifest's active sources.
+        {
+          dependency-name: "hyperpolymath/hypatia/.github/workflows/credential-read-check.yml",
+        },
+        {
+          dependency-name: "hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml",
+        },
+        {
+          dependency-name: "metadatastician/standards/.github/workflows/governance-reusable.yml",
+        },
+        {
+          dependency-name: "metadatastician/standards/.github/workflows/hypatia-scan-reusable.yml",
+        },
+        {
+          dependency-name: "metadatastician/standards/.github/workflows/mirror-reusable.yml",
+        },
+        {
+          dependency-name: "metadatastician/standards/.github/workflows/scorecard-reusable.yml",
+        },
       ],
     },
     # Rust dependencies. Keep every Cargo project in one update entry so the

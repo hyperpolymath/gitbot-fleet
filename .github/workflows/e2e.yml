@@ -78,6 +78,10 @@ jobs:
         run: bash scripts/tests/pinned-reusable-sources-test.sh
       - name: Authenticate pinned reusable sources
         run: bash scripts/audit-pinned-reusable-sources.sh --fetch-sources
+      - name: Dependabot never bumps an attested reusable workflow
+        run: bash scripts/tests/dependabot-attested-ignore-test.sh
+      - name: Re-attestation tool moves only an unchanged source
+        run: bash scripts/tests/reattest-pinned-source-test.sh
       - name: Verify live scanner caller and negative controls
         run: bash scripts/tests/scanner-caller-contract-test.sh
       - name: Authenticate historical scanner source for archived preflight
