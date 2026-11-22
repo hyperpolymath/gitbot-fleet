@@ -154,7 +154,6 @@ pnpm-lock.yaml
 .editorconfig
 .env.*
 /exports/*.json
-/exports/*.lgt
 /logs/
 ai-cli-crash-capture/
 composer/*.beam

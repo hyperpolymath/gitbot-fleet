@@ -43,7 +43,6 @@ workflows:
     '.github/workflows/labels.yml': []
     '.github/workflows/learning-loop.yml':
         - 'actions/checkout@v7.0.1'
-        - 'actions/upload-artifact@v7.0.2'
     '.github/workflows/lock-sync-gate.yml': []
     '.github/workflows/mirror.yml': []
     '.github/workflows/pages.yml':

@@ -81,6 +81,11 @@ jobs:
       - name: Run the driver's test suite against the real renderer
         run: STANDARDS_DIR="$PWD/.standards-grid" bash tests/fleet-report-back-test.sh
 
+      # The enrolment rollout end to end on a synthetic repository: fixer, then
+      # driver, then the real renderer, before and after (tests/enrolment-canary-test.sh).
+      - name: Enrolment canary (fixer, driver and renderer, end to end)
+        run: STANDARDS_DIR="$PWD/.standards-grid" bash tests/enrolment-canary-test.sh
+
       - name: Render the grid from the envelopes and fail on any silent member
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

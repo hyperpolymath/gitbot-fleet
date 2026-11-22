@@ -52,7 +52,7 @@ public for transparency 3. Publish findings after patches deployed
 |===
 |Repo |Language |Unsafe Patterns Found |Severity |Can Self-Fix?
 |*hypatia* |Rust |27 unwrap calls |Medium |✅ YES
-|*gitbot-fleet* |Shell/Logtalk |3 getExn, 3 Obj.magic |Low |✅ YES
+|*gitbot-fleet* |Shell |3 getExn, 3 Obj.magic |Low |✅ YES
 |*rhodibot* |Rust |0 issues |None |✅ CLEAN
 |*echidnabot* |Rust |6 unwrap calls |Medium |✅ YES
 |*glambot* |Rust |1 unwrap call |Low |✅ YES
@@ -88,9 +88,6 @@ review before merging
 * [ ] *Add hypatia self-scan to CI/CD*
 ** Workflow: `+.github/workflows/hypatia-self-scan.yml+`
 ** Block merges if critical issues found
-* [ ] *Document all Logtalk predicates*
-** Many predicates in `+engine/scanner.lgt+` lack comments
-** Add usage examples for each rule in `+code-safety-lessons.lgt+`
 * [ ] *Test suite for learning engine*
 ** Test observation thresholds (5 for proposal, 10 for auto-approve)
 ** Test fix outcome tracking
@@ -101,9 +98,6 @@ review before merging
 * [ ] *Create proper Rust library crate*
 ** Current structure mixes CLI, adapters, fixer, scanner
 ** Separate: `+hypatia-core+`, `+hypatia-cli+`, `+hypatia-adapters+`
-* [ ] *Add SWI-Prolog installation to CI*
-** Currently using bash POC scanner
-** Full Logtalk validation requires SWI-Prolog
 * [ ] *Implement rule versioning*
 ** Track which hypatia version generated each rule
 ** Support rule deprecation and migration
