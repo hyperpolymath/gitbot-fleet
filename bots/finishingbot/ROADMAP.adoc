@@ -91,7 +91,7 @@ This roadmap outlines the development plan for finishing-bot, the release readin
 **Target:** 2026-Q3
 
 === Hypatia Integration
-* Logtalk rule-based validation
+* Rule-based validation (Hypatia rules)
 * Formal verification of release criteria
 * Proof-carrying code validation
 * Rule synthesis from validation history

@@ -89,7 +89,7 @@ No centralized repository-policy reconciliation across all these entry points wa
 
 `tests/e2e.sh` describes and primarily checks repository structure, shell syntax and required configuration. A passing “E2E Tests” run is not proof of dispatch → bot execution → changed target → verification → published check/PR.
 
-The learning workflow explicitly disables `deploy-approved-rules`; the coordinator's generic generated Logtalk detector contains a TODO and an unconditional `fail`. Generated proposals are not necessarily functioning new detectors.
+The learning workflow explicitly disables `deploy-approved-rules`; the coordinator's generic generated detector contained a TODO and an unconditional `fail`. Generated proposals are not necessarily functioning new detectors.
 
 ## Live GitHub observations and limits
 

@@ -95,18 +95,14 @@ canonical_workflow "$NEW_SHA" > "$A/.github/workflows/fork-governance.yml"; chmo
 set +e; bash "$FIXER" "$A" > "$TMP/a.out" 2>&1; rc=$?; set -e
 check "A: exit 0 — wired end to end" 0 "$rc"
 check_grep "A: manifest created" 'CREATED \.gitbot-fleet/enrolment\.json' "$TMP/a.out"
-check "A: manifest is canonical priority order compact JSON with one final LF (I-JCS as Python produces it)" \
-    "$(python3 -c "
-import json, sys
-with open('$A/.gitbot-fleet/enrolment.json') as f:
-    data = json.load(f)
-# Re-serialize with same priority order as fix-fleet-enrolment.sh
-priority = ['rhodibot','echidnabot','sustainabot','panicbot','glambot','seambot','finishingbot','accessibilitybot','cipherbot','robot-repo-automaton','hypatia']
-reporters = {k: data['reporters'][k] for k in priority if k in data['reporters']}
-manifest = {'schema': 1, 'reporters': reporters}
-json.dump(manifest, sys.stdout, separators=(',', ':'))
-print()
-")" "$(cat "$A/.gitbot-fleet/enrolment.json")"
+check "A: manifest is canonical priority order compact JSON with one final LF (I-JCS)" \
+    "$(jq -c '{schema: 1, reporters: (.reporters as $r | reduce ("rhodibot","echidnabot","sustainabot","panicbot","glambot","seambot","finishingbot","accessibilitybot","cipherbot") as $k ({}; if $r | has($k) then . + {($k): $r[$k]} else . end))}' "$A/.gitbot-fleet/enrolment.json")" \
+    "$(cat "$A/.gitbot-fleet/enrolment.json")"
+check "A: manifest lists exactly the nine fleet reporters, in priority order" \
+    "rhodibot echidnabot sustainabot panicbot glambot seambot finishingbot accessibilitybot cipherbot" \
+    "$(jq -r '.reporters | keys_unsorted | join(" ")' "$A/.gitbot-fleet/enrolment.json")"
+check "A: non-reporter roles (hypatia, robot-repo-automaton) get no manifest entry" "false false" \
+    "$(jq -r '[(.reporters | has("hypatia")), (.reporters | has("robot-repo-automaton"))] | map(tostring) | join(" ")' "$A/.gitbot-fleet/enrolment.json")"
 check "A: manifest ends with exactly one LF" "1" "$(tail -c1 "$A/.gitbot-fleet/enrolment.json" | wc -l | tr -d ' ')"
 check "A: every-repo members enrolled" "true true true true" \
     "$(jq -r '[.reporters.rhodibot, .reporters.finishingbot, .reporters.glambot, .reporters.cipherbot][] | .enrolled' "$A/.gitbot-fleet/enrolment.json" | paste -sd' ' -)"

@@ -156,68 +156,29 @@ robot-repo-automaton
 hypatia'
     fi
 
-    # jq 1.6 does NOT preserve object key order in output regardless of input method.
-    # Use Python (which preserves dict insertion order since 3.7) to generate the
-    # manifest with keys in canonical priority order.
-    # Convert shell true/false to Python True/False
-    py_rust=$( [ "$has_rust" = "true" ] && echo "True" || echo "False" )
-    py_seams=$( [ "$has_seams" = "true" ] && echo "True" || echo "False" )
-    py_html=$( [ "$has_html" = "true" ] && echo "True" || echo "False" )
-    py_proofs=$( [ "$has_proofs" = "true" ] && echo "True" || echo "False" )
-
-    python3 -c "
-import json
-import sys
-
-has_rust = $py_rust
-has_seams = $py_seams
-has_html = $py_html
-has_proofs = $py_proofs
-
-priority_order = '''$priority_order'''.strip().split('\n')
-
-reporters = {}
-for member in priority_order:
-    if member == 'rhodibot':
-        reporters[member] = {'title': 'rhodibot (RSR compliance)', 'enrolled': True}
-    elif member == 'echidnabot':
-        if has_proofs:
-            reporters[member] = {'title': 'echidnabot (formal verification)', 'enrolled': True}
-        else:
-            reporters[member] = {'enrolled': False, 'reason': 'no proof files in the tree'}
-    elif member == 'sustainabot':
-        reporters[member] = {'enrolled': False, 'reason': 'reserved fleet slot; no adapter exists'}
-    elif member == 'panicbot':
-        if has_rust:
-            reporters[member] = {'title': 'panicbot (panic recovery, error handling)', 'enrolled': True}
-        else:
-            reporters[member] = {'enrolled': False, 'reason': 'no Cargo.toml in the tree; panic-attack scans Rust'}
-    elif member == 'glambot':
-        reporters[member] = {'title': 'glambot (presentation quality)', 'enrolled': True}
-    elif member == 'seambot':
-        if has_seams:
-            reporters[member] = {'title': 'seambot (ABI/FFI seam checks)', 'enrolled': True}
-        else:
-            reporters[member] = {'enrolled': False, 'reason': 'no seam register is declared (spec/seams/seam-register.json)'}
-    elif member == 'finishingbot':
-        reporters[member] = {'title': 'finishingbot (release readiness)', 'enrolled': True}
-    elif member == 'accessibilitybot':
-        if has_html:
-            reporters[member] = {'title': 'accessibilitybot (WCAG conformance)', 'enrolled': True}
-        else:
-            reporters[member] = {'enrolled': False, 'reason': 'no HTML files in the tree'}
-    elif member == 'cipherbot':
-        reporters[member] = {'title': 'cipherbot (cryptographic hygiene)', 'enrolled': True}
-    elif member == 'robot-repo-automaton':
-        reporters[member] = {'enrolled': False, 'reason': 'not a fleet reporter; executor role only'}
-    elif member == 'hypatia':
-        reporters[member] = {'enrolled': False, 'reason': 'not a fleet reporter; engine role only'}
-
-manifest = {'schema': 1, 'reporters': reporters}
-# Compact output with single trailing newline (I-JSON/JCS)
-json.dump(manifest, sys.stdout, separators=(',', ':'))
-print()
-" > "$MANIFEST"
+    # jq builds objects in insertion order, so reducing over the priority list
+    # writes the manifest in canonical priority order. Only fleet REPORTERS get
+    # an entry: robot-repo-automaton (executor) and hypatia (engine) are in the
+    # priority file for the Arbiter, but they are not grid rows, and a manifest
+    # entry named `hypatia` would give the grid a second row with the scanner's id.
+    printf '%s\n' "$priority_order" | jq -R . | jq -sc \
+        --argjson rust "$has_rust" --argjson seams "$has_seams" \
+        --argjson html "$has_html" --argjson proofs "$has_proofs" '
+      def on($title): {title: $title, enrolled: true};
+      def off($reason): {enrolled: false, reason: $reason};
+      def entry:
+        if . == "rhodibot" then on("rhodibot (RSR compliance)")
+        elif . == "echidnabot" then (if $proofs then on("echidnabot (formal verification)") else off("no proof files in the tree") end)
+        elif . == "sustainabot" then off("reserved fleet slot; no adapter exists")
+        elif . == "panicbot" then (if $rust then on("panicbot (panic recovery, error handling)") else off("no Cargo.toml in the tree; panic-attack scans Rust") end)
+        elif . == "glambot" then on("glambot (presentation quality)")
+        elif . == "seambot" then (if $seams then on("seambot (ABI/FFI seam checks)") else off("no seam register is declared (spec/seams/seam-register.json)") end)
+        elif . == "finishingbot" then on("finishingbot (release readiness)")
+        elif . == "accessibilitybot" then (if $html then on("accessibilitybot (WCAG conformance)") else off("no HTML files in the tree") end)
+        elif . == "cipherbot" then on("cipherbot (cryptographic hygiene)")
+        else null end;
+      {schema: 1, reporters: (reduce (.[] | select(length > 0)) as $m ({}; ($m | entry) as $e | if $e == null then . else . + {($m): $e} end))}
+    ' > "$MANIFEST"
 
     echo "  CREATED .gitbot-fleet/enrolment.json (rust=$has_rust seams=$has_seams html=$has_html proofs=$has_proofs; edit it — enrol what is true of this repository)"
 fi
