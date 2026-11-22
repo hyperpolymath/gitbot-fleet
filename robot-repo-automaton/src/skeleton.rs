@@ -15,8 +15,8 @@
 //!
 //! Source of truth = the **post-#47 canonical layout**, not the prose in
 //! `standards` `REQUIRED-FILES.md` (which is stale: it still lists root
-//! `*.scm` + `Mustfile`, predating the estate-wide `.scm`→`.a2ml` migration
-//! and the `.machine_readable/descriptiles/` layout). Updating that doc to match is a
+//! `*.scm` + `Mustfile`, predating the estate-wide A2ML retirement and the
+//! deed-first layout). Updating that doc to match is a
 //! separate `standards`-repo change, deliberately out of scope here.
 
 use anyhow::{Context, Result};
@@ -45,33 +45,12 @@ pub const SKELETON: &[(&str, &str)] = &[
         include_str!("../templates/skeleton/.tool-versions"),
     ),
     ("Justfile", include_str!("../templates/skeleton/Justfile")),
+    // A2ML is retired (owner rulings D99, D312, D313): no `.a2ml` is ever
+    // emitted. Repo facts are clauses of `<repo>_chora.deed`; the playbook moves
+    // to `PLAYBOOK.deed` (A7 ruling), with empty sections for now.
     (
-        ".machine_readable/descriptiles/ANCHOR.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/descriptiles/ANCHOR.a2ml"),
-    ),
-    (
-        ".machine_readable/descriptiles/META.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/descriptiles/META.a2ml"),
-    ),
-    (
-        ".machine_readable/descriptiles/STATE.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/descriptiles/STATE.a2ml"),
-    ),
-    (
-        ".machine_readable/descriptiles/ECOSYSTEM.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/descriptiles/ECOSYSTEM.a2ml"),
-    ),
-    (
-        ".machine_readable/descriptiles/PLAYBOOK.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/descriptiles/PLAYBOOK.a2ml"),
-    ),
-    (
-        ".machine_readable/descriptiles/AGENTIC.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/descriptiles/AGENTIC.a2ml"),
-    ),
-    (
-        ".machine_readable/descriptiles/NEUROSYM.a2ml",
-        include_str!("../templates/skeleton/.machine_readable/descriptiles/NEUROSYM.a2ml"),
+        ".machine_readable/descriptiles/PLAYBOOK.deed",
+        include_str!("../templates/skeleton/.machine_readable/descriptiles/PLAYBOOK.deed"),
     ),
 ];
 
@@ -131,12 +110,76 @@ mod tests {
 
     #[test]
     fn skeleton_is_non_empty_and_well_formed() {
-        assert!(SKELETON.len() >= 11, "expected the full RSR required set");
+        assert!(SKELETON.len() >= 6, "expected the full RSR required set");
         for (rel, content) in SKELETON {
             assert!(!rel.is_empty(), "empty skeleton path");
             assert!(!rel.starts_with('/'), "{rel} must be repo-relative");
             assert!(!content.is_empty(), "{rel} canonical content is empty");
         }
+    }
+
+    #[test]
+    fn skeleton_emits_no_a2ml() {
+        for (rel, content) in SKELETON {
+            assert!(!rel.ends_with(".a2ml"), "{rel} is retired A2ML");
+            assert!(
+                !content.contains(".a2ml"),
+                "{rel} still names a .a2ml file"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        emit(dir.path()).unwrap();
+        let mut stack = vec![dir.path().to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(d).unwrap() {
+                let p = e.unwrap().path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else {
+                    assert_ne!(
+                        p.extension().and_then(|x| x.to_str()),
+                        Some("a2ml"),
+                        "emitted {}",
+                        p.display()
+                    );
+                }
+            }
+        }
+    }
+
+    /// Every emitted `.deed` is structurally a deed (SPDX header, `(`-form,
+    /// no `key = value` / `[section]`). When `DEED_LINT` points at
+    /// standards' `1-formats/deed/tools/deed_lint.js`, the real linter runs.
+    #[test]
+    fn emitted_deeds_lint() {
+        let dir = tempfile::tempdir().unwrap();
+        emit(dir.path()).unwrap();
+        let mut n = 0;
+        for (rel, content) in SKELETON.iter().filter(|(r, _)| r.ends_with(".deed")) {
+            n += 1;
+            assert!(content.starts_with(";; SPDX-"), "{rel}: SPDX header");
+            for line in content.lines().filter(|l| !l.trim_start().starts_with(';')) {
+                assert!(!line.trim_start().starts_with('['), "{rel}: [section]");
+            }
+            assert!(content.contains("(descriptile-deed"), "{rel}: doc-head");
+            assert!(
+                content.matches(":schema-version").count() == 1,
+                "{rel}: :schema-version exactly once"
+            );
+            if let Ok(lint) = std::env::var("DEED_LINT") {
+                let out = std::process::Command::new("bun")
+                    .arg(&lint)
+                    .arg(dir.path().join(rel))
+                    .output()
+                    .expect("run bun deed_lint.js");
+                assert!(
+                    out.status.success(),
+                    "{rel} fails deed_lint: {}",
+                    String::from_utf8_lossy(&out.stdout)
+                );
+            }
+        }
+        assert!(n >= 1, "skeleton must emit the deed form");
     }
 
     #[test]
