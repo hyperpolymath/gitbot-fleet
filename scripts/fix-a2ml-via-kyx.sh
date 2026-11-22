@@ -163,36 +163,56 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/a2ml-kyx-work.XXXXXX")"
 STAGED=()        # sources whose conversion is staged in the index
 REPORTS_DONE=0   # set once every report is published
 CREATED_TARGET=0 # set once THIS run created the target file (never a file that was already there)
+SOURCE_REMOVED=0 # set only after git rm succeeds
 
-# Put the index and work tree back as they were before `src` was staged, and
-# say whether that worked: every step is checked, then the result is.
-undo_stage() { # src
-  local src="$1" status paths=("$1")
-  if [[ "$CREATED_TARGET" -eq 1 ]]; then
-    # The target is ours to remove only while it is still exactly what this
-    # run generated, in the work tree and in the index. An edit made since
-    # belongs to the owner: keep it and fail the rollback.
-    if [[ -e "$REPO/$TARGET" || -L "$REPO/$TARGET" ]]; then
-      if [[ -L "$REPO/$TARGET" ]] || ! cmp -s -- "$REPO/$TARGET" "$WORK/ECOSYSTEM.deed"; then
-        echo "$TARGET was changed after it was generated; left unchanged" >> "$WORK/undo.err"; return 1
-      fi
+# Roll back the generated target independently of the source.
+undo_target() {
+  if [[ -e "$REPO/$TARGET" || -L "$REPO/$TARGET" ]]; then
+    if [[ ! -f "$REPO/$TARGET" || -L "$REPO/$TARGET" ]] || ! cmp -s -- "$REPO/$TARGET" "$WORK/ECOSYSTEM.deed"; then
+      echo "$TARGET was changed after it was generated; left unchanged" >> "$WORK/undo.err"; return 1
     fi
-    if [[ -n "$(git -C "$REPO" ls-files --cached -- "$TARGET" 2>> "$WORK/undo.err")" ]]; then
-      git -C "$REPO" show ":$TARGET" 2>> "$WORK/undo.err" | cmp -s -- - "$WORK/ECOSYSTEM.deed" \
-        || { echo "$TARGET was changed in the index after it was generated; left unchanged" >> "$WORK/undo.err"; return 1; }
-    fi
-    paths=("$TARGET" "$src")
   fi
-  git -C "$REPO" reset -q -- "${paths[@]}" 2>> "$WORK/undo.err" || return 1
-  if [[ "$CREATED_TARGET" -eq 1 ]]; then
-    rm -f -- "$REPO/$TARGET" 2>> "$WORK/undo.err" || return 1
+  local entry
+  entry="$(git -C "$REPO" ls-files --stage -- "$TARGET" 2>> "$WORK/undo.err")" || return 1
+  if [[ -n "$entry" ]]; then
+    git -C "$REPO" show ":$TARGET" 2>> "$WORK/undo.err" | cmp -s -- - "$WORK/ECOSYSTEM.deed" \
+      || { echo "$TARGET was changed in the index after it was generated; left unchanged" >> "$WORK/undo.err"; return 1; }
+  fi
+  git -C "$REPO" reset -q -- "$TARGET" 2>> "$WORK/undo.err" || return 1
+  rm -f -- "$REPO/$TARGET" 2>> "$WORK/undo.err"
+}
+
+# Expect the original entry if git rm failed, or no entry if it succeeded.
+undo_source() {
+  local src="$1" entry expected="$SOURCE_INDEX"
+  [[ "$SOURCE_REMOVED" -ne 1 ]] || expected=
+  if ! entry="$(git -C "$REPO" ls-files --stage -- "$src" 2>> "$WORK/undo.err")"; then
+    echo "could not verify the index entry for $src; left unchanged" >> "$WORK/undo.err"
+    return 1
+  fi
+  if [[ "$entry" != "$expected" ]]; then
+    echo "$src was changed in the index during staging; left unchanged" >> "$WORK/undo.err"
+    return 1
+  fi
+  if [[ "$SOURCE_REMOVED" -eq 1 ]]; then
+    git -C "$REPO" reset -q -- "$src" 2>> "$WORK/undo.err" || return 1
   fi
   # A missing source is the expected result of git rm. If it still exists,
   # preserve any edits made since preflight rather than checking over them.
   if [[ -e "$REPO/$src" || -L "$REPO/$src" ]]; then
     git -C "$REPO" diff --quiet -- "$src" 2>> "$WORK/undo.err" || return 1
   fi
-  git -C "$REPO" checkout -q -- "$src" 2>> "$WORK/undo.err" || return 1
+  git -C "$REPO" checkout -q -- "$src" 2>> "$WORK/undo.err"
+}
+
+undo_stage() { # src
+  local status failed=0 paths=("$1")
+  undo_source "$1" || failed=1
+  if [[ "$CREATED_TARGET" -eq 1 ]]; then
+    paths+=("$TARGET")
+    undo_target || failed=1
+  fi
+  [[ "$failed" -eq 0 ]] || return 1
   # The check itself must succeed: a failed `git status` prints nothing, and
   # nothing would read as clean.
   status="$(git -C "$REPO" status --porcelain -- "${paths[@]}" 2>> "$WORK/undo.err")" || return 1
@@ -219,6 +239,7 @@ on_exit() {
         printf 'fix-a2ml-via-kyx: the run stopped before its reports were written; the staged conversion of %s was rolled back\n' "$src" >&2
       else
         printf 'fix-a2ml-via-kyx: INCONSISTENT: the run stopped before its reports were written, and rolling back %s failed. The index and work tree of %s need a human (git status).\n' "$src" "$REPO" >&2
+        [[ ! -s "$WORK/undo.err" ]] || sed 's/^/fix-a2ml-via-kyx:   /' "$WORK/undo.err" >&2
         rc=70
       fi
     done
@@ -312,6 +333,9 @@ mapfile -d '' -t choras < <(git -C "$REPO" ls-files -z -- ':(glob)*_chora.deed')
 # BEFORE kyX runs, so a failed `git add`/`git rm` cannot leave half a change.
 preflight() { # src
   local src="$1" dir st
+  if [[ -L "$REPO/${choras[0]}" ]]; then
+    echo "${choras[0]} is a symlink; kyX must read a regular file with the committed chora deed content."; return
+  fi
   # A failed `git status` prints nothing, which would read as clean: check
   # that it ran before reading what it printed. Its stderr is kept apart:
   # a harmless warning (a missing parent directory of an absent target) is
@@ -346,6 +370,23 @@ preflight() { # src
   if git -C "$REPO" check-ignore -q --no-index -- "$TARGET"; then
     echo "$TARGET is gitignored here, so it could not be staged."; return
   fi
+}
+
+# Check both the committed state and the bytes kyX would read.
+chora_identity() {
+  local deed="$1" status
+  [[ -f "$REPO/$deed" && ! -L "$REPO/$deed" ]] || return 1
+  status="$(git -C "$REPO" status --porcelain -- "$deed")" || return 1
+  [[ -z "$status" ]] || return 1
+  git hash-object --no-filters -- "$REPO/$deed"
+}
+
+write_target() {
+  local -
+  set -o noclobber
+  # The redirection must succeed before we claim the path, and we must claim
+  # it before the write so rollback can detect a partial file.
+  { CREATED_TARGET=1; cat -- "$1" >&3; } 3> "$REPO/$TARGET"
 }
 
 eco_sources=()
@@ -388,10 +429,25 @@ for src in "${eco_sources[@]}"; do
     refuse "$src" ECOSYSTEM "$spec" "$blocked"
     continue
   fi
+  if ! SOURCE_INDEX="$(git -C "$REPO" ls-files --stage -- "$src")" || [[ -z "$SOURCE_INDEX" ]]; then
+    refuse "$src" ECOSYSTEM "$spec" "could not record the source's index entry before conversion."
+    continue
+  fi
   need_tools
   out="$WORK/ECOSYSTEM.deed"; rm -f "$out" "$WORK/kyx.err" "$WORK/ast.json"
+  chora="${choras[0]}"
+  chora_input="$WORK/$chora"
+  # Use a private copy so kyX cannot follow a link substituted at the repo path.
+  if ! chora_before="$(chora_identity "$chora")" \
+      || ! cp -P -- "$REPO/$chora" "$chora_input" \
+      || [[ ! -f "$chora_input" || -L "$chora_input" ]] \
+      || ! chora_copy="$(git hash-object --no-filters -- "$chora_input")" \
+      || [[ "$chora_copy" != "$chora_before" ]]; then
+    refuse "$src" ECOSYSTEM "$spec" "$chora changed or could not be read before conversion."
+    continue
+  fi
   rc=0
-  bun "$KYX" a2ml ecosystem "$REPO/$src" --chora "$REPO/${choras[0]}" --affirmed "$AFFIRMED" --out "$out" \
+  bun "$KYX" a2ml ecosystem "$REPO/$src" --chora "$chora_input" --affirmed "$AFFIRMED" --out "$out" \
     > "$WORK/kyx.out" 2> "$WORK/kyx.err" || rc=$?
   # The work directory is random per run; a reason that names it would give
   # the same refusal a new fingerprint every time, and a duplicate P1 issue.
@@ -439,14 +495,18 @@ for src in "${eco_sources[@]}"; do
     fi
     continue
   fi
+  if ! chora_now="$(chora_identity "$chora")" || [[ "$chora_now" != "$chora_before" ]]; then
+    refuse "$src" ECOSYSTEM "$spec" "$chora changed during conversion or could no longer be verified; nothing was staged."
+    continue
+  fi
   # Every gate passed: stage the deed and the deletion, all or nothing. The
   # preflight makes a failure here unlikely; if one happens anyway, the tree
   # and index are put back (checked) and the file is refused with the reason.
   if ! { mkdir -p "$REPO/$(dirname "$TARGET")" \
-      && ( set -o noclobber; cat -- "$out" > "$REPO/$TARGET" ) \
-      && CREATED_TARGET=1 \
+      && write_target "$out" \
       && git -C "$REPO" add -- "$TARGET" \
-      && git -C "$REPO" rm -q -- "$src"; } 2> "$WORK/stage.err"; then
+      && git -C "$REPO" rm -q -- "$src" \
+      && SOURCE_REMOVED=1; } 2> "$WORK/stage.err"; then
     scrub "$WORK/stage.err"
     undo_stage "$src" \
       || inconsistent "staging the conversion of $src failed ($(head -c 200 "$WORK/stage.err")), and rolling it back failed too"

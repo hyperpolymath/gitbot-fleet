@@ -67,7 +67,9 @@ GOOD_DEED=';; SPDX-License-Identifier: MPL-2.0
 
 # STUB_KYX selects converter outcomes below; ordinary conversions use "ok".
 cat > "$TMP/kyx.js" <<'JS'
-import { writeFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { dirname } from "node:path";
 const a = process.argv.slice(2);
 const out = a[a.indexOf("--out") + 1];
 const mode = process.env.STUB_KYX;
@@ -87,6 +89,11 @@ let text = good;
 if (mode === "lossy") text = good.replace('"A demo used by the fixer tests."', '"A demo."');
 if (mode === "badgrammar") text = good.replace("standard-source", "depends-on");
 writeFileSync(out, text + "\n");
+if (mode === "changechora") {
+  const chora = process.env.CHORA_TO_CHANGE;
+  appendFileSync(chora, ";; owner edit\n");
+  execFileSync("git", ["-C", dirname(chora), "commit", "-qm", "update chora", "--", chora]);
+}
 if (mode === "drop") process.stderr.write("kyx: dropped by the drop doctrine (spec §4): 1 comment line(s), 0 directive(s)\n");
 process.exit(0);
 JS
@@ -212,7 +219,8 @@ const result = Bun.spawnSync([process.execPath, process.env.REAL_DEED_LINT, ...a
 process.exit(result.exitCode);
 JS
 r=$(mkrepo ast-fails)
-REAL_DEED_LINT="$DEED_LINT" DEED_LINT="$TMP/ast-fails.js" STUB_KYX=ok run "$r"
+real_deed_lint="$DEED_LINT"
+REAL_DEED_LINT="$real_deed_lint" DEED_LINT="$TMP/ast-fails.js" STUB_KYX=ok run "$r"
 check "AST extraction fails after grammar validation: refused, tree unchanged" "2 " "$RC $(git -C "$r" status --porcelain)"
 check "AST extraction failure names the gate and scrubs the temp path" 1 \
   "$(jq '[.refused[] | .reasons[] | select(contains("deed_lint --ast-json") and contains("could not extract AST from <work>/ECOSYSTEM.deed"))] | length' "$REPORT/a2ml-report.json")"
@@ -311,6 +319,17 @@ check "a source with uncommitted changes is refused before kyX runs" 1 "$(jq '[.
 check "dirty source: only the local edit is in the tree; nothing staged" " M .machine_readable/descriptiles/ECOSYSTEM.a2ml" "$(git -C "$r" status --porcelain)"
 r=$(mkrepo dirtychora); printf ';; local edit\n' >> "$r/demo_chora.deed"; STUB_KYX=ok run "$r"
 check "a chora deed with uncommitted changes is refused" 1 "$(jq '[.refused[] | select(.reasons[0]|test("demo_chora.deed has uncommitted"))] | length' "$REPORT/a2ml-report.json")"
+r=$(mkrepo chora-link); mv "$r/demo_chora.deed" "$TMP/chora-referent"
+ln -s "$TMP/chora-referent" "$r/demo_chora.deed"
+git -C "$r" add -A; git -C "$r" commit -qm symlink
+KYX='' run "$r"
+check "a committed chora symlink is refused before requiring kyX" "2 1" \
+  "$RC $(jq '[.refused[] | select(.reasons[0]|contains("demo_chora.deed is a symlink"))] | length' "$REPORT/a2ml-report.json")"
+check "chora symlink: tree unchanged" "" "$(git -C "$r" status --porcelain)"
+r=$(mkrepo changed-chora); STUB_KYX=changechora CHORA_TO_CHANGE="$r/demo_chora.deed" run "$r"
+check "a chora changed and committed during kyX is refused" "2 1" \
+  "$RC $(jq '[.refused[] | select(.reasons[0]|contains("demo_chora.deed changed during conversion"))] | length' "$REPORT/a2ml-report.json")"
+check "changed chora: nothing staged or written by the fixer" "" "$(git -C "$r" status --porcelain)"
 r=$(mkrepo untrackedchora); git -C "$r" rm -q --cached demo_chora.deed; git -C "$r" commit -qm x; STUB_KYX=ok run "$r"
 check "an untracked chora deed does not count; refused, found 0" 1 "$(jq '[.refused[] | select(.reasons[0]|test("found 0"))] | length' "$REPORT/a2ml-report.json")"
 r=$(mkrepo ignored); printf '.machine_readable/descriptiles/*.deed\n' > "$r/.gitignore"; git -C "$r" add .gitignore; git -C "$r" commit -qm x
@@ -376,7 +395,7 @@ done
 # Wrappers first on PATH fail one command at a chosen point and pass everything
 # else to the real tool, so the script needs no test hooks.
 WRAP="$TMP/wrap"; mkdir -p "$WRAP"
-REAL_GIT="$(command -v git)" REAL_MV="$(command -v mv)" REAL_MKTEMP="$(command -v mktemp)"
+REAL_GIT="$(command -v git)" REAL_MV="$(command -v mv)" REAL_MKTEMP="$(command -v mktemp)" REAL_CAT="$(command -v cat)"
 cat > "$WRAP/git" <<SH
 #!/usr/bin/env bash
 for a in "\$@"; do
@@ -384,6 +403,14 @@ for a in "\$@"; do
     rm)
       if [[ -n "\${EDIT_SOURCE_ON_RM:-}" ]]; then
         printf '# owner edit\\n' >> "\$2/.machine_readable/descriptiles/ECOSYSTEM.a2ml"
+        exit 128
+      fi
+      if [[ -n "\${STAGE_SOURCE_ON_RM:-}" ]]; then
+        src="\$2/.machine_readable/descriptiles/ECOSYSTEM.a2ml"
+        if [[ "\$STAGE_SOURCE_ON_RM" == after ]]; then "$REAL_GIT" "\$@" || exit \$?; fi
+        printf '# owner staged edit\n' >> "\$src"
+        "$REAL_GIT" -C "\$2" add -- "\$src" || exit \$?
+        [[ "\$STAGE_SOURCE_ON_RM" == after ]] && exit 0
         exit 128
       fi
       [[ -n "\${FAIL_GIT_RM:-}" ]] && { : > "$WRAP/rm-failed"; echo "fatal: injected rm failure" >&2; exit 128; } ;;
@@ -406,6 +433,14 @@ for a in "\$@"; do
   esac
 done
 exec "$REAL_GIT" "\$@"
+SH
+cat > "$WRAP/cat" <<SH
+#!/usr/bin/env bash
+if [[ -n "\${FAIL_TARGET_WRITE:-}" && "\${2:-}" == */a2ml-kyx-work.*/ECOSYSTEM.deed ]]; then
+  printf 'partial deed\n'
+  exit 1
+fi
+exec "$REAL_CAT" "\$@"
 SH
 cat > "$WRAP/mv" <<SH
 #!/usr/bin/env bash
@@ -433,6 +468,23 @@ check "failed discovery prints no count" "" "$(cat "$TMP/out")"
 r=$(mkrepo owner-edit); EDIT_SOURCE_ON_RM=1 wrun "$r"
 check "rollback with source edits exits INCONSISTENT" 70 "$RC"
 check "rollback preserves source edits" '# owner edit' "$(tail -1 "$r/.machine_readable/descriptiles/ECOSYSTEM.a2ml")"
+src_path=.machine_readable/descriptiles/ECOSYSTEM.a2ml
+target_path=.machine_readable/descriptiles/ECOSYSTEM.deed
+for when in before after; do
+  r=$(mkrepo "staged-edit-$when"); STAGE_SOURCE_ON_RM=$when FAIL_MV=1 wrun "$r"
+  check "source staged edit ($when git rm): exit INCONSISTENT" 70 "$RC"
+  check "source staged edit ($when git rm): index entry preserved" '# owner staged edit' \
+    "$(git -C "$r" show ":$src_path" | tail -1)"
+  check "source staged edit ($when git rm): rollback identifies the changed entry" 1 \
+    "$(grep -Fc "$src_path was changed in the index" "$TMP/err")"
+  check "source staged edit ($when git rm): target rolled back independently" "" \
+    "$(git -C "$r" status --porcelain -- "$target_path")"
+done
+r=$(mkrepo partial-target); FAIL_TARGET_WRITE=1 wrun "$r"
+check "partial target write: exit INCONSISTENT" 70 "$RC"
+check "partial target write: reports the retained target" 1 "$(grep -Fc "$target_path was changed" "$TMP/err")"
+check "partial target write: source untouched and only the partial file remains" "?? $target_path" \
+  "$(git -C "$r" status --porcelain)"
 # A target the owner creates after preflight is never overwritten or removed.
 r=$(mkrepo target-race); OWNER_CREATES_TARGET=1 wrun "$r"
 check "target created after preflight: refused, not converted -> exit 2" 2 "$RC"
