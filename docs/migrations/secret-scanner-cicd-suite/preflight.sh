@@ -87,7 +87,7 @@ fi
 # this disposable tree. This preserves the historical canary gate without
 # pretending it verifies the newer deployed caller; E2E separately authenticates
 # the live source and tests its scanner contract.
-if grep -Fq 'uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6' "$TMP/tree/.github/workflows/secret-scanner.yml" 2>/dev/null; then
+if grep -Fq 'uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@6a35e510a41037adfd422b7f449c3503c5e26a98' "$TMP/tree/.github/workflows/secret-scanner.yml" 2>/dev/null; then
   if ! bash "$MIG/fixtures/restore-historical-source.sh" "$TMP/tree" "$MIG/fixtures/historical-source.json"; then
     finding TREE "could not reconstruct the historical scanner proposal"
   fi

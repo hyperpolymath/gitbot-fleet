@@ -4,7 +4,7 @@
 require 'psych'
 
 path = ARGV.fetch(0, '.github/workflows/secret-scanner.yml')
-expected = 'hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6'
+expected = 'hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@6a35e510a41037adfd422b7f449c3503c5e26a98'
 
 # Validate a Psych node and its descendants before loading the workflow.
 # Raises RuntimeError for aliases, non-scalar mapping keys, or duplicate keys

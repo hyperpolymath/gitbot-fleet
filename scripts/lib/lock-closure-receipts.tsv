@@ -73,8 +73,8 @@ metadatastician/standards	ea2f4d8a886585ed442687ae63d4ad7493379ba4	editorconfig-
 metadatastician/standards	ea2f4d8a886585ed442687ae63d4ad7493379ba4	erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
 metadatastician/standards	ea2f4d8a886585ed442687ae63d4ad7493379ba4	oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
 
-# Reviewed source: hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6
-hyperpolymath/proven-cicd-and-workflows	1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+# Reviewed source: hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@6a35e510a41037adfd422b7f449c3503c5e26a98
+hyperpolymath/proven-cicd-and-workflows	6a35e510a41037adfd422b7f449c3503c5e26a98	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-# Reviewed source: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@29a9e4a881b6a3cc4cd27fcbc0886ffbadcbc5fe
-hyperpolymath/hypatia	29a9e4a881b6a3cc4cd27fcbc0886ffbadcbc5fe	step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a
+# Reviewed source: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@689897b4ed00ee9074b88dd01a7959030da93ebc
+hyperpolymath/hypatia	689897b4ed00ee9074b88dd01a7959030da93ebc	step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a
