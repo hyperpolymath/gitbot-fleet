@@ -137,7 +137,7 @@ reached for new patterns
 ==== Immediate (Ready Now)
 
 [arabic]
-. ✅ Generate Logtalk rule proposals for 3 new patterns
+. ✅ Generate rule proposals for 3 new patterns
 . ✅ Submit for ECHIDNA validation
 . ✅ Human review and approval
 

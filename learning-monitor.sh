@@ -43,34 +43,6 @@ else
 fi
 
 echo ""
-echo -e "${CYAN}🧠 Rule Proposals${NC}"
-if [[ -d "$LEARNING_DIR/rule-proposals" ]]; then
-    proposal_count=$(find "$LEARNING_DIR/rule-proposals" -name "*.lgt" 2>/dev/null | wc -l)
-    echo -e "  Total proposals: ${GREEN}$proposal_count${NC}"
-
-    if [[ $proposal_count -gt 0 ]]; then
-        echo ""
-        echo -e "  ${YELLOW}Generated rules:${NC}"
-        for rule in "$LEARNING_DIR/rule-proposals"/*.lgt; do
-            rule_name=$(basename "$rule" .lgt)
-            observations=$(grep "% Observations:" "$rule" | awk '{print $3}')
-            generated=$(grep "% Generated:" "$rule" | cut -d' ' -f3-)
-
-            # Check if rule is approved (moved to hypatia engine)
-            if [[ -f "$FLEET_DIR/../hypatia/engine/rules/auto-learned/$(basename "$rule")" ]]; then
-                status="${GREEN}✓ APPROVED${NC}"
-            else
-                status="${YELLOW}⏳ PENDING${NC}"
-            fi
-
-            printf "    %-30s %s observations  %b\n" "$rule_name" "$observations" "$status"
-        done
-    fi
-else
-    echo -e "  ${RED}No proposals yet${NC}"
-fi
-
-echo ""
 echo -e "${CYAN}🔧 Auto-Fix Outcomes${NC}"
 if [[ -f "$LEARNING_DIR/fix-outcomes.jsonl" ]]; then
     # Only a predicate-confirmed fix counts as successful. Rows written
@@ -130,18 +102,6 @@ echo -e "${CYAN}💡 Next actions:${NC}"
 # Suggest next actions based on state
 if [[ $unprocessed -gt 0 ]]; then
     echo -e "  • Process $unprocessed pending findings: ${YELLOW}./fleet-coordinator.sh process-findings${NC}"
-fi
-
-if [[ -f "$LEARNING_DIR/observed-patterns.jsonl" ]]; then
-    patterns_ready=$(jq -r '.type' "$LEARNING_DIR/observed-patterns.jsonl" | \
-        sort | uniq -c | awk '$1 >= 5 {print $2}' | wc -l)
-    if [[ $patterns_ready -gt 0 ]]; then
-        echo -e "  • Generate rules for $patterns_ready patterns: ${YELLOW}./fleet-coordinator.sh generate-rules${NC}"
-    fi
-fi
-
-if [[ -d "$LEARNING_DIR/rule-proposals" ]] && [[ $proposal_count -gt 0 ]]; then
-    echo -e "  • Review rule proposals in: ${CYAN}$LEARNING_DIR/rule-proposals/${NC}"
 fi
 
 echo ""
