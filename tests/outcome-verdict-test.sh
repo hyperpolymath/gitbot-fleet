@@ -21,6 +21,8 @@
 #   8. Run counters from background jobs reach the parent (--parallel).
 #   9. The runner's own run_entry and post-loop drain keep those counts
 #      (extracted; the quarantined main loop is not run).
+#  10. The actual runner in dispatch-paths.sh's isolated fixture preserves one
+#      producer id across start/outcome/mirrors, and refuses an unrecorded start.
 
 set -euo pipefail
 
@@ -137,7 +139,8 @@ RESCAN_REPOS_FILE="$TMP/rescan"
 # shellcheck disable=SC1091
 source "$TMP/extracted.sh"
 
-record_outcome "PA009" "recipe-shell-quote-vars" "repo-a" "" verified 0 3 0
+producer_id=018e4000-0000-8000-8000-000000000001
+record_outcome "PA009" "recipe-shell-quote-vars" "repo-a" "" verified 0 3 0 "$producer_id"
 record_outcome "PA009" "recipe-shell-quote-vars" "repo-b" "" no_op 0 0 0
 record_outcome "PA009" "recipe-x" "repo-c" "" unverified 0
 record_outcome "PA009" "recipe-license-hygiene" "repo-d" "" refused_license_policy
@@ -149,6 +152,10 @@ check "unverified row has no counts" '{"verdict":"unverified","before_hits":null
 check "refusal keeps its own outcome" '{"verdict":"refused_license_policy","outcome":"refused_license_policy","exit_code":null}' \
     "$(sed -n 4p "$OUTCOME_FILE" | jq -c '{verdict, outcome, exit_code}')"
 check "only verified repos trigger a rescan" "repo-a" "$(cat "$RESCAN_REPOS_FILE")"
+check "outcome retains the producer's event id" "$producer_id" \
+    "$(sed -n 1p "$OUTCOME_FILE" | jq -r '.event_id')"
+check "policy refusal remains outside fix attempts" false \
+    "$(sed -n 4p "$OUTCOME_FILE" | jq 'has("event_id")')"
 
 # --- 5. deprecated recipe ids ---------------------------------------------
 registry="$ROOT/scripts/fix-script-registry.json"
@@ -340,6 +347,15 @@ check "the runner stops when detection fails (before any call)" 1 \
 run_case fail off
 check "reporting off: no help call and no record call" "detect_rc=0 mode=off 0" \
     "$(grep '^detect_rc' "$TMP/case.out") $(calls | wc -l | tr -d ' ')"
+
+# --- 11. producer identity through the actual dispatch paths (E0-12) ------
+# The existing harness copies the runner into a disposable tree and removes
+# exactly its quarantine interlock there. It never changes the production
+# runner or exposes a runtime switch that could unlock it.
+dispatch_rc=0
+bash "$ROOT/scripts/tests/dispatch-paths.sh" > "$TMP/dispatch-paths.log" 2>&1 || dispatch_rc=$?
+cat "$TMP/dispatch-paths.log"
+check "isolated actual-runner producer identity contracts" 0 "$dispatch_rc"
 
 echo ""
 echo "Results: $pass passed, $fail failed"
