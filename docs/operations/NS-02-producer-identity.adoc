@@ -3,10 +3,14 @@
 :toc:
 :date: 2026-11-23
 
-Status: implemented and independently reviewed for the bounded producer
-contract. Full E0-12 closure remains blocked on the route and observation
-decision in `docs/design/e0-12-outcome-route-decision.adoc`. No production
-dispatch or quarantine removal occurred.
+Status: historical bounded producer evidence at PR #709,
+`565f075cf204f25f5b648547b8d8ae46fe1977ff`. The behavior and results below
+describe that exact revision, including its former transport destinations and
+direct callback. The owner subsequently approved the route direction in
+`docs/design/e0-12-outcome-route-decision.adoc`; the versioned follow-on is
+documented in `docs/operations/NS-02-single-admission.adoc`. Full E0-12 closure,
+post-fix state attribution and production activation are not established by
+this historical record. No quarantine removal occurred.
 
 Fleet base: `f1b14e2a352491ff7972f0dfd592bfbb28d2f32c`.
 Hypatia generator/importer base: `d158aed87f76b93e4f291e995bef9f26559c7fb2`.

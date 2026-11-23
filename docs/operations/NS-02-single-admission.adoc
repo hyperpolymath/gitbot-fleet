@@ -1,0 +1,277 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= NS-02: Single fleet admission producer evidence
+:toc:
+:date: 2026-11-23
+
+Status: implemented and independently reviewed within the approved v1 scope.
+Jonathan approved single trusted fleet admission with rescans as correlated
+evidence on 2026-11-23. This note records the producer change and the local
+paired acceptance witness. Production dispatch remains quarantined; no
+activation, quarantine removal or full E0-12 closure is claimed.
+
+The producer change follows fleet revision
+`565f075cf204f25f5b648547b8d8ae46fe1977ff` (#709). The earlier
+link:NS-02-producer-identity.adoc[producer identity evidence] describes that
+historical revision. The
+link:../design/e0-12-outcome-route-decision.adoc[approved route decision]
+records why independent direct recording and fleet import cannot both admit
+the same attempt.
+
+== Implemented producer contract
+
+An executable fix attempt uses the existing
+`cd "$HYPATIA_HOME" && mix hypatia.event_id` task once to obtain its canonical
+ADR-008 version 8, profile T event ID. The runner validates the final output
+line, allowing the task's documented compile chatter. A nonzero generator exit
+is refused even if its output contains a plausible ID. There is no fallback
+generator or generic outcome path without an ID for an actual fix attempt.
+
+Before invoking either a fix script or RRA, the runner appends the unchanged,
+compact, sorted six-field start record. Its keys are `chain_version`,
+`event_id`, `kind`, `producer`, `recipe_id` and `repo`; its fixed values include
+`chain_version = "e0-receipt/1"`, `kind = "start"` and
+`producer = "dispatch-runner"`. The start is separate from the outcome feed
+and earns no learning credit. Interruption after this append can leave a start
+without an outcome.
+
+Every actual outcome adds `attempt_contract = "fleet-attempt/1"` and
+`repo_relative_path`. The latter is the normalized, resolved repository target
+relative to `REPOS_BASE`, after `program_path`, repository override and symlink
+resolution. Targets outside that root are refused. This field locates the
+target; it does not bind a repository snapshot or establish when a later scan
+observed it.
+
+[cols="2,4,3",options="header"]
+|===
+|Record |Destination |Write contract
+|Start
+|`$FLEET_ROOT/shared-context/learning/fix-attempts.jsonl`
+|Appended before execution, with the attempt's event ID.
+|Canonical producer feed
+|`$FLEET_ROOT/shared-context/learning/fix-outcomes.jsonl`
+|First outcome append; this is the matching importer's source.
+|Local transport mirror
+|`$HYPATIA_DATA/dispatch/fleet-outcomes/YYYY-MM.jsonl`
+|Exact serialized feed row, written after the feed.
+|Central transport mirror
+|`$VERISIMDB_DATA/dispatch/fleet-outcomes/YYYY-MM.jsonl`
+|Exact serialized feed row, written after earlier distinct destinations.
+|===
+
+The canonical producer feed is an input to admission. Hypatia owns its
+canonical admitted outcomes and receipts. Raw transport copies no longer go
+to the consumer's `outcomes/` directory. Each attempt keeps one event ID
+across its start, feed row and mirrors; two otherwise identical executions
+receive different IDs.
+
+Identified attempts never call `mix hypatia.record_outcome`, including when
+`HYPATIA_OUTCOME_REPORT=on`. The trusted fleet importer is their sole admission
+path. The existing repository rescan queue remains a cache-refresh mechanism;
+it is not an independent admission or correlated observation contract.
+
+The existing licence/policy refusal remains a separate, non-execution case.
+It mints no attempt ID, writes no start and retains its legacy row shape and
+best-effort false-positive callback. `HYPATIA_OUTCOME_REPORT` controls only
+that refusal callback, not mandatory delivery of actual attempt outcomes.
+The licence gate and unconditional production exit 78 before manifest
+processing remain unchanged.
+
+== Aliases and failure semantics
+
+The runner resolves paths and checks existing file identity to coalesce
+textual, symlink and hardlink aliases among the feed and transport mirrors.
+An aliased destination receives one append. Any alias between the start file
+and an outcome destination is refused. The checks also refuse paths within
+known `outcomes/` or `receipts/` ledgers and existing hardlinks to their JSONL
+files. Known roots include the transport roots and the explicitly supplied
+`HYPATIA_VERISIM_DATA_PATH`.
+
+These are checks of the paths visible to the producer process. They do not
+establish an atomic multi-file transaction, power-loss durability or the
+configuration of another process. The test controls use real symlinks and
+hardlinks, including existing ledger bytes that must remain unchanged.
+
+* Generator, path-validation or start-append failure prevents execution.
+* Feed-append failure prevents subsequent mirror writes.
+* Mirror failure leaves the already appended canonical feed row committed,
+  reports the error and does not retry the fixer or mint another ID. The
+  committed feed row remains available to the consumer.
+* Infrastructure failures in parallel children reach the parent through the
+  existing dispatch error marker. Successful verdict counters are updated
+  only after the required outcome writes succeed.
+
+== Consumer and deployment pairing
+
+The matching `fleet-attempt/1` consumer must be deployed and configured before
+any producer activation. A failing control with the older E0-11 consumer
+showed it crediting a producer `verified` assertion: the import returned one
+qualified contribution where the new witness required zero. The older reader
+ignores the new marker; the version field cannot make it reject the row.
+Unchanged quarantine remains the activation boundary.
+
+The physical roots must also agree across the two processes:
+
+* Hypatia's configured fleet root, including `HYPATIA_FLEET_PATH` when used,
+  must resolve to the producer's `FLEET_ROOT`.
+* The consumer's `HYPATIA_REPOS_DIR` must identify the same repository root as
+  the producer's `REPOS_BASE`.
+* `HYPATIA_VERISIM_DATA_PATH`, when supplied, must identify the consumer's
+  actual canonical learning store. `HYPATIA_DATA` and `VERISIMDB_DATA` name
+  transport roots and do not establish that consumer configuration by
+  themselves.
+
+The runner checks an explicitly supplied fleet root for mismatch and checks
+an explicitly supplied consumer store for ledger pollution. Relative Hypatia
+settings resolve from `HYPATIA_HOME`. Pairing an independently configured
+consumer remains an integration prerequisite; unprovided cross-process roots
+cannot be verified by the producer.
+
+In v1 the consumer embeds its own correlated rescan observation in one
+canonical admitted outcome. A later clean or adverse scan of mutable,
+unbound state remains audit-only: it supplies neither positive credit nor
+false-positive blame for the earlier attempt. Existing failed/incomplete
+numeric qualification criteria are retained. Binding positive observations
+to the actual post-fix state remains a separate requirement.
+
+== Recorded verification
+
+The final local checks used Elixir 1.19.4 / OTP 27.3.4.19 for canonical Mix
+generation and the paired witness. The receipt check used Nickel 1.11.0.
+
+[cols="3,3",options="header"]
+|===
+|Check |Recorded result
+|`bash tests/outcome-verdict-test.sh`
+|63 passed, 0 failed; also invokes the 189-assertion whole-runner fixture.
+|`bash scripts/tests/dispatch-paths.sh`
+|189 passed, 0 failed in the focused runner controls.
+|Same runner fixture with the actual canonical Mix generator
+|189 passed, 0 failed; real emitted rows were captured.
+|`bash tests/automation-quarantine-test.sh`
+|All seven blocked invocations and the no-publication/state-mutation control passed.
+|`bash tests/hypatia-record-outcome-smoke.sh`
+|5 passed, 0 failed for the retained refusal helper guards.
+|Bash syntax checks on the four changed shell files; `git diff --check`
+|Passed. ShellCheck was unavailable locally.
+|Independent read-only producer review
+|No source blocker after review of routing, callback restriction, target resolution, alias controls and failure propagation.
+|`tests/hypatia-single-admission-test.exs` with the matching consumer
+|1 test, 0 failures; all four emitted receipts passed the existing Nickel receipt contract.
+|===
+
+The runner controls cover all actual verdict classes, interrupted starts,
+missing or invalid IDs, generator failures, start/feed/mirror write failures,
+parallel failure propagation, alias coalescing and refusal, normalized target
+selection, preserved policy refusal and zero direct recorder calls for
+identified attempts.
+
+Failing-before controls recorded the old producer's missing canonical feed
+and independent recorder call. The earlier producer unit control had eight
+failures, including missing version fields and acceptance of an actual outcome
+without identity. The paired witness failed against the historical producer
+at the missing-feed assertion, and against the older consumer at the incorrect
+success credit. These are distinct from the passing matching-pair result.
+
+Session evidence was retained outside the repository under
+`notes/continuation/`: `admission-final-outcome.log`,
+`admission-final-quarantine.log`, `admission-final-smoke.log`,
+`admission-canonical-generator.log`, `admission-red-feed.log`,
+`admission-red-unit.log`, `single-admission-red-delivery.log`,
+`single-admission-red-consumer.log` and `single-admission-green-delivery.log`.
+The commands and assertions below are the reproducible repository evidence.
+
+== What the paired witness establishes
+
+The witness runs the actual runner in a disposable fixture with a controlled
+fixer and the canonical Mix generator. Its established test seam removes only
+the two unconditional interlock lines from that disposable copy. It does not
+add a production bypass flag. Separate quarantine checks exercise the
+unchanged production entrypoints.
+
+The runner itself creates the configured feed. No copy populates the source
+for initial delivery. The matching consumer reads that same feed and admits
+four distinct attempts: two qualified failures and two audit-only outcomes.
+The test requires the same four unique IDs across starts, source outcomes,
+admitted outcomes and receipts. Both transport mirrors match the source
+bytes. A sentinel rejects any direct recording call for an identified
+attempt.
+
+The scanner is a real subprocess invocation of a controlled fixture
+executable. It checks the repository target argument and returns selected
+clean or adverse JSON. The test checks both resulting unbound observations,
+their distinct observation-versus-attempt IDs and their exact source-row
+digests. This establishes invocation, interpretation and correlation; it does
+not test the production scanner's effectiveness on real repairs.
+
+All four receipts bind to the canonical admitted row bytes, retain empty
+revision-parent lists, and pass Hypatia's existing `schema/receipt.ncl` through
+Nickel 1.11.0. After initial admission, the test explicitly appends duplicate
+source bytes as a replay control. Repeated imports leave stored bytes and
+the scan invocation count unchanged. That later injection is not a delivery
+step for the original attempts.
+
+== Reproduction with matching checkouts
+
+Use isolated checkouts of this producer change and the matching
+`fleet-attempt/1` consumer. Configure Elixir 1.19.4 / OTP 27.3.4.19, Hypatia's
+test dependencies, Bash, jq and Nickel 1.11.0. Put the required executables on
+`PATH`; these placeholders are not live store locations.
+
+[source,shell]
+----
+export FLEET_CHECKOUT=/absolute/gitbot-fleet
+export HYPATIA_CHECKOUT=/absolute/hypatia
+export MIX_ENV=test
+
+cd "$FLEET_CHECKOUT"
+bash tests/outcome-verdict-test.sh
+bash tests/automation-quarantine-test.sh
+bash tests/hypatia-record-outcome-smoke.sh
+bash -n scripts/dispatch-runner.sh scripts/tests/dispatch-paths.sh \
+  tests/outcome-verdict-test.sh tests/hypatia-record-outcome-smoke.sh
+git diff --check
+----
+
+The outcome suite invokes the runner fixture. To run that fixture with the
+actual canonical generator and retain its emitted evidence:
+
+[source,shell]
+----
+export DISPATCH_TEST_HYPATIA_HOME="$HYPATIA_CHECKOUT"
+export DISPATCH_TEST_MIX_BIN="$(command -v mix)"
+export DISPATCH_TEST_EVIDENCE_DIR="$(mktemp -d)"
+bash "$FLEET_CHECKOUT/scripts/tests/dispatch-paths.sh"
+----
+
+The evidence directory contains `success-feed.jsonl`, `success-primary.jsonl`,
+`success-central.jsonl`, `success-starts.jsonl` and their `failure-*`
+counterparts. Each feed, primary and start file contains two attempts; each
+central file is the exact second outcome. These captures are separate from
+the no-copy witness, which constructs and consumes its own disposable feed.
+
+Run the paired witness from the matching Hypatia checkout, without starting
+the application:
+
+[source,shell]
+----
+cd "$HYPATIA_CHECKOUT"
+export NICKEL="$(command -v nickel)"
+mix run --no-start "$FLEET_CHECKOUT/tests/hypatia-single-admission-test.exs"
+----
+
+The witness configures both fixture roots explicitly. Its
+`FLEET_SINGLE_ADMISSION_SOURCE` override can select a historical producer for
+a failing-before control; that is not a supported deployment pairing.
+
+== Claim boundary
+
+The existing fleet workflow jobs execute shell contracts. They do not run the
+paired consumer witness or certify the deployed consumer version and roots.
+A green shell job alone therefore does not establish a supported pair.
+
+The evidence establishes local producer delivery, identity preservation,
+correlated audit evidence, receipt binding and replay stability for the
+controlled fixture. It does not establish production activation, scanner
+effectiveness, post-fix snapshot attribution, power-loss durability,
+exactly-once neural parameter updates, corpus quality, full E0 acceptance or a
+higher Kautz qualification. Those claims require their own evidence.

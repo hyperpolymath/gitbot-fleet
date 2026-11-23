@@ -3,7 +3,7 @@
 # Exercise the actual dispatch orchestration with inert fixes and isolated data.
 # Optional DISPATCH_TEST_HYPATIA_HOME and DISPATCH_TEST_MIX_BIN use the canonical
 # generator for successful cases. DISPATCH_TEST_EVIDENCE_DIR retains emitted rows
-# for a separate consumer wire/replay witness; it does not enable delivery.
+# including the actual canonical feed for the separate consumer witness.
 set -euo pipefail
 fleet_test_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 fixture="$(mktemp -d)"
@@ -14,8 +14,9 @@ cp "$fleet_test_root/scripts/repo-path-overrides.json" "$fixture/checkout/script
 cp "$fleet_test_root/scripts/lib/outcome-verdict.sh" "$fixture/checkout/scripts/lib/"
 month="$(date -u +%Y-%m)"
 starts="$fixture/checkout/shared-context/learning/fix-attempts.jsonl"
-primary="$fixture/primary/outcomes/$month.jsonl"
-central="$fixture/central/outcomes/$month.jsonl"
+feed="$fixture/checkout/shared-context/learning/fix-outcomes.jsonl"
+primary="$fixture/primary/dispatch/fleet-outcomes/$month.jsonl"
+central="$fixture/central/dispatch/fleet-outcomes/$month.jsonl"
 manifest="$fixture/primary/dispatch/pending.jsonl"
 canonical_mix="${DISPATCH_TEST_MIX_BIN:-$(command -v mix || true)}"
 pass=0
@@ -56,7 +57,13 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$FIXTURE_ROOT/mix-calls"
 case "$*" in
     'help hypatia.record_outcome') echo '--verdict verified|no_op|incomplete|unverified|failed'; exit 0 ;;
-    hypatia.record_outcome*) exit 0 ;;
+    hypatia.record_outcome*)
+        if [[ "$FIXTURE_ALLOW_REFUSAL" != yes ]]; then
+            touch "$FIXTURE_ROOT/unexpected-record"
+            echo 'independent recording forbidden for a producer attempt' >&2
+            exit 99
+        fi
+        exit 0 ;;
     hypatia.event_id) ;;
     *) echo 'unexpected mix arguments' >&2; exit 98 ;;
 esac
@@ -110,14 +117,18 @@ STUB
 chmod +x "$fixture/bin/mix" "$fixture/bin/rra" "$fixture/checkout/scripts/fix-fixture.sh"
 
 reset_fixture() {
-    rm -rf "$fixture/primary/outcomes" "$fixture/central" "$fixture/checkout/shared-context" "$fixture/kin"
+    rm -rf "$fixture/primary/outcomes" "$fixture/primary/dispatch/fleet-outcomes" \
+        "$fixture/central" "$fixture/checkout/shared-context" "$fixture/kin"
+    rm -f "$fixture/unexpected-record"
     : > "$fixture/mix-calls"
     : > "$fixture/fix-calls"
     printf '%s\n' '018e4000-0000-8000-8000-000000000001' \
         '018e4000-0000-8000-8000-000000000002' > "$fixture/ids"
     touch "$fixture/repos/sample/needs-fix"
     printf '%s\n' '{"repo":"sample","tier":"eliminate","strategy":"auto_execute","pattern_id":"fixture","recipe_id":"recipe-fixture","fix_script":"fix-fixture.sh","auto_fixable":true}' > "$manifest"
-    generator_mode=ok fix_mode=ok report_mode=off parallel=1 limit=1
+    generator_mode=ok fix_mode=ok report_mode=on parallel=1 limit=1 allow_refusal=no
+    hypatia_store="$fixture/learning-store"
+    hypatia_fleet="$fixture/checkout"
     runner_args=()
     hypatia_home="${DISPATCH_TEST_HYPATIA_HOME:-$fixture/hypatia}"
     runner_path="$fixture/bin:$PATH"
@@ -129,8 +140,10 @@ invoke_runner() {
         PATH="$runner_path" FLEET_ROOT="$fixture/checkout" REPOS_BASE="$fixture/repos" \
         HYPATIA_DATA="$fixture/primary" VERISIMDB_DATA="$store" \
         HYPATIA_HOME="$hypatia_home" HYPATIA_OUTCOME_REPORT="$report_mode" \
+        HYPATIA_FLEET_PATH="$hypatia_fleet" HYPATIA_VERISIM_DATA_PATH="$hypatia_store" \
         KIN_DIR="$fixture/kin" RRA_BIN="$rra_bin" FIXTURE_ROOT="$fixture" \
         FIXTURE_GENERATOR_MODE="$generator_mode" FIXTURE_FIX_MODE="$fix_mode" \
+        FIXTURE_ALLOW_REFUSAL="$allow_refusal" \
         DISPATCH_TEST_MIX_BIN="$canonical_mix" \
         bash "$runner" --limit "$limit" --parallel "$parallel" "${runner_args[@]}"
 }
@@ -143,11 +156,13 @@ expect_failure() {
 no_fix_or_outcome() {
     check "$1: fixer was not called" test ! -s "$fixture/fix-calls"
     check "$1: no outcome was written" test ! -s "$primary"
+    check "$1: no canonical feed row was written" test ! -s "$feed"
 }
 retain_rows() {
     [[ -n "${DISPATCH_TEST_EVIDENCE_DIR:-}" ]] || return 0
     mkdir -p "$DISPATCH_TEST_EVIDENCE_DIR"
     cp "$starts" "$DISPATCH_TEST_EVIDENCE_DIR/$1-starts.jsonl"
+    cp "$feed" "$DISPATCH_TEST_EVIDENCE_DIR/$1-feed.jsonl"
     cp "$primary" "$DISPATCH_TEST_EVIDENCE_DIR/$1-primary.jsonl"
     cp "$central" "$DISPATCH_TEST_EVIDENCE_DIR/$1-central.jsonl"
 }
@@ -162,6 +177,12 @@ check 'quarantine writes no primary state' test ! -e "$fixture/primary/outcomes"
 
 # Two identical manifest entries and initial repo states are two attempts.
 run_dispatch "$fixture/primary/."
+check 'actual runner delivers to the canonical fleet feed' test -s "$feed"
+check 'attempt declares frozen v1 and actual relative target' jq -e \
+    '.attempt_contract == "fleet-attempt/1" and .repo_relative_path == "sample"' "$feed"
+check 'identified attempt never calls the independent recorder' test ! -e "$fixture/unexpected-record"
+check 'canonical feed and local mirror are byte-identical' cmp -s "$feed" "$primary"
+check 'raw transport never writes the monthly learning ledger' test ! -e "$fixture/primary/outcomes"
 check 'first outcome is verified' jq -e '.verdict == "verified" and .before_hits == 1 and .after_hits == 0' "$primary"
 check 'same store gets exactly one outcome' test "$(wc -l < "$primary")" -eq 1
 check 'start has exactly the ruled six fields' jq -e \
@@ -177,6 +198,8 @@ check 'identical attempts have distinct event ids' jq -se 'map(.event_id) | leng
 check 'both starts match their outcomes' test "$(jq -r .event_id "$starts")" "=" "$(jq -r .event_id "$primary")"
 check 'mirrored outcome is the exact same row' test "$(tail -n 1 "$primary")" "=" "$(cat "$central")"
 check 'mirror contains one outcome' test "$(wc -l < "$central")" -eq 1
+check 'all canonical feed rows match the local transport copy' cmp -s "$feed" "$primary"
+check 'both identified attempts avoid the independent recorder' test ! -e "$fixture/unexpected-record"
 retain_rows success
 
 reset_fixture
@@ -187,6 +210,8 @@ check 'failed fix retains its producer id and exit code' jq -e '.verdict == "fai
 check 'failed attempt keeps one id across all copies' test "$(jq -r .event_id "$starts")" "=" "$(jq -r .event_id "$primary")"
 check 'identical failed attempts have distinct event ids' jq -se 'map(.event_id) | length == 2 and (unique | length == 2)' "$primary"
 check 'failed mirrored outcome is byte-identical' test "$(tail -n 1 "$primary")" "=" "$(cat "$central")"
+check 'failed attempts go to the same canonical feed' cmp -s "$feed" "$primary"
+check 'failed attempts avoid the independent recorder' test ! -e "$fixture/unexpected-record"
 retain_rows failure
 
 reset_fixture
@@ -233,24 +258,28 @@ for failure in directory append; do
     expect_failure "start $failure failure"
     no_fix_or_outcome "start $failure failure"
 done
-for failure in primary central; do
+for failure in feed primary central; do
     reset_fixture
     report_mode=on
-    if [[ "$failure" == primary ]]; then mkdir -p "$primary"; else mkdir -p "$central"; fi
+    case "$failure" in feed) mkdir -p "$feed";; primary) mkdir -p "$primary";; central) mkdir -p "$central";; esac
     expect_failure "$failure outcome append failure"
     check "$failure append failure leaves its start" test -s "$starts"
     check "$failure append failure does not call direct outcome reporting" test \
         "$(grep -c '^hypatia.record_outcome ' "$fixture/mix-calls" || true)" -eq 0
-    if [[ "$failure" == primary ]]; then
-        check 'primary append failure does not write a mirror' test ! -e "$central"
-    else
-        check 'mirror append failure preserves the committed primary row' jq -e '.event_id | type == "string"' "$primary"
-    fi
+    case "$failure" in
+        feed)
+            check 'feed failure writes no local mirror' test ! -e "$primary"
+            check 'feed failure writes no central mirror' test ! -e "$central" ;;
+        primary|central)
+            check "$failure mirror failure preserves the committed canonical feed" jq -e '.event_id | type == "string"' "$feed"
+            check "$failure mirror failure reports the existing commit" grep -q 'canonical feed row is committed' "$fixture/result"
+            check "$failure mirror failure never retries the fixer" test "$(wc -l < "$fixture/fix-calls")" -eq 1 ;;
+    esac
 done
 
 # Infrastructure failures must reach the parent under --parallel too: wait
 # without a job id otherwise hides a failed child behind an overall exit 0.
-for failure in generator start primary central; do
+for failure in generator start feed primary central; do
     reset_fixture
     limit=0 parallel=2
     cat "$manifest" > "$fixture/entry"
@@ -258,6 +287,7 @@ for failure in generator start primary central; do
     case "$failure" in
         generator) generator_mode=fail ;;
         start) mkdir -p "$starts" ;;
+        feed) mkdir -p "$feed" ;;
         primary) mkdir -p "$primary" ;;
         central) mkdir -p "$central" ;;
     esac
@@ -303,18 +333,107 @@ run_dispatch
 check 'parallel attempts each receive an id' jq -se 'map(.event_id) | length == 2 and (unique | length == 2)' "$primary"
 check 'parallel starts and outcomes name the same attempts' test \
     "$(jq -r .event_id "$starts" | sort)" "=" "$(jq -r .event_id "$primary" | sort)"
-check 'parallel repo lock still credits only one fix' jq -se 'map(.verdict) | sort == ["no_op","verified"]' "$primary"
+check 'parallel repo lock classifies only one verified fix' jq -se 'map(.verdict) | sort == ["no_op","verified"]' "$primary"
+check 'parallel identified attempts avoid the independent recorder' test ! -e "$fixture/unexpected-record"
+
+# Physical aliases coalesce transport writes but may never mix starts or raw
+# transport with a canonical learning ledger. These fixtures use real symlinks
+# and hardlinks; no permission test relies on the test user being unprivileged.
+for alias_kind in symlink hardlink; do
+    reset_fixture
+    mkdir -p "$(dirname "$primary")" "$(dirname "$feed")"
+    : > "$feed"
+    if [[ "$alias_kind" == symlink ]]; then ln -s "$feed" "$primary"; else ln "$feed" "$primary"; fi
+    run_dispatch
+    check "$alias_kind alias of feed is appended once" test "$(wc -l < "$feed")" -eq 1
+    check "$alias_kind feed alias preserves mirror bytes" cmp -s "$feed" "$central"
+
+    reset_fixture
+    mkdir -p "$(dirname "$feed")"
+    : > "$starts"
+    if [[ "$alias_kind" == symlink ]]; then ln -s "$starts" "$feed"; else ln "$starts" "$feed"; fi
+    expect_failure "$alias_kind alias between feed and starts"
+    no_fix_or_outcome "$alias_kind alias between feed and starts"
+    check "$alias_kind start alias mints no event" test ! -s "$fixture/mix-calls"
+done
+reset_fixture
+mkdir -p "$(dirname "$primary")" "$(dirname "$central")"
+: > "$primary"
+ln "$primary" "$central"
+run_dispatch
+check 'hardlinked local and central transports are appended once' test "$(wc -l < "$primary")" -eq 1
+check 'hardlinked transports contain the canonical bytes' cmp -s "$feed" "$primary"
+reset_fixture
+mkdir -p "$(dirname "$primary")" "$(dirname "$starts")"
+: > "$starts"
+ln "$starts" "$primary"
+expect_failure 'transport alias of starts'
+no_fix_or_outcome 'transport alias of starts'
+
+for alias_target in feed primary; do
+    reset_fixture
+    mkdir -p "$hypatia_store/outcomes" "$(dirname "$feed")" "$(dirname "$primary")"
+    printf '%s\n' '{"existing":"learning-row"}' > "$hypatia_store/outcomes/existing.jsonl"
+    if [[ "$alias_target" == feed ]]; then
+        ln "$hypatia_store/outcomes/existing.jsonl" "$feed"
+    else
+        ln "$hypatia_store/outcomes/existing.jsonl" "$primary"
+    fi
+    expect_failure "$alias_target hardlink into explicit learning ledger"
+    check "$alias_target ledger alias never calls the fixer" test ! -s "$fixture/fix-calls"
+    check "$alias_target ledger alias mints no event" test ! -s "$fixture/mix-calls"
+    check "$alias_target ledger bytes are unchanged" test "$(cat "$hypatia_store/outcomes/existing.jsonl")" = '{"existing":"learning-row"}'
+done
+reset_fixture
+mkdir -p "$hypatia_store/outcomes" "$fixture/checkout/shared-context"
+ln -s "$hypatia_store/outcomes" "$fixture/checkout/shared-context/learning"
+expect_failure 'canonical feed directory inside explicit learning ledger'
+check 'ledger directory alias never executes' test ! -s "$fixture/fix-calls"
+check 'ledger directory alias creates no start' test ! -e "$hypatia_store/outcomes/fix-attempts.jsonl"
+reset_fixture
+hypatia_fleet="$fixture/another-fleet"
+expect_failure 'explicit consumer fleet root differs'
+no_fix_or_outcome 'explicit consumer fleet root differs'
+
+# The v1 path is the actual target, after alias/program_path/symlink resolution.
+reset_fixture
+mkdir -p "$fixture/repos/actual/nested"
+touch "$fixture/repos/actual/nested/needs-fix"
+jq -c --arg path "$fixture/repos/sample/../actual/./nested" '.repo="manifest-name" | .program_path=$path' "$manifest" > "$fixture/entry"
+mv "$fixture/entry" "$manifest"
+run_dispatch
+check 'program_path binds the actual normalized relative target' jq -e \
+    '.repo == "manifest-name" and .repo_relative_path == "actual/nested"' "$feed"
+reset_fixture
+ln -s "$fixture/repos/actual/nested" "$fixture/repos/target-link"
+jq -c '.repo="target-link"' "$manifest" > "$fixture/entry"
+mv "$fixture/entry" "$manifest"
+run_dispatch
+check 'target symlink records its actual resolved path' jq -e '.repo_relative_path == "actual/nested"' "$feed"
+reset_fixture
+mkdir -p "$fixture/repos/developer-ecosystem/julia-ecosystem/packages/Axiom.jl"
+jq -c '.repo="Axiom.jl"' "$manifest" > "$fixture/entry"
+mv "$fixture/entry" "$manifest"
+run_dispatch
+check 'repository override records its actual relative target' jq -e \
+    '.repo_relative_path == "developer-ecosystem/julia-ecosystem/packages/Axiom.jl"' "$feed"
 
 # No attempted execution means no new attempt id. Preserve the licence refusal.
 reset_fixture
 generator_mode=fail
+allow_refusal=yes
 jq -c '.recipe_id = "recipe-license-hygiene"' "$manifest" > "$fixture/entry"
 mv "$fixture/entry" "$manifest"
 run_dispatch
 check 'licence refusal still has its original outcome' jq -e '.verdict == "refused_license_policy" and (has("event_id") | not)' "$primary"
-check 'licence refusal mints no execution id' test ! -s "$fixture/mix-calls"
+check 'licence refusal mints no execution id' test "$(grep -c '^hypatia.event_id$' "$fixture/mix-calls" || true)" -eq 0
+check 'licence refusal retains only its false-positive callback' test "$(cat "$fixture/mix-calls")" = \
+    'hypatia.record_outcome --recipe recipe-license-hygiene --repo sample --file . --outcome false_positive'
+check 'licence refusal has no attempt contract or relative target' jq -e \
+    '(has("attempt_contract") or has("repo_relative_path")) | not' "$feed"
 check 'licence refusal never calls the fixer' test ! -s "$fixture/fix-calls"
 check 'licence refusal creates no start' test ! -e "$starts"
+check 'licence callback is the only permitted recording call' test ! -e "$fixture/unexpected-record"
 
 reset_fixture
 generator_mode=fail
