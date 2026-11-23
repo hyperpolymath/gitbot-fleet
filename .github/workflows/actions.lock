@@ -35,10 +35,10 @@ workflows:
     '.github/workflows/hypatia-scan.yml': []
     '.github/workflows/inbox-steward.yml':
         - 'actions/checkout@v7.0.1'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c'
     '.github/workflows/instant-sync.yml':
         - 'peter-evans/repository-dispatch@v4.0.1'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c'
     '.github/workflows/label-triage.yml': []
     '.github/workflows/labels.yml': []
     '.github/workflows/learning-loop.yml':
@@ -56,7 +56,7 @@ workflows:
         - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/push-email-notify.yml':
         - 'hyperpolymath/smtp-notify-action@v0.5.1'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c'
     '.github/workflows/repo-integrity-guard.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/rust.yml':
@@ -65,7 +65,7 @@ workflows:
     '.github/workflows/secret-scanner.yml': []
     '.github/workflows/supervised-fleet-scan.yml':
         - 'actions/checkout@v7.0.1'
-        - 'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a'
+        - 'step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c'
     '.github/workflows/vendored-bot-drift.yml':
         - 'actions/checkout@v7.0.1'
 dependencies:
@@ -166,9 +166,9 @@ dependencies:
         commit: 'sha1-28959ce8df70de7be546dd1250a005dd32156697'
         owner_id: 18365890
         repo_id: 220359305
-    'step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a':
-        ref: 'v2.22.4'
-        commit: 'sha1-1d88384fd173af6ecb012dfd0264a306b711241a'
+    'step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c':
+        ref: 'v2.23.0'
+        commit: 'sha1-aebdcf6156ab6691adf63218240e476564a1ed4c'
         owner_id: 88700172
         repo_id: 422287306
     'swatinem/rust-cache@v2.9.3':
