@@ -77,14 +77,14 @@ replace_pin() {
   done
 }
 check() {
-  local label="$1" expected="$2" rc=0 valid=0
+  local label="$1" expected="$2" expected_rule="${3:-}" rc=0 valid=0
   timeout 15s bash "$HELPER" --json --repo-root "$CASE/repo" --manifest "$MANIFEST" \
     --lock "$CASE/repo/.github/workflows/actions.lock" --receipts "$CASE/repo/receipts.tsv" --cache "$CASE/cache" \
     > "$CASE/result.json" 2> "$CASE/stderr" || rc=$?
   if jq -e 'type=="object" and (.findings|type=="array") and (.not_run|type=="array") and (.verified_roots|type=="array") and (.verified_receipt_sources|type=="array")' "$CASE/result.json" >/dev/null 2>&1; then
     case "$expected" in
       clean) [[ "$rc" == 0 ]] && jq -e '(.findings|length)==0 and (.not_run|length)==0 and (.verified_roots|length)==1 and (.verified_receipt_sources|length)>0' "$CASE/result.json" >/dev/null && valid=1 ;;
-      fatal) [[ "$rc" == 1 || "$rc" == 3 ]] && jq -e 'any(.findings[]; .severity=="FATAL" and (.rule|length)>0 and (.detail|length)>0) and (.verified_roots|length)==0 and (.verified_receipt_sources|length)==0' "$CASE/result.json" >/dev/null && valid=1 ;;
+      fatal) [[ "$rc" == 1 || "$rc" == 3 ]] && jq -e --arg rule "$expected_rule" 'any(.findings[]; .severity=="FATAL" and (.rule|length)>0 and ($rule=="" or .rule==$rule) and (.detail|length)>0) and (.verified_roots|length)==0 and (.verified_receipt_sources|length)==0' "$CASE/result.json" >/dev/null && valid=1 ;;
       notrun) [[ "$rc" == 2 ]] && jq -e '(.findings|length)==0 and any(.not_run[]; (.rule|length)>0 and (.detail|length)>0) and (.verified_roots|length)==0 and (.verified_receipt_sources|length)==0' "$CASE/result.json" >/dev/null && valid=1 ;;
       *) printf 'Unexpected fixture expectation: %s\n' "$expected" >&2; exit 64 ;;
     esac
@@ -115,6 +115,22 @@ fi
 [[ -f "$HELPER" ]] || { echo 'Missing helper; this is a prerequisite failure, not a successful rejection control.' >&2; exit 64; }
 
 case_fixture good; check 'authenticated active source and exact receipt' clean
+
+# A pin can move even when the reusable workflow and its direct edges are
+# unchanged. The new caller pin still needs both current attestations.
+case_fixture same-blob-repin
+repin_tree="$(git --git-dir="$CASE/cache/org/reusable.git" rev-parse "$ROOT_SHA^{tree}")"
+repin_sha="$(commit_tree "$CASE/cache/org/reusable.git" "$repin_tree" 'Repin unchanged workflow')"
+[[ "$repin_sha" != "$ROOT_SHA" ]]
+replace_pin "$ROOT_SHA" "$repin_sha"
+check 'unchanged workflow authenticates after repinning caller, catalog and receipt' clean
+
+cp "$BASE/repo/receipts.tsv" "$CASE/repo/receipts.tsv"
+check 'unchanged workflow cannot use a receipt for the old pin' fatal SOURCE-RECEIPT
+replace_pin "$ROOT_SHA" "$repin_sha"
+edit_manifest --arg old "$ROOT_SHA" '.sources[0].commit=$old'
+check 'unchanged workflow cannot use a catalog binding for the old pin' fatal SOURCE-ACTIVE-MISSING
+
 case_fixture historical; edit_manifest '.sources += [(.sources[0] | .role="retained-review" | .callers=[] | .path=".github/workflows/other.yml")]'; check 'explicit historical review can coexist with active source' clean
 case_fixture unrelated-vendor; cat >> "$CASE/repo/.github/workflows/actions.lock" <<YAML
     'unrelated/action@v9':
