@@ -35,7 +35,11 @@ fn test_high_confidence_deletes_are_downgraded_in_protected_directories() {
         "packages/engine/spec/grammar.txt",
         "verification/run.sh",
     ] {
-        assert_eq!(deletion_confidence(target), ConfidenceLevel::Low, "{target}");
+        assert_eq!(
+            deletion_confidence(target),
+            ConfidenceLevel::Low,
+            "{target}"
+        );
     }
 }
 
@@ -47,6 +51,10 @@ fn test_high_confidence_deletes_keep_their_rating_for_directory_near_misses() {
         "packages/engine/Spec/grammar.txt", // Directory markers are case sensitive.
         "crates/engine/src/abigail/exports.rs",
     ] {
-        assert_eq!(deletion_confidence(target), ConfidenceLevel::High, "{target}");
+        assert_eq!(
+            deletion_confidence(target),
+            ConfidenceLevel::High,
+            "{target}"
+        );
     }
 }
