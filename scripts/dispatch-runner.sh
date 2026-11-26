@@ -306,6 +306,26 @@ validate_outcome_paths() {
             return 1
         fi
     fi
+    # The consumer resolves each repo_relative_path under its own repository
+    # root, while this runner emits it relative to REPOS_BASE. A different root
+    # would attach rescans to another checkout, so refuse before any attempt.
+    if [[ -n "${HYPATIA_REPOS_DIR:-}" ]]; then
+        local configured_repos
+        configured_repos="$HYPATIA_REPOS_DIR"
+        [[ "$configured_repos" == /* ]] || configured_repos="$HYPATIA_HOME/$configured_repos"
+        configured_repos=$(realpath -m -- "$configured_repos") || return 1
+        resolved=$(realpath -m -- "$REPOS_BASE") || return 1
+        if [[ "$configured_repos" != "$resolved" ]]; then
+            echo "ERROR: configured Hypatia repository root differs from REPOS_BASE" >&2
+            return 1
+        fi
+    fi
+    # A checkout without LFS hydration holds a pointer, not JSONL; appending to
+    # it would hand the importer a malformed canonical feed.
+    if [[ -s "$OUTCOME_FILE" ]] && head -n 1 -- "$OUTCOME_FILE" | grep -q '^version https://git-lfs\.github\.com/spec/'; then
+        echo "ERROR: $OUTCOME_FILE is an unhydrated Git LFS pointer; hydrate it before dispatch" >&2
+        return 1
+    fi
     if [[ -n "${HYPATIA_VERISIM_DATA_PATH:-}" ]]; then
         root="$HYPATIA_VERISIM_DATA_PATH"
         [[ "$root" == /* ]] || root="$HYPATIA_HOME/$root"
@@ -457,7 +477,27 @@ record_outcome() {
         return 1
     fi
 
-    if ! mkdir -p "$(dirname "$OUTCOME_FILE")" || ! printf '%s\n' "$json" >> "$OUTCOME_FILE"; then
+    # One lock covers the feed append and both mirror appends, so parallel
+    # attempts cannot interleave them and leave the mirrors in another order
+    # than the canonical feed.
+    local lock_fd append_rc=0
+    if ! mkdir -p "$(dirname "$OUTCOME_FILE")" ||
+        ! exec {lock_fd}>>"$OUTCOME_FILE.lock" ||
+        ! flock -x "$lock_fd"; then
+        echo "ERROR: could not lock the outcome feed for event_id=$event_id" >&2
+        return 1
+    fi
+    append_outcome_rows "$json" "$event_id" || append_rc=$?
+    exec {lock_fd}>&-
+    [[ "$append_rc" -eq 0 ]] || return "$append_rc"
+    record_outcome_followup
+}
+
+# Appends one row to the canonical feed, then to each distinct mirror. The
+# caller holds the feed lock.
+append_outcome_rows() {
+    local json="$1" event_id="$2"
+    if ! printf '%s\n' "$json" >> "$OUTCOME_FILE"; then
         echo "ERROR: could not append outcome for event_id=$event_id to $OUTCOME_FILE" >&2
         return 1
     fi
@@ -481,7 +521,10 @@ record_outcome() {
         fi
         written+=("$path")
     done
+}
 
+# Runs after a row is committed; the verdict and repo come from record_outcome.
+record_outcome_followup() {
     # Only the trusted importer admits an identified attempt. No independent
     # recorder and no no-ID fallback may create a second learning event.
     # The existing repo-only rescan is a cache refresh, not correlated evidence.

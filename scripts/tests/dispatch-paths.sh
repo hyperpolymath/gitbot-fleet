@@ -129,6 +129,7 @@ reset_fixture() {
     generator_mode=ok fix_mode=ok report_mode=on parallel=1 limit=1 allow_refusal=no
     hypatia_store="$fixture/learning-store"
     hypatia_fleet="$fixture/checkout"
+    hypatia_repos=""
     runner_args=()
     hypatia_home="${DISPATCH_TEST_HYPATIA_HOME:-$fixture/hypatia}"
     runner_path="$fixture/bin:$PATH"
@@ -141,6 +142,7 @@ invoke_runner() {
         HYPATIA_DATA="$fixture/primary" VERISIMDB_DATA="$store" \
         HYPATIA_HOME="$hypatia_home" HYPATIA_OUTCOME_REPORT="$report_mode" \
         HYPATIA_FLEET_PATH="$hypatia_fleet" HYPATIA_VERISIM_DATA_PATH="$hypatia_store" \
+        HYPATIA_REPOS_DIR="$hypatia_repos" \
         KIN_DIR="$fixture/kin" RRA_BIN="$rra_bin" FIXTURE_ROOT="$fixture" \
         FIXTURE_GENERATOR_MODE="$generator_mode" FIXTURE_FIX_MODE="$fix_mode" \
         FIXTURE_ALLOW_REFUSAL="$allow_refusal" \
@@ -335,6 +337,8 @@ check 'parallel starts and outcomes name the same attempts' test \
     "$(jq -r .event_id "$starts" | sort)" "=" "$(jq -r .event_id "$primary" | sort)"
 check 'parallel repo lock classifies only one verified fix' jq -se 'map(.verdict) | sort == ["no_op","verified"]' "$primary"
 check 'parallel identified attempts avoid the independent recorder' test ! -e "$fixture/unexpected-record"
+check 'parallel canonical feed and local mirror keep one order' cmp -s "$feed" "$primary"
+check 'parallel canonical feed and central mirror keep one order' cmp -s "$feed" "$central"
 
 # Physical aliases coalesce transport writes but may never mix starts or raw
 # transport with a canonical learning ledger. These fixtures use real symlinks
@@ -394,6 +398,27 @@ reset_fixture
 hypatia_fleet="$fixture/another-fleet"
 expect_failure 'explicit consumer fleet root differs'
 no_fix_or_outcome 'explicit consumer fleet root differs'
+
+reset_fixture
+hypatia_repos="$fixture/another-repos"
+expect_failure 'explicit consumer repository root differs'
+no_fix_or_outcome 'explicit consumer repository root differs'
+check 'consumer repository root mismatch mints no event' test ! -s "$fixture/mix-calls"
+reset_fixture
+hypatia_repos="$fixture/repos"
+run_dispatch
+check 'matching consumer repository root is accepted' test -s "$feed"
+
+# A checkout whose feed is an unhydrated LFS pointer fails before any attempt.
+reset_fixture
+mkdir -p "$(dirname "$feed")"
+printf '%s\n' 'version https://git-lfs.github.com/spec/v1' \
+    'oid sha256:0000000000000000000000000000000000000000000000000000000000000000' \
+    'size 1' > "$feed"
+expect_failure 'unhydrated LFS pointer feed'
+check 'LFS pointer feed never calls the fixer' test ! -s "$fixture/fix-calls"
+check 'LFS pointer feed mints no event' test ! -s "$fixture/mix-calls"
+check 'LFS pointer feed is left unchanged' test "$(wc -l < "$feed")" -eq 3
 
 # The v1 path is the actual target, after alias/program_path/symlink resolution.
 reset_fixture
