@@ -731,7 +731,7 @@
     },
     {
       "repository": "hyperpolymath/hypatia",
-      "commit": "29a9e4a881b6a3cc4cd27fcbc0886ffbadcbc5fe",
+      "commit": "f2c0604880f615bec5edda7aaefc8feac3d04cc5",
       "path": ".github/workflows/credential-read-check.yml",
       "blob": "15c597ea720a5affb861dab058084f7245ee4cbd",
       "content_sha256": "645e8ac8ff118c33f2dc941ec46f1abac895f7836339736841c269e4b9dc084d",
@@ -752,6 +752,194 @@
           "ref": "step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a"
         }
       ]
+    },
+    {
+      "repository": "hyperpolymath/proven-cicd-and-workflows",
+      "commit": "50a443f01b1b85e4957b893a6f1a0ed2e8a52459",
+      "path": ".github/workflows/rust-ci.yml",
+      "blob": "21907736e02b2dde87041447f953fc92217cddda",
+      "content_sha256": "204edafe2891b98da5fab9659c3a8f8f94a44e27d2ad34d09b8bbbeb6afd56ce",
+      "role": "active",
+      "callers": [
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-robot-repo-automaton",
+          "line": 46
+        },
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-shared-context",
+          "line": 54
+        },
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-dashboard",
+          "line": 62
+        },
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-rhodibot",
+          "line": 72
+        },
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-panicbot",
+          "line": 80
+        },
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-ponsbot",
+          "line": 88
+        },
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-idris-dependents",
+          "line": 96
+        }
+      ],
+      "uses": [
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 209
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 257
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 285
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 333
+        },
+        {
+          "kind": "step",
+          "ref": "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+          "line": 349
+        },
+        {
+          "kind": "step",
+          "ref": "goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406",
+          "line": 355
+        },
+        {
+          "kind": "step",
+          "ref": "swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+          "line": 364
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 386
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 434
+        },
+        {
+          "kind": "step",
+          "ref": "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+          "line": 446
+        },
+        {
+          "kind": "step",
+          "ref": "goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406",
+          "line": 451
+        },
+        {
+          "kind": "step",
+          "ref": "swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+          "line": 460
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 483
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 531
+        },
+        {
+          "kind": "step",
+          "ref": "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+          "line": 543
+        },
+        {
+          "kind": "step",
+          "ref": "goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406",
+          "line": 548
+        },
+        {
+          "kind": "step",
+          "ref": "swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+          "line": 557
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 578
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 626
+        },
+        {
+          "kind": "step",
+          "ref": "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+          "line": 638
+        },
+        {
+          "kind": "step",
+          "ref": "goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406",
+          "line": 643
+        },
+        {
+          "kind": "step",
+          "ref": "swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+          "line": 652
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 675
+        },
+        {
+          "kind": "step",
+          "ref": "taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519",
+          "line": 690
+        },
+        {
+          "kind": "step",
+          "ref": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "line": 734
+        },
+        {
+          "kind": "step",
+          "ref": "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+          "line": 738
+        },
+        {
+          "kind": "step",
+          "ref": "goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406",
+          "line": 744
+        },
+        {
+          "kind": "step",
+          "ref": "taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519",
+          "line": 761
+        }
+      ],
+      "source_url": "https://github.com/hyperpolymath/proven-cicd-and-workflows/blob/50a443f01b1b85e4957b893a6f1a0ed2e8a52459/.github/workflows/rust-ci.yml"
     }
   ],
   "dependencies": {
@@ -882,6 +1070,34 @@
       "commit": "sha1-fa7117db83c52d787ae5a89f350999701505d78e",
       "owner_id": 67707773,
       "repo_id": 421101922,
+      "uses": []
+    },
+    "hyperpolymath/proven-cicd-and-workflows@50a443f01b1b85e4957b893a6f1a0ed2e8a52459": {
+      "ref": "50a443f01b1b85e4957b893a6f1a0ed2e8a52459",
+      "commit": "sha1-50a443f01b1b85e4957b893a6f1a0ed2e8a52459",
+      "owner_id": 6759885,
+      "repo_id": 1326697643,
+      "uses": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8",
+        "goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406",
+        "swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+        "taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519"
+      ]
+    },
+    "goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406": {
+      "ref": "v2.2.1",
+      "commit": "sha1-abea47f85e598557f500fa1fd2ab7464fcb39406",
+      "uses": []
+    },
+    "swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0": {
+      "ref": "v2.9.3",
+      "commit": "sha1-d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+      "uses": []
+    },
+    "taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519": {
+      "ref": "v2.90.5",
+      "commit": "sha1-ab49d3c64680143e184118bed66a46419fc15519",
       "uses": []
     }
   }
