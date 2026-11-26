@@ -30,7 +30,9 @@ jq --slurpfile prior "$fixture" '
 ' "$manifest" > "$manifest.tmp"
 mv "$manifest.tmp" "$manifest"
 # The archived proposal has its own source receipt; keep unrelated receipts.
-awk '$0 !~ /^# Reviewed source: hyperpolymath\/proven-cicd-and-workflows\// && $0 !~ /^hyperpolymath\/proven-cicd-and-workflows\t/' "$receipts" > "$receipts.tmp"
+# Only the 1fd5e63 scanner source is replaced; later proven-cicd sources
+# (for example rust-ci.yml) keep their own receipt rows.
+awk '$0 !~ /^# Reviewed source: hyperpolymath\/proven-cicd-and-workflows\/.*@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6$/ && $0 !~ /^hyperpolymath\/proven-cicd-and-workflows\t1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6\t/' "$receipts" > "$receipts.tmp"
 printf '%s\n' '# Reviewed historical cicd-suite scanner source' >> "$receipts.tmp"
 printf 'hyperpolymath/cicd-suite\t4404c3c0474e17753fe7689f3485c02890aac113\tactions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n' >> "$receipts.tmp"
 mv "$receipts.tmp" "$receipts"
