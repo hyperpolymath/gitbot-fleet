@@ -1,0 +1,16 @@
+;; SPDX-License-Identifier: MPL-2.0
+; PLAYBOOK.deed: operational playbook (A7 ruling: the playbook moves to
+; PLAYBOOK.deed). Empty sections for now; runbooks, incident response and
+; release steps are added here as deed facts. A2ML is retired.
+; Uninstantiated template: :of-chora is the template's own chora id and is
+; replaced by the repo's id when the repo is minted.
+(descriptile-deed
+  :schema-version "1.0.0"
+  :canonical-name "PLAYBOOK"
+  :of-chora #uuid"8e515699-3fb9-8785-8883-ef2a100c2e02"
+  :affirmed "2026-11-21"
+  :affirmed-by agent
+  (deployment)
+  (incident-response)
+  (release-process)
+  (maintenance-operations))

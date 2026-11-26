@@ -211,7 +211,7 @@ impl CanonReport {
         )
     }
 
-    /// Check one repository against the canon, as overlaid by [`overlay`].
+    /// Check one repository against the canon, as overlaid by [`overlay`](super::overlay).
     ///
     /// The profile comes from the chora deed's `(rsr-profile ...)` clause; a
     /// legacy `rsr-profile.a2ml` is read only when the deed has none. No
