@@ -764,37 +764,37 @@
         {
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-robot-repo-automaton",
-          "line": 43
+          "line": 46
         },
         {
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-shared-context",
-          "line": 51
+          "line": 54
         },
         {
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-dashboard",
-          "line": 59
+          "line": 62
         },
         {
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-rhodibot",
-          "line": 69
+          "line": 72
         },
         {
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-panicbot",
-          "line": 77
+          "line": 80
         },
         {
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-ponsbot",
-          "line": 85
+          "line": 88
         },
         {
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-idris-dependents",
-          "line": 93
+          "line": 96
         }
       ],
       "uses": [
