@@ -76,6 +76,8 @@ jobs:
         run: printf 'PINNED_SOURCE_CACHE=%s/fleet-pinned-sources\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Test pinned-source failure modes
         run: bash scripts/tests/pinned-reusable-sources-test.sh
+      - name: Test the post-pin-bump hook
+        run: bash scripts/tests/post-pin-bump-test.sh
       - name: Authenticate pinned reusable sources
         run: bash scripts/audit-pinned-reusable-sources.sh --fetch-sources
       - name: Verify live scanner caller and negative controls
