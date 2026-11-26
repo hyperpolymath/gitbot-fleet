@@ -33,7 +33,7 @@ until = "2026-12-10"
 
 # Shell build: syntax-check every script (a real check; the shell tests carry a negative control).
 [categories.build.shell]
-command = "bash -n fleet-coordinator.sh && for f in scripts/*.sh tests/*.sh; do bash -n \"$f\" || exit 1; done"
+command = "bash -n fleet-coordinator.sh && find scripts tests -name '*.sh' -print0 | xargs -0 -n1 bash -n"
 
 [languages.ignore.agda]
 reason = "bots/echidnabot/proofs/agda are echidnabot prover fixtures (inputs the bot checks), not a project of this repo"
