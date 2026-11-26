@@ -32,7 +32,22 @@ gnu-grep = "latest"
 # Task runner alias
 [alias]
 task = "go-task"
-build = "cargo build --release"
-test = "cargo test"
-lint = "bun install --frozen-lockfile && bunx --no-install --bun prettier --check ."
-fmt = "bun install --frozen-lockfile && bunx --no-install --bun prettier --write ."
+
+# Runnable tasks. The root has no Cargo.toml, so run from the crate.
+# Prettier is not a mise tool: it needs Node, which is banned by
+# LANGUAGE-POLICY, and canonical JSON here must not be reformatted.
+[tasks.build]
+dir = "robot-repo-automaton"
+run = "cargo build --release"
+
+[tasks.test]
+dir = "robot-repo-automaton"
+run = "cargo test"
+
+[tasks.lint]
+dir = "robot-repo-automaton"
+run = "cargo fmt --check"
+
+[tasks.fmt]
+dir = "robot-repo-automaton"
+run = "cargo fmt"

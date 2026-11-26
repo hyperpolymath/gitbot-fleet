@@ -144,6 +144,7 @@ package-lock.json
 **/package-lock.json
 bun.lockb
 yarn.lock
+pnpm-lock.yaml
 .npmrc
 *.db
 *.db-journal
