@@ -2,30 +2,14 @@
 {
   version: 2,
   updates: [
-    {
-      package-ecosystem: "github-actions",
-      directory: "/",
-      schedule: {
-        interval: "daily",
-      },
-      groups: {
-        actions: {
-          patterns: [
-            "*",
-          ],
-        },
-      },
-      open-pull-requests-limit: 2,
-      ignore: [
-        # HOLD: github/codeql-action at v4.38.0 (SHA-pinned). v4.38.1 fails
-        # GitHub workflow-startup validation estate-wide (nexia-list#100;
-        # SHA-form re-bump bypassed versions-scoped ignores - nexia-list#101).
-        # Hold until upstream clears 4.38.1 or a new release verifies green.
-        {
-          dependency-name: "github/codeql-action",
-        },
-      ],
-    },
+    # No "github-actions" entry, by owner ruling "single pin writer"
+    # (2026-11-26). Third-party action pins and .github/workflows/actions.lock
+    # are written together, one PR per repository, by the Action pins applier
+    # in metadatastician/standards (.github/workflows/action-pins-applier.yml,
+    # standards #1688), and first-party standards pins by apply-workflow-pins.
+    # The github/codeql-action hold that used to live here is carried in
+    # standards config/settings/actions-bump-holds.txt.
+
     # Rust dependencies. Keep every Cargo project in one update entry so the
     # open-PR limit applies to the fleet as a whole, rather than once per bot.
     # Grouping by dependency name updates a shared crate across every affected
