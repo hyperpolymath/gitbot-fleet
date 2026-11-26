@@ -1,0 +1,3 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= Estate master schedule
+The canonical, continuously updated schedule is `docs/ESTATE-MASTER-SCHEDULE.adoc` in https://github.com/hyperpolymath/proven-cicd-and-workflows/blob/f2/proven-umbrella-v0/docs/ESTATE-MASTER-SCHEDULE.adoc[proven-cicd-and-workflows] (on branch `f2/proven-umbrella-v0` until #168 merges; maintained there by F2; see proven-cicd-and-workflows#168). This repository keeps no copy.
