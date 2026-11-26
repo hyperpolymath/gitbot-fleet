@@ -762,39 +762,39 @@
       "role": "active",
       "callers": [
         {
-          "workflow": ".github/workflows/rust.yml",
+          "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-robot-repo-automaton",
-          "line": 81
+          "line": 43
         },
         {
-          "workflow": ".github/workflows/rust.yml",
+          "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-shared-context",
-          "line": 89
+          "line": 51
         },
         {
-          "workflow": ".github/workflows/rust.yml",
+          "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-dashboard",
-          "line": 97
+          "line": 59
         },
         {
-          "workflow": ".github/workflows/rust.yml",
+          "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-rhodibot",
-          "line": 107
+          "line": 69
         },
         {
-          "workflow": ".github/workflows/rust.yml",
+          "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-panicbot",
-          "line": 115
+          "line": 77
         },
         {
-          "workflow": ".github/workflows/rust.yml",
+          "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-ponsbot",
-          "line": 123
+          "line": 85
         },
         {
-          "workflow": ".github/workflows/rust.yml",
+          "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-idris-dependents",
-          "line": 131
+          "line": 93
         }
       ],
       "uses": [
