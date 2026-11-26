@@ -30,6 +30,16 @@ fi
 # capture the early exit.
 TMP=$(mktemp -d /tmp/c15-smoke-XXXXXX)
 trap 'rm -rf "$TMP"' EXIT
+# The function checks for mix before it checks placeholder recipe ids. Supply
+# an inert executable so these no-call cases are independent of the host PATH.
+mkdir "$TMP/bin"
+cat > "$TMP/bin/mix" <<'STUB'
+#!/usr/bin/env bash
+echo 'unexpected mix call in a no-call smoke case' >&2
+exit 99
+STUB
+chmod +x "$TMP/bin/mix"
+export PATH="$TMP/bin:$PATH"
 
 # Extract just the function definitions we need (between # --- Hypatia
 # closed-loop contract --- and the next "# --- " section). Cheap and
