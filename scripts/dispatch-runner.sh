@@ -200,9 +200,10 @@ RESCAN_REPOS_FILE="$(mktemp /tmp/dispatch-rescan-repos.XXXXXX)"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/outcome-verdict.sh"
 
 # Parallel jobs on one repo take a per-repo lock around check/fix/check
-# (repo_lock), so --parallel needs flock. Refuse rather than run unlocked.
-if [[ "$PARALLEL" -gt 1 ]] && ! command -v flock &>/dev/null; then
-    echo "ERROR: --parallel $PARALLEL needs flock (util-linux) to serialise fixes per repo" >&2
+# (repo_lock), and every outcome append holds the feed lock, so flock is
+# needed for any run. Refuse before an attempt rather than after a fix.
+if ! command -v flock &>/dev/null; then
+    echo "ERROR: dispatch needs flock (util-linux) to serialise fixes and outcome appends" >&2
     exit 1
 fi
 
@@ -400,6 +401,47 @@ begin_attempt() {
     printf '%s\n' "$event_id"
 }
 
+# Appends one row to the canonical feed, then to each distinct mirror. The
+# caller holds the feed lock.
+append_outcome_rows() {
+    local json="$1" event_id="$2"
+    local path previous resolved duplicate
+    local written=("$OUTCOME_FILE")
+    if ! printf '%s\n' "$json" >> "$OUTCOME_FILE"; then
+        echo "ERROR: could not append outcome for event_id=$event_id to $OUTCOME_FILE" >&2
+        return 1
+    fi
+    # The feed is already committed. Transport mirrors are not another attempt.
+    # Coalesce textual, symlink and hardlink aliases, including aliases of the feed.
+    for path in "$OUTCOME_FILE_LOCAL" "$OUTCOME_FILE_CENTRAL"; do
+        resolved=$(realpath -m -- "$path") || return 1
+        duplicate=false
+        for previous in "${written[@]}"; do
+            if [[ "$resolved" == "$(realpath -m -- "$previous")" || "$path" -ef "$previous" ]]; then
+                duplicate=true
+                break
+            fi
+        done
+        [[ "$duplicate" == false ]] || continue
+        if ! mkdir -p "$(dirname "$path")" || ! printf '%s\n' "$json" >> "$path"; then
+            echo "ERROR: could not mirror outcome for event_id=$event_id to $path; canonical feed row is committed" >&2
+            return 1
+        fi
+        written+=("$path")
+    done
+}
+
+# Runs after a row is committed; the verdict and repo come from record_outcome.
+record_outcome_followup() {
+    # Only the trusted importer admits an identified attempt. No independent
+    # recorder and no no-ID fallback may create a second learning event.
+    # The existing repo-only rescan is a cache refresh, not correlated evidence.
+    case "$verdict" in
+        verified) echo "$repo" >> "$RESCAN_REPOS_FILE" ;;
+        refused_*) hypatia_record_refusal "$recipe_id" "$repo" "$file" || true ;;
+    esac
+}
+
 # record_outcome <pattern_id> <recipe_id> <repo> <file> <verdict> [exit before after event_id repo_relative_path]
 #
 # <verdict> is one of lib/outcome-verdict.sh's verdicts, or refused_* for a
@@ -491,47 +533,6 @@ record_outcome() {
     exec {lock_fd}>&-
     [[ "$append_rc" -eq 0 ]] || return "$append_rc"
     record_outcome_followup
-}
-
-# Appends one row to the canonical feed, then to each distinct mirror. The
-# caller holds the feed lock.
-append_outcome_rows() {
-    local json="$1" event_id="$2"
-    if ! printf '%s\n' "$json" >> "$OUTCOME_FILE"; then
-        echo "ERROR: could not append outcome for event_id=$event_id to $OUTCOME_FILE" >&2
-        return 1
-    fi
-    # The feed is already committed. Transport mirrors are not another attempt.
-    # Coalesce textual, symlink and hardlink aliases, including aliases of the feed.
-    local path previous resolved duplicate
-    local written=("$OUTCOME_FILE")
-    for path in "$OUTCOME_FILE_LOCAL" "$OUTCOME_FILE_CENTRAL"; do
-        resolved=$(realpath -m -- "$path") || return 1
-        duplicate=false
-        for previous in "${written[@]}"; do
-            if [[ "$resolved" == "$(realpath -m -- "$previous")" || "$path" -ef "$previous" ]]; then
-                duplicate=true
-                break
-            fi
-        done
-        [[ "$duplicate" == false ]] || continue
-        if ! mkdir -p "$(dirname "$path")" || ! printf '%s\n' "$json" >> "$path"; then
-            echo "ERROR: could not mirror outcome for event_id=$event_id to $path; canonical feed row is committed" >&2
-            return 1
-        fi
-        written+=("$path")
-    done
-}
-
-# Runs after a row is committed; the verdict and repo come from record_outcome.
-record_outcome_followup() {
-    # Only the trusted importer admits an identified attempt. No independent
-    # recorder and no no-ID fallback may create a second learning event.
-    # The existing repo-only rescan is a cache refresh, not correlated evidence.
-    case "$verdict" in
-        verified) echo "$repo" >> "$RESCAN_REPOS_FILE" ;;
-        refused_*) hypatia_record_refusal "$recipe_id" "$repo" "$file" || true ;;
-    esac
 }
 
 # --- Execute a single manifest entry ---
