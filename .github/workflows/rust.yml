@@ -26,7 +26,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
-    needs: [rust, dispatch-contracts, gsbot]
+    needs:
+      - rust
+      - dispatch-contracts
+      - gsbot
+      - rust-ci-robot-repo-automaton
+      - rust-ci-shared-context
+      - rust-ci-dashboard
+      - rust-ci-rhodibot
+      - rust-ci-panicbot
+      - rust-ci-ponsbot
+      - rust-ci-idris-dependents
     if: always()
     steps:
       - name: Require every CI job to succeed
@@ -34,14 +44,93 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           set -euo pipefail
-          for job in rust dispatch-contracts gsbot; do
+          for job in rust dispatch-contracts gsbot \
+            rust-ci-robot-repo-automaton \
+            rust-ci-shared-context \
+            rust-ci-dashboard \
+            rust-ci-rhodibot \
+            rust-ci-panicbot \
+            rust-ci-ponsbot \
+            rust-ci-idris-dependents; do
             result=$(jq -r --arg job "$job" '.[$job].result // "missing"' <<< "$NEEDS_JSON")
             if [[ "$result" != success ]]; then
               echo "::error::$job did not succeed (result: $result)"
               exit 1
             fi
           done
-          echo 'CI/gate passed: Rust matrix, dispatch contracts and GSBot succeeded.'
+          echo 'CI/gate passed: Rust matrix, proven rust-ci callers, dispatch contracts and GSBot succeeded.'
+
+  # Proven reusable Rust gate (hyperpolymath/proven-cicd-and-workflows
+  # rust-ci.yml), one caller per crate. It is stricter than the `rust` matrix
+  # above: warnings denied on every compile, doctests, `cargo doc` with broken
+  # links failing, MSRV when declared, and cargo-deny (advisories, bans,
+  # sources). Contexts are `rust-ci (<crate>) / <gate job>`.
+  #
+  # The `rust` matrix stays until branch rules require these contexts instead
+  # of `build · test · clippy (<crate>)`; a follow-up then removes it (and
+  # moves rhodibot's canon pin drift step to its own job).
+  #
+  # Pinned at one full SHA and de-onboarded from actions.lock (an onboarded
+  # cross-repo reusable startup-fails with zero jobs); the pin is recorded in
+  # scripts/lib/pinned-reusable-sources.json and lock-closure-receipts.tsv.
+  # `contents: read` is the whole grant the callee declares.
+  rust-ci-robot-repo-automaton:
+    name: rust-ci (robot-repo-automaton)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: robot-repo-automaton
+
+  rust-ci-shared-context:
+    name: rust-ci (shared-context)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: shared-context
+
+  rust-ci-dashboard:
+    name: rust-ci (dashboard)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: dashboard
+      # Binary-only crate: `cargo test --doc` has no library to test.
+      doctests: false
+
+  rust-ci-rhodibot:
+    name: rust-ci (rhodibot)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: bots/rhodibot
+
+  rust-ci-panicbot:
+    name: rust-ci (panicbot)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: bots/panicbot
+
+  rust-ci-ponsbot:
+    name: rust-ci (ponsbot)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: bots/ponsbot
+
+  rust-ci-idris-dependents:
+    name: rust-ci (idris-dependents)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: idris-dependents
 
   rust:
     name: build · test · clippy (${{ matrix.module }})

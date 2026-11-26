@@ -301,7 +301,7 @@ fn map_severity(panic_attack_severity: &str) -> Severity {
     }
 }
 
-/// Parse a panic-attack location string ("src/lib.rs:42") into (PathBuf, Option<usize>).
+/// Parse a panic-attack location string ("src/lib.rs:42") into `(PathBuf, Option<usize>)`.
 fn parse_location(location: &str) -> (PathBuf, Option<usize>) {
     // Format: "path/to/file.rs:line" or just "path/to/file.rs"
     if let Some(colon_pos) = location.rfind(':') {

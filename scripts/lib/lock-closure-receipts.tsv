@@ -76,5 +76,13 @@ metadatastician/standards	ea2f4d8a886585ed442687ae63d4ad7493379ba4	oven-sh/setup
 # Reviewed source: hyperpolymath/proven-cicd-and-workflows/.github/workflows/secret-scanner-reusable.yml@1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6
 hyperpolymath/proven-cicd-and-workflows	1fd5e6371a50f0fc3687206a5adca0cdf7b39aa6	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+# Reviewed source: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+# Exact Git blob: 21907736e02b2dde87041447f953fc92217cddda; emitted with --emit-receipt.
+hyperpolymath/proven-cicd-and-workflows	50a443f01b1b85e4957b893a6f1a0ed2e8a52459	actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+hyperpolymath/proven-cicd-and-workflows	50a443f01b1b85e4957b893a6f1a0ed2e8a52459	dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+hyperpolymath/proven-cicd-and-workflows	50a443f01b1b85e4957b893a6f1a0ed2e8a52459	goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406
+hyperpolymath/proven-cicd-and-workflows	50a443f01b1b85e4957b893a6f1a0ed2e8a52459	swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+hyperpolymath/proven-cicd-and-workflows	50a443f01b1b85e4957b893a6f1a0ed2e8a52459	taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519
+
 # Reviewed source: hyperpolymath/hypatia/.github/workflows/credential-read-check.yml@f2c0604880f615bec5edda7aaefc8feac3d04cc5
 hyperpolymath/hypatia	f2c0604880f615bec5edda7aaefc8feac3d04cc5	step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a
