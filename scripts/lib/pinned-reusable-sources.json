@@ -795,6 +795,11 @@
           "workflow": ".github/workflows/rust-proven.yml",
           "job": "rust-ci-idris-dependents",
           "line": 96
+        },
+        {
+          "workflow": ".github/workflows/rust-proven.yml",
+          "job": "rust-ci-check-scanner-caller",
+          "line": 104
         }
       ],
       "uses": [

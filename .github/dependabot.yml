@@ -32,6 +32,7 @@
         "/bots/accessibilitybot",
         "/bots/cipherbot",
         "/bots/panicbot",
+        "/scripts/check-scanner-caller",
       ],
       schedule: {
         interval: "weekly",
