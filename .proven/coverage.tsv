@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+# Coverage manifest (kit/README.adoc). Sweep 1 only: rows exist for ids a real test covers. Ids with no row are
+# missing, not N/A: kit/check-coverage.sh fails closed on them until sweeps 2-4 add rows or written N/A reasons.
+# id	status	language	ref
+UT	covered	bash	tests/sweep1/fleet-coordinator.sweep1.test.sh
+UT	covered	rust	robot-repo-automaton/tests/fixer_tests.rs
+SMK	covered	bash	tests/sweep1/fleet-coordinator.sweep1.test.sh
+BLD	covered	bash	tests/sweep1/fleet-coordinator.sweep1.test.sh
+P2P	covered	bash	tests/sweep1/fleet-coordinator.sweep1.test.sh
+P2P	covered	rust	shared-context/tests/property_tests.rs
