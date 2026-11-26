@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: MPL-2.0
+# Files copied unchanged from metadatastician/standards (public). They are
+# copies, not vendored products: refresh them by copying again and updating
+# this note. Provenance:
+#   source repository: metadatastician/standards
+#   source commit:     eed16d38ad481cca9a93b5d2a89efe29bf40015f
+#   copied on:         2026-11-26
+# sha256 of each copy (equal to the source file at that commit):
+5f249b3021dd7df0b1c4c2bbea6bfe032c01f04a63c7f19243ba459e904242a3  scripts/departures.sh
+26c91df66e7ad899281fec37103ca48be8cbc1ec750ede11c8e08844d66ba432  scripts/issue-evidence.sh
+96efdfc7a226853c3222f629314d8ac9277f96fe9ee2d8580bf70fbffff58f9b  scripts/lib/ledger-prune.sh
+# Checked by CI: the departures job runs `departures.sh validate` and
+# `departures.sh check` on .machine_readable/departures.jsonl.

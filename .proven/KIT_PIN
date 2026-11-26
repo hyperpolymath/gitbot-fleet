@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+# Consumer kit pin: hyperpolymath/proven-tests-and-benches, kit/ (PR #121, draft).
+# Full SHA, never a branch. Tests find the kit through PTB_LIB (kit/lib); nothing is vendored.
+4d849e992c9d19a86a860a511a175315dddaf83d
