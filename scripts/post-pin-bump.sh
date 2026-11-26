@@ -25,13 +25,19 @@
 # pin moved). Messages go to stderr. Exit 0 = nothing to do or re-attested,
 # 1 = refused or self-audit failed (files restored), 64 = usage.
 #
+# Fetching new source is on when POST_PIN_BUMP=1 (set by the applier) or with
+# --fetch-sources; otherwise the hook is offline and reads only the cache.
+#
 # Usage: post-pin-bump.sh [--repo-root DIR] [--cache DIR] [--fetch-sources]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE="${PINNED_SOURCE_CACHE:-${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/fleet-pinned-sources}"
+# The Action pins applier runs this hook with no arguments and POST_PIN_BUMP=1 (the
+# contract in metadatastician/standards), so that variable also turns fetching on.
 FETCH=0
+[[ "${POST_PIN_BUMP:-}" != 1 ]] || FETCH=1
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --repo-root) ROOT="${2:?repository root required}"; shift ;;

@@ -102,6 +102,18 @@ if [[ $rc == 1 ]] && cmp -s "$CASE/pre.json" "$R/scripts/lib/pinned-reusable-sou
 fix allow-list; bump "$SAME"; printf 'scripts/lib/pinned-reusable-sources.json\n' > "$R/.github/post-pin-bump.paths"; run
 if [[ $rc == 1 ]] && unchanged; then ok 'refuses to change a path outside the allow-list'; else bad 'allow-list'; fi
 
+# Fetch policy: POST_PIN_BUMP=1 (no arguments) must make the hook fetch; without it, offline.
+fix fetch-policy; bump "$SAME"
+mv "$R/scripts/audit-pinned-reusable-sources.sh" "$R/scripts/audit-real.sh"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s/args"\nexec bash "$(dirname "$0")/audit-real.sh" "$@"\n' "$CASE" > "$R/scripts/audit-pinned-reusable-sources.sh"
+rc=0; (cd "$R" && POST_PIN_BUMP=1 timeout 30s bash scripts/post-pin-bump.sh --repo-root "$R" --cache "$CASE/cache" > "$CASE/out" 2> "$CASE/err") || rc=$?
+if [[ $rc == 0 ]] && grep -q -- '--fetch-sources' "$CASE/args" && ! grep -v -- '--roots-only' "$CASE/args" | grep -qv -- '--fetch-sources'; then ok 'POST_PIN_BUMP=1 turns fetching on for every source audit call'; else bad 'POST_PIN_BUMP=1 did not enable fetching'; fi
+fix fetch-offline; bump "$SAME"
+mv "$R/scripts/audit-pinned-reusable-sources.sh" "$R/scripts/audit-real.sh"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s/args"\nexec bash "$(dirname "$0")/audit-real.sh" "$@"\n' "$CASE" > "$R/scripts/audit-pinned-reusable-sources.sh"
+rc=0; (cd "$R" && env -u POST_PIN_BUMP timeout 30s bash scripts/post-pin-bump.sh --repo-root "$R" --cache "$CASE/cache" > "$CASE/out" 2> "$CASE/err") || rc=$?
+if [[ $rc == 0 && -s "$CASE/args" ]] && ! grep -q -- '--fetch-sources' "$CASE/args"; then ok 'without POST_PIN_BUMP the hook stays offline'; else bad 'default is not offline'; fi
+
 # Mutant: if the hook skipped both audits it would accept the changed blob.
 fix mutant; bump "$CHANGED"; sed -i 's/^if ! bash "\$AUDIT" "\${audit_args\[@\]}".*/if false; then/' "$R/scripts/post-pin-bump.sh"; run
 if [[ $rc == 0 ]] && ! unchanged; then ok 'mutant (both audits disabled) accepts a changed blob, so the audit is what refuses'; else bad 'mutant did not demonstrate the audit is load-bearing'; fi
