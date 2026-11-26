@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Fail closed on changes to the fleet scanner's deployed security contract.
 //!
-//! Usage: check-scanner-caller [WORKFLOW]   (default: .github/workflows/secret-scanner.yml)
+//! Usage: check-scanner-caller \[WORKFLOW\]   (default: .github/workflows/secret-scanner.yml)
 //! Exits 0 when the caller matches the reviewed contract, 1 otherwise.
 
 use std::collections::HashSet;
@@ -23,7 +23,10 @@ struct Validator {
 
 enum Frame {
     Seq,
-    Map { keys: HashSet<String>, expect_key: bool },
+    Map {
+        keys: HashSet<String>,
+        expect_key: bool,
+    },
 }
 
 impl Validator {
@@ -69,7 +72,10 @@ impl MarkedEventReceiver for Validator {
             }
             Event::MappingStart(..) => {
                 self.enter_node(None);
-                self.frames.push(Frame::Map { keys: HashSet::new(), expect_key: true });
+                self.frames.push(Frame::Map {
+                    keys: HashSet::new(),
+                    expect_key: true,
+                });
             }
             Event::SequenceEnd | Event::MappingEnd => {
                 self.frames.pop();
@@ -96,7 +102,13 @@ fn same(a: &Yaml, b: &Yaml) -> bool {
 fn expected(text: &str) -> Yaml {
     YamlLoader::load_from_str(text)
         .ok()
-        .and_then(|mut docs| if docs.is_empty() { None } else { Some(docs.remove(0)) })
+        .and_then(|mut docs| {
+            if docs.is_empty() {
+                None
+            } else {
+                Some(docs.remove(0))
+            }
+        })
         .expect("built-in contract literal parses")
 }
 
@@ -112,7 +124,9 @@ fn check(path: &str) -> Result<(), String> {
 
     let mut validator = Validator::default();
     let mut parser = Parser::new_from_str(&text);
-    parser.load(&mut validator, true).map_err(|e| e.to_string())?;
+    parser
+        .load(&mut validator, true)
+        .map_err(|e| e.to_string())?;
     if let Some(e) = validator.error {
         return Err(e);
     }
@@ -131,7 +145,11 @@ fn check(path: &str) -> Result<(), String> {
         "triggers",
     )?;
     let perms = expected("contents: read\n");
-    require_equal(get(map, "permissions").as_ref(), &perms, "workflow permissions")?;
+    require_equal(
+        get(map, "permissions").as_ref(),
+        &perms,
+        "workflow permissions",
+    )?;
 
     let jobs = get(map, "jobs")
         .and_then(|j| j.into_hash())
@@ -146,14 +164,28 @@ fn check(path: &str) -> Result<(), String> {
         })
         .ok_or("unexpected scan job fields")?;
 
-    require_equal(get(&scan, "permissions").as_ref(), &perms, "job permissions")?;
-    require_equal(get(&scan, "uses").as_ref(), &Yaml::String(EXPECTED_PIN.into()), "suite pin")?;
-    require_equal(get(&scan, "with").as_ref(), &expected("fast-pr: false\n"), "scan policy")?;
+    require_equal(
+        get(&scan, "permissions").as_ref(),
+        &perms,
+        "job permissions",
+    )?;
+    require_equal(
+        get(&scan, "uses").as_ref(),
+        &Yaml::String(EXPECTED_PIN.into()),
+        "suite pin",
+    )?;
+    require_equal(
+        get(&scan, "with").as_ref(),
+        &expected("fast-pr: false\n"),
+        "scan policy",
+    )?;
     Ok(())
 }
 
 fn main() -> ExitCode {
-    let path = std::env::args().nth(1).unwrap_or_else(|| ".github/workflows/secret-scanner.yml".into());
+    let path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| ".github/workflows/secret-scanner.yml".into());
     match check(&path) {
         Ok(()) => {
             println!("scanner caller contract: exact suite pin, full-history policy, triggers, least privilege and no secrets verified");
