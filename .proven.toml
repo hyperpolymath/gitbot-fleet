@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MPL-2.0
+# Manifest for the proven umbrella gate (schema proven/manifest/v1), drafted against
+# proven-cicd-and-workflows#168. Repo-local content only: reasons, waivers, commands.
+schema = "proven/manifest/v1"
+
+# Rust: `just test` / `just build` cover robot-repo-automaton (the Justfile recipes);
+# the other crates (shared-context, bots/*) are on the later list for the umbrella's
+# multi-root support and are not claimed here.
+
+# Shell sweep 1 (tests/sweep1/*.sweep1.test.sh) needs the proven-tests kit (PTB_LIB, pinned in
+# .proven/KIT_PIN). The umbrella does not provide the kit yet, so these are visible, expiring
+# waivers, not N/A and not a pass.
+[categories.smoke.shell.waiver]
+reason = "tests/sweep1 needs the proven-tests kit at .proven/KIT_PIN; the umbrella does not fetch it yet"
+until = "2026-12-10"
+[categories.p2p.shell.waiver]
+reason = "as smoke: tests/sweep1 needs the kit; the umbrella does not fetch it yet"
+until = "2026-12-10"
+
+# Rust smoke and P2P: no smoke/p2p test targets exist under the default root (dashboard); the
+# P2P tests live in shared-context/tests/property_tests.rs (another root). Visible waivers.
+[categories.smoke.rust.waiver]
+reason = "no cargo smoke target at the default root; smoke is shell (tests/sweep1) and is waived above"
+until = "2026-12-10"
+[categories.p2p.rust.waiver]
+reason = "P2P tests are shared-context/tests/property_tests.rs, a second Rust root the manifest cannot yet address"
+until = "2026-12-10"
+
+# Shell unit: tests/*-test.sh have not been validated one by one on a runner; none is claimed yet.
+[categories.unit.shell.waiver]
+reason = "tests/*-test.sh not yet validated on a runner; a Rust unit job covers robot-repo-automaton"
+until = "2026-12-10"
+
+# Shell build: syntax-check every script (a real check; the shell tests carry a negative control).
+[categories.build.shell]
+command = "bash -n fleet-coordinator.sh && for f in scripts/*.sh tests/*.sh; do bash -n \"$f\" || exit 1; done"
+
+[languages.ignore.agda]
+reason = "bots/echidnabot/proofs/agda are echidnabot prover fixtures (inputs the bot checks), not a project of this repo"
+[languages.ignore.coq]
+reason = "bots/echidnabot/proofs/coq and theory/rocq are echidnabot prover fixtures, including deliberate Admitted stubs, not a project of this repo"
+[languages.ignore.lean]
+reason = "bots/echidnabot/proofs/lean are echidnabot prover fixtures, including a deliberate sorry stub, not a project of this repo"
+[languages.ignore.idris2]
+reason = "Idris2 files are bots/echidnabot ABI sources and idris-dependents fixtures; the umbrella cannot provision idris2 in release 0.1"
+[languages.ignore.ruby]
+reason = "scripts/check-scanner-caller.rb is being ported to Rust in #713; it is one standalone script"
+[languages.ignore.elixir]
+reason = "scripts/sync-all-parallel.exs is a single standalone script, not a mix project"
