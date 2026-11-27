@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+# Paths scripts/post-pin-bump.sh may change, one per line. The Action pins applier
+# stages exactly these (and nothing else) after running the hook.
+scripts/lib/pinned-reusable-sources.json
+scripts/lib/lock-closure-receipts.tsv
