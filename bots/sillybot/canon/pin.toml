@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MPL-2.0
+#
+# The ONE commit of each engine sillybot accepts. sillybot runs two external
+# tools and owns no checking logic (sillybot spec v0, owner ruling DP5):
+#
+#   docudactyl  `docs-ingest`  repo tree -> reconcile-input/v0 bundle
+#   recon-silly-ation `reconcile`  bundles -> findings/v0
+#
+# Neither tool prints its own source commit yet, so sillybot cannot check the
+# binary against this pin at run time the way ponsbot does. The pin is what
+# the build step (fleet wiring, DP12) must build. Until a tool stamps its
+# commit, a drifted binary is a known gap, recorded here and in lib.rs.
+#
+# Provenance: docudactyl main after #96 and #97 (docs-ingest and its review
+# fixes); recon-silly-ation main after #83 (reconcile v0) and #85 (design).
+#
+# To re-pin: change a commit and `pinned`, rebuild that tool there, run
+# `cargo test` in bots/sillybot.
+
+[ingest]
+repo = "hyperpolymath/docudactyl"
+commit = "f8ed65f0979b6bb12cd9e2258bed993e2d0e9d7c"
+pinned = "2026-11-27"
+
+[reconcile]
+repo = "hyperpolymath/recon-silly-ation"
+commit = "6b306c6e3ef2825f685817a206951f204a1b75de"
+pinned = "2026-11-27"
