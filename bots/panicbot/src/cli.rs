@@ -90,7 +90,7 @@ pub enum Command {
         #[arg(default_value = ".")]
         dir: PathBuf,
 
-        /// Output file path. Default: <repo>/.panicbot/PANICBOT-FINDINGS.a2ml.
+        /// Output file path. Default: `<repo>/.panicbot/PANICBOT-FINDINGS.a2ml`.
         #[arg(short, long)]
         output: Option<PathBuf>,
     },

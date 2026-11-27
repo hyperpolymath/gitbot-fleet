@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= NS-02: Bounded producer identity evidence
+:toc:
+:date: 2026-11-23
+
+Status: historical bounded producer evidence at PR #709,
+`565f075cf204f25f5b648547b8d8ae46fe1977ff`. The behavior and results below
+describe that exact revision, including its former transport destinations and
+direct callback. The owner subsequently approved the route direction in
+`docs/design/e0-12-outcome-route-decision.adoc`; the versioned follow-on is
+documented in `docs/operations/NS-02-single-admission.adoc`. Full E0-12 closure,
+post-fix state attribution and production activation are not established by
+this historical record. No quarantine removal occurred.
+
+Fleet base: `f1b14e2a352491ff7972f0dfd592bfbb28d2f32c`.
+Hypatia generator/importer base: `d158aed87f76b93e4f291e995bef9f26559c7fb2`.
+E0-11 and E0-31 were confirmed in that Hypatia ancestry, at `6de3764`
+(PR #1165) and `00ee725` (PR #1213). The existing receipt design fixes the
+start record; the later E0-31 ruling fixes the Mix tooling choice.
+
+== Behavior
+
+An executable fix attempt calls `mix hypatia.event_id` once and checks the
+canonical final output line. Nonzero generator exit is refused even if stdout
+contains a plausible ID. Final-line checking follows the task's documented
+handling of first-run compile chatter; it is validation, not a new generator.
+
+Before either fix-script or RRA execution, the producer appends the exact
+sorted six-field start to
+`$FLEET_ROOT/shared-context/learning/fix-attempts.jsonl`. Failed identity or
+start persistence prevents the fix. An interrupted attempt leaves a start
+without an outcome.
+
+The existing primary and central outcome destinations are preserved. Their
+copies carry the same producer ID and serialized bytes. Primary failure
+prevents later mirror/direct-report calls; mirror failure retains the primary
+row and reports failure. New infrastructure failures propagate from parallel
+children to the parent through a narrow marker alongside the existing tally;
+success counters are added after successful outcome persistence.
+
+The production exit 78 before manifest processing and the complete licence
+refusal branch remain unchanged. A policy refusal does not become a fix
+attempt and keeps its existing row shape. No public caller may supply trusted
+receipt identity through a new CLI flag.
+
+== Failing-before evidence and correction
+
+* Against unchanged producer source, the new row-identity assertion found
+  `null`: 62 existing checks passed and the new assertion failed.
+* The whole-runner fixture showed the fixer executing without its required
+  start record.
+* Independent review found that the old parallel drain discarded the new
+  infrastructure failure return. A failing-before control showed two failed
+  generator jobs, `FAILED=2`, and overall exit zero. The explicit error marker
+  now makes that case fail visibly.
+* The existing smoke test assumed Mix was present in two no-call cases. Its
+  inert presence stub makes those assertions independent of the host without
+  allowing a real Mix call or changing production behavior.
+
+== Completed checks
+
+[cols="3,2",options="header"]
+|===
+|Command / scope |Result
+|`bash tests/outcome-verdict-test.sh`
+|63 outcome checks pass; it also invokes the 112-check whole-runner fixture.
+|`bash tests/automation-quarantine-test.sh`
+|Seven blocked entrypoints and the no-publication/state-mutation assertion pass.
+|`bash tests/hypatia-record-outcome-smoke.sh`
+|5 checks pass.
+|`bash scripts/tests/dispatch-paths.sh` with the actual canonical Mix generator
+|112 checks pass, including serial and parallel generator/start/primary/mirror failures.
+|`bash -n` on the four changed shell files; `git diff --check`
+|Pass. ShellCheck was unavailable locally.
+|`tests/hypatia-event-import-test.exs`, run by `MIX_ENV=test mix run --no-start` from Hypatia
+|3 checks pass using actual emitted rows and an explicit test transfer.
+|`mix test test/learning_scheduler_test.exs test/event_id_test.exs test/mix_tasks/event_id_test.exs --seed 0` from Hypatia
+|56 tests pass, zero failures, covering the existing importer and event-ID contracts.
+|`tests/hypatia-route-counterexample.exs`, same isolated runtime
+|Exit 1: one actual attempt yields two qualified failures and two receipts after direct recording plus explicit import. This unresolved integration failure remains visible.
+|===
+
+The real generator and consumer witness used Elixir 1.19.4 / OTP 27.3.4.19,
+matching Hypatia's pin. The fixture runs only a disposable copy of the runner,
+using the pre-existing quarantine test seam and inert temporary fixes. The
+unmodified production entrypoint is separately required to return 78. No
+test makes a production exception or enables dispatch through an environment
+switch.
+
+The harness can preserve actual rows under `DISPATCH_TEST_EVIDENCE_DIR`:
+`success-starts.jsonl`, `success-primary.jsonl`, `success-central.jsonl`, and
+the corresponding three `failure-*` files. Each primary/start pair contains
+two distinct attempts; each central file is the exact second outcome. Set
+`DISPATCH_TEST_HYPATIA_HOME` to the pinned Hypatia checkout and
+`DISPATCH_TEST_MIX_BIN` to its configured Mix executable to use the canonical
+generator. Omitting those selects the deterministic test stub, never a
+production fallback generator.
+
+The companion decision packet contains the exact cross-repository commands.
+The importer witness proves ID and receipt fidelity, mirror/replay
+deduplication and start exclusion. Its deliberate copy into the import feed
+does not demonstrate automatic delivery.
+
+== Claim boundary
+
+This patch establishes local producer identity and tested wire compatibility.
+It does not establish power-loss durability, a multi-file atomic transaction,
+exactly-once neural parameter updates, corpus quality, held-out usefulness,
+live deployment, full E0-12/E0 acceptance or a higher Kautz type.
+
+The current monthly-log routes and direct recording callback remain unchanged.
+Do not add forwarding without settling the decision packet: the reproduced
+counterexample shows how that naive connection multiplies evidence. The new
+identity patch does not justify relaxing the existing quarantine.
