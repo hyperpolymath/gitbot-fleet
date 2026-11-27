@@ -28,6 +28,18 @@ source_object() {
   NEW_COMMIT="$(commit_tree "$repo" "$tree" "Fixture $RANDOM$RANDOM")"
   rm "$index"
 }
+# source_object2 REPO TEXT: like source_object, but the same blob is also written at reuse2.yml.
+source_object2() {
+  local repo="$1" text="$2" index tree
+  NEW_BLOB="$(printf '%s\n' "$text" | git --git-dir="$repo" hash-object -w --stdin)"
+  index="$(mktemp "$WORK/index.XXXXXX")"; rm "$index"
+  GIT_INDEX_FILE="$index" git --git-dir="$repo" read-tree --empty
+  GIT_INDEX_FILE="$index" git --git-dir="$repo" update-index --add --cacheinfo "100644,$NEW_BLOB,.github/workflows/reuse.yml"
+  GIT_INDEX_FILE="$index" git --git-dir="$repo" update-index --add --cacheinfo "100644,$NEW_BLOB,.github/workflows/reuse2.yml"
+  tree="$(GIT_INDEX_FILE="$index" git --git-dir="$repo" write-tree)"
+  NEW_COMMIT="$(commit_tree "$repo" "$tree" "Fixture $RANDOM$RANDOM")"
+  rm "$index"
+}
 
 BASE="$WORK/base"; mkdir -p "$BASE/cache/org" "$BASE/repo/.github/workflows" "$BASE/repo/scripts/lib"
 SRC="$BASE/cache/org/reusable.git"; git init -q --bare "$SRC"
@@ -41,6 +53,7 @@ source_object "$SRC" "$TEXT"; SAME="$NEW_COMMIT"
 # Same text means the same blob; a distinct commit comes from the unique message.
 source_object "$SRC" "$TEXT"$'\n# changed'; CHANGED="$NEW_COMMIT"
 source_object "$SRC" "${TEXT/org\/child@$CHILD_SHA/org\/other@$CHILD_SHA}"; EDGES="$NEW_COMMIT"
+source_object2 "$SRC" "$TEXT"; OLD2="$NEW_COMMIT"; source_object2 "$SRC" "$TEXT"; SAME2="$NEW_COMMIT"
 cat > "$BASE/repo/.github/workflows/test.yml" <<YAML
 name: Test
 on: push
@@ -94,10 +107,51 @@ fix unreachable-source; bump "$SAME"; rm -rf "$CASE/cache/org/reusable.git"; run
 if [[ $rc == 1 && ! -s "$CASE/out" ]] && unchanged; then ok 'refuses (not guesses) when the new source is unavailable offline'; else bad 'unavailable source'; fi
 
 fix shared-commit; bump "$SAME"
-jq '.sources += [(.sources[0] | .role="retained-review" | .callers=[] | .path=".github/workflows/reuse.yml")]' "$R/scripts/lib/pinned-reusable-sources.json" > "$CASE/m.json"
-jq '.sources[1].path=".github/workflows/reuse.yml" | .sources[1].repository="org/reusable"' "$CASE/m.json" > "$R/scripts/lib/pinned-reusable-sources.json"
+jq '.sources += [(.sources[0] | .role="retained-review" | .callers=[] | .path=".github/workflows/other.yml")]' "$R/scripts/lib/pinned-reusable-sources.json" > "$CASE/m.json"
+cp "$CASE/m.json" "$R/scripts/lib/pinned-reusable-sources.json"
 cp "$R/scripts/lib/pinned-reusable-sources.json" "$CASE/pre.json"; run
-if [[ $rc == 1 ]] && cmp -s "$CASE/pre.json" "$R/scripts/lib/pinned-reusable-sources.json"; then ok 'refuses a commit shared with a source that did not move'; else bad 'shared commit'; fi
+if [[ $rc == 1 ]] && cmp -s "$CASE/pre.json" "$R/scripts/lib/pinned-reusable-sources.json" && grep -q 'is shared with' "$CASE/err"; then ok 'refuses a commit shared with a source that did not move'; else bad 'shared commit'; fi
+
+# Provenance: source_url and local_file name the old commit and must follow a pin-only bump.
+fix provenance; bump "$SAME"
+jq --arg o "$OLD" '.sources[0].source_url="https://github.com/org/reusable/blob/"+$o+"/.github/workflows/reuse.yml" | .sources[0].local_file="C:\\src\\"+$o+"\\reuse.yml"' "$R/scripts/lib/pinned-reusable-sources.json" > "$CASE/m.json"
+cp "$CASE/m.json" "$R/scripts/lib/pinned-reusable-sources.json"; run
+if [[ $rc == 0 ]] && jq -e --arg s "$SAME" '.sources[0] | .commit==$s and (.source_url|contains($s)) and (.local_file|contains($s))' "$R/scripts/lib/pinned-reusable-sources.json" >/dev/null &&
+   ! grep -q "$OLD" "$R/scripts/lib/pinned-reusable-sources.json"; then ok 'pin-only bump refreshes source_url and local_file provenance'; else bad 'provenance refresh'; fi
+
+fix dep-ref; bump "$SAME"
+jq --arg o "$OLD" '.sources[0].review_note="reviewed at "+$o' "$R/scripts/lib/pinned-reusable-sources.json" > "$CASE/m.json"
+cp "$CASE/m.json" "$R/scripts/lib/pinned-reusable-sources.json"; cp "$CASE/m.json" "$CASE/pre.json"; run
+if [[ $rc == 1 ]] && cmp -s "$CASE/pre.json" "$R/scripts/lib/pinned-reusable-sources.json" && grep -q 'dependency records' "$CASE/err"; then ok 'still refuses an unresolved dependency reference to the old commit'; else bad 'dependency reference'; fi
+
+# Joint move: two sources at the same old commit moving to the same new commit.
+joint() { # sets up the fixture with a second active source (reuse2.yml) at $OLD2
+  fix "$1"
+  sed -i "s/@$OLD/@$OLD2/" "$R/.github/workflows/test.yml"
+  sed 's/test.yml/test2.yml/; s/gate:/gate2:/; s#reuse.yml#reuse2.yml#' "$R/.github/workflows/test.yml" > "$R/.github/workflows/test2.yml"
+  sed -i "s#    '.github/workflows/test.yml':#&\n    '.github/workflows/test2.yml':#" "$R/.github/workflows/actions.lock"
+  jq --arg o "$OLD2" '.sources[0].commit=$o | .sources += [(.sources[0] | .path=".github/workflows/reuse2.yml" | .callers=[{workflow:".github/workflows/test2.yml",job:"gate2"}])]' \
+    "$BASE/repo/scripts/lib/pinned-reusable-sources.json" > "$R/scripts/lib/pinned-reusable-sources.json"
+  printf '# SPDX-License-Identifier: MPL-2.0\n# Reviewed source: org/reusable/.github/workflows/reuse.yml@%s\n# Reviewed source: org/reusable/.github/workflows/reuse2.yml@%s\norg/reusable\t%s\t%s\n' "$OLD2" "$OLD2" "$OLD2" "$CHILD_KEY" > "$R/scripts/lib/lock-closure-receipts.tsv"
+  cp -a "$R/scripts/lib" "$CASE/lib0"
+}
+joint joint-move; sed -i "s/@$OLD2/@$SAME2/" "$R/.github/workflows/test.yml" "$R/.github/workflows/test2.yml"; run
+if [[ $rc == 0 ]] && jq -e --arg s "$SAME2" '[.sources[].commit]|all(.==$s)' "$R/scripts/lib/pinned-reusable-sources.json" >/dev/null &&
+   ! grep -q "$OLD2" "$R/scripts/lib/lock-closure-receipts.tsv" && [[ "$(grep -c "^org/reusable	$SAME2	" "$R/scripts/lib/lock-closure-receipts.tsv")" == 1 ]] &&
+   grep -q "reuse2.yml@$SAME2" "$R/scripts/lib/lock-closure-receipts.tsv"; then ok 'two sources moving from one commit to the same new commit are re-attested together'; else bad 'joint move'; fi
+
+joint joint-stationary; sed -i "s/@$OLD2/@$SAME2/" "$R/.github/workflows/test.yml"; run
+if [[ $rc == 1 ]] && diff -r "$CASE/lib0" "$R/scripts/lib" >/dev/null && grep -q 'is shared with' "$CASE/err"; then ok 'refuses when one of two sharing sources stays at the old commit'; else bad 'stationary sharer'; fi
+
+joint joint-conflict; sed -i "s/@$OLD2/@$SAME2/" "$R/.github/workflows/test.yml"; sed -i "s/@$OLD2/@$CHANGED/" "$R/.github/workflows/test2.yml"; run
+if [[ $rc == 1 ]] && diff -r "$CASE/lib0" "$R/scripts/lib" >/dev/null && grep -q 'different commits' "$CASE/err"; then ok 'refuses sources of one commit moving to different commits'; else bad 'conflicting targets'; fi
+
+# Rollback: the manifest write succeeds, the receipts write fails; both files must end as they began.
+fix rollback; bump "$SAME"; cp -a "$R/scripts/lib" "$CASE/lib0"
+mkdir "$CASE/fakebin"
+printf '#!/usr/bin/env bash\ncase "${1:-}" in */post-pin-bump.*/receipts.tsv) exit 1 ;; esac\nexec /bin/cat "$@"\n' > "$CASE/fakebin/cat"; chmod +x "$CASE/fakebin/cat"
+rc=0; (cd "$R" && PATH="$CASE/fakebin:$PATH" timeout 30s bash scripts/post-pin-bump.sh --repo-root "$R" --cache "$CASE/cache" > "$CASE/out" 2> "$CASE/err") || rc=$?
+if [[ $rc == 1 && ! -s "$CASE/out" ]] && diff -r "$CASE/lib0" "$R/scripts/lib" >/dev/null && grep -q 'could not write' "$CASE/err"; then ok 'a failed receipts write restores both files'; else bad 'rollback on write failure'; fi
 
 fix allow-list; bump "$SAME"; printf 'scripts/lib/pinned-reusable-sources.json\n' > "$R/.github/post-pin-bump.paths"; run
 if [[ $rc == 1 ]] && unchanged; then ok 'refuses to change a path outside the allow-list'; else bad 'allow-list'; fi
