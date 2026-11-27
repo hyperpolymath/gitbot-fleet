@@ -102,6 +102,21 @@ while IFS=$'\t' read -r _ idx old new; do
   jq -r --argjson i "$idx" --arg old "$old" --arg new "$new" \
     '[(.sources[$i].repository|ascii_downcase), $old, $new, ($i|tostring)] | @tsv' "$TMP/manifest.json" >> "$TMP/members.tsv"
 done < <(grep '^BUMP' "$TMP/plan.tsv")
+# Chained or overlapping moves (A->B with B->C, or a swap) make the result depend on
+# the order the rewrites run in; refuse them before any rewrite, whatever the order.
+chained="$(awk -F'\t' '{ old[$1 FS $2] = 1; nw[$1 FS $3] = 1 } END { for (k in nw) if (k in old) { split(k, a, FS); print a[1] } }' "$TMP/members.tsv" | LC_ALL=C sort -u | tr '\n' ' ')"
+[[ -z "$chained" ]] || refuse "chained or overlapping pin moves for ${chained% }; review by hand"
+# A lock record still resolving to repo@old would lose its receipt rows when they move
+# to the new commit (the full audit reports CLOSURE-NO-RECEIPT), so it must be bumped
+# too: refuse rather than leave the lock pointing at a commit without receipts.
+bash "$SCRIPT_DIR/audit-lock-closure.sh" --dump-lock-records --lock "$ROOT/.github/workflows/actions.lock" \
+  --workflows "$ROOT/.github/workflows" --repo-root "$ROOT" --receipts "$RECEIPTS" --baseline /dev/null > "$TMP/lockrecs.json" 2> "$TMP/lockrecs.err" ||
+  refuse "lock records unreadable: $(tr '\n' ' ' < "$TMP/lockrecs.err" | cut -c1-300)"
+while IFS=$'\t' read -r repo old; do
+  if jq -e --arg k "$repo@$old" '[(keys[], (.[] | .uses[]?)) | ascii_downcase | select(. == $k)] | length > 0' "$TMP/lockrecs.json" >/dev/null; then
+    refuse "actions.lock still resolves $repo@$old; bump the lock record too, or review by hand"
+  fi
+done < <(cut -f1,2 "$TMP/members.tsv" | LC_ALL=C sort -u)
 while IFS=$'\t' read -r repo old; do
   targets="$(awk -F'\t' -v r="$repo" -v o="$old" '$1==r && $2==o {print $3}' "$TMP/members.tsv" | LC_ALL=C sort -u)"
   [[ "$(printf '%s\n' "$targets" | wc -l)" -eq 1 ]] ||
@@ -111,7 +126,7 @@ while IFS=$'\t' read -r repo old; do
   # Receipt rows and the comment cover every source of repo@old: a commit shared
   # with a source outside this bump plan cannot be re-pointed by guessing.
   shared="$(jq -r --arg r "$repo" --arg c "$old" --argjson ids "[$idxs]" \
-    '[.sources|to_entries[]|select((.key as $k | $ids|index($k)|not) and (.value.repository|ascii_downcase)==$r and .value.commit==$c)]|length' "$TMP/manifest.json")"
+    '[.sources|to_entries[]|select((.key as $k | $ids|index($k)|not) and (.value.repository|ascii_downcase)==$r and .value.commit==$c)]|length' "$MANIFEST")"
   [[ "$shared" -eq 0 ]] || refuse "$repo@$old is shared with $shared other source(s) that did not move; review by hand"
   # Re-point each member's commit and its recognised provenance fields (source_url,
   # local_file), by literal split/join. Any other mention of $old is refused below.

@@ -220,6 +220,35 @@ jq --arg o "$OLD" '.sources[0].review_note={($o):"x"}' "$R/scripts/lib/pinned-re
 cp "$CASE/m.json" "$R/scripts/lib/pinned-reusable-sources.json"; cp "$R/scripts/lib/pinned-reusable-sources.json" "$CASE/pre.json"; cp "$R/scripts/lib/lock-closure-receipts.tsv" "$CASE/pre.tsv"; run
 if [[ $rc == 1 ]] && gunchanged && grep -q 'manifest still names' "$CASE/err"; then ok 'refuses an old commit that survives only as an object key'; else bad 'key-only old-commit reference'; fi
 
+# Chained plans: A->B with B->C refuses identically whichever order the sources are listed in.
+fixc() { # NAME REVERSE: reuse.yml at OLD2 moving to SAME2, reuse2.yml at SAME2 moving to THIRD2
+  fix "$1"
+  cat > "$R/.github/workflows/test.yml" <<YAML
+name: Test
+on: push
+jobs:
+  gate:
+    uses: org/reusable/.github/workflows/reuse.yml@$SAME2
+  gate2:
+    uses: org/reusable/.github/workflows/reuse2.yml@$SAME3
+YAML
+  jq --arg a "$OLD2" --arg b "$SAME2" --argjson rev "$2" '
+    .sources[0] as $s | .sources = [ ($s | .commit=$a), ($s | .commit=$b | .path=".github/workflows/reuse2.yml" | .callers=[{workflow:".github/workflows/test.yml",job:"gate2"}]) ]
+    | if $rev then .sources |= reverse else . end' "$R/scripts/lib/pinned-reusable-sources.json" > "$CASE/c.json"
+  cp "$CASE/c.json" "$R/scripts/lib/pinned-reusable-sources.json"
+  cp "$R/scripts/lib/pinned-reusable-sources.json" "$CASE/pre.json"; cp "$R/scripts/lib/lock-closure-receipts.tsv" "$CASE/pre.tsv"
+}
+for rev in false true; do
+  fixc "chain-$rev" "$rev"; run
+  if [[ $rc == 1 && ! -s "$CASE/out" ]] && gunchanged && grep -q 'chained or overlapping pin moves for org/reusable' "$CASE/err"; then ok "refuses chained moves A->B, B->C (sources reversed: $rev); files unchanged"; else bad "chained moves (reversed: $rev)"; fi
+done
+
+# An actions.lock record still resolving to repo@old would lose its receipt: refused.
+fix lock-still-old; bump "$SAME"
+printf "    'org/reusable@%s':\n        ref: 'v1'\n        commit: 'sha1-%s'\n" "$OLD" "$OLD" >> "$R/.github/workflows/actions.lock"
+cp "$R/scripts/lib/pinned-reusable-sources.json" "$CASE/pre.json"; cp "$R/scripts/lib/lock-closure-receipts.tsv" "$CASE/pre.tsv"; run
+if [[ $rc == 1 && ! -s "$CASE/out" ]] && gunchanged && grep -q 'actions.lock still resolves org/reusable@' "$CASE/err"; then ok 'refuses when a lock record still resolves the old commit; files unchanged'; else bad 'lock record at the old commit'; fi
+
 # Mutant: if the hook skipped both audits it would accept the changed blob.
 fix mutant; bump "$CHANGED"; sed -i 's/^if ! bash "\$AUDIT" "\${audit_args\[@\]}".*/if false; then/' "$R/scripts/post-pin-bump.sh"; run
 if [[ $rc == 0 ]] && ! unchanged; then ok 'mutant (both audits disabled) accepts a changed blob, so the audit is what refuses'; else bad 'mutant did not demonstrate the audit is load-bearing'; fi
