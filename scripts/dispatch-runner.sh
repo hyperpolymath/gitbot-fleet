@@ -179,10 +179,12 @@ echo "  Dry run:   $DRY_RUN"
 echo ""
 
 # --- Outcome recording ---
-# Write outcomes to hypatia's local store (primary) and central store (backup)
-OUTCOME_FILE="${HYPATIA_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
-OUTCOME_FILE_CENTRAL="${VERISIMDB_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
-mkdir -p "$(dirname "$OUTCOME_FILE")"
+# The configured fleet importer owns admission. Raw transport rows never go
+# into Hypatia's canonical outcomes ledger. The fleet feed is committed first;
+# monthly transport mirrors preserve its exact bytes, outside that ledger.
+OUTCOME_FILE="${FLEET_ROOT}/shared-context/learning/fix-outcomes.jsonl"
+OUTCOME_FILE_LOCAL="${HYPATIA_DATA}/dispatch/fleet-outcomes/$(date -u +%Y-%m).jsonl"
+OUTCOME_FILE_CENTRAL="${VERISIMDB_DATA}/dispatch/fleet-outcomes/$(date -u +%Y-%m).jsonl"
 # E0 receipt design, section 5.2: starts are separate from every outcome log.
 ATTEMPT_FILE="${FLEET_ROOT}/shared-context/learning/fix-attempts.jsonl"
 
@@ -198,27 +200,27 @@ RESCAN_REPOS_FILE="$(mktemp /tmp/dispatch-rescan-repos.XXXXXX)"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/outcome-verdict.sh"
 
 # Parallel jobs on one repo take a per-repo lock around check/fix/check
-# (repo_lock), so --parallel needs flock. Refuse rather than run unlocked.
-if [[ "$PARALLEL" -gt 1 ]] && ! command -v flock &>/dev/null; then
-    echo "ERROR: --parallel $PARALLEL needs flock (util-linux) to serialise fixes per repo" >&2
+# (repo_lock), and every outcome append holds the feed lock, so flock is
+# needed for any run. Refuse before an attempt rather than after a fix.
+if ! command -v flock &>/dev/null; then
+    echo "ERROR: dispatch needs flock (util-linux) to serialise fixes and outcome appends" >&2
     exit 1
 fi
 
 # --- Hypatia closed-loop contract ---
 #
-# Per hypatia/docs/operations/dispatch-runner-contract.adoc, after each
-# fix the runner MUST invoke `mix hypatia.record_outcome` so Bayesian
-# confidence updating, auto-quarantine, and re-scan verification all see
-# real evidence. Without this call, every recipe stays at
-# :insufficient_data and the closed-loop verification metric (PR #309)
-# never engages. Closes estate-audit blocker C15.
+# Owner ruling: identified attempts enter learning only through the trusted
+# fleet feed. The importer owns any correlated rescan observation and admission;
+# a successful append here is delivery, not proof that either has happened.
+# The independent Mix recorder survives only for policy refusals, which are not
+# executed attempts. Mutable post-fix trees carry no snapshot binding in v1.
 #
 # Configuration via env:
 #   HYPATIA_HOME             path to the hypatia checkout (defaults to
 #                            $REPOS_BASE/hypatia)
-#   HYPATIA_OUTCOME_REPORT   set to "off" to disable outcome reports;
-#                            defaults to "on". Fix attempts still require
-#                            mix and HYPATIA_HOME to mint their event id.
+#   HYPATIA_OUTCOME_REPORT   set to "off" to disable legacy refusal callbacks;
+#                            defaults to "on". Canonical delivery is mandatory.
+#                            Fix attempts still need mix to mint their event id.
 #   HYPATIA_BATCH_ID         when set, exit-2 hints suggest
 #                            `mix hypatia.rollback_batch $HYPATIA_BATCH_ID`
 #
@@ -230,43 +232,10 @@ HYPATIA_HOME="${HYPATIA_HOME:-${REPOS_BASE}/hypatia}"
 HYPATIA_OUTCOME_REPORT="${HYPATIA_OUTCOME_REPORT:-on}"
 HYPATIA_BATCH_ID="${HYPATIA_BATCH_ID:-}"
 
-# Does this Hypatia know `--verdict`? Learned ONCE per run, from the help text of
-# the task and never from an exit code: a Hypatia from before E0-01 ignores an
-# option that it does not know, so a no_op call would be recorded as a success.
-#   verdict  Hypatia names --verdict: every verdict is passed to it, and no_op and
-#            unverified are recorded (they carry no credit).
-#   legacy   an older Hypatia: no --verdict, and no call for no_op or unverified
-#            (the behaviour before this check, exactly).
-#   off      no outcome calls (reporting off, no checkout, no mix).
-# A help command that fails is not an older Hypatia: the run stops, visibly.
-HYPATIA_VERDICT_MODE="off"
-hypatia_detect_verdict_mode() {
-    HYPATIA_VERDICT_MODE="off"
-    [[ "$HYPATIA_OUTCOME_REPORT" == "on" ]] || return 0
-    [[ -d "$HYPATIA_HOME" ]] || return 0
-    command -v mix &>/dev/null || return 0
-
-    local help_text rc=0
-    help_text=$(cd "$HYPATIA_HOME" && mix help hypatia.record_outcome 2>&1) || rc=$?
-    if [[ "$rc" -ne 0 ]]; then
-        HYPATIA_VERDICT_MODE="error"
-        echo "ERROR: 'mix help hypatia.record_outcome' failed (exit $rc) in $HYPATIA_HOME: Hypatia does not answer, and a Hypatia that does not answer is not an older Hypatia. Stopping." >&2
-        return 1
-    fi
-    if grep -q -- '--verdict' <<< "$help_text"; then
-        HYPATIA_VERDICT_MODE="verdict"
-    else
-        HYPATIA_VERDICT_MODE="legacy"
-    fi
-    echo "hypatia outcome mode: $HYPATIA_VERDICT_MODE"
-}
-
-hypatia_record_outcome() {
+hypatia_record_refusal() {
     local recipe_id="$1"
     local repo="$2"
     local file="$3"
-    local outcome="$4"
-    local verdict="${5:-}"
 
     # Opt-out short-circuit.
     if [[ "$HYPATIA_OUTCOME_REPORT" != "on" ]]; then
@@ -292,13 +261,6 @@ hypatia_record_outcome() {
     local file_arg="${file:-.}"
     [[ -z "$file_arg" ]] && file_arg="."
 
-    # The verdict goes along only when Hypatia knows the option, and only the
-    # 5 verdicts of the pair table (a refusal has none).
-    local verdict_args=()
-    if [[ "$HYPATIA_VERDICT_MODE" == "verdict" && -n "$verdict" ]]; then
-        verdict_args=(--verdict "$verdict")
-    fi
-
     local rc=0
     (
         cd "$HYPATIA_HOME"
@@ -306,8 +268,7 @@ hypatia_record_outcome() {
             --recipe   "$recipe_id" \
             --repo     "$repo" \
             --file     "$file_arg" \
-            --outcome  "$outcome" \
-            "${verdict_args[@]}"
+            --outcome  false_positive
     ) || rc=$?
 
     case "$rc" in
@@ -326,12 +287,87 @@ hypatia_record_outcome() {
     return "$rc"
 }
 
+# Physical paths, not environment variable names, separate source, starts and
+# learning ledgers. HYPATIA_DATA/VERISIMDB_DATA are transport roots, not a claim
+# about the consumer's actual store. An explicit consumer store is checked too;
+# otherwise pairing that process with this fleet root remains a deployment
+# prerequisite. Relative Hypatia settings resolve from its checkout.
+validate_outcome_paths() {
+    local path start_path resolved root ledger file configured_fleet
+    local paths=("$OUTCOME_FILE" "$OUTCOME_FILE_LOCAL" "$OUTCOME_FILE_CENTRAL")
+    local roots=("${HYPATIA_DATA:-}" "${VERISIMDB_DATA:-}")
+    start_path=$(realpath -m -- "$ATTEMPT_FILE") || return 1
+    if [[ -n "${HYPATIA_FLEET_PATH:-}" ]]; then
+        configured_fleet="$HYPATIA_FLEET_PATH"
+        [[ "$configured_fleet" == /* ]] || configured_fleet="$HYPATIA_HOME/$configured_fleet"
+        configured_fleet=$(realpath -m -- "$configured_fleet") || return 1
+        resolved=$(realpath -m -- "$FLEET_ROOT") || return 1
+        if [[ "$configured_fleet" != "$resolved" ]]; then
+            echo "ERROR: configured Hypatia fleet source differs from FLEET_ROOT" >&2
+            return 1
+        fi
+    fi
+    # The consumer resolves each repo_relative_path under its own repository
+    # root, while this runner emits it relative to REPOS_BASE. A different root
+    # would attach rescans to another checkout, so refuse before any attempt.
+    if [[ -n "${HYPATIA_REPOS_DIR:-}" ]]; then
+        local configured_repos
+        configured_repos="$HYPATIA_REPOS_DIR"
+        [[ "$configured_repos" == /* ]] || configured_repos="$HYPATIA_HOME/$configured_repos"
+        configured_repos=$(realpath -m -- "$configured_repos") || return 1
+        resolved=$(realpath -m -- "$REPOS_BASE") || return 1
+        if [[ "$configured_repos" != "$resolved" ]]; then
+            echo "ERROR: configured Hypatia repository root differs from REPOS_BASE" >&2
+            return 1
+        fi
+    fi
+    # A checkout without LFS hydration holds a pointer, not JSONL; appending to
+    # it would hand the importer a malformed canonical feed.
+    if [[ -s "$OUTCOME_FILE" ]] && head -n 1 -- "$OUTCOME_FILE" | grep -q '^version https://git-lfs\.github\.com/spec/'; then
+        echo "ERROR: $OUTCOME_FILE is an unhydrated Git LFS pointer; hydrate it before dispatch" >&2
+        return 1
+    fi
+    if [[ -n "${HYPATIA_VERISIM_DATA_PATH:-}" ]]; then
+        root="$HYPATIA_VERISIM_DATA_PATH"
+        [[ "$root" == /* ]] || root="$HYPATIA_HOME/$root"
+        roots+=("$root")
+    fi
+    for path in "${paths[@]}"; do
+        resolved=$(realpath -m -- "$path") || return 1
+        if [[ "$resolved" == "$start_path" || "$path" -ef "$ATTEMPT_FILE" ]]; then
+            echo "ERROR: attempt start and outcome destination alias each other: $path" >&2
+            return 1
+        fi
+    done
+    for root in "${roots[@]}"; do
+        [[ -n "$root" ]] || continue
+        for ledger in "$root/outcomes" "$root/receipts"; do
+            ledger=$(realpath -m -- "$ledger") || return 1
+            for path in "$ATTEMPT_FILE" "${paths[@]}"; do
+                resolved=$(realpath -m -- "$path") || return 1
+                if [[ "$resolved" == "$ledger" || "$resolved" == "$ledger/"* ]]; then
+                    echo "ERROR: raw fleet evidence must not enter the canonical learning ledger: $path" >&2
+                    return 1
+                fi
+                # realpath cannot reveal a hardlink into an existing ledger.
+                for file in "$ledger/"*.jsonl; do
+                    if [[ "$path" -ef "$file" ]]; then
+                        echo "ERROR: raw fleet evidence aliases a canonical ledger row file: $path" >&2
+                        return 1
+                    fi
+                done
+            done
+        done
+    done
+}
+
 # begin_attempt <recipe_id> <repo> -> event_id, only after its start is appended.
 # event_id is ADR-008 version 8, profile T. E0-31 names Hypatia's existing Mix
 # task as the producer tool; there is no fallback generator. E0-08 section 5.2
 # fixes this six-field start schema and its separate append-only destination.
 begin_attempt() {
     local recipe_id="$1" repo="$2" generated event_id start_json rc=0
+    validate_outcome_paths || return 1
     if [[ ! -d "$HYPATIA_HOME" ]]; then
         echo "ERROR: event id unavailable: HYPATIA_HOME is not a directory: $HYPATIA_HOME" >&2
         return 1
@@ -365,7 +401,48 @@ begin_attempt() {
     printf '%s\n' "$event_id"
 }
 
-# record_outcome <pattern_id> <recipe_id> <repo> <file> <verdict> [exit before after event_id]
+# Appends one row to the canonical feed, then to each distinct mirror. The
+# caller holds the feed lock.
+append_outcome_rows() {
+    local json="$1" event_id="$2"
+    local path previous resolved duplicate
+    local written=("$OUTCOME_FILE")
+    if ! printf '%s\n' "$json" >> "$OUTCOME_FILE"; then
+        echo "ERROR: could not append outcome for event_id=$event_id to $OUTCOME_FILE" >&2
+        return 1
+    fi
+    # The feed is already committed. Transport mirrors are not another attempt.
+    # Coalesce textual, symlink and hardlink aliases, including aliases of the feed.
+    for path in "$OUTCOME_FILE_LOCAL" "$OUTCOME_FILE_CENTRAL"; do
+        resolved=$(realpath -m -- "$path") || return 1
+        duplicate=false
+        for previous in "${written[@]}"; do
+            if [[ "$resolved" == "$(realpath -m -- "$previous")" || "$path" -ef "$previous" ]]; then
+                duplicate=true
+                break
+            fi
+        done
+        [[ "$duplicate" == false ]] || continue
+        if ! mkdir -p "$(dirname "$path")" || ! printf '%s\n' "$json" >> "$path"; then
+            echo "ERROR: could not mirror outcome for event_id=$event_id to $path; canonical feed row is committed" >&2
+            return 1
+        fi
+        written+=("$path")
+    done
+}
+
+# Runs after a row is committed; the verdict and repo come from record_outcome.
+record_outcome_followup() {
+    # Only the trusted importer admits an identified attempt. No independent
+    # recorder and no no-ID fallback may create a second learning event.
+    # The existing repo-only rescan is a cache refresh, not correlated evidence.
+    case "$verdict" in
+        verified) echo "$repo" >> "$RESCAN_REPOS_FILE" ;;
+        refused_*) hypatia_record_refusal "$recipe_id" "$repo" "$file" || true ;;
+    esac
+}
+
+# record_outcome <pattern_id> <recipe_id> <repo> <file> <verdict> [exit before after event_id repo_relative_path]
 #
 # <verdict> is one of lib/outcome-verdict.sh's verdicts, or refused_* for a
 # policy refusal. `outcome` is kept for older readers and reports the exit
@@ -382,7 +459,28 @@ record_outcome() {
     # Execution attempts pass the id already committed by begin_attempt.
     # Policy refusals do not execute a fix and keep their existing row shape.
     local event_id="${9:-}"
+    local repo_relative_path="${10:-}"
     local bot="dispatch-runner"
+
+    case "$verdict" in
+        refused_*)
+            if [[ -n "$event_id" || -n "$repo_relative_path" ]]; then
+                echo "ERROR: a policy refusal is not an identified fix attempt" >&2
+                return 1
+            fi
+            ;;
+        verified|no_op|unverified|incomplete|failed)
+            if [[ ! "$event_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] ||
+                [[ -z "$repo_relative_path" || "$repo_relative_path" == /* ||
+                   "/$repo_relative_path/" == *'/../'* || "/$repo_relative_path/" == *'/./'* ||
+                   "/$repo_relative_path/" == *'//'* ]]; then
+                echo "ERROR: actual fix outcome requires an event id and normalized relative repo target" >&2
+                return 1
+            fi
+            ;;
+        *) echo "ERROR: unsupported fix outcome verdict: $verdict" >&2; return 1 ;;
+    esac
+    validate_outcome_paths || return 1
 
     local outcome
     case "$verdict" in
@@ -407,71 +505,35 @@ record_outcome() {
         --arg ts "$ts" \
         --arg bot "$bot" \
         --arg event_id "$event_id" \
+        --arg repo_relative_path "$repo_relative_path" \
         '{pattern_id: $pid, recipe_id: $rid, repo: $repo, file: $file, outcome: $outcome,
           verdict: $verdict,
           exit_code: (if $exit_code == "" then null else ($exit_code | tonumber) end),
           before_hits: (if $before == "NA" then null else ($before | tonumber) end),
           after_hits: (if $after == "NA" then null else ($after | tonumber) end),
           timestamp: $ts, bot: $bot}
-          + (if $event_id == "" then {} else {event_id: $event_id} end)'); then
+          + (if $event_id == "" then {} else
+              {event_id: $event_id, attempt_contract: "fleet-attempt/1", repo_relative_path: $repo_relative_path}
+             end)'); then
         echo "ERROR: could not encode outcome for $repo/$recipe_id event_id=$event_id" >&2
         return 1
     fi
 
-    if ! printf '%s\n' "$json" >> "$OUTCOME_FILE"; then
-        echo "ERROR: could not append outcome for event_id=$event_id to $OUTCOME_FILE" >&2
+    # One lock covers the feed append and both mirror appends, so parallel
+    # attempts cannot interleave them and leave the mirrors in another order
+    # than the canonical feed.
+    local lock_fd append_rc=0
+    if ! mkdir -p "$(dirname "$OUTCOME_FILE")" ||
+        ! exec {lock_fd}>>"$OUTCOME_FILE.lock" ||
+        ! flock -x "$lock_fd"; then
+        echo "ERROR: could not lock the outcome feed for event_id=$event_id" >&2
         return 1
     fi
-    # Avoid duplicate JSONL records when the two configured stores are the same.
-    local primary_path central_path
-    primary_path=$(realpath -m "$OUTCOME_FILE")
-    central_path=$(realpath -m "$OUTCOME_FILE_CENTRAL")
-    if [[ "$primary_path" != "$central_path" && ! "$OUTCOME_FILE" -ef "$OUTCOME_FILE_CENTRAL" ]]; then
-        if ! mkdir -p "$(dirname "$OUTCOME_FILE_CENTRAL")" || ! printf '%s\n' "$json" >> "$OUTCOME_FILE_CENTRAL"; then
-            echo "ERROR: could not mirror outcome for event_id=$event_id to $OUTCOME_FILE_CENTRAL; primary row is committed" >&2
-            return 1
-        fi
-    fi
-
-    # Hypatia closed-loop contract — best-effort, never fails the dispatch
-    # loop. Map verdicts to the contract's outcome vocabulary:
-    #   verified            → success
-    #   failed / incomplete → failure (the fix ran but the work remains)
-    #   refused_*           → false_positive (the recipe is misfiring, not
-    #                         the code; surfaces this to auto-quarantine)
-    #   no_op / unverified  → with a Hypatia that knows --verdict: recorded, as
-    #                         success WITH the verdict, which Hypatia stores as
-    #                         an audit row with no credit (E0-01). With an older
-    #                         Hypatia: skipped, as before, because without the
-    #                         verdict it would be recorded as a success.
-    local hypatia_outcome verdict_arg=""
-    case "$verdict" in
-        verified)
-            hypatia_outcome="success"
-            verdict_arg="$verdict"
-            echo "$repo" >> "$RESCAN_REPOS_FILE"
-            ;;
-        failed|incomplete)
-            hypatia_outcome="failure"
-            verdict_arg="$verdict"
-            ;;
-        refused_license_policy|refused_*)
-            hypatia_outcome="false_positive"
-            ;;
-        no_op|unverified)
-            [[ "$HYPATIA_VERDICT_MODE" == "verdict" ]] || return 0
-            hypatia_outcome="success"
-            verdict_arg="$verdict"
-            ;;
-        *)
-            return 0
-            ;;
-    esac
-    hypatia_record_outcome "$recipe_id" "$repo" "$file" "$hypatia_outcome" "$verdict_arg" || true
+    append_outcome_rows "$json" "$event_id" || append_rc=$?
+    exec {lock_fd}>&-
+    [[ "$append_rc" -eq 0 ]] || return "$append_rc"
+    record_outcome_followup
 }
-
-# Learn once per run which of the 2 calls Hypatia takes. Stop if it does not answer.
-hypatia_detect_verdict_mode || exit 1
 
 # --- Execute a single manifest entry ---
 execute_entry() {
@@ -581,6 +643,22 @@ execute_entry() {
                 return
             fi
 
+            # Bind the locator to the actual target, including monorepo aliases
+            # and program_path. This is not a snapshot or evidence that a later
+            # rescan observes the fixer's post-execution repository state.
+            local repo_relative_path resolved_base
+            if ! resolved_base=$(realpath -e -- "$REPOS_BASE") ||
+                ! repo_path=$(realpath -e -- "$repo_path"); then
+                mark_dispatch_error
+                return 1
+            fi
+            if [[ "$repo_path" != "$resolved_base/"* ]]; then
+                echo "ERROR: resolved fix target must be a repository inside REPOS_BASE" >&2
+                mark_dispatch_error
+                return 1
+            fi
+            repo_relative_path="${repo_path#"$resolved_base"/}"
+
             # Resolve fix_script from registry if not set in manifest
             if [[ "$fix_script" == "none" || "$fix_script" == "null" ]]; then
                 local registry="$FLEET_SCRIPTS/fix-script-registry.json"
@@ -625,7 +703,7 @@ execute_entry() {
                 if [[ "$PARALLEL" -gt 1 ]]; then repo_unlock; fi
                 verdict=$(outcome_verdict "$rc" "$before" "$after")
                 echo "        $verdict (exit $rc, targets $before -> $after)"
-                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" "$before" "$after" "$event_id" || {
+                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" "$before" "$after" "$event_id" "$repo_relative_path" || {
                     rm -f "$tmp_finding"
                     count EXECUTED
                     mark_dispatch_error
@@ -655,7 +733,7 @@ execute_entry() {
                 local verdict
                 verdict=$(outcome_verdict "$rc" NA NA)
                 echo "        $verdict (exit $rc)"
-                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" NA NA "$event_id" || {
+                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" NA NA "$event_id" "$repo_relative_path" || {
                     count EXECUTED
                     mark_dispatch_error
                     return 1

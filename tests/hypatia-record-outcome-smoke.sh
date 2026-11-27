@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MPL-2.0
 #
-# Smoke test for hypatia_record_outcome() in scripts/dispatch-runner.sh.
+# Smoke test for the refusal-only hypatia_record_refusal() callback.
 #
 # Covers the no-op short-circuit paths that don't require an actual
 # hypatia checkout or `mix` on PATH:
@@ -102,14 +102,14 @@ assert_warn_ok() {
 # Case 1: opt-out.
 HYPATIA_OUTCOME_REPORT=off \
     assert_silent_ok "opt-out silently no-ops" \
-    hypatia_record_outcome "rid-1" "owner/repo" "src/file.py" "success"
+    hypatia_record_refusal "rid-1" "owner/repo" "src/file.py"
 
 # Case 2: HYPATIA_HOME not a directory.
 HYPATIA_OUTCOME_REPORT=on \
 HYPATIA_HOME="$TMP/does-not-exist" \
     assert_warn_ok "missing HYPATIA_HOME warns and no-ops" \
     "not a directory" \
-    hypatia_record_outcome "rid-2" "owner/repo" "src/file.py" "success"
+    hypatia_record_refusal "rid-2" "owner/repo" "src/file.py"
 
 # Cases 3a-c need HYPATIA_HOME to exist so the recipe-id guard fires
 # rather than the missing-dir guard.
@@ -119,19 +119,19 @@ mkdir -p "$TMP/repos/hypatia"
 HYPATIA_OUTCOME_REPORT=on \
 HYPATIA_HOME="$TMP/repos/hypatia" \
     assert_silent_ok "empty recipe_id silently no-ops" \
-    hypatia_record_outcome "" "owner/repo" "src/file.py" "success"
+    hypatia_record_refusal "" "owner/repo" "src/file.py"
 
 # Case 3b: "none" recipe_id.
 HYPATIA_OUTCOME_REPORT=on \
 HYPATIA_HOME="$TMP/repos/hypatia" \
     assert_silent_ok "'none' recipe_id silently no-ops" \
-    hypatia_record_outcome "none" "owner/repo" "src/file.py" "success"
+    hypatia_record_refusal "none" "owner/repo" "src/file.py"
 
 # Case 3c: "null" recipe_id.
 HYPATIA_OUTCOME_REPORT=on \
 HYPATIA_HOME="$TMP/repos/hypatia" \
     assert_silent_ok "'null' recipe_id silently no-ops" \
-    hypatia_record_outcome "null" "owner/repo" "src/file.py" "success"
+    hypatia_record_refusal "null" "owner/repo" "src/file.py"
 
 echo ""
 echo "Results: $pass passed, $fail failed"

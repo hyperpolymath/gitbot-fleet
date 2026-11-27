@@ -3,11 +3,14 @@
 :toc:
 :date: 2026-11-23
 
-Status: PROPOSED; no owner ruling is recorded here. The bounded NS-02 producer
-identity patch can be reviewed, but full E0-12 closure and automatic delivery
-remain unqualified. Production dispatch remains quarantined.
+Status: owner direction APPROVED on 2026-11-23. Jonathan approved the
+recommended single fleet admission and correlated-rescan direction. The
+original bounded producer patch and counterexample below remain historical
+evidence. The follow-on defines actual versioned delivery; complete E0-12,
+post-fix state attribution and production operation still require their
+acceptance evidence. Production dispatch remains quarantined.
 
-== Decision requested
+== Approved direction
 
 Adopt the existing trusted fleet importer as the sole admission path for a
 producer-identified attempt. Retain Hypatia's rescan as evidence about that
@@ -15,10 +18,30 @@ attempt, with explicit correlation and at most one effective contribution to
 learning per attempt. The current direct callback must cease creating an
 additional independent qualified attempt for the same dispatch.
 
-This is the recommended contract direction, not an implemented route change
-or a claim that the observation/revision schema already exists. It needs the
-owner's ruling because the existing May contract requires the direct recording
-call, while the E0 design introduces a distinct identity-preserving importer.
+The owner approved this contract direction after reviewing the counterexample
+and the conflict with the May mandatory recording call. The follow-on amends
+that contract explicitly. Approval is not a claim that route implementation,
+observation state binding or qualification revision machinery is complete.
+
+The bounded v1 uses `attempt_contract = "fleet-attempt/1"`, delivers directly
+to the configured fleet feed, and suppresses independent direct recording for
+identified attempts. The consumer stores its own versioned admission and
+correlated observation. Mutable post-fix state is not yet bound: a later clean
+or adverse scan is retained only as unbound audit evidence. Failed/incomplete
+attempts retain their existing qualification criteria. This limitation is
+required to avoid attributing a later repair's effects to an earlier attempt.
+
+The matching consumer must be deployed and configured before any producer
+activation. An older E0-11 reader ignores the new marker and can still credit
+a producer `verified` row under its historical interpretation. The version
+field alone cannot make that older reader refuse it. Quarantine remains the
+activation boundary.
+
+Pair the actual configured roots, not only the code versions: Hypatia's fleet
+root must resolve to the producer's `FLEET_ROOT`, and its `HYPATIA_REPOS_DIR`
+must identify the same repository root as `REPOS_BASE`. The real learning store
+must be named by `HYPATIA_VERISIM_DATA_PATH` where configured. A runner cannot
+prove the roots of another process whose configuration was not supplied.
 
 == Authorities and measured sources
 
@@ -41,11 +64,11 @@ The Hypatia sources below are pinned at
   default rescan behavior. Its later verdict table makes failed/incomplete
   calls qualified failures without a rescan.
 
-== S-01: Producer-to-learning admission
+== S-01: Historical producer-to-learning admission counterexample
 
 [cols="2,3,3",options="header"]
 |===
-|Path |Current behavior |Identity and qualification
+|Path |Behavior at the pinned baseline |Identity and qualification
 |Producer start
 |The NS-02 patch writes `shared-context/learning/fix-attempts.jsonl`.
 |One producer ID, before execution; no outcome or evidence credit.
@@ -114,11 +137,14 @@ an expected-bad passing test. A future exclusive-ingress design needs an
 acceptance test through its actual chosen flow; this artificial dual-call
 diagnostic is not a universal acceptance condition for every possible design.
 
-Reproduce both witnesses from a configured test Hypatia checkout:
+Reproduce both historical witnesses from the exact isolated revisions below.
+These commands do not test the approved v1 implementation:
 
 [source,shell]
 ----
-# Set these to the two isolated checkouts; do not use a live fleet store.
+# Fleet revision: 565f075cf204f25f5b648547b8d8ae46fe1977ff (#709).
+# Hypatia revision: d158aed87f76b93e4f291e995bef9f26559c7fb2.
+# Set these to those isolated checkouts; do not use a live fleet store.
 export FLEET_CHECKOUT=/absolute/gitbot-fleet
 export HYPATIA_CHECKOUT=/absolute/hypatia
 export DISPATCH_TEST_HYPATIA_HOME="$HYPATIA_CHECKOUT"
@@ -129,10 +155,31 @@ bash "$FLEET_CHECKOUT/scripts/tests/dispatch-paths.sh"
 cd "$HYPATIA_CHECKOUT"
 mix run --no-start "$FLEET_CHECKOUT/tests/hypatia-event-import-test.exs"
 mix run --no-start "$FLEET_CHECKOUT/tests/hypatia-route-counterexample.exs"
-# The final command currently exits 1 and reports the duplicate contribution.
+# The final command at those revisions exits 1 and reports the duplicate contribution.
 ----
 
-== Recommended ruling: one attempt admission, correlated rescan evidence
+The approved v1 pair has a separate actual-delivery witness. From the matching
+Hypatia consumer checkout, with Elixir 1.19.4 / OTP 27.3.4.19 and Nickel 1.11.0:
+
+[source,shell]
+----
+export MIX_ENV=test
+export NICKEL=/absolute/nickel
+mix run --no-start /absolute/gitbot-fleet/tests/hypatia-single-admission-test.exs
+----
+
+It uses the actual runner in a disposable fixture, the canonical Mix event-ID
+generator, a controlled fixer and scanner subprocess, and the configured feed.
+No copying step delivers an original source event. Its only injected duplicate
+is an explicit replay control after the original events have been admitted.
+This tests delivery, identity, evidence gating and receipt binding; it does not
+test the production scanner's effectiveness on real repairs.
+
+The existing fleet workflow jobs run shell contracts; they do not invoke this
+cross-repository witness or certify a deployed consumer pair. Their green
+status alone is insufficient evidence for activation.
+
+== Approved ruling: one attempt admission, correlated rescan evidence
 
 . Use the trusted E0-11 fleet import as the canonical admission path for
   producer-identified dispatch attempts. The source is append-only; primary
