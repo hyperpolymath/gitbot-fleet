@@ -122,6 +122,8 @@ htmlcov/
 
 # Machine-readable locks
 .machine_readable/.locks/
+# Serialises feed and mirror appends in dispatch-runner.sh.
+shared-context/learning/*.jsonl.lock
 
 
 # Temp
