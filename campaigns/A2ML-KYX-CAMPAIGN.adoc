@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= A2ML Retirement Campaign (kyX): 2026-11-17
+:toc:
+:toclevels: 2
+
+== Purpose
+
+The owner's directive of 2026-11-17: "make sure that a2ml is sorted and
+converted opportunistically and automatically when a bot sees it as a
+priority one task, I need to rid the estate of this".
+
+A2ML is retired (owner rulings D99, D269c, D312, D313). Two pieces carry the
+directive:
+
+* *Seeing it.* rhodibot reports every tracked `.a2ml` as a priority-1 finding:
+  `rhodibot.no-a2ml` (severity `retired`, `critical` on the verdict grid) in
+  `canon`, and `no-*.a2ml` (RSR-A2ML-001, Required in every policy pack) in the
+  GitHub App check. (Draft PR #690.)
+* *Sorting it.* `scripts/fix-a2ml-via-kyx.sh` (recipe `recipe-a2ml-kyx`,
+  category `RetiredA2ML`) converts what kyX can convert losslessly and fails
+  loudly, with a P1 issue body, on everything else. It never hand-converts.
+
+== Status
+
+*Nothing is dispatched.* The fleet dispatch is under quarantine
+(`docs/AUTOMATION-QUARANTINE.adoc`), and this change does not touch the
+interlock. There is no manifest, because a manifest needs an estate scan, and
+the quarantine document forbids a scan as a workaround. Running the campaign is
+the owner's decision; the options are below.
+
+== What kyX can do today (checked 2026-11-17)
+
+* `metadatastician/kyx` main `731e63a`: CI green, 39 acceptance checks, every
+  output checked with standards `deed_lint` at a pinned commit.
+* *One front end: `ECOSYSTEM.a2ml`.* Every other family is "not started"
+  (kyX README, Status). kyX refuses any field its spec does not list (the real
+  hypatia ECOSYSTEM is refused with 19 fields named), and refuses a repository
+  with no chora deed: it reads the id and never mints one (U1).
+* *No released artifact.* A consumer builds the AffineScript compiler at kyX's
+  pinned commit (OCaml) and then kyX. `metadatastician/kyx` is *private*, so a
+  fleet runner needs read access to it.
+
+Dogfood on this repository (`fix-a2ml-via-kyx.sh` on a scratch clone):
+*0 converted, 42 refused* across 13 families, because gitbot-fleet has no
+`gitbot-fleet_chora.deed` and only its 3 ECOSYSTEM files are kyX-routable at
+all. Expect the estate to look the same: until kyX grows front ends, almost
+every repository gets a P1 issue and very few get a PR.
+
+== The fixer's gates
+
+Every converted file passes all four, or nothing in the tree changes for it:
+
+. kyX exits 0 (fail-closed field accounting under the mapping spec).
+. kyX drops nothing. Spec §4 lets kyX drop empty values, comment lines and
+  `@directives`; by default any drop is a refusal ("not lossless").
+  `A2ML_ACCEPT_SPEC_DROPS=1` accepts spec-sanctioned drops and lists each in
+  the PR (an owner decision, see Q-LOSSLESS below).
+. The deed passes standards `deed_lint.js --ecosystem --root <repo>` (deed.abnf
+  plus ecosystem.abnf). A `.k9`/`.k9.ncl` output, when a future front end emits
+  one, must pass `k9-validate.sh --strict`.
+. The value census (`scripts/lib/a2ml-census.js`): every non-empty source value
+  appears in the deed (`deed_lint --ast-json`) at least as many times as in
+  the source, so a field collapsed into another is caught; independently of
+  kyX. It errs towards refusing.
+
+Bots open PRs, never push: the fixer stages the change and writes the PR and
+P1 issue bodies; it never commits, pushes or publishes. A refusal's issue body
+carries a fingerprint, so a caller can find an open issue for the same refusal
+instead of opening a second one.
+
+== Prerequisites (each blocks a real run)
+
+[cols="1,3,2"]
+|===
+| # | Prerequisite | Whose
+
+| P-1 | A kyX build a runner can fetch: a release asset `kyx.bun.js` with its SHA-256 and source commit (preferred), or a read token for the private repo. Building AffineScript on every run is minutes per repository. | owner / kyx
+| P-2 | The quarantine lifted for this recipe, by a reviewed change, with PR-only token scope (branches, PRs, issues; no default-branch push, which branch protection enforces independently). | owner
+| P-3 | A chora deed in each target repository (kyX never mints one). This repository has none. | per repo
+| P-4 | Issue labels `P1` and `a2ml` exist where issues are opened. | per repo
+|===
+
+== Rollout options (owner question Q-ROLLOUT)
+
+Rated, most elegant and correct first; the second number is dependable and
+secure/private.
+
+[cols="1,4,1,1"]
+|===
+| Option | What | Elegance | Safety
+
+| A. Repo-local opportunistic job (recommended)
+| `fix-fleet-enrolment.sh` adds an `a2ml` step to each repo's own fleet job:
+  when rhodibot's report-back carries `rhodibot.no-a2ml`, the job runs the
+  fixer in that repo's own CI and opens a draft PR or the P1 issue with the
+  repo's own `GITHUB_TOKEN`. No cross-repo credential, truly "when a bot sees
+  it", and enrolment is already per repo.
+| 5 | 4
+
+| B. Waved campaign manifest through `dispatch-runner`
+| A JSONL manifest built from the rhodibot findings the report-backs already
+  hold (no new scan), dispatched in waves: 3 pilot repos with an ECOSYSTEM.a2ml
+  and a chora deed, then 25, then all. Needs P-2 for the runner.
+| 4 | 4
+
+| C. Report only, owner converts
+| Keep rhodibot's P1 finding; the owner runs the fixer locally per repo. No
+  automation to qualify.
+| 2 | 5
+
+| D. kyX-side batch (alternative path)
+| kyX grows a `--repo` batch front end and its own CI opens the PRs; the fleet
+  only reports. Puts conversion and its proof in one place, but moves work to
+  kyX.
+| 4 | 3
+|===
+
+Whichever is chosen, issue volume is the cost to weigh: about 500 repositories
+and one front end today means hundreds of P1 issues. A variant of any option
+opens *one tracking issue per family in metadatastician/kyx* and a short P1
+issue per repository that links to it.
+
+== Owner questions
+
+* *Q-ROLLOUT:* A, B, C or D above, and whether to open per-repo P1 issues now
+  or wait for more kyX front ends.
+* *Q-LOSSLESS:* is a spec §4 drop (empty value, comment line, `@directive`) a
+  loss? Default: yes, refuse. Alternative: accept and list it in the PR.
+
+== Beyond this repository (to track)
+
+* kyX: a released `kyx.bun.js` (P-1); front ends for STATE, META, AGENTIC,
+  NEUROSYM, PLAYBOOK, CLADE and the manifest; mapping specs for ANCHOR,
+  rsr-profile, bot directives and the contractiles.
+* standards: the vendored `rsr-criteria-v2.a2ml` here is a pinned copy of the
+  live standards canon; it goes when standards converts the canon (A7, P2.5).
+* gitbot-fleet itself: a `gitbot-fleet_chora.deed` (P-3), then its own 42
+  `.a2ml` files are the pilot.
