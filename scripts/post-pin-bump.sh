@@ -136,9 +136,9 @@ while IFS=$'\t' read -r repo old; do
     # The only tolerated mention is prose in the header comment block.
     grep -F "$old" "$TMP/receipts.tsv" | grep -qv '^#' && refuse "receipts still name $old after the rewrite"
   fi
-  # Any other mention of the old commit in the manifest (e.g. dependency keys) is
+  # Any other mention of the old commit in the manifest, in a value or an object key (e.g. dependency keys), is
   # something this hook did not review.
-  if jq -e --arg c "$old" '[.. | strings | select(contains($c))] | length > 0' "$TMP/manifest.json" >/dev/null; then
+  if jq -e --arg c "$old" '[.. | (strings, (objects | keys[])) | select(contains($c))] | length > 0' "$TMP/manifest.json" >/dev/null; then
     refuse "manifest still names $old after the rewrite (dependency records); review by hand"
   fi
 done < <(cut -f1,2 "$TMP/members.tsv" | LC_ALL=C sort -u)

@@ -214,6 +214,12 @@ keep="$(sed -n 's/.*originals kept in \(.*\) (copy to a separate.*/\1/p' "$CASE/
 if [[ $rc == 1 && -n "$keep" && -d "$keep" ]] && cmp -s "$keep/manifest.orig" "$BASE/repo/scripts/lib/pinned-reusable-sources.json" && cmp -s "$keep/receipts.orig" "$BASE/repo/scripts/lib/lock-closure-receipts.tsv"; then
   ok 'restore and backup-dir creation both failing: originals survive in the named directory'; else bad 'originals lost when the backup copy fails'; fi
 
+# An old-commit mention that is only an object KEY (no string value names it) is refused too.
+fix key-only-ref; bump "$SAME"
+jq --arg o "$OLD" '.sources[0].review_note={($o):"x"}' "$R/scripts/lib/pinned-reusable-sources.json" > "$CASE/m.json"
+cp "$CASE/m.json" "$R/scripts/lib/pinned-reusable-sources.json"; cp "$R/scripts/lib/pinned-reusable-sources.json" "$CASE/pre.json"; cp "$R/scripts/lib/lock-closure-receipts.tsv" "$CASE/pre.tsv"; run
+if [[ $rc == 1 ]] && gunchanged && grep -q 'manifest still names' "$CASE/err"; then ok 'refuses an old commit that survives only as an object key'; else bad 'key-only old-commit reference'; fi
+
 # Mutant: if the hook skipped both audits it would accept the changed blob.
 fix mutant; bump "$CHANGED"; sed -i 's/^if ! bash "\$AUDIT" "\${audit_args\[@\]}".*/if false; then/' "$R/scripts/post-pin-bump.sh"; run
 if [[ $rc == 0 ]] && ! unchanged; then ok 'mutant (both audits disabled) accepts a changed blob, so the audit is what refuses'; else bad 'mutant did not demonstrate the audit is load-bearing'; fi
