@@ -90,42 +90,39 @@ jq -rn --slurpfile roots "$TMP/roots.json" --slurpfile m "$MANIFEST" '
 if grep -q '^ERR' "$TMP/plan.tsv"; then refuse "$(grep '^ERR' "$TMP/plan.tsv" | tr '\t' ' ' | tr '\n' ';')"; fi
 if [[ ! -s "$TMP/plan.tsv" ]]; then exit 0; fi
 
-# 3. Evaluate the WHOLE bump plan, grouped by repo@old. Sources that move from
-#    the same old commit to the same new commit are re-pointed together and their
-#    receipt rows rewritten once. Refused: a source still at that old commit that
-#    did not move (stationary sharer), sources of one old commit moving to
-#    different commits (conflicting targets), and a new commit that is another
-#    group's old commit (a chain).
-jq -rn --slurpfile m "$MANIFEST" --rawfile plan "$TMP/plan.tsv" '
-  $m[0].sources as $src |
-  [ $plan | split("\n")[] | select(startswith("BUMP\t")) | split("\t") |
-    {i:(.[1]|tonumber), old:.[2], new:.[3], repo:($src[.[1]|tonumber].repository|ascii_downcase)} ] as $rows |
-  ($rows | group_by([.repo, .old])[]) as $g | $g[0] as $f |
-  ($g | map(.new) | unique) as $news |
-  ([$src[] | select((.repository|ascii_downcase)==$f.repo and .commit==$f.old)] | length) as $all |
-  if ($news|length) != 1 then "ERR\t\($f.repo)@\($f.old) moves to \($news|length) different commits (\($news|join(","))); review by hand"
-  elif $all != ($g|length) then "ERR\t\($f.repo)@\($f.old) is shared with \($all - ($g|length)) other source(s) that did not move; review by hand"
-  elif any($rows[]; .repo==$f.repo and .old==$news[0]) then "ERR\t\($f.repo)@\($news[0]) is both a new and an old commit in this bump; review by hand"
-  else "GROUP\t\($f.repo)\t\($f.old)\t\($news[0])\t\($g|map(.i|tostring)|join(","))" end' > "$TMP/groups.tsv"
-if grep -q '^ERR' "$TMP/groups.tsv"; then refuse "$(grep '^ERR' "$TMP/groups.tsv" | cut -f2- | tr '\n' ';')"; fi
-
-# Rewrite into temporary copies, never into the tree.
+# 3. Rewrite into temporary copies, never into the tree.
 cp "$MANIFEST" "$TMP/manifest.json"
 cp "$RECEIPTS" "$TMP/receipts.tsv"
-while IFS=$'\t' read -r _ repo old new idxs; do
-  [[ "$idxs" =~ ^[0-9]+(,[0-9]+)*$ && "$old" =~ ^[0-9a-f]{40}$ && "$new" =~ ^[0-9a-f]{40}$ ]] || refuse 'malformed plan row'
-  # New commit, plus the provenance fields that name the old commit (source_url,
-  # local_file) refreshed by literal substitution. Any other mention is caught by
-  # the residual check below.
-  jq --argjson idx "[$idxs]" --arg old "$old" --arg new "$new" '
-    reduce $idx[] as $i (.; .sources[$i].commit = $new
-      | reduce ("source_url", "local_file") as $k (.;
-          if (.sources[$i][$k]|type) == "string" then .sources[$i][$k] |= (split($old) | join($new)) else . end))' \
+# Plan rows grouped by (repository, old commit): sources that share an old commit
+# and ALL move together to the same new commit are one group and are rewritten
+# once. A sharer that stays put, or members moving to different targets, is refused.
+: > "$TMP/members.tsv"
+while IFS=$'\t' read -r _ idx old new; do
+  [[ "$idx" =~ ^[0-9]+$ && "$old" =~ ^[0-9a-f]{40}$ && "$new" =~ ^[0-9a-f]{40}$ ]] || refuse 'malformed plan row'
+  jq -r --argjson i "$idx" --arg old "$old" --arg new "$new" \
+    '[(.sources[$i].repository|ascii_downcase), $old, $new, ($i|tostring)] | @tsv' "$TMP/manifest.json" >> "$TMP/members.tsv"
+done < <(grep '^BUMP' "$TMP/plan.tsv")
+while IFS=$'\t' read -r repo old; do
+  targets="$(awk -F'\t' -v r="$repo" -v o="$old" '$1==r && $2==o {print $3}' "$TMP/members.tsv" | LC_ALL=C sort -u)"
+  [[ "$(printf '%s\n' "$targets" | wc -l)" -eq 1 ]] ||
+    refuse "$repo@$old moves to conflicting commits ($(printf '%s' "$targets" | tr '\n' ' ')); review by hand"
+  new="$targets"
+  idxs="$(awk -F'\t' -v r="$repo" -v o="$old" '$1==r && $2==o {print $4}' "$TMP/members.tsv" | paste -sd, -)"
+  # Receipt rows and the comment cover every source of repo@old: a commit shared
+  # with a source outside this bump plan cannot be re-pointed by guessing.
+  shared="$(jq -r --arg r "$repo" --arg c "$old" --argjson ids "[$idxs]" \
+    '[.sources|to_entries[]|select((.key as $k | $ids|index($k)|not) and (.value.repository|ascii_downcase)==$r and .value.commit==$c)]|length' "$TMP/manifest.json")"
+  [[ "$shared" -eq 0 ]] || refuse "$repo@$old is shared with $shared other source(s) that did not move; review by hand"
+  # Re-point each member's commit and its recognised provenance fields (source_url,
+  # local_file), by literal split/join. Any other mention of $old is refused below.
+  jq --argjson ids "[$idxs]" --arg old "$old" --arg new "$new" '
+    def swap: if type=="string" then split($old)|join($new) else . end;
+    reduce $ids[] as $i (.; .sources[$i] |= (.commit=$new | (if has("source_url") then .source_url|=swap else . end) | (if has("local_file") then .local_file|=swap else . end)))' \
     "$TMP/manifest.json" > "$TMP/manifest.next"
   mv "$TMP/manifest.next" "$TMP/manifest.json"
   # Receipts: rows "repo<TAB>old<TAB>..." and "# Reviewed source: ...repo/...@old" lines,
-  # literal matching only (no regex on data). Once per repo@old group.
-  awk -F'\t' -v OFS='\t' -v repo="$repo" -v old="$old" -v new="$new" '
+  # literal matching only (no regex on data).
+  awk -F'\t' -v OFS='\t' -v repo="${repo,,}" -v old="$old" -v new="$new" '
     BEGIN { tag = "# Reviewed source: " }
     substr($0, 1, length(tag)) == tag {
       i = index(tolower($0), repo "/")
@@ -140,11 +137,11 @@ while IFS=$'\t' read -r _ repo old new idxs; do
     grep -F "$old" "$TMP/receipts.tsv" | grep -qv '^#' && refuse "receipts still name $old after the rewrite"
   fi
   # Any other mention of the old commit in the manifest (e.g. dependency keys) is
-  # an unresolved reference this hook did not review.
+  # something this hook did not review.
   if jq -e --arg c "$old" '[.. | strings | select(contains($c))] | length > 0' "$TMP/manifest.json" >/dev/null; then
     refuse "manifest still names $old after the rewrite (dependency records); review by hand"
   fi
-done < <(grep '^GROUP' "$TMP/groups.tsv")
+done < <(cut -f1,2 "$TMP/members.tsv" | LC_ALL=C sort -u)
 
 # 4. The audit is the authority: with the rewritten copies it must find, at the
 #    NEW commit, the same blob (a fetched blob mismatch is a FATAL finding) and
@@ -172,18 +169,18 @@ while IFS= read -r p; do
   grep -qxF -- "$p" "$ALLOW" || refuse "$p is not in .github/post-pin-bump.paths"
 done < "$TMP/changed"
 
-# 7. Install and self-audit the real tree. Any failure from the first write
-#    onward (a write error, the audit, a signal) restores BOTH originals before
-#    cleanup; the new pair is kept only once the self-audit has passed.
+# 7. Install, self-audit the real tree. Any failure (a write that stops half way, or
+#    a failed self-audit) restores BOTH files, so the pair never describes different commits.
 cp -p "$MANIFEST" "$TMP/manifest.orig"; cp -p "$RECEIPTS" "$TMP/receipts.orig"
-restore_originals() { cat "$TMP/manifest.orig" > "$MANIFEST" && cat "$TMP/receipts.orig" > "$RECEIPTS"; }
-INSTALLING=1
-trap 'if [[ "${INSTALLING:-0}" -eq 1 ]]; then restore_originals || printf "post-pin-bump: FAILED to restore originals; git checkout %s %s\n" "$MANIFEST_REL" "$RECEIPTS_REL" >&2; fi; rm -rf "$TMP"' EXIT
+restore() {
+  if cat "$TMP/manifest.orig" > "$MANIFEST" && cat "$TMP/receipts.orig" > "$RECEIPTS"; then return 0; fi
+  refuse 'cannot restore the closure files after a failed install; restore them from git'
+}
 if ! { cat "$TMP/manifest.json" > "$MANIFEST" && cat "$TMP/receipts.tsv" > "$RECEIPTS"; }; then
-  refuse 'could not write the rewritten files (originals restored)'
+  restore; refuse 'writing the closure files failed (files restored)'
 fi
 if ! bash "$AUDIT" "${audit_args[@]}" > "$TMP/final.out" 2>&1; then
+  restore
   refuse "self-audit failed after the rewrite (files restored): $(tr '\n' ' ' < "$TMP/final.out" | cut -c1-600)"
 fi
-INSTALLING=0
 while IFS= read -r p; do printf '%s\0' "$p"; done < "$TMP/changed"
