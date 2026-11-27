@@ -93,16 +93,32 @@ if [[ ! -s "$TMP/plan.tsv" ]]; then exit 0; fi
 # 3. Rewrite into temporary copies, never into the tree.
 cp "$MANIFEST" "$TMP/manifest.json"
 cp "$RECEIPTS" "$TMP/receipts.tsv"
+# Plan rows grouped by (repository, old commit): sources that share an old commit
+# and ALL move together to the same new commit are one group and are rewritten
+# once. A sharer that stays put, or members moving to different targets, is refused.
+: > "$TMP/members.tsv"
 while IFS=$'\t' read -r _ idx old new; do
   [[ "$idx" =~ ^[0-9]+$ && "$old" =~ ^[0-9a-f]{40}$ && "$new" =~ ^[0-9a-f]{40}$ ]] || refuse 'malformed plan row'
-  repo="$(jq -r --argjson i "$idx" '.sources[$i].repository' "$TMP/manifest.json")"
-  path="$(jq -r --argjson i "$idx" '.sources[$i].path' "$TMP/manifest.json")"
+  jq -r --argjson i "$idx" --arg old "$old" --arg new "$new" \
+    '[(.sources[$i].repository|ascii_downcase), $old, $new, ($i|tostring)] | @tsv' "$TMP/manifest.json" >> "$TMP/members.tsv"
+done < <(grep '^BUMP' "$TMP/plan.tsv")
+while IFS=$'\t' read -r repo old; do
+  targets="$(awk -F'\t' -v r="$repo" -v o="$old" '$1==r && $2==o {print $3}' "$TMP/members.tsv" | LC_ALL=C sort -u)"
+  [[ "$(printf '%s\n' "$targets" | wc -l)" -eq 1 ]] ||
+    refuse "$repo@$old moves to conflicting commits ($(printf '%s' "$targets" | tr '\n' ' ')); review by hand"
+  new="$targets"
+  idxs="$(awk -F'\t' -v r="$repo" -v o="$old" '$1==r && $2==o {print $4}' "$TMP/members.tsv" | paste -sd, -)"
   # Receipt rows and the comment cover every source of repo@old: a commit shared
-  # with a source that did not move cannot be re-pointed by guessing.
-  shared="$(jq -r --arg r "$repo" --arg c "$old" --argjson i "$idx" \
-    '[.sources|to_entries[]|select(.key!=$i and (.value.repository|ascii_downcase)==($r|ascii_downcase) and .value.commit==$c)]|length' "$TMP/manifest.json")"
+  # with a source outside this bump plan cannot be re-pointed by guessing.
+  shared="$(jq -r --arg r "$repo" --arg c "$old" --argjson ids "[$idxs]" \
+    '[.sources|to_entries[]|select((.key as $k | $ids|index($k)|not) and (.value.repository|ascii_downcase)==$r and .value.commit==$c)]|length' "$TMP/manifest.json")"
   [[ "$shared" -eq 0 ]] || refuse "$repo@$old is shared with $shared other source(s) that did not move; review by hand"
-  jq --argjson i "$idx" --arg new "$new" '.sources[$i].commit=$new' "$TMP/manifest.json" > "$TMP/manifest.next"
+  # Re-point each member's commit and its recognised provenance fields (source_url,
+  # local_file), by literal split/join. Any other mention of $old is refused below.
+  jq --argjson ids "[$idxs]" --arg old "$old" --arg new "$new" '
+    def swap: if type=="string" then split($old)|join($new) else . end;
+    reduce $ids[] as $i (.; .sources[$i] |= (.commit=$new | (if has("source_url") then .source_url|=swap else . end) | (if has("local_file") then .local_file|=swap else . end)))' \
+    "$TMP/manifest.json" > "$TMP/manifest.next"
   mv "$TMP/manifest.next" "$TMP/manifest.json"
   # Receipts: rows "repo<TAB>old<TAB>..." and "# Reviewed source: ...repo/...@old" lines,
   # literal matching only (no regex on data).
@@ -125,7 +141,7 @@ while IFS=$'\t' read -r _ idx old new; do
   if jq -e --arg c "$old" '[.. | strings | select(contains($c))] | length > 0' "$TMP/manifest.json" >/dev/null; then
     refuse "manifest still names $old after the rewrite (dependency records); review by hand"
   fi
-done < <(grep '^BUMP' "$TMP/plan.tsv")
+done < <(cut -f1,2 "$TMP/members.tsv" | LC_ALL=C sort -u)
 
 # 4. The audit is the authority: with the rewritten copies it must find, at the
 #    NEW commit, the same blob (a fetched blob mismatch is a FATAL finding) and
@@ -153,11 +169,18 @@ while IFS= read -r p; do
   grep -qxF -- "$p" "$ALLOW" || refuse "$p is not in .github/post-pin-bump.paths"
 done < "$TMP/changed"
 
-# 7. Install, self-audit the real tree, restore on failure.
+# 7. Install, self-audit the real tree. Any failure (a write that stops half way, or
+#    a failed self-audit) restores BOTH files, so the pair never describes different commits.
 cp -p "$MANIFEST" "$TMP/manifest.orig"; cp -p "$RECEIPTS" "$TMP/receipts.orig"
-cat "$TMP/manifest.json" > "$MANIFEST"; cat "$TMP/receipts.tsv" > "$RECEIPTS"
+restore() {
+  if cat "$TMP/manifest.orig" > "$MANIFEST" && cat "$TMP/receipts.orig" > "$RECEIPTS"; then return 0; fi
+  refuse 'cannot restore the closure files after a failed install; restore them from git'
+}
+if ! { cat "$TMP/manifest.json" > "$MANIFEST" && cat "$TMP/receipts.tsv" > "$RECEIPTS"; }; then
+  restore; refuse 'writing the closure files failed (files restored)'
+fi
 if ! bash "$AUDIT" "${audit_args[@]}" > "$TMP/final.out" 2>&1; then
-  cat "$TMP/manifest.orig" > "$MANIFEST"; cat "$TMP/receipts.orig" > "$RECEIPTS"
+  restore
   refuse "self-audit failed after the rewrite (files restored): $(tr '\n' ' ' < "$TMP/final.out" | cut -c1-600)"
 fi
 while IFS= read -r p; do printf '%s\0' "$p"; done < "$TMP/changed"
