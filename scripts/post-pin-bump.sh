@@ -178,10 +178,13 @@ restore() {
   cat "$TMP/manifest.orig" > "$MANIFEST" || failed=1
   cat "$TMP/receipts.orig" > "$RECEIPTS" || failed=1
   [[ "$failed" -eq 1 ]] || return 0
-  # $TMP is deleted on exit, so keep the originals somewhere that survives it.
-  keep="$(mktemp -d "${TMPDIR:-/tmp}/post-pin-bump-backup.XXXXXX")" &&
-    cp -p "$TMP/manifest.orig" "$TMP/receipts.orig" "$keep/" || keep='(copying the backups failed)'
-  refuse "cannot restore the closure files after a failed install; originals kept in $keep (restore from there or from git)"
+  # $TMP is deleted on exit, so keep the originals somewhere that survives it. If
+  # that copy fails too, disarm the deletion and leave them in $TMP itself.
+  if keep="$(mktemp -d "${TMPDIR:-/tmp}/post-pin-bump-backup.XXXXXX")" && cp -p "$TMP/manifest.orig" "$TMP/receipts.orig" "$keep/"; then
+    refuse "cannot restore the closure files after a failed install; originals kept in $keep (restore from there or from git)"
+  fi
+  trap - EXIT
+  refuse "cannot restore the closure files after a failed install; originals kept in $TMP (copy to a separate backup dir failed; restore from there or from git)"
 }
 if ! { cat "$TMP/manifest.json" > "$MANIFEST" && cat "$TMP/receipts.tsv" > "$RECEIPTS"; }; then
   restore; refuse 'writing the closure files failed (files restored)'

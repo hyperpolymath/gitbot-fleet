@@ -201,6 +201,19 @@ if [[ $rc == 1 ]] && grep -q 'receipts.orig' "$CASE/shim.log" && [[ -n "$keep" &
    cmp -s "$keep/manifest.orig" "$BASE/repo/scripts/lib/pinned-reusable-sources.json" && cmp -s "$keep/receipts.orig" "$BASE/repo/scripts/lib/lock-closure-receipts.tsv"; then
   ok 'a failed manifest restore still attempts the receipts restore and keeps the originals'; else bad 'restore failure handling'; fi
 
+# Review 3c: both restores fail AND the backup directory cannot be made: the originals
+# must still survive, in $TMP (whose deletion is disarmed), and the refusal must name it.
+mkdir -p "$WORK/shim3"; REAL_MKTEMP="$(command -v mktemp)"
+# shellcheck disable=SC2016  # the shim bodies are written literally
+printf '#!/usr/bin/env bash\n[[ "$*" == */receipts.tsv || "$*" == */manifest.orig || "$*" == */receipts.orig ]] && exit 1\nexec /bin/cat "$@"\n' > "$WORK/shim3/cat"
+# shellcheck disable=SC2016
+printf '#!/usr/bin/env bash\n[[ "$*" == *post-pin-bump-backup* ]] && exit 1\nexec %s "$@"\n' "$REAL_MKTEMP" > "$WORK/shim3/mktemp"; chmod +x "$WORK/shim3/cat" "$WORK/shim3/mktemp"
+fix restore-and-backup-fail; bump "$SAME"; rc=0; mkdir "$CASE/tmpd"
+(cd "$R" && TMPDIR="$CASE/tmpd" PATH="$WORK/shim3:$PATH" timeout 30s bash scripts/post-pin-bump.sh --repo-root "$R" --cache "$CASE/cache" > "$CASE/out" 2> "$CASE/err") || rc=$?
+keep="$(sed -n 's/.*originals kept in \(.*\) (copy to a separate.*/\1/p' "$CASE/err")"
+if [[ $rc == 1 && -n "$keep" && -d "$keep" ]] && cmp -s "$keep/manifest.orig" "$BASE/repo/scripts/lib/pinned-reusable-sources.json" && cmp -s "$keep/receipts.orig" "$BASE/repo/scripts/lib/lock-closure-receipts.tsv"; then
+  ok 'restore and backup-dir creation both failing: originals survive in the named directory'; else bad 'originals lost when the backup copy fails'; fi
+
 # Mutant: if the hook skipped both audits it would accept the changed blob.
 fix mutant; bump "$CHANGED"; sed -i 's/^if ! bash "\$AUDIT" "\${audit_args\[@\]}".*/if false; then/' "$R/scripts/post-pin-bump.sh"; run
 if [[ $rc == 0 ]] && ! unchanged; then ok 'mutant (both audits disabled) accepts a changed blob, so the audit is what refuses'; else bad 'mutant did not demonstrate the audit is load-bearing'; fi
