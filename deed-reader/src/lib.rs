@@ -242,8 +242,17 @@ fn pick_chora(
     let mut found: Vec<PathBuf> = Vec::new();
     for entry in entries {
         let (name, path) = entry.map_err(|e| ChoraError::Io(dir.to_path_buf(), e))?;
-        if name.to_str().is_some_and(is_chora_name) && path.is_file() {
-            found.push(path);
+        if !name.to_str().is_some_and(is_chora_name) {
+            continue;
+        }
+        // `Path::is_file` turns every metadata error into `false`, which would
+        // drop an unreadable candidate silently. Only a dangling link
+        // (`NotFound`) is intentionally ignored; any other error surfaces.
+        match std::fs::metadata(&path) {
+            Ok(m) if m.is_file() => found.push(path),
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(ChoraError::Io(path, e)),
         }
     }
     found.sort();
@@ -1009,5 +1018,33 @@ mod tests {
             pick_chora(Path::new("d"), failed.into_iter()),
             Err(ChoraError::Io(p, _)) if p == Path::new("d")
         ));
+    }
+
+    #[test]
+    fn a_metadata_error_on_a_candidate_is_an_error_not_a_skipped_entry() {
+        let tmp = std::env::temp_dir().join(format!("deed-meta-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let plain = tmp.join("plain");
+        std::fs::write(&plain, "x").unwrap();
+        let good = tmp.join("a_chora.deed");
+        std::fs::write(&good, "x").unwrap();
+        // A path "inside" a regular file: metadata fails with an error that
+        // is not NotFound, so it must surface instead of being skipped.
+        let bad = plain.join("b_chora.deed");
+        let entries = vec![
+            Ok((std::ffi::OsString::from("a_chora.deed"), good)),
+            Ok((std::ffi::OsString::from("b_chora.deed"), bad)),
+        ];
+        assert!(matches!(
+            pick_chora(&tmp, entries.into_iter()),
+            Err(ChoraError::Io(p, _)) if p.ends_with("b_chora.deed")
+        ));
+        // A dangling path is still ignored.
+        let dangling = vec![Ok((
+            std::ffi::OsString::from("c_chora.deed"),
+            tmp.join("missing_chora.deed"),
+        ))];
+        assert!(pick_chora(&tmp, dangling.into_iter()).unwrap().is_none());
+        std::fs::remove_dir_all(&tmp).unwrap();
     }
 }
