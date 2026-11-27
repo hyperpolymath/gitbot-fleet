@@ -21,6 +21,8 @@
 #   8. Run counters from background jobs reach the parent (--parallel).
 #   9. The runner's own run_entry and post-loop drain keep those counts
 #      (extracted; the quarantined main loop is not run).
+#  10. The actual runner in dispatch-paths.sh's isolated fixture preserves one
+#      producer id across start/outcome/mirrors, and refuses an unrecorded start.
 
 set -euo pipefail
 
@@ -131,15 +133,18 @@ awk '
 ' "$ROOT/scripts/dispatch-runner.sh" > "$TMP/extracted.sh"
 export REPOS_BASE="$TMP/repos" HYPATIA_OUTCOME_REPORT=off
 OUTCOME_FILE="$TMP/outcomes.jsonl"
+OUTCOME_FILE_LOCAL="$OUTCOME_FILE"
 export OUTCOME_FILE_CENTRAL="$OUTCOME_FILE"  # read by the sourced record_outcome
+ATTEMPT_FILE="$TMP/starts.jsonl"
 RESCAN_REPOS_FILE="$TMP/rescan"
 : > "$RESCAN_REPOS_FILE"
 # shellcheck disable=SC1091
 source "$TMP/extracted.sh"
 
-record_outcome "PA009" "recipe-shell-quote-vars" "repo-a" "" verified 0 3 0
-record_outcome "PA009" "recipe-shell-quote-vars" "repo-b" "" no_op 0 0 0
-record_outcome "PA009" "recipe-x" "repo-c" "" unverified 0
+producer_id=018e4000-0000-8000-8000-000000000001
+record_outcome "PA009" "recipe-shell-quote-vars" "repo-a" "" verified 0 3 0 "$producer_id" repo-a
+record_outcome "PA009" "recipe-shell-quote-vars" "repo-b" "" no_op 0 0 0 "$producer_id" repo-b
+record_outcome "PA009" "recipe-x" "repo-c" "" unverified 0 NA NA "$producer_id" repo-c
 record_outcome "PA009" "recipe-license-hygiene" "repo-d" "" refused_license_policy
 
 check "verified row" '{"verdict":"verified","outcome":"success","exit_code":0,"before_hits":3,"after_hits":0}' \
@@ -149,6 +154,23 @@ check "unverified row has no counts" '{"verdict":"unverified","before_hits":null
 check "refusal keeps its own outcome" '{"verdict":"refused_license_policy","outcome":"refused_license_policy","exit_code":null}' \
     "$(sed -n 4p "$OUTCOME_FILE" | jq -c '{verdict, outcome, exit_code}')"
 check "only verified repos trigger a rescan" "repo-a" "$(cat "$RESCAN_REPOS_FILE")"
+check "outcome retains the producer's event id" "$producer_id" \
+    "$(sed -n 1p "$OUTCOME_FILE" | jq -r '.event_id')"
+check "policy refusal remains outside fix attempts" false \
+    "$(sed -n 4p "$OUTCOME_FILE" | jq 'has("event_id")')"
+check "producer row carries v1 and actual relative target" 'fleet-attempt/1 repo-a' \
+    "$(sed -n 1p "$OUTCOME_FILE" | jq -r '[.attempt_contract,.repo_relative_path] | join(" ")')"
+missing_id_rc=0
+record_outcome PA009 recipe-x repo-x "" failed 7 1 1 > "$TMP/missing-id.log" 2>&1 || missing_id_rc=$?
+check "an actual fix outcome without identity is refused" 1 "$missing_id_rc"
+check "identity refusal appends no row" 4 "$(wc -l < "$OUTCOME_FILE" | tr -d ' ')"
+for bad_path in '' . .. ../escape /absolute repo/../escape repo/./child repo//child repo/; do
+    invalid_path_rc=0
+    record_outcome PA009 recipe-x repo-x "" failed 7 1 1 "$producer_id" "$bad_path" \
+        > "$TMP/invalid-path.log" 2>&1 || invalid_path_rc=$?
+    check "unnormalized relative target '$bad_path' is refused" 1 "$invalid_path_rc"
+done
+check "target refusals append no rows" 4 "$(wc -l < "$OUTCOME_FILE" | tr -d ' ')"
 
 # --- 5. deprecated recipe ids ---------------------------------------------
 registry="$ROOT/scripts/fix-script-registry.json"
@@ -256,90 +278,62 @@ for PARALLEL in 1 2; do
         "EXECUTED=$EXECUTED SUCCEEDED=$SUCCEEDED FAILED=$FAILED SKIPPED=$SKIPPED"
 done
 
-# --- 10. the verdict goes to Hypatia when Hypatia knows the option (E0-02) -
-# A stub `mix` on PATH records its arguments and answers `mix help
-# hypatia.record_outcome` as the case needs. The mode is learned once, from the
-# help text and never from an exit code: an older Hypatia ignores an option that
-# it does not know, so a no_op call would be recorded as a success. The main
-# loop is not run; it sits behind the quarantine (exit 78).
+# --- 10. only policy refusals retain the legacy callback -----------------
+# Identified attempts are delivered solely through the fleet feed. A Mix stub
+# records any forbidden independent admission even if a best-effort caller masks
+# its exit status. Policy refusals are not attempts and keep their old callback.
 stub_dir="$TMP/stub-bin"
 mkdir -p "$stub_dir" "$TMP/hy-home"
 cat > "$stub_dir/mix" <<'STUB'
 #!/usr/bin/env bash
-if [[ "$1" == "help" ]]; then
-    case "$STUB_HELP" in
-        verdict) echo "mix hypatia.record_outcome --recipe R --verdict verified|no_op|incomplete|unverified|failed"; exit 0 ;;
-        legacy)  echo "mix hypatia.record_outcome --recipe R --repo X --file F --outcome O"; exit 0 ;;
-        *)       echo "mix: cannot start" >&2; exit 3 ;;
-    esac
-fi
-echo "$*" >> "$STUB_LOG"
-exit 0
+printf '%s\n' "$*" >> "$STUB_LOG"
+exit "${STUB_RC:-0}"
 STUB
 chmod +x "$stub_dir/mix"
-
-# run_case <what the stub's help says> [on|off]: runs the runner's own contract
-# block in a subshell, as the runner does: detect first, stop if that fails,
-# then record each verdict and one refusal.
 run_case() {
-    local mode="$1" report="${2:-on}"
+    local report="$1" callback_rc="${2:-0}"
     : > "$TMP/stub.log"
     (
-        export PATH="$stub_dir:$PATH" STUB_HELP="$mode" STUB_LOG="$TMP/stub.log"
+        export PATH="$stub_dir:$PATH" STUB_LOG="$TMP/stub.log" STUB_RC="$callback_rc"
         export HYPATIA_HOME="$TMP/hy-home" HYPATIA_OUTCOME_REPORT="$report" REPOS_BASE="$TMP/repos"
         OUTCOME_FILE="$TMP/case-outcomes.jsonl"
-        OUTCOME_FILE_CENTRAL="$OUTCOME_FILE"
-        RESCAN_REPOS_FILE="$TMP/case-rescan"
+        OUTCOME_FILE_LOCAL="$OUTCOME_FILE" OUTCOME_FILE_CENTRAL="$OUTCOME_FILE"
+        ATTEMPT_FILE="$TMP/case-starts.jsonl" RESCAN_REPOS_FILE="$TMP/case-rescan"
         : > "$OUTCOME_FILE"
         : > "$RESCAN_REPOS_FILE"
         # shellcheck disable=SC1091
         source "$TMP/extracted.sh"
-        rc=0
-        hypatia_detect_verdict_mode || rc=$?
-        echo "detect_rc=$rc mode=${HYPATIA_VERDICT_MODE:-unset}"
-        if [[ "$rc" -eq 0 ]]; then
-            for v in verified no_op unverified incomplete failed; do
-                record_outcome PA009 recipe-x repo f "$v" 0 3 0
-            done
-            record_outcome PA009 recipe-lic repo "" refused_license_policy
-        fi
-    ) > "$TMP/case.out" 2>&1 || true
+        for v in verified no_op unverified incomplete failed; do
+            record_outcome PA009 recipe-x repo f "$v" 0 3 0 "$producer_id" repo
+        done
+        printf 'attempt_calls=%s\n' "$(wc -l < "$STUB_LOG" | tr -d ' ')"
+        record_outcome PA009 recipe-lic repo "" refused_license_policy
+    ) > "$TMP/case.out" 2>&1
 }
-calls() { cat "$TMP/stub.log"; }
+run_case on
+check "reporting on: identified attempts make no independent recording call" attempt_calls=0 \
+    "$(grep '^attempt_calls=' "$TMP/case.out")"
+check "reporting on: the only callback is the policy refusal" \
+    'hypatia.record_outcome --recipe recipe-lic --repo repo --file . --outcome false_positive' \
+    "$(cat "$TMP/stub.log")"
+check "refusal callback never probes an attempt verdict mode" 0 \
+    "$(grep -c '^help ' "$TMP/stub.log" || true)"
+run_case off
+check "reporting off: attempts are still delivered" 5 \
+    "$(jq -s 'map(select(.attempt_contract == "fleet-attempt/1")) | length' "$TMP/case-outcomes.jsonl")"
+check "reporting off: no callback" 0 "$(wc -l < "$TMP/stub.log" | tr -d ' ')"
+run_case on 3
+check "refusal callback failure remains visible and best-effort" 1 \
+    "$(grep -c 'record_outcome failed' "$TMP/case.out")"
 
-run_case verdict
-check "knows --verdict: mode is verdict" "detect_rc=0 mode=verdict" "$(grep '^detect_rc' "$TMP/case.out")"
-check "knows --verdict: the mode is logged once" 1 "$(grep -c '^hypatia outcome mode: verdict' "$TMP/case.out")"
-check "knows --verdict: 6 calls, one for each verdict and the refusal" 6 "$(calls | wc -l | tr -d ' ')"
-for pair in verified:success no_op:success unverified:success incomplete:failure failed:failure; do
-    v="${pair%%:*}" o="${pair##*:}"
-    check "knows --verdict: $v is passed with outcome $o" \
-        "hypatia.record_outcome --recipe recipe-x --repo repo --file f --outcome $o --verdict $v" \
-        "$(calls | grep -- "--verdict $v\$" || true)"
-done
-check "knows --verdict: a refusal has no --verdict" \
-    "hypatia.record_outcome --recipe recipe-lic --repo repo --file . --outcome false_positive" \
-    "$(calls | grep -- 'recipe-lic' || true)"
-
-run_case legacy
-check "older Hypatia: mode is legacy" "detect_rc=0 mode=legacy" "$(grep '^detect_rc' "$TMP/case.out")"
-check "older Hypatia: the mode is logged once" 1 "$(grep -c '^hypatia outcome mode: legacy' "$TMP/case.out")"
-check "older Hypatia: no --verdict in any call" 0 "$(calls | grep -c -- '--verdict' || true)"
-check "older Hypatia: no call for no_op or unverified, 4 calls in all" 4 "$(calls | wc -l | tr -d ' ')"
-check "older Hypatia: the calls are the calls of today" \
-    "success failure failure false_positive" \
-    "$(calls | sed -E 's/.*--outcome ([a-z_]+).*/\1/' | tr '\n' ' ' | sed 's/ $//')"
-
-run_case fail
-check "help fails: detection fails" "detect_rc=1 mode=error" "$(grep '^detect_rc' "$TMP/case.out")"
-check "help fails: a visible error says why" 1 "$(grep -c 'does not answer' "$TMP/case.out")"
-check "help fails: no record call is made" 0 "$(calls | wc -l | tr -d ' ')"
-check "the runner stops when detection fails (before any call)" 1 \
-    "$(grep -c '^hypatia_detect_verdict_mode || exit 1$' "$ROOT/scripts/dispatch-runner.sh")"
-
-run_case fail off
-check "reporting off: no help call and no record call" "detect_rc=0 mode=off 0" \
-    "$(grep '^detect_rc' "$TMP/case.out") $(calls | wc -l | tr -d ' ')"
+# --- 11. producer identity through the actual dispatch paths (E0-12) ------
+# The existing harness copies the runner into a disposable tree and removes
+# exactly its quarantine interlock there. It never changes the production
+# runner or exposes a runtime switch that could unlock it.
+dispatch_rc=0
+bash "$ROOT/scripts/tests/dispatch-paths.sh" > "$TMP/dispatch-paths.log" 2>&1 || dispatch_rc=$?
+cat "$TMP/dispatch-paths.log"
+check "isolated actual-runner producer identity contracts" 0 "$dispatch_rc"
 
 echo ""
 echo "Results: $pass passed, $fail failed"
