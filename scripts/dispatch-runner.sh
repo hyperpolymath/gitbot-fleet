@@ -121,6 +121,15 @@ fold_counts() {
         esac
     done < "$PARALLEL_TMPDIR/tally"
 }
+
+# Background wait calls do not retain each child's status. Mark a failed
+# identity/start/outcome contract explicitly so the parent also fails closed.
+mark_dispatch_error() {
+    count FAILED
+    if [[ "${IN_JOB:-0}" == 1 ]]; then
+        printf '%s\n' failed >> "$PARALLEL_TMPDIR/errors"
+    fi
+}
 # --- end run counters ---
 
 # --- Parse arguments ---
@@ -174,6 +183,8 @@ echo ""
 OUTCOME_FILE="${HYPATIA_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
 OUTCOME_FILE_CENTRAL="${VERISIMDB_DATA}/outcomes/$(date -u +%Y-%m).jsonl"
 mkdir -p "$(dirname "$OUTCOME_FILE")"
+# E0 receipt design, section 5.2: starts are separate from every outcome log.
+ATTEMPT_FILE="${FLEET_ROOT}/shared-context/learning/fix-attempts.jsonl"
 
 # Repos that received at least one successful fix this run. Appended by
 # record_outcome (file, not a variable: execute_entry may run in
@@ -205,9 +216,9 @@ fi
 # Configuration via env:
 #   HYPATIA_HOME             path to the hypatia checkout (defaults to
 #                            $REPOS_BASE/hypatia)
-#   HYPATIA_OUTCOME_REPORT   set to "off" to disable mix calls (e.g. a
-#                            CI runner without Elixir/mix on PATH);
-#                            defaults to "on"
+#   HYPATIA_OUTCOME_REPORT   set to "off" to disable outcome reports;
+#                            defaults to "on". Fix attempts still require
+#                            mix and HYPATIA_HOME to mint their event id.
 #   HYPATIA_BATCH_ID         when set, exit-2 hints suggest
 #                            `mix hypatia.rollback_batch $HYPATIA_BATCH_ID`
 #
@@ -226,7 +237,7 @@ HYPATIA_BATCH_ID="${HYPATIA_BATCH_ID:-}"
 #            unverified are recorded (they carry no credit).
 #   legacy   an older Hypatia: no --verdict, and no call for no_op or unverified
 #            (the behaviour before this check, exactly).
-#   off      no calls are made at all (reporting off, no checkout, no mix).
+#   off      no outcome calls (reporting off, no checkout, no mix).
 # A help command that fails is not an older Hypatia: the run stops, visibly.
 HYPATIA_VERDICT_MODE="off"
 hypatia_detect_verdict_mode() {
@@ -315,7 +326,46 @@ hypatia_record_outcome() {
     return "$rc"
 }
 
-# record_outcome <pattern_id> <recipe_id> <repo> <file> <verdict> [exit before after]
+# begin_attempt <recipe_id> <repo> -> event_id, only after its start is appended.
+# event_id is ADR-008 version 8, profile T. E0-31 names Hypatia's existing Mix
+# task as the producer tool; there is no fallback generator. E0-08 section 5.2
+# fixes this six-field start schema and its separate append-only destination.
+begin_attempt() {
+    local recipe_id="$1" repo="$2" generated event_id start_json rc=0
+    if [[ ! -d "$HYPATIA_HOME" ]]; then
+        echo "ERROR: event id unavailable: HYPATIA_HOME is not a directory: $HYPATIA_HOME" >&2
+        return 1
+    fi
+    if ! command -v mix &>/dev/null; then
+        echo "ERROR: event id unavailable: mix is not on PATH" >&2
+        return 1
+    fi
+    generated=$(cd "$HYPATIA_HOME" && mix hypatia.event_id) || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        echo "ERROR: event id generation failed: mix hypatia.event_id exited $rc" >&2
+        return 1
+    fi
+    # The task documents compilation messages before its final id line. Never
+    # accept trailing output, a malformed id, or output from a failed command.
+    event_id="${generated##*$'\n'}"
+    if [[ ! "$event_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]]; then
+        echo "ERROR: event id generation returned no valid ADR-008 v8 profile T id" >&2
+        return 1
+    fi
+    if ! start_json=$(jq -cnS --arg event_id "$event_id" --arg recipe_id "$recipe_id" --arg repo "$repo" \
+        '{chain_version: "e0-receipt/1", event_id: $event_id, kind: "start",
+          producer: "dispatch-runner", recipe_id: $recipe_id, repo: $repo}'); then
+        echo "ERROR: could not encode attempt start for event_id=$event_id" >&2
+        return 1
+    fi
+    if ! mkdir -p "$(dirname "$ATTEMPT_FILE")" || ! printf '%s\n' "$start_json" >> "$ATTEMPT_FILE"; then
+        echo "ERROR: could not append attempt start for event_id=$event_id to $ATTEMPT_FILE" >&2
+        return 1
+    fi
+    printf '%s\n' "$event_id"
+}
+
+# record_outcome <pattern_id> <recipe_id> <repo> <file> <verdict> [exit before after event_id]
 #
 # <verdict> is one of lib/outcome-verdict.sh's verdicts, or refused_* for a
 # policy refusal. `outcome` is kept for older readers and reports the exit
@@ -329,6 +379,9 @@ record_outcome() {
     local exit_code="${6:-}"
     local before="${7:-NA}"
     local after="${8:-NA}"
+    # Execution attempts pass the id already committed by begin_attempt.
+    # Policy refusals do not execute a fix and keep their existing row shape.
+    local event_id="${9:-}"
     local bot="dispatch-runner"
 
     local outcome
@@ -341,7 +394,7 @@ record_outcome() {
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     local json
-    json=$(jq -cn \
+    if ! json=$(jq -cn \
         --arg pid "$pattern_id" \
         --arg rid "$recipe_id" \
         --arg repo "$repo" \
@@ -353,21 +406,31 @@ record_outcome() {
         --arg after "$after" \
         --arg ts "$ts" \
         --arg bot "$bot" \
+        --arg event_id "$event_id" \
         '{pattern_id: $pid, recipe_id: $rid, repo: $repo, file: $file, outcome: $outcome,
           verdict: $verdict,
           exit_code: (if $exit_code == "" then null else ($exit_code | tonumber) end),
           before_hits: (if $before == "NA" then null else ($before | tonumber) end),
           after_hits: (if $after == "NA" then null else ($after | tonumber) end),
-          timestamp: $ts, bot: $bot}')
+          timestamp: $ts, bot: $bot}
+          + (if $event_id == "" then {} else {event_id: $event_id} end)'); then
+        echo "ERROR: could not encode outcome for $repo/$recipe_id event_id=$event_id" >&2
+        return 1
+    fi
 
-    echo "$json" >> "$OUTCOME_FILE"
+    if ! printf '%s\n' "$json" >> "$OUTCOME_FILE"; then
+        echo "ERROR: could not append outcome for event_id=$event_id to $OUTCOME_FILE" >&2
+        return 1
+    fi
     # Avoid duplicate JSONL records when the two configured stores are the same.
     local primary_path central_path
     primary_path=$(realpath -m "$OUTCOME_FILE")
     central_path=$(realpath -m "$OUTCOME_FILE_CENTRAL")
     if [[ "$primary_path" != "$central_path" && ! "$OUTCOME_FILE" -ef "$OUTCOME_FILE_CENTRAL" ]]; then
-        mkdir -p "$(dirname "$OUTCOME_FILE_CENTRAL")"
-        echo "$json" >> "$OUTCOME_FILE_CENTRAL"
+        if ! mkdir -p "$(dirname "$OUTCOME_FILE_CENTRAL")" || ! printf '%s\n' "$json" >> "$OUTCOME_FILE_CENTRAL"; then
+            echo "ERROR: could not mirror outcome for event_id=$event_id to $OUTCOME_FILE_CENTRAL; primary row is committed" >&2
+            return 1
+        fi
     fi
 
     # Hypatia closed-loop contract — best-effort, never fails the dispatch
@@ -543,9 +606,15 @@ execute_entry() {
                 tmp_finding=$(mktemp /tmp/dispatch-finding-XXXXXX.json)
                 echo "$entry" > "$tmp_finding"
 
-                local before after rc verdict
+                local before after rc verdict event_id
                 if [[ "$PARALLEL" -gt 1 ]]; then repo_lock "$PARALLEL_TMPDIR" "$repo_path"; fi
                 before=$(recipe_check_count "$FLEET_SCRIPTS/$fix_script" "$repo_path")
+                if ! event_id=$(begin_attempt "$recipe_id" "$repo"); then
+                    if [[ "$PARALLEL" -gt 1 ]]; then repo_unlock; fi
+                    rm -f "$tmp_finding"
+                    mark_dispatch_error
+                    return 1
+                fi
 
                 echo "        Running: $fix_script $repo_path $tmp_finding"
                 rc=0
@@ -556,17 +625,27 @@ execute_entry() {
                 if [[ "$PARALLEL" -gt 1 ]]; then repo_unlock; fi
                 verdict=$(outcome_verdict "$rc" "$before" "$after")
                 echo "        $verdict (exit $rc, targets $before -> $after)"
+                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" "$before" "$after" "$event_id" || {
+                    rm -f "$tmp_finding"
+                    count EXECUTED
+                    mark_dispatch_error
+                    return 1
+                }
                 if [[ "$verdict" == failed || "$verdict" == incomplete ]]; then
                     count FAILED
                 else
                     count SUCCEEDED
                 fi
-                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" "$before" "$after"
 
                 rm -f "$tmp_finding"
 
             elif command -v "$RRA_BIN" &>/dev/null; then
                 # Use robot-repo-automaton fix command
+                local event_id
+                if ! event_id=$(begin_attempt "$recipe_id" "$repo"); then
+                    mark_dispatch_error
+                    return 1
+                fi
                 echo "        Running: $RRA_BIN fix --repo $repo_path --commit"
                 # robot-repo-automaton exposes no predicate, so a clean exit
                 # is recorded as unverified, never as a confirmed fix.
@@ -576,12 +655,16 @@ execute_entry() {
                 local verdict
                 verdict=$(outcome_verdict "$rc" NA NA)
                 echo "        $verdict (exit $rc)"
+                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc" NA NA "$event_id" || {
+                    count EXECUTED
+                    mark_dispatch_error
+                    return 1
+                }
                 if [[ "$verdict" == failed ]]; then
                     count FAILED
                 else
                     count SUCCEEDED
                 fi
-                record_outcome "$pattern_id" "$recipe_id" "$repo" "" "$verdict" "$rc"
             else
                 echo "        SKIP: No fix mechanism available (no fix_script, no $RRA_BIN)"
                 count SKIPPED
@@ -722,6 +805,11 @@ done < "$MANIFEST_PATH"
 if [[ "$PARALLEL" -gt 1 ]]; then
     wait
     fold_counts
+    if [[ -s "$PARALLEL_TMPDIR/errors" ]]; then
+        echo "ERROR: a dispatch job could not commit its attempt identity or outcome" >&2
+        rm -rf "$PARALLEL_TMPDIR"
+        exit 1
+    fi
 fi
 rm -rf "$PARALLEL_TMPDIR" 2>/dev/null || true
 

@@ -1,0 +1,195 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+= E0-12: Outcome route and observation identity decision
+:toc:
+:date: 2026-11-23
+
+Status: PROPOSED; no owner ruling is recorded here. The bounded NS-02 producer
+identity patch can be reviewed, but full E0-12 closure and automatic delivery
+remain unqualified. Production dispatch remains quarantined.
+
+== Decision requested
+
+Adopt the existing trusted fleet importer as the sole admission path for a
+producer-identified attempt. Retain Hypatia's rescan as evidence about that
+attempt, with explicit correlation and at most one effective contribution to
+learning per attempt. The current direct callback must cease creating an
+additional independent qualified attempt for the same dispatch.
+
+This is the recommended contract direction, not an implemented route change
+or a claim that the observation/revision schema already exists. It needs the
+owner's ruling because the existing May contract requires the direct recording
+call, while the E0 design introduces a distinct identity-preserving importer.
+
+== Authorities and measured sources
+
+The Hypatia sources below are pinned at
+`d158aed87f76b93e4f291e995bef9f26559c7fb2`; the inspected fleet baseline is
+`f1b14e2a352491ff7972f0dfd592bfbb28d2f32c`.
+
+* https://github.com/hyperpolymath/hypatia/blob/d158aed87f76b93e4f291e995bef9f26559c7fb2/docs/operations/e0-closeout/work-orders/E0-12-fleet-writes-event-id.adoc[E0-12]
+  requires one identity per attempt and equal identities on its mirrored rows.
+  Its stop condition says that two different outcome rows from an attempt
+  need identities and a design explaining their relationship.
+* https://github.com/hyperpolymath/hypatia/blob/d158aed87f76b93e4f291e995bef9f26559c7fb2/docs/design/e0-receipt.adoc[E0 receipt design],
+  section 5.2 and accepted D4, names
+  `shared-context/learning/fix-attempts.jsonl` beside the fleet outcome feed.
+  Starts carry no evidence credit and do not consume an outcome's identity.
+* https://github.com/hyperpolymath/hypatia/blob/d158aed87f76b93e4f291e995bef9f26559c7fb2/docs/operations/e0-closeout/work-orders/E0-31-event-id-task.adoc[E0-31]
+  records the newer owner choice of `mix hypatia.event_id` for the producer.
+* https://github.com/hyperpolymath/hypatia/blob/d158aed87f76b93e4f291e995bef9f26559c7fb2/docs/operations/dispatch-runner-contract.adoc[The May dispatch-runner contract]
+  says the runner MUST call `mix hypatia.record_outcome` after a fix and retains
+  default rescan behavior. Its later verdict table makes failed/incomplete
+  calls qualified failures without a rescan.
+
+== S-01: Producer-to-learning admission
+
+[cols="2,3,3",options="header"]
+|===
+|Path |Current behavior |Identity and qualification
+|Producer start
+|The NS-02 patch writes `shared-context/learning/fix-attempts.jsonl`.
+|One producer ID, before execution; no outcome or evidence credit.
+|Producer outcome
+|The runner writes `$HYPATIA_DATA/outcomes/YYYY-MM.jsonl` and a central copy at
+`$VERISIMDB_DATA/outcomes/YYYY-MM.jsonl` when those stores differ.
+|Both copies retain one producer ID. These raw rows have a verdict but no
+Hypatia `verification` field; their mere presence in a learning-store directory
+does not qualify them.
+|Direct recording callback
+|The runner calls Mix from `$HYPATIA_HOME`. Hypatia resolves its data through
+`HYPATIA_VERISIM_DATA_PATH`, not the runner's `HYPATIA_DATA` variable.
+|The public task creates a newly identified `local_caller` or `local_rescan`
+row. A failed/incomplete verdict can be qualified immediately.
+|Fleet importer
+|`LearningScheduler.ingest_fleet_outcomes/1` reads only
+`$HYPATIA_FLEET_PATH/shared-context/learning/fix-outcomes.jsonl`.
+|The trusted import preserves a valid producer ID and deduplicates persisted
+`fleet_import_id` values. No current runner forwarding step joins these paths.
+|===
+
+The direct call also emits an echo marked `bot=hypatia`; the importer skips
+that echo. The echo alone is not the duplicate-credit defect demonstrated
+below. Its missing event ID is an additional existing gap against ruled R6;
+this patch does not silently repair that separate path.
+
+The raw monthly file and the qualified consumer store must not be treated as
+interchangeable. Code inspection indicates that publishing the same producer
+ID into both raw and admitted rows within the receipt lookup's store can make
+lookup depend on row order:
+https://github.com/hyperpolymath/hypatia/blob/d158aed87f76b93e4f291e995bef9f26559c7fb2/lib/hypatia/receipt.ex[`Receipt.locate/2`]
+returns the first matching event-ID row. This is an inference from the pinned
+implementation, not an additional executed counterexample.
+The selected route must separate transport mirrors from the canonical
+learning ledger, not merely add a third write.
+
+== Executed counterexample
+
+The producer fixture uses the real canonical Mix generator and an inert
+throwaway fixer. It emits two distinct failed attempts and their exact
+primary/central copies. The wire witness transfers those bytes explicitly to
+the importer and passes three checks: identity/mirror fidelity, start exclusion
+and replay-safe import, and absence of implicit qualification for raw monthly
+rows. This is compatibility evidence, not automatic delivery.
+
+`tests/hypatia-route-counterexample.exs` then takes one actual emitted failure,
+calls the actual `Mix.Tasks.Hypatia.RecordOutcome` task with its labels, verifies
+that the echo imports nothing, and explicitly appends the producer row to the
+importer's feed. On the pinned Hypatia base it reports:
+
+[cols="2,1",options="header"]
+|===
+|Measurement |Observed
+|Actual emitted attempts selected |1
+|Qualified failure contributions after the direct task |1
+|Qualified failure contributions after adding the producer row |2
+|Distinct persisted event IDs |2
+|Receipts |2
+|Counterexample process exit |1
+|Automatic delivery exercised |No
+|===
+
+The negative result falsifies joining the current paths while leaving the
+independent recording callback active. It is deliberately not converted into
+an expected-bad passing test. A future exclusive-ingress design needs an
+acceptance test through its actual chosen flow; this artificial dual-call
+diagnostic is not a universal acceptance condition for every possible design.
+
+Reproduce both witnesses from a configured test Hypatia checkout:
+
+[source,shell]
+----
+# Set these to the two isolated checkouts; do not use a live fleet store.
+export FLEET_CHECKOUT=/absolute/gitbot-fleet
+export HYPATIA_CHECKOUT=/absolute/hypatia
+export DISPATCH_TEST_HYPATIA_HOME="$HYPATIA_CHECKOUT"
+export DISPATCH_TEST_MIX_BIN="$(command -v mix)"
+export DISPATCH_TEST_EVIDENCE_DIR="$(mktemp -d)"
+export MIX_ENV=test
+bash "$FLEET_CHECKOUT/scripts/tests/dispatch-paths.sh"
+cd "$HYPATIA_CHECKOUT"
+mix run --no-start "$FLEET_CHECKOUT/tests/hypatia-event-import-test.exs"
+mix run --no-start "$FLEET_CHECKOUT/tests/hypatia-route-counterexample.exs"
+# The final command currently exits 1 and reports the duplicate contribution.
+----
+
+== Recommended ruling: one attempt admission, correlated rescan evidence
+
+. Use the trusted E0-11 fleet import as the canonical admission path for
+  producer-identified dispatch attempts. The source is append-only; primary
+  and central transport copies remain one attempt. Mirrors live outside the
+  canonical learning store and never create extra admitted trials.
+. Retain rescan verification, but change the current mandatory recording
+  callback into a verification/evidence step for that admitted attempt. It
+  must not independently record another qualified attempt. Revise the May
+  callback contract explicitly as part of implementation.
+. An attempt's ID, an observation's ID and a qualification revision's ID have
+  distinct meanings. Bind any separately stored rescan observation to the
+  attempt through a restricted, source-bound contract. A public caller's
+  syntax-valid UUID is insufficient provenance.
+. Derive at most one current contribution per attempt. Multiple observations
+  are evidence for that contribution, not additional successes, failures or
+  qualified false positives. Preserve the existing separate false-positive
+  accounting.
+  Conflicting observations must use an explicit qualification/retraction rule
+  and preserve the history. E0-35's withdrawal work remains a dependency;
+  approval of this direction does not claim that machinery is implemented.
+. Do not silently reuse `parent_event_ids` for an unruled relation. D7 defines
+  that field for receipt revision ancestry. The detailed observation/attempt
+  correlation and its relation to D7 must be written and reviewed before code
+  relies on them.
+. Preserve legacy rows and uncertainty. Do not infer common attempt identity
+  from equal content, timestamps or recipe names: two identical attempts may
+  be distinct. Historical reconciliation needs its own evidence and receipts.
+
+The invariant can be stated without inventing new mathematics: count effective
+attempt qualifications, not raw rows or observations. A single attempt may
+contribute at most one effective qualified contribution -- success, failure
+or qualified false positive -- or none, under the existing gate. Qualified
+false positives retain their current separate accounting, as implemented by
+https://github.com/hyperpolymath/hypatia/blob/d158aed87f76b93e4f291e995bef9f26559c7fb2/lib/outcome_tracker.ex[`OutcomeTracker.qualified_outcome_counts/1`].
+A later authorised revision changes that effective contribution without
+erasing prior evidence.
+
+=== Alternative: make a new restricted direct recorder the sole ingress
+
+The direct route could instead become an idempotent trusted producer-admission
+API, while fleet files become audit-only for those events. This preserves more
+of the current invocation shape, but requires new admission/provenance and
+offline/replay machinery and an explicit restriction on E0-11. Adding a public
+`--event-id` option is not that machinery: `OutcomeTracker.record_outcome/5`
+deliberately strips caller identity to prevent forged replay/receipt identity,
+and the current qualification fold counts rows even if their IDs agree.
+
+The importer option reuses the existing persisted producer identity, source
+hash and replay controls and is recommended. Neither option is activated by
+the bounded NS-02 producer patch.
+
+== Work authorised by approval of the recommended direction
+
+Prepare the explicit contract amendment and correlated observation design;
+implement one source-bound admission path in isolated changes; and demonstrate
+the actual producer-to-consumer flow with fault, replay, mirror, conflict and
+forged-identity controls. Preserve the existing qualification criteria and
+quarantine while those gates are developed. E0 acceptance, production
+activation and any Kautz qualification remain separate decisions supported by
+their own evidence.
