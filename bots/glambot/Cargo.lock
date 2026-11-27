@@ -1034,6 +1034,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "gitbot-deed-reader"
+version = "0.1.0"
+
+[[package]]
 name = "gitbot-shared-context"
 version = "0.1.0"
 dependencies = [
@@ -1061,6 +1065,7 @@ dependencies = [
  "comrak",
  "criterion",
  "dirs",
+ "gitbot-deed-reader",
  "gitbot-shared-context",
  "glob",
  "globset",

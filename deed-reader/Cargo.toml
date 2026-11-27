@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MPL-2.0
+[package]
+name = "gitbot-deed-reader"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+authors = ["Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>"]
+description = "Read-only, std-only reader for the repo chora deed (<repo>_chora.deed), shared by gitbot-fleet bots"
+repository = "https://github.com/hyperpolymath/gitbot-fleet"
+publish = false
+
+[lib]
+name = "deed_reader"
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]

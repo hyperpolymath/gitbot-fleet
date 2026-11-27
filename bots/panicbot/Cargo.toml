@@ -17,6 +17,8 @@ path = "src/main.rs"
 [dependencies]
 # Fleet integration
 gitbot-shared-context = { path = "../../shared-context" }
+# Repo deed reader (shared, std-only, in-repo)
+gitbot-deed-reader = { path = "../../deed-reader" }
 
 # CLI
 clap = { version = "4.6.1", features = ["derive"] }

@@ -48,8 +48,8 @@ the gitbot-fleet shared context layer and makes the final release-readiness dete
 |Version consistency across files, debug statement detection, sensitive data patterns, SECURITY.md, release profiles
 |No
 
-|**SCM Files**
-|Legacy `.machine_readable/` SCM files (STATE.scm, META.scm, ECOSYSTEM.scm, PLAYBOOK.scm, AGENTIC.scm, NEUROSYM.scm) are validated only if present (SPDX headers, required sections, content completeness); their absence is canonical, since those descriptiles are now clauses of `<name>_chora.deed`
+|**Repo Deed** (the `scm_files` report key)
+|Reads the one `<repo>_chora.deed` at the root (through `deed-reader/`): none is DEED-001 (warning), more than one is DEED-002 (error, D312), unreadable or not a `repo-deed` is DEED-003 (error), no `(status …)` or `(maturity …)` clause and no `.machine_readable/descriptiles/STATE.deed` is DEED-004 (warning). A retired STATE, META, ECOSYSTEM, PLAYBOOK, AGENTIC or NEUROSYM `.scm` at the root, under `.machine_readable/` or under `.machine_readable/6scm/` is SCM-006 (warning, "migrate"): it is not validated and is never to be moved
 |No
 
 |**Testing**
@@ -179,7 +179,7 @@ The analyzers accept the estate's canonical locations, not only one spelling:
 * `mise.toml` in place of `.tool-versions` (TOOL-001).
 * `tests/fuzz/` as well as `fuzz/` and `.clusterfuzzlite/` (TEST-RU-003); a crate with no code yet (no `.rs` line that is not blank or a comment) is exempt from TEST-RU-005 and TEST-RU-006.
 * A workflow named by file name in prose resolves under `.github/workflows/` (CLM-006).
-* SCM-001 is retired: STATE, META, ECOSYSTEM, PLAYBOOK, AGENTIC and NEUROSYM are clauses of `<name>_chora.deed`, not files.
+* SCM-001 to SCM-005 are retired: STATE, META, ECOSYSTEM, PLAYBOOK, AGENTIC and NEUROSYM are clauses of `<name>_chora.deed`, not files, so a legacy `.scm` is neither required nor validated, and SCM-005 no longer advises moving one into `.machine_readable/` (a retired layout).
 * REL-008 matches key material (PEM headers, AWS key ids, vendor token shapes, long key literals), not the words "private key".
 
 A repository can acknowledge a finding in its `.hypatia-baseline.json`, the estate's documented exemption mechanism (`docs/upstream-proposals/standards--hypatia-baseline-consumer/docs/EXEMPTION-MECHANISMS.adoc`, "Layer 2"). `.hypatia-ignore` is not read: that document rejects it. An entry uses this bot's `rule_module`, `finishing_bot`, and the finding id as `type`, with the estate severity word (error = `high`, warning = `medium`, info = `info`, suggestion = `low`) and exactly one of `file` or `file_pattern`: `{"severity": "medium", "rule_module": "finishing_bot", "type": "PH-001", "file_pattern": "build/just/**", "note": "scanner names the tokens"}`. Matching is exact on severity, module and type, so a rule family needs one entry per id. Entries past `expires_at`, or carrying `severity_override` (this bot does not downgrade), acknowledge nothing; other modules' entries (`cicd_rules`, ...) are Hypatia's and are not read. Currently only the placeholder analyzer (PH-nnn, hence PH-100) honours it. See `src/baseline.rs`.
@@ -418,7 +418,7 @@ src/
     placeholder.rs           Placeholder detection and removal
     claims.rs                Documentation claims verification
     release.rs               Release artifact and security checks
-    scm_files.rs             .machine_readable/ SCM file validation
+    scm_files.rs             Repo deed (<repo>_chora.deed) checks; retired .scm reported as "migrate"
     testing.rs               Testing infrastructure analysis
     tooling.rs               Tooling and CI workflow validation
     v1_readiness.rs          V1 release readiness assessment

@@ -80,6 +80,15 @@ jobs:
             dir: bots/ponsbot
           - module: idris-dependents
             dir: idris-dependents
+          # deed-reader: the shared, std-only reader for <repo>_chora.deed.
+          - module: deed-reader
+            dir: deed-reader
+          # finishingbot reads the chora deed through deed-reader; it was
+          # never built, tested or linted in CI before (2026-11-17). glambot
+          # also uses deed-reader but stays out until its pre-existing clippy
+          # debt (about 60 diagnostics under -D warnings) is paid.
+          - module: finishingbot
+            dir: bots/finishingbot
     defaults:
       run:
         working-directory: ${{ matrix.dir }}

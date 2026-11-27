@@ -644,102 +644,94 @@ mod scm_files_analyzer {
     }
 
     #[test]
-    fn test_state_scm_in_root_warns_wrong_location() {
+    fn test_state_scm_in_root_is_migrate_not_move() {
+        // SCM-005 used to advise MOVING a root STATE.scm into .machine_readable/,
+        // which restores a retired layout. A legacy file is now "migrate".
         let (_temp, path) = setup_test_repo();
         fs::write(
             path.join("STATE.scm"),
-            ";; SPDX-License-Identifier: MPL-2.0\n\
-             (define state\n  '((metadata (version . \"0.1.0\"))\n\
-             (current-position (phase . \"mvp\"))))\n\
-             ;; padding content to meet minimum size requirement\n\
-             ;; more content here to make the file substantial enough\n\
-             ;; and even more lines of content for the validator\n",
+            ";; SPDX-License-Identifier: MPL-2.0\n(state)\n",
         )
         .unwrap();
 
-        let analyzer = ScmFilesAnalyzer;
-        let config = default_config();
-        let result = analyzer.analyze(&path, &config).unwrap();
+        let result = ScmFilesAnalyzer.analyze(&path, &default_config()).unwrap();
 
-        assert!(
-            result.findings.iter().any(|f| f.id == "SCM-005-STATE.scm"),
-            "Should warn about STATE.scm in root instead of .machine_readable/"
-        );
-        assert!(
-            result
-                .findings
-                .iter()
-                .any(|f| f.id == "SCM-005-STATE.scm" && f.severity == Severity::Warning),
-            "Wrong location should be Warning severity"
-        );
+        assert!(result.findings.iter().all(|f| !f.id.starts_with("SCM-005")));
+        let f = result
+            .findings
+            .iter()
+            .find(|f| f.id == "SCM-006-STATE.scm")
+            .expect("a legacy STATE.scm is reported");
+        assert_eq!(f.severity, Severity::Warning);
+        let s = f.suggestion.as_deref().unwrap_or("");
+        assert!(s.contains("(status") && !s.contains("Move"), "{s}");
     }
 
     #[test]
-    fn test_all_scm_files_present_in_machine_readable() {
+    fn test_full_legacy_scm_set_is_six_migrate_findings_and_never_validated() {
         let (_temp, path) = setup_test_repo();
         let mr_dir = path.join(".machine_readable");
         fs::create_dir_all(&mr_dir).unwrap();
-
-        let scm_files = [
-            ("STATE.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define state '((metadata (version . \"0.1.0\"))(current-position (phase . \"mvp\"))))\n;; padding\n;; more padding to meet minimum content\n;; and more\n;; and more\n;; and more\n;; and more\n"),
-            ("META.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define meta '((architecture-decisions ())(development-practices ())))\n;; padding\n;; more padding\n;; and more\n;; and more\n;; and more\n"),
-            ("ECOSYSTEM.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define ecosystem '((position-in-ecosystem \"tools\")(related-projects ())))\n;; padding\n;; more padding\n;; and more\n;; and more\n"),
-            ("PLAYBOOK.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define playbook '((operations ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
-            ("AGENTIC.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define agentic '((ai-integration ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
-            ("NEUROSYM.scm", ";; SPDX-License-Identifier: MPL-2.0\n(define neurosym '((neurosymbolic ())))\n;; padding\n;; more padding\n;; and more\n;; and more content to fill\n;; even more filler for length\n"),
-        ];
-
-        for (name, content) in &scm_files {
-            fs::write(mr_dir.join(name), content).unwrap();
+        for name in [
+            "STATE.scm",
+            "META.scm",
+            "ECOSYSTEM.scm",
+            "PLAYBOOK.scm",
+            "AGENTIC.scm",
+            "NEUROSYM.scm",
+        ] {
+            // No SPDX header and tiny: the retired SCM-002/003/004 checks
+            // would have fired; a legacy file is no longer validated.
+            fs::write(mr_dir.join(name), "(x)").unwrap();
         }
 
-        let analyzer = ScmFilesAnalyzer;
-        let config = default_config();
-        let result = analyzer.analyze(&path, &config).unwrap();
+        let result = ScmFilesAnalyzer.analyze(&path, &default_config()).unwrap();
+        let ids: Vec<&str> = result.findings.iter().map(|f| f.id.as_str()).collect();
 
-        let missing_errors: Vec<_> = result
-            .findings
-            .iter()
-            .filter(|f| f.id.starts_with("SCM-001"))
-            .collect();
-        assert!(
-            missing_errors.is_empty(),
-            "Should not report missing SCM files when all are present in .machine_readable/"
+        assert_eq!(
+            ids.iter().filter(|i| i.starts_with("SCM-006-")).count(),
+            6,
+            "{ids:?}"
         );
-        let wrong_location: Vec<_> = result
-            .findings
-            .iter()
-            .filter(|f| f.id.starts_with("SCM-005"))
-            .collect();
+        for retired in ["SCM-001", "SCM-002", "SCM-003", "SCM-004", "SCM-005"] {
+            assert!(
+                ids.iter().all(|i| !i.starts_with(retired)),
+                "{retired}: {ids:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_chora_deed_with_status_satisfies_the_analyzer() {
+        let (_temp, path) = setup_test_repo();
+        fs::write(
+            path.join("test_chora.deed"),
+            ";; SPDX-License-Identifier: MPL-2.0\n\
+             (repo-deed\n  :schema-version \"1.0.0\"\n  :canonical-name \"test\"\n\
+             \x20 (status :phase beta))\n",
+        )
+        .unwrap();
+
+        let result = ScmFilesAnalyzer.analyze(&path, &default_config()).unwrap();
+
         assert!(
-            wrong_location.is_empty(),
-            "Should not report wrong location for files in .machine_readable/"
+            result.findings.is_empty(),
+            "{:?}",
+            result.findings.iter().map(|f| &f.id).collect::<Vec<_>>()
         );
     }
 
     #[test]
-    fn test_scm_file_missing_spdx_header() {
+    fn test_unparseable_chora_deed_is_an_error() {
         let (_temp, path) = setup_test_repo();
-        let mr_dir = path.join(".machine_readable");
-        fs::create_dir_all(&mr_dir).unwrap();
-        // STATE.scm without SPDX header
-        fs::write(
-            mr_dir.join("STATE.scm"),
-            "(define state '((metadata (version . \"0.1.0\"))(current-position (phase . \"mvp\"))))\n\
-             ;; padding to meet length requirements for the validator\n\
-             ;; more padding content here for the minimum length check\n\
-             ;; and even more padding to ensure we pass the length check\n",
-        )
-        .unwrap();
+        fs::write(path.join("test_chora.deed"), "(repo-deed\n\t:a b)\n").unwrap();
 
-        let analyzer = ScmFilesAnalyzer;
-        let config = default_config();
-        let result = analyzer.analyze(&path, &config).unwrap();
+        let result = ScmFilesAnalyzer.analyze(&path, &default_config()).unwrap();
 
-        assert!(
-            result.findings.iter().any(|f| f.id == "SCM-002-STATE.scm"),
-            "Should warn about missing SPDX header in STATE.scm"
-        );
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.id == "DEED-003" && f.severity == Severity::Error));
     }
 }
 

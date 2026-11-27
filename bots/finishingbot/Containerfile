@@ -2,10 +2,14 @@
 # Cerro Torre - The Challenging Peak
 # Patagonian mountain known for difficulty and technical climbing
 # Purpose: Release readiness validation (conquering the final ascent)
+#
+# Build from the REPOSITORY ROOT, so the in-repo deed-reader crate is in the
+# context (finishingbot reads the chora deed through it):
+#   podman build -f bots/finishingbot/Containerfile -t cerro-torre .
 
 FROM docker.io/library/rust:latest AS builder
 
-WORKDIR /build
+WORKDIR /build/bots/finishingbot
 
 # Install dependencies and nightly toolchain
 RUN apt-get update && \
@@ -13,9 +17,13 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     rustup default nightly
 
-# Copy source
-COPY Cargo.toml Cargo.lock ./
-COPY src ./src
+# Copy source, keeping the repository layout so ../../deed-reader resolves
+COPY deed-reader /build/deed-reader
+COPY bots/finishingbot/Cargo.toml bots/finishingbot/Cargo.lock ./
+COPY bots/finishingbot/src ./src
+# Cargo.toml declares a [[bench]]; without it the manifest does not parse
+# (this image failed to build on main for that reason alone).
+COPY bots/finishingbot/benches ./benches
 
 # Remove path dependency that isn't available in container context
 RUN sed -i '/gitbot-shared-context.*path.*optional/d' Cargo.toml && \
@@ -32,7 +40,7 @@ RUN apt-get update && \
     apt-get install -y ca-certificates libssl3 && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/target/release/finishing-bot /usr/local/bin/cerro-torre
+COPY --from=builder /build/bots/finishingbot/target/release/finishing-bot /usr/local/bin/cerro-torre
 
 # Run as non-root
 RUN useradd -r -s /bin/false cerro-torre
