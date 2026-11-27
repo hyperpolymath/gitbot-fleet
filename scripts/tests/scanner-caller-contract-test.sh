@@ -5,12 +5,17 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 wf="$tmp/scanner.yml"
-check="$root/scripts/check-scanner-caller.rb"
+# Build the Rust checker unless a prebuilt one is supplied.
+check=${CHECK_SCANNER_CALLER:-}
+if [ -z "$check" ]; then
+  cargo build --quiet --locked --release --manifest-path "$root/scripts/check-scanner-caller/Cargo.toml"
+  check="${CARGO_TARGET_DIR:-$root/scripts/check-scanner-caller/target}/release/check-scanner-caller"
+fi
 cp "$root/.github/workflows/secret-scanner.yml" "$wf"
-ruby "$check" "$wf"
+"$check" "$wf"
 reject() {
   local name=$1
-  if ruby "$check" "$wf" >/dev/null 2>&1; then
+  if "$check" "$wf" >/dev/null 2>&1; then
     echo "FAIL: accepted $name" >&2; exit 1
   fi
   echo "PASS: rejected $name"
@@ -42,5 +47,5 @@ printf '[]\n' > "$wf"; reject 'sequence workflow'
 
 # Quoting the YAML 1.1 boolean-looking key must preserve GitHub's semantics.
 sed -i 's/^on:/"on":/' "$wf"
-ruby "$check" "$wf"
+"$check" "$wf"
 echo 'scanner caller parser and policy boundary controls passed'

@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: MPL-2.0
+# This workflow is managed by gh actions-lock.
+name: Rust (proven)
+
+# Proven reusable Rust gate (hyperpolymath/proven-cicd-and-workflows
+# rust-ci.yml), one caller per crate. It is stricter than the `rust` matrix in
+# rust.yml: warnings denied on every compile, doctests, `cargo doc` with broken
+# links failing, MSRV when declared, and cargo-deny (advisories, bans,
+# sources). Contexts are `rust-ci (<crate>) / <gate job>`; branch rules require
+# `rust-ci (<crate>) / Rust CI verdict` directly.
+#
+# This file holds only job-level reusable calls, like secret-scanner.yml and
+# scorecard.yml: a workflow mixing native step pins with a job-level remote
+# reusable fails Scorecard's native action-lock reconciliation.
+#
+# The `rust` matrix in rust.yml stays until branch rules require these contexts
+# instead of `build · test · clippy (<crate>)`; a follow-up then removes it (and
+# moves rhodibot's canon pin drift step to its own job).
+#
+# Pinned at one full SHA and de-onboarded from actions.lock (an onboarded
+# cross-repo reusable startup-fails with zero jobs); the pin is recorded in
+# scripts/lib/pinned-reusable-sources.json and lock-closure-receipts.tsv.
+# `contents: read` is the whole grant the callee declares; no secrets.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ['**']
+  # Manual run: a startup_failure cannot be re-run, and settings fixes
+  # (for example the Actions allowlist) need a fresh run to be witnessed.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust-ci-robot-repo-automaton:
+    name: rust-ci (robot-repo-automaton)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: robot-repo-automaton
+
+  rust-ci-shared-context:
+    name: rust-ci (shared-context)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: shared-context
+
+  rust-ci-dashboard:
+    name: rust-ci (dashboard)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: dashboard
+      # Binary-only crate: `cargo test --doc` has no library to test.
+      doctests: false
+
+  rust-ci-rhodibot:
+    name: rust-ci (rhodibot)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: bots/rhodibot
+
+  rust-ci-panicbot:
+    name: rust-ci (panicbot)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: bots/panicbot
+
+  rust-ci-ponsbot:
+    name: rust-ci (ponsbot)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: bots/ponsbot
+
+  rust-ci-idris-dependents:
+    name: rust-ci (idris-dependents)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: idris-dependents
+
+  rust-ci-check-scanner-caller:
+    name: rust-ci (scripts/check-scanner-caller)
+    permissions:
+      contents: read
+    uses: hyperpolymath/proven-cicd-and-workflows/.github/workflows/rust-ci.yml@50a443f01b1b85e4957b893a6f1a0ed2e8a52459
+    with:
+      working_directory: scripts/check-scanner-caller
+      # Binary-only crate: `cargo test --doc` has no library to test.
+      doctests: false

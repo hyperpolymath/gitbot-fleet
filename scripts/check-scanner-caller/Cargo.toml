@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+[package]
+name = "check-scanner-caller"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Fail closed on changes to the fleet scanner's deployed security contract."
+
+[dependencies]
+yaml-rust2 = "0.13.2"

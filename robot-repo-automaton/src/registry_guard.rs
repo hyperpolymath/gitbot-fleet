@@ -135,9 +135,11 @@ fn repo_identity(repo_path: &Path) -> (Option<String>, Option<String>) {
 
 /// Parse `owner/repo` out of a common git URL shape.
 ///
-///   git@github.com:owner/repo.git         → owner/repo
-///   https://github.com/owner/repo.git     → owner/repo
-///   ssh://git@github.com/owner/repo       → owner/repo
+/// ```text
+/// git@github.com:owner/repo.git         → owner/repo
+/// https://github.com/owner/repo.git     → owner/repo
+/// ssh://git@github.com/owner/repo       → owner/repo
+/// ```
 fn parse_full_name(url: &str) -> Option<String> {
     let s = url.strip_suffix(".git").unwrap_or(url);
 

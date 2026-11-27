@@ -26,7 +26,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
-    needs: [rust, dispatch-contracts, gsbot]
+    needs:
+      - rust
+      - dispatch-contracts
+      - gsbot
     if: always()
     steps:
       - name: Require every CI job to succeed
