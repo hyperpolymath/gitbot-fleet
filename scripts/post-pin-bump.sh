@@ -173,8 +173,15 @@ done < "$TMP/changed"
 #    a failed self-audit) restores BOTH files, so the pair never describes different commits.
 cp -p "$MANIFEST" "$TMP/manifest.orig"; cp -p "$RECEIPTS" "$TMP/receipts.orig"
 restore() {
-  if cat "$TMP/manifest.orig" > "$MANIFEST" && cat "$TMP/receipts.orig" > "$RECEIPTS"; then return 0; fi
-  refuse 'cannot restore the closure files after a failed install; restore them from git'
+  # Attempt BOTH restores independently: a failed first one must not skip the second.
+  local failed=0 keep
+  cat "$TMP/manifest.orig" > "$MANIFEST" || failed=1
+  cat "$TMP/receipts.orig" > "$RECEIPTS" || failed=1
+  [[ "$failed" -eq 1 ]] || return 0
+  # $TMP is deleted on exit, so keep the originals somewhere that survives it.
+  keep="$(mktemp -d "${TMPDIR:-/tmp}/post-pin-bump-backup.XXXXXX")" &&
+    cp -p "$TMP/manifest.orig" "$TMP/receipts.orig" "$keep/" || keep='(copying the backups failed)'
+  refuse "cannot restore the closure files after a failed install; originals kept in $keep (restore from there or from git)"
 }
 if ! { cat "$TMP/manifest.json" > "$MANIFEST" && cat "$TMP/receipts.tsv" > "$RECEIPTS"; }; then
   restore; refuse 'writing the closure files failed (files restored)'
