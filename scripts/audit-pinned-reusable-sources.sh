@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MANIFEST=""; LOCK=""; RECEIPTS=""; CACHE="${PINNED_SOURCE_CACHE:-${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/fleet-pinned-sources}"
-FETCH=0; JSON=0
+FETCH=0; JSON=0; ROOTS_ONLY=0
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --manifest|--source-manifest) MANIFEST="${2:?manifest file required}"; shift ;;
@@ -17,7 +17,8 @@ while [[ "$#" -gt 0 ]]; do
     --cache|--source-cache) CACHE="${2:?cache directory required}"; shift ;;
     --fetch-sources) FETCH=1 ;;
     --json) JSON=1 ;;
-    -h|--help) printf '%s\n' 'Usage: audit-pinned-reusable-sources.sh [--manifest FILE] [--repo-root DIR] [--lock FILE] [--receipts FILE] [--cache DIR] [--fetch-sources] [--json]'; exit 0 ;;
+    --roots-only) ROOTS_ONLY=1 ;;
+    -h|--help) printf '%s\n' 'Usage: audit-pinned-reusable-sources.sh [--manifest FILE] [--repo-root DIR] [--lock FILE] [--receipts FILE] [--cache DIR] [--fetch-sources] [--json] [--roots-only]'; exit 0 ;;
     *) printf 'Unknown argument: %s\n' "$1" >&2; exit 64 ;;
   esac
   shift
@@ -179,6 +180,15 @@ for workflow in "$ROOT"/.github/workflows/*.yml "$ROOT"/.github/workflows/*.yaml
 done
 shopt -u nullglob
 jq -s 'sort_by(.workflow,.job)' "$TMP/roots" > "$TMP/actual-roots.json"
+if [[ "$ROOTS_ONLY" -eq 1 ]]; then
+  # Print the live remote-reusable roots (workflow, job, repository, path,
+  # commit) and stop: no source is fetched and nothing is compared. Used by
+  # scripts/post-pin-bump.sh to learn which pins a bump moved.
+  if [[ -s "$TMP/findings" ]] || [[ -s "$TMP/notrun" ]]; then
+    jq -r '"\(.rule)\t\(.subject)\t\(.detail)"' "$TMP/findings" "$TMP/notrun" >&2; exit 1
+  fi
+  cat "$TMP/actual-roots.json"; exit 0
+fi
 jq '[.sources[]|select(.role=="active")|. as $s|.callers[]|{workflow,job,repository:($s.repository|ascii_downcase),path:$s.path,commit:$s.commit}]|sort_by(.workflow,.job)' "$MANIFEST" > "$TMP/expected-roots.json"
 if ! cmp -s "$TMP/actual-roots.json" "$TMP/expected-roots.json"; then
   finding SOURCE-ACTIVE-MISSING "$MANIFEST" 'Active caller/job/path/commit bindings differ from the actual workflow roots (historical paths cannot satisfy active calls)'
